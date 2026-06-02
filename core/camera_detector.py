@@ -2,25 +2,87 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from pathlib import Path
+from typing import Any
 
 import cv2
+import numpy as np
 
 from core.fallback_manager import iter_fallback_configs
 from core.model_selector import RuntimeConfig
 from core.yolo_loader import LoadedModel, load_yolo_model
+from utils.file_utils import ensure_project_directories
 from utils.logger import get_logger
 from utils.visualization import draw_detection_results
 
 
 logger = get_logger(__name__)
+WINDOW_NAME = "YOLO Realtime Camera"
+SAMPLE_IMAGE_DIR = Path("dataset/sample/images")
+SAMPLE_LABEL_DIR = Path("dataset/sample/labels")
+CAPTURE_STABILITY_SECONDS = 5.0
+MOTION_RESET_THRESHOLD = 3.5
+ALLOWED_NAME_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
 
 
 @dataclass
 class DetectionRecord:
+    class_id: int
     label: str
     confidence: float
     bbox: tuple[int, int, int, int]
+
+
+@dataclass
+class CapturePreparationState:
+    stable_since: float
+    previous_gray: np.ndarray | None = None
+    motion_score: float = 0.0
+    status: str = "Giu camera on dinh trong 5 giay."
+
+
+def _to_yolo_bbox_line(class_id: int, bbox: tuple[int, int, int, int], image_shape: tuple[int, ...]) -> str:
+    image_height, image_width = image_shape[:2]
+    x1, y1, x2, y2 = bbox
+    x1 = max(0, min(x1, image_width - 1))
+    y1 = max(0, min(y1, image_height - 1))
+    x2 = max(0, min(x2, image_width - 1))
+    y2 = max(0, min(y2, image_height - 1))
+    box_width = max(1, x2 - x1)
+    box_height = max(1, y2 - y1)
+    x_center = x1 + (box_width / 2.0)
+    y_center = y1 + (box_height / 2.0)
+    return (
+        f"{class_id} "
+        f"{x_center / image_width:.6f} "
+        f"{y_center / image_height:.6f} "
+        f"{box_width / image_width:.6f} "
+        f"{box_height / image_height:.6f}"
+    )
+
+
+def _sanitize_sample_name(value: str) -> str:
+    cleaned = "".join(char if char in ALLOWED_NAME_CHARS else "_" for char in value.strip())
+    while "__" in cleaned:
+        cleaned = cleaned.replace("__", "_")
+    return cleaned.strip("_-")
+
+
+def _draw_message_panel(frame: np.ndarray, title: str, lines: list[str]) -> np.ndarray:
+    panel = frame.copy()
+    panel_width = min(frame.shape[1] - 40, 700)
+    panel_height = 80 + (len(lines) * 34)
+    x1 = 20
+    y1 = 20
+    x2 = x1 + panel_width
+    y2 = min(frame.shape[0] - 20, y1 + panel_height)
+    cv2.rectangle(panel, (x1, y1), (x2, y2), (30, 30, 30), -1)
+    cv2.rectangle(panel, (x1, y1), (x2, y2), (0, 220, 255), 2)
+    cv2.putText(panel, title, (x1 + 16, y1 + 32), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 220, 255), 2, cv2.LINE_AA)
+    for index, line in enumerate(lines):
+        y = y1 + 66 + (index * 30)
+        cv2.putText(panel, line, (x1 + 16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (235, 235, 235), 2, cv2.LINE_AA)
+    return panel
 
 
 class CameraDetector:
@@ -34,9 +96,11 @@ class CameraDetector:
         self.consecutive_read_failures = 0
         self.max_consecutive_read_failures = 5
         self.recovery_count = 0
-        self.last_status_message = "Sẵn sàng khởi tạo camera."
+        self.last_status_message = "San sang khoi tao camera."
         self.last_error_message = ""
         self.active_runtime_summary = ""
+        self.last_raw_frame: np.ndarray | None = None
+        self.last_detections: list[DetectionRecord] = []
 
     def initialize(self) -> None:
         last_error: Exception | None = None
@@ -51,7 +115,7 @@ class CameraDetector:
                 self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.runtime.camera_height)
                 self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 if not self.capture.isOpened():
-                    raise RuntimeError("Không mở được camera.")
+                    raise RuntimeError("Khong mo duoc camera.")
                 self.consecutive_read_failures = 0
                 self.last_frame_ts = time.perf_counter()
                 self.last_error_message = ""
@@ -60,31 +124,31 @@ class CameraDetector:
                     f"{self.runtime.resolved_device} | imgsz {self.runtime.imgsz}"
                 )
                 self.last_status_message = (
-                    "Đã khởi tạo camera thành công. "
-                    f"Đang chạy với {self.active_runtime_summary}."
+                    "Da khoi tao camera thanh cong. "
+                    f"Dang chay voi {self.active_runtime_summary}."
                 )
                 logger.info("Detector initialized with %s", self.runtime.summary())
                 return
             except Exception as exc:
                 last_error = exc
                 self.last_error_message = str(exc)
-                self.last_status_message = "Khởi tạo runtime thất bại, đang thử fallback."
+                self.last_status_message = "Khoi tao runtime that bai, dang thu fallback."
                 logger.warning("Runtime failed, trying fallback: %s", exc)
                 self.release()
-        raise RuntimeError(f"Không khởi tạo được detector. Lỗi cuối: {last_error}")
+        raise RuntimeError(f"Khong khoi tao duoc detector. Loi cuoi: {last_error}")
 
-    def read_and_detect(self) -> Tuple[bool, Any, List[DetectionRecord], float]:
+    def read_and_detect(self) -> tuple[bool, Any, list[DetectionRecord], float]:
         if self.capture is None or self.loaded_model is None:
-            raise RuntimeError("Detector chưa được khởi tạo.")
+            raise RuntimeError("Detector chua duoc khoi tao.")
         ok, frame = self.capture.read()
         if not ok:
             self.consecutive_read_failures += 1
-            self.last_error_message = "Không đọc được frame từ camera."
+            self.last_error_message = "Khong doc duoc frame tu camera."
             self.last_status_message = (
-                f"Mất frame camera ({self.consecutive_read_failures}/{self.max_consecutive_read_failures})."
+                f"Mat frame camera ({self.consecutive_read_failures}/{self.max_consecutive_read_failures})."
             )
             if self.consecutive_read_failures >= self.max_consecutive_read_failures:
-                raise RuntimeError("Camera liên tục không trả về frame.")
+                raise RuntimeError("Camera lien tuc khong tra ve frame.")
             return False, None, [], 0.0
         self.consecutive_read_failures = 0
 
@@ -104,18 +168,21 @@ class CameraDetector:
             self.recovery_count += 1
             self.last_error_message = str(exc)
             self.last_status_message = (
-                "Suy luận bị lỗi, hệ thống đang tự phục hồi và thử cấu hình an toàn hơn."
+                "Suy luan bi loi, he thong dang tu phuc hoi va thu cau hinh an toan hon."
             )
             self.initialize()
             return False, None, [], 0.0
 
         detections = self._parse_results(results)
-        frame = draw_detection_results(
+        raw_frame = frame.copy()
+        processed_frame = draw_detection_results(
             image=frame,
             detections=detections,
             box_thickness=self.runtime.box_thickness,
             label_font_scale=self.runtime.label_font_scale,
         )
+        self.last_raw_frame = raw_frame
+        self.last_detections = detections
         now = time.perf_counter()
         current_fps = 1.0 / max(now - self.last_frame_ts, 1e-6)
         self.last_frame_ts = now
@@ -123,11 +190,11 @@ class CameraDetector:
             self.smoothed_fps = current_fps
         else:
             self.smoothed_fps = (self.smoothed_fps * 0.85) + (current_fps * 0.15)
-        self.last_status_message = f"Đang nhận diện ổn định với {len(detections)} đối tượng."
-        return True, frame, detections, self.smoothed_fps
+        self.last_status_message = f"Dang nhan dien on dinh voi {len(detections)} doi tuong."
+        return True, processed_frame, detections, self.smoothed_fps
 
-    def _parse_results(self, results: list) -> List[DetectionRecord]:
-        parsed: List[DetectionRecord] = []
+    def _parse_results(self, results: list) -> list[DetectionRecord]:
+        parsed: list[DetectionRecord] = []
         for result in results:
             names = result.names
             for box in result.boxes:
@@ -136,6 +203,7 @@ class CameraDetector:
                 x1, y1, x2, y2 = [int(value) for value in box.xyxy[0].tolist()]
                 parsed.append(
                     DetectionRecord(
+                        class_id=cls_id,
                         label=names.get(cls_id, str(cls_id)),
                         confidence=confidence,
                         bbox=(x1, y1, x2, y2),
@@ -147,7 +215,42 @@ class CameraDetector:
         if self.capture is not None:
             self.capture.release()
             self.capture = None
-        self.last_status_message = "Camera đã dừng."
+        self.last_status_message = "Camera da dung."
+
+    def save_training_sample(
+        self,
+        *,
+        frame: np.ndarray,
+        detections: list[DetectionRecord],
+        sample_name: str | None = None,
+    ) -> tuple[Path, Path]:
+        ensure_project_directories()
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        name_prefix = _sanitize_sample_name(sample_name or "")
+        if name_prefix:
+            base_name = f"{name_prefix}_{timestamp}"
+        else:
+            base_name = f"capture_{timestamp}_{int(time.time() * 1000) % 1000:03d}"
+        image_path = SAMPLE_IMAGE_DIR / f"{base_name}.jpg"
+        label_path = SAMPLE_LABEL_DIR / f"{base_name}.txt"
+        if not cv2.imwrite(str(image_path), frame):
+            raise RuntimeError(f"Khong luu duoc anh: {image_path}")
+        label_lines = [_to_yolo_bbox_line(item.class_id, item.bbox, frame.shape) for item in detections]
+        label_path.write_text("\n".join(label_lines), encoding="utf-8")
+        self.last_status_message = (
+            f"Da luu mau train: {image_path.name} va {label_path.name} ({len(label_lines)} nhan)."
+        )
+        logger.info("Saved training sample: %s | %s", image_path, label_path)
+        return image_path, label_path
+
+    def save_current_training_sample(self, sample_name: str | None = None) -> tuple[Path, Path]:
+        if self.last_raw_frame is None:
+            raise RuntimeError("Chua co frame nao de luu.")
+        return self.save_training_sample(
+            frame=self.last_raw_frame,
+            detections=self.last_detections,
+            sample_name=sample_name,
+        )
 
     def runtime_health(self) -> dict:
         return {
@@ -163,16 +266,170 @@ class CameraDetector:
         return cv2.VideoCapture(self.camera_index)
 
 
+def _compute_motion_score(current_frame: np.ndarray, previous_gray: np.ndarray | None) -> tuple[float, np.ndarray]:
+    current_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+    if previous_gray is None:
+        return 0.0, current_gray
+    diff = cv2.absdiff(current_gray, previous_gray)
+    return float(diff.mean()), current_gray
+
+
+def _update_capture_preparation(
+    state: CapturePreparationState,
+    frame: np.ndarray,
+    now: float,
+) -> tuple[CapturePreparationState, bool, float]:
+    motion_score, current_gray = _compute_motion_score(frame, state.previous_gray)
+    stable_since = state.stable_since
+    status = state.status
+    if motion_score > MOTION_RESET_THRESHOLD:
+        stable_since = now
+        status = "Phat hien rung/lac. Giu yen lai de dem nguoc tu dau."
+    else:
+        status = "Khung hinh dang on dinh. Tiep tuc giu yen."
+    remaining = max(0.0, CAPTURE_STABILITY_SECONDS - (now - stable_since))
+    updated = CapturePreparationState(
+        stable_since=stable_since,
+        previous_gray=current_gray,
+        motion_score=motion_score,
+        status=status,
+    )
+    return updated, remaining <= 0.0, remaining
+
+
+def _render_capture_preparation_overlay(
+    frame: np.ndarray,
+    *,
+    remaining_seconds: float,
+    motion_score: float,
+    status: str,
+) -> np.ndarray:
+    seconds = int(np.ceil(remaining_seconds))
+    return _draw_message_panel(
+        frame,
+        title="CHUAN BI CHUP MAU TRAIN",
+        lines=[
+            "Nhan T da kich hoat che do chup co kiem tra on dinh.",
+            f"Dem nguoc: {seconds}s",
+            f"Muc rung/lac: {motion_score:.2f} | nguong reset: {MOTION_RESET_THRESHOLD:.2f}",
+            status,
+            "Giu camera va vat the yen. Neu lac, he thong se dem lai tu dau.",
+        ],
+    )
+
+
+def _render_name_prompt(frame: np.ndarray, sample_name: str, detection_count: int) -> np.ndarray:
+    typed_value = sample_name or "(de trong se dung ten mac dinh)"
+    return _draw_message_panel(
+        frame,
+        title="DAT TEN MAU TRAIN",
+        lines=[
+            f"So nhan se luu: {detection_count}",
+            f"Ten hien tai: {typed_value}",
+            "Go ten bang ban phim. Enter de luu.",
+            "Backspace de xoa, Esc de huy.",
+        ],
+    )
+
+
+def _handle_name_input(current_name: str, key: int) -> tuple[str, bool, bool]:
+    if key in (13, 10):
+        return current_name, True, False
+    if key == 27:
+        return current_name, False, True
+    if key in (8, 127):
+        return current_name[:-1], False, False
+    if 32 <= key <= 126:
+        char = chr(key)
+        if char in ALLOWED_NAME_CHARS and len(current_name) < 48:
+            return current_name + char, False, False
+    return current_name, False, False
+
+
 def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
     detector = CameraDetector(runtime=runtime, camera_index=camera_index)
     detector.initialize()
+    capture_prep: CapturePreparationState | None = None
+    naming_mode = False
+    typed_name = ""
+    frozen_frame: np.ndarray | None = None
+    frozen_detections: list[DetectionRecord] = []
     try:
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(WINDOW_NAME, runtime.camera_width, runtime.camera_height)
         while True:
-            ok, frame, _detections, _fps = detector.read_and_detect()
+            ok, frame, detections, _fps = detector.read_and_detect()
             if not ok:
                 continue
-            cv2.imshow("YOLO Realtime Camera", frame)
-            if cv2.waitKey(1) & 0xFF == 27:
+
+            display_frame = frame
+            if capture_prep is not None:
+                now = time.perf_counter()
+                capture_prep, ready, remaining = _update_capture_preparation(capture_prep, detector.last_raw_frame, now)
+                display_frame = _render_capture_preparation_overlay(
+                    frame=display_frame,
+                    remaining_seconds=remaining,
+                    motion_score=capture_prep.motion_score,
+                    status=capture_prep.status,
+                )
+                if ready and detector.last_raw_frame is not None:
+                    capture_prep = None
+                    naming_mode = True
+                    typed_name = ""
+                    frozen_frame = detector.last_raw_frame.copy()
+                    frozen_detections = list(detector.last_detections)
+                    detector.last_status_message = "Khung hinh da on dinh. Hay dat ten de luu."
+                    display_frame = draw_detection_results(
+                        image=frozen_frame.copy(),
+                        detections=frozen_detections,
+                        box_thickness=runtime.box_thickness,
+                        label_font_scale=runtime.label_font_scale,
+                    )
+                    display_frame = _render_name_prompt(display_frame, typed_name, len(frozen_detections))
+            elif naming_mode and frozen_frame is not None:
+                display_frame = draw_detection_results(
+                    image=frozen_frame.copy(),
+                    detections=frozen_detections,
+                    box_thickness=runtime.box_thickness,
+                    label_font_scale=runtime.label_font_scale,
+                )
+                display_frame = _render_name_prompt(display_frame, typed_name, len(frozen_detections))
+
+            cv2.imshow(WINDOW_NAME, display_frame)
+            key = cv2.waitKey(1) & 0xFF
+
+            if naming_mode:
+                typed_name, should_save, should_cancel = _handle_name_input(typed_name, key)
+                if should_cancel:
+                    naming_mode = False
+                    frozen_frame = None
+                    frozen_detections = []
+                    detector.last_status_message = "Da huy luu mau train."
+                    continue
+                if should_save and frozen_frame is not None:
+                    image_path, label_path = detector.save_training_sample(
+                        frame=frozen_frame,
+                        detections=frozen_detections,
+                        sample_name=typed_name,
+                    )
+                    logger.info("Da luu %s va %s", image_path.name, label_path.name)
+                    naming_mode = False
+                    frozen_frame = None
+                    frozen_detections = []
+                    typed_name = ""
+                continue
+
+            if capture_prep is not None:
+                if key == 27:
+                    capture_prep = None
+                    detector.last_status_message = "Da huy che do chup mau train."
+                continue
+
+            if key in (ord("t"), ord("T")):
+                capture_prep = CapturePreparationState(stable_since=time.perf_counter())
+                detector.last_status_message = "Bat dau dem nguoc 5 giay de chup mau train."
+                continue
+            if key == 27:
                 break
     finally:
         detector.release()

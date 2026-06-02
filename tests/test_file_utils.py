@@ -29,6 +29,8 @@ class FileUtilsTests(unittest.TestCase):
                 ensure_project_directories()
                 self.assertTrue(Path("dataset/raw/images").is_dir())
                 self.assertTrue(Path("dataset/processed/labels/test").is_dir())
+                self.assertTrue(Path("dataset/sample/images").is_dir())
+                self.assertTrue(Path("dataset/sample/labels").is_dir())
                 self.assertTrue(Path("output/logs").is_dir())
                 self.assertTrue(Path("runs/detect").is_dir())
             finally:

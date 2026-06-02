@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from core.camera_detector import CameraDetector, DetectionRecord
+from core.camera_detector import CameraDetector, DetectionRecord, _sanitize_sample_name
 from core.hardware_detector import HardwareInfo
 from core.model_selector import select_runtime_config
 from core.yolo_loader import LoadedModel
@@ -122,6 +124,50 @@ class CameraDetectorTests(unittest.TestCase):
         detections = detector._parse_results(results)
         self.assertEqual(detections[0].bbox, (1, 2, 3, 4))
         self.assertEqual(detections[0].label, "car")
+        self.assertEqual(detections[0].class_id, 1)
+
+    def test_save_current_training_sample_writes_image_and_yolo_label(self) -> None:
+        detector = CameraDetector(runtime=self._runtime())
+        detector.last_raw_frame = np.zeros((100, 200, 3), dtype=np.uint8)
+        detector.last_detections = [
+            DetectionRecord(class_id=3, label="helmet", confidence=0.8, bbox=(20, 10, 120, 60))
+        ]
+
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            previous_cwd = Path.cwd()
+            try:
+                import os
+
+                os.chdir(temp_dir)
+                image_path, label_path = detector.save_current_training_sample()
+                self.assertTrue(image_path.exists())
+                self.assertTrue(label_path.exists())
+                self.assertEqual(
+                    label_path.read_text(encoding="utf-8").strip(),
+                    "3 0.350000 0.350000 0.500000 0.500000",
+                )
+            finally:
+                os.chdir(previous_cwd)
+
+    def test_save_current_training_sample_uses_sanitized_custom_name(self) -> None:
+        detector = CameraDetector(runtime=self._runtime())
+        detector.last_raw_frame = np.zeros((20, 20, 3), dtype=np.uint8)
+        detector.last_detections = []
+
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            previous_cwd = Path.cwd()
+            try:
+                import os
+
+                os.chdir(temp_dir)
+                image_path, label_path = detector.save_current_training_sample("Nguoi doi non 01")
+                self.assertTrue(image_path.name.startswith("Nguoi_doi_non_01_"))
+                self.assertEqual(label_path.read_text(encoding="utf-8"), "")
+            finally:
+                os.chdir(previous_cwd)
+
+    def test_sanitize_sample_name_replaces_invalid_chars(self) -> None:
+        self.assertEqual(_sanitize_sample_name("  nguoi doi non/01  "), "nguoi_doi_non_01")
 
     @patch("core.camera_detector.cv2.VideoCapture")
     @patch("core.camera_detector.load_yolo_model")

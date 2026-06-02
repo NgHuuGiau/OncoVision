@@ -139,8 +139,8 @@ class ModelSelectorTests(unittest.TestCase):
             gpu_count=1,
         )
         runtime = select_runtime_config("high", hardware)
-        self.assertEqual(runtime.camera_width, 1000)
-        self.assertEqual(runtime.camera_height, 650)
+        self.assertEqual(runtime.camera_width, 1280)
+        self.assertEqual(runtime.camera_height, 800)
         self.assertEqual(runtime.imgsz, 768)
         self.assertEqual(runtime.max_det, 100)
 
@@ -164,10 +164,10 @@ class ModelSelectorTests(unittest.TestCase):
         self.assertEqual(
             sizes,
             {
-                "auto": (1000, 650),
-                "high": (1000, 650),
-                "medium": (1000, 650),
-                "low": (1000, 650),
+                "auto": (1280, 800),
+                "high": (1280, 800),
+                "medium": (1280, 800),
+                "low": (1280, 800),
             },
         )
 

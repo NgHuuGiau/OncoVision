@@ -3,6 +3,15 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+try:
+    from training._bootstrap import ensure_project_root_on_path
+    from training.model_artifacts import TRAINED_BEST_MODEL_PATH
+except ModuleNotFoundError:
+    from _bootstrap import ensure_project_root_on_path
+    from model_artifacts import TRAINED_BEST_MODEL_PATH
+
+ensure_project_root_on_path()
+
 from ultralytics import YOLO
 
 from utils.file_utils import ensure_project_directories, load_yaml
@@ -14,7 +23,7 @@ logger = get_logger(__name__)
 
 def _copy_best_weight(run_dir: Path) -> None:
     best_weight = run_dir / "weights" / "best.pt"
-    target = Path("models/trained/best.pt")
+    target = TRAINED_BEST_MODEL_PATH
     if best_weight.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(best_weight, target)
