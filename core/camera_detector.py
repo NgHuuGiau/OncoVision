@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 from core.fallback_manager import iter_fallback_configs
 from core.model_selector import RuntimeConfig
@@ -18,11 +20,13 @@ from utils.visualization import draw_detection_results
 
 logger = get_logger(__name__)
 WINDOW_NAME = "YOLO Realtime Camera"
+ASSISTANT_WINDOW_NAME = "YOLO Capture Assistant"
 SAMPLE_IMAGE_DIR = Path("dataset/sample/images")
 SAMPLE_LABEL_DIR = Path("dataset/sample/labels")
 CAPTURE_STABILITY_SECONDS = 5.0
 MOTION_RESET_THRESHOLD = 3.5
 ALLOWED_NAME_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+ASSISTANT_WINDOW_SIZE = (860, 320)
 
 
 @dataclass
@@ -83,6 +87,37 @@ def _draw_message_panel(frame: np.ndarray, title: str, lines: list[str]) -> np.n
         y = y1 + 66 + (index * 30)
         cv2.putText(panel, line, (x1 + 16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (235, 235, 235), 2, cv2.LINE_AA)
     return panel
+
+
+@lru_cache(maxsize=8)
+def _load_unicode_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    font_candidates = [
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("C:/Windows/Fonts/tahoma.ttf"),
+        Path("C:/Windows/Fonts/segoeui.ttf"),
+    ]
+    for candidate in font_candidates:
+        if candidate.exists():
+            try:
+                return ImageFont.truetype(str(candidate), size=size)
+            except OSError:
+                continue
+    return ImageFont.load_default()
+
+
+def _render_assistant_window(title: str, lines: list[str]) -> np.ndarray:
+    width, height = ASSISTANT_WINDOW_SIZE
+    image = Image.new("RGB", (width, height), color=(30, 30, 30))
+    draw = ImageDraw.Draw(image)
+    title_font = _load_unicode_font(34)
+    body_font = _load_unicode_font(22)
+    draw.rectangle([(8, 8), (width - 8, height - 8)], outline=(0, 220, 255), width=3)
+    draw.text((24, 22), title, fill=(0, 220, 255), font=title_font)
+    y = 78
+    for line in lines:
+        draw.text((24, y), line, fill=(240, 240, 240), font=body_font)
+        y += 36
+    return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
 
 class CameraDetector:
@@ -305,29 +340,39 @@ def _render_capture_preparation_overlay(
     status: str,
 ) -> np.ndarray:
     seconds = int(np.ceil(remaining_seconds))
-    return _draw_message_panel(
-        frame,
-        title="CHUAN BI CHUP MAU TRAIN",
+    return _render_assistant_window(
+        title="Chuẩn bị chụp mẫu train",
         lines=[
-            "Nhan T da kich hoat che do chup co kiem tra on dinh.",
-            f"Dem nguoc: {seconds}s",
-            f"Muc rung/lac: {motion_score:.2f} | nguong reset: {MOTION_RESET_THRESHOLD:.2f}",
+            "Bạn đã bấm T. Hệ thống đang kiểm tra độ ổn định khung hình.",
+            f"Đếm ngược: {seconds}s",
+            f"Mức rung/lắc: {motion_score:.2f} | Ngưỡng reset: {MOTION_RESET_THRESHOLD:.2f}",
             status,
-            "Giu camera va vat the yen. Neu lac, he thong se dem lai tu dau.",
+            "Giữ camera và vật thể yên. Nếu rung, bộ đếm sẽ bắt đầu lại.",
         ],
     )
 
 
-def _render_name_prompt(frame: np.ndarray, sample_name: str, detection_count: int) -> np.ndarray:
-    typed_value = sample_name or "(de trong se dung ten mac dinh)"
-    return _draw_message_panel(
-        frame,
-        title="DAT TEN MAU TRAIN",
+def _render_name_prompt(sample_name: str, detection_count: int) -> np.ndarray:
+    typed_value = sample_name or "(để trống sẽ dùng tên mặc định)"
+    return _render_assistant_window(
+        title="Đặt tên mẫu train",
         lines=[
-            f"So nhan se luu: {detection_count}",
-            f"Ten hien tai: {typed_value}",
-            "Go ten bang ban phim. Enter de luu.",
-            "Backspace de xoa, Esc de huy.",
+            f"Số nhãn sẽ lưu: {detection_count}",
+            f"Tên hiện tại: {typed_value}",
+            "Gõ tên bằng bàn phím rồi nhấn Enter để lưu.",
+            "Backspace để xóa ký tự, Esc để hủy.",
+        ],
+    )
+
+
+@lru_cache(maxsize=1)
+def _render_idle_assistant() -> np.ndarray:
+    return _render_assistant_window(
+        title="Trợ lý chụp mẫu train",
+        lines=[
+            "Bấm T để bắt đầu chụp dữ liệu huấn luyện.",
+            "Hệ thống sẽ đếm 5 giây ổn định trước khi lưu.",
+            "Cửa sổ này độc lập với camera nên bạn có thể phóng to/thu nhỏ camera.",
         ],
     )
 
@@ -356,7 +401,10 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
     frozen_detections: list[DetectionRecord] = []
     try:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(ASSISTANT_WINDOW_NAME, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(WINDOW_NAME, runtime.camera_width, runtime.camera_height)
+        cv2.resizeWindow(ASSISTANT_WINDOW_NAME, *ASSISTANT_WINDOW_SIZE)
+        cv2.imshow(ASSISTANT_WINDOW_NAME, _render_idle_assistant())
         while True:
             ok, frame, detections, _fps = detector.read_and_detect()
             if not ok:
@@ -366,12 +414,13 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
             if capture_prep is not None:
                 now = time.perf_counter()
                 capture_prep, ready, remaining = _update_capture_preparation(capture_prep, detector.last_raw_frame, now)
-                display_frame = _render_capture_preparation_overlay(
+                assistant_panel = _render_capture_preparation_overlay(
                     frame=display_frame,
                     remaining_seconds=remaining,
                     motion_score=capture_prep.motion_score,
                     status=capture_prep.status,
                 )
+                cv2.imshow(ASSISTANT_WINDOW_NAME, assistant_panel)
                 if ready and detector.last_raw_frame is not None:
                     capture_prep = None
                     naming_mode = True
@@ -379,13 +428,7 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     frozen_frame = detector.last_raw_frame.copy()
                     frozen_detections = list(detector.last_detections)
                     detector.last_status_message = "Khung hinh da on dinh. Hay dat ten de luu."
-                    display_frame = draw_detection_results(
-                        image=frozen_frame.copy(),
-                        detections=frozen_detections,
-                        box_thickness=runtime.box_thickness,
-                        label_font_scale=runtime.label_font_scale,
-                    )
-                    display_frame = _render_name_prompt(display_frame, typed_name, len(frozen_detections))
+                    cv2.imshow(ASSISTANT_WINDOW_NAME, _render_name_prompt(typed_name, len(frozen_detections)))
             elif naming_mode and frozen_frame is not None:
                 display_frame = draw_detection_results(
                     image=frozen_frame.copy(),
@@ -393,7 +436,9 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     box_thickness=runtime.box_thickness,
                     label_font_scale=runtime.label_font_scale,
                 )
-                display_frame = _render_name_prompt(display_frame, typed_name, len(frozen_detections))
+                cv2.imshow(ASSISTANT_WINDOW_NAME, _render_name_prompt(typed_name, len(frozen_detections)))
+            else:
+                cv2.imshow(ASSISTANT_WINDOW_NAME, _render_idle_assistant())
 
             cv2.imshow(WINDOW_NAME, display_frame)
             key = cv2.waitKey(1) & 0xFF
@@ -405,6 +450,7 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     frozen_frame = None
                     frozen_detections = []
                     detector.last_status_message = "Da huy luu mau train."
+                    cv2.imshow(ASSISTANT_WINDOW_NAME, _render_idle_assistant())
                     continue
                 if should_save and frozen_frame is not None:
                     image_path, label_path = detector.save_training_sample(
@@ -417,12 +463,14 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     frozen_frame = None
                     frozen_detections = []
                     typed_name = ""
+                    cv2.imshow(ASSISTANT_WINDOW_NAME, _render_idle_assistant())
                 continue
 
             if capture_prep is not None:
                 if key == 27:
                     capture_prep = None
                     detector.last_status_message = "Da huy che do chup mau train."
+                    cv2.imshow(ASSISTANT_WINDOW_NAME, _render_idle_assistant())
                 continue
 
             if key in (ord("t"), ord("T")):
