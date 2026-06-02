@@ -17,14 +17,14 @@ PROFILE_LABELS = {
 }
 PROMPT_OPTIONS = (
     ("1 | Tu dong", "Can bang an toan | he thong tu quyet dinh.", "\033[92m"),
-    ("2 | Cao nhat", "Uu tien chat luong | yolo26s.pt | imgsz 768.", "\033[95m"),
-    ("3 | Trung binh", "Uu tien can bang | yolo26s.pt | imgsz 640.", "\033[96m"),
+    ("2 | Cao nhat", "Uu tien chat luong | yolo26s.pt | imgsz 768.", "\033[92m"),
+    ("3 | Trung binh", "Uu tien can bang | yolo26s.pt | imgsz 640.", "\033[93m"),
     ("4 | Yeu", "Uu tien muot | yolo26n.pt | imgsz 512.", "\033[93m"),
 )
 PERFORMANCE_HINTS = (
     (85, "Che do rat manh, he thong dang uu tien chat luong va hieu nang toi da."),
     (65, "Che do can bang manh, hop cho da so may tam trung va manh."),
-    (45, "Che do on dinh, uu tien van hanh muot va it loi."),
+    (40, "Che do tam on, dang chay duoc nhung uu tien do an toan hon hieu nang."),
 )
 
 RESET = "\033[0m"
@@ -35,9 +35,20 @@ YELLOW = "\033[93m"
 MAGENTA = "\033[95m"
 RED = "\033[91m"
 DIM = "\033[2m"
-ORANGE = "\033[38;5;208m"
 CARD_WIDTH = 96
 BOOT_BAR_WIDTH = 24
+
+
+def _ensure_utf8_console() -> None:
+    if not hasattr(sys.stdout, "reconfigure"):
+        return
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        return
+
+
+_ensure_utf8_console()
 
 
 def _clear_terminal() -> None:
@@ -92,20 +103,22 @@ def power_score(runtime: Any, hardware: Any) -> int:
     return max(0, min(100, score))
 
 
+def _score_color(score: int) -> str:
+    return GREEN if score >= 70 else YELLOW if score >= 40 else RED
+
+
 def progress_bar_colored(score: int, width: int | None = None) -> str:
     normalized = max(0, min(100, score))
     if width is None:
         width = min(BOOT_BAR_WIDTH, max(12, (_terminal_columns() - len("0[]100")) // 2))
     filled = round((normalized / 100) * width)
-    yellow_zone = round(width * 0.34)
-    orange_zone = round(width * 0.33)
+    active_color = _score_color(normalized)
     parts: list[str] = []
     for index in range(width):
         if index >= filled:
             parts.append(f"{DIM}·{RESET}")
-            continue
-        color = YELLOW if index < yellow_zone else ORANGE if index < yellow_zone + orange_zone else RED
-        parts.append(f"{color}█{RESET}")
+        else:
+            parts.append(f"{active_color}█{RESET}")
     return f"0[{' '.join(parts)}]100"
 
 
@@ -113,11 +126,7 @@ def performance_hint(score: int) -> str:
     for minimum, message in PERFORMANCE_HINTS:
         if score >= minimum:
             return message
-    return "Che do an toan, phu hop may yeu hoac dang chay CPU du phong."
-
-
-def _status_color(ok: bool | None) -> str:
-    return GREEN if ok is True else RED if ok is False else YELLOW
+    return "Che do yeu hoac dang bi gioi han. Nen kiem tra lai CUDA, model hoac cau hinh may."
 
 
 def _render_prompt(print_fn=print) -> None:
@@ -172,28 +181,63 @@ def _dashboard_values(runtime: Any, hardware: Any, camera_index: int) -> dict[st
     requested_model_name = getattr(runtime, "requested_model_name", "-")
     requested_device = getattr(runtime, "requested_device", "-")
     requested_imgsz = getattr(runtime, "requested_imgsz", "-")
+    score = power_score(runtime, hardware)
+    requested_gpu_mode = requested_profile in {"high", "medium"} or requested_device == "gpu"
+    runtime_on_gpu = resolved_device.startswith("cuda")
+    profile_match = getattr(runtime, "profile_name", "") == requested_profile if requested_profile != "auto" else True
     cuda_target = "Tu dong theo phan cung" if requested_profile == "auto" else f"{requested_model_name} / {requested_device} / imgsz {requested_imgsz}"
-    if resolved_device.startswith("cuda"):
+
+    if runtime_on_gpu:
         cuda_model_status = primary_model_name
     elif gpu_hardware_available:
         cuda_model_status = "GPU co san nhung moi truong PyTorch hien tai chua dung duoc CUDA"
     else:
         cuda_model_status = "Khong co GPU/CUDA de chay model bang CUDA"
+
+    if cuda_available:
+        cuda_color = GREEN
+        reason_color = GREEN
+    elif requested_gpu_mode or gpu_hardware_available:
+        cuda_color = RED
+        reason_color = RED
+    else:
+        cuda_color = YELLOW
+        reason_color = YELLOW
+
+    if runtime_on_gpu:
+        model_color = GREEN
+    elif requested_gpu_mode:
+        model_color = RED
+    else:
+        model_color = YELLOW
+
+    if requested_profile == "auto":
+        profile_color = GREEN if runtime_on_gpu else YELLOW
+    elif profile_match:
+        profile_color = GREEN
+    elif runtime_on_gpu:
+        profile_color = YELLOW
+    else:
+        profile_color = RED
+
     return {
         "chosen_label": mode_label(getattr(runtime, "mode", "auto")),
         "runtime_profile": getattr(runtime, "profile_name", getattr(runtime, "mode", "auto")),
         "requested_profile": requested_profile,
-        "score": power_score(runtime, hardware),
+        "score": score,
         "actual_runtime": f"{primary_model_name} / {resolved_device} / imgsz {getattr(runtime, 'imgsz', '-')}",
         "cuda_target": cuda_target,
         "cuda_model_status": cuda_model_status,
-        "cuda_available": cuda_available,
-        "gpu_hardware_available": gpu_hardware_available,
         "torch_color": GREEN if getattr(hardware, "torch_cuda_version", "CPU-only") != "CPU-only" else YELLOW if gpu_hardware_available else RED,
-        "reason_color": GREEN if cuda_available else YELLOW if gpu_hardware_available else RED,
-        "cuda_color": _status_color(True if cuda_available else None if gpu_hardware_available else False),
-        "model_color": _status_color(True if resolved_device.startswith("cuda") else None if gpu_hardware_available else False),
-        "profile_color": _status_color(None if requested_profile == "auto" else (getattr(runtime, "profile_name", "") == requested_profile)),
+        "cuda_color": cuda_color,
+        "reason_color": reason_color,
+        "model_color": model_color,
+        "profile_color": profile_color,
+        "boot_color": _score_color(score),
+        "hardware_section_color": GREEN if cuda_available else RED if gpu_hardware_available else YELLOW,
+        "runtime_section_color": model_color,
+        "ready_section_color": _score_color(score),
+        "ready_text_color": _score_color(score),
         "camera_index": camera_index,
     }
 
@@ -204,29 +248,29 @@ def print_runtime_dashboard(title: str, runtime: Any, hardware: Any, camera_inde
         _line(_rule("="), CYAN),
         _line(_pad(title), BOLD + CYAN),
         _line(_rule("="), CYAN),
-        _row("Lua chon", values["chosen_label"], MAGENTA),
+        _row("Lua chon", values["chosen_label"], GREEN),
         _row("Muc tieu", f"{values['requested_profile']} -> {values['cuda_target']}", MAGENTA),
         _row("Thuc te", f"{profile_label(values['runtime_profile'])} ({values['runtime_profile']})", values["profile_color"]),
-        _row("Thanh khoi dong", progress_bar_colored(100, width=BOOT_BAR_WIDTH), YELLOW, bounded=False),
+        _row("Thanh khoi dong", progress_bar_colored(values["score"], width=BOOT_BAR_WIDTH), values["boot_color"], bounded=False),
         _line(_rule("-"), CYAN),
-        _section("PHAN CUNG", GREEN),
+        _section("PHAN CUNG", values["hardware_section_color"]),
         _row("CPU", getattr(hardware, "cpu_name", "Khong ro CPU"), GREEN),
         _row("RAM / OS", f"{float(getattr(hardware, 'ram_gb', 0.0) or 0.0):.1f} GB / {getattr(hardware, 'os_name', 'Khong ro OS')}", GREEN),
-        _row("GPU", getattr(hardware, "gpu_name", "Khong ro"), GREEN),
-        _row("VRAM / GPU count", f"{float(getattr(hardware, 'vram_gb', 0.0) or 0.0):.1f} GB / {int(getattr(hardware, 'gpu_count', 0) or 0)}", GREEN),
+        _row("GPU", getattr(hardware, "gpu_name", "Khong ro"), values["hardware_section_color"]),
+        _row("VRAM / GPU count", f"{float(getattr(hardware, 'vram_gb', 0.0) or 0.0):.1f} GB / {int(getattr(hardware, 'gpu_count', 0) or 0)}", values["hardware_section_color"]),
         _row("Torch / build", f"{getattr(hardware, 'torch_version', 'Khong co PyTorch')} / {getattr(hardware, 'torch_cuda_version', 'CPU-only')}", values["torch_color"]),
         _row("CUDA runtime", getattr(hardware, "cuda_runtime_status", "Khong"), values["cuda_color"]),
         _row("Ly do CUDA", getattr(hardware, "cuda_runtime_reason", "Chua kiem tra"), values["reason_color"], bounded=False),
         _line(_rule("-"), CYAN),
-        _section("RUNTIME", CYAN),
+        _section("RUNTIME", values["runtime_section_color"]),
         _row("Model dang chay", values["actual_runtime"], values["model_color"]),
         _row("Model CUDA", values["cuda_model_status"], values["model_color"], bounded=False),
         _row("imgsz / max_det", f"{getattr(runtime, 'imgsz', '-')} / {getattr(runtime, 'max_det', '-')}", CYAN),
         _row("Camera / Index", f"{getattr(runtime, 'camera_width', '-')}x{getattr(runtime, 'camera_height', '-')} / {camera_index}", CYAN),
-        _row("Half precision", "Bat" if getattr(runtime, "use_half", False) else "Tat", CYAN),
+        _row("Half precision", "Bat" if getattr(runtime, "use_half", False) else "Tat", GREEN if getattr(runtime, "use_half", False) else YELLOW),
         _line(_rule("-"), CYAN),
-        _section("SAN SANG", YELLOW),
-        _row("Trang thai", performance_hint(values["score"]), YELLOW, bounded=False),
+        _section("SAN SANG", values["ready_section_color"]),
+        _row("Trang thai", performance_hint(values["score"]), values["ready_text_color"], bounded=False),
         _line(_rule("-"), CYAN),
     ]
     for line in lines:
@@ -251,7 +295,7 @@ class BootProgress:
 
     def _render_line(self) -> None:
         self._clear_line()
-        print(_line(progress_bar_colored(self.current), YELLOW), end="", flush=True)
+        print(_line(progress_bar_colored(self.current), _score_color(self.current)), end="", flush=True)
 
     def advance_to(self, target: int, label: str) -> None:
         if not self.enabled:
