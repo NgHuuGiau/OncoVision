@@ -6,69 +6,305 @@
 [![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-Ứng dụng nhận diện vật thể realtime bằng YOLO chạy trên desktop Python + OpenCV. Dự án có giao diện terminal tiếng Việt, tự dò cấu hình máy trước khi chạy, tự gợi ý mức phù hợp, có pipeline train riêng và có thể chụp mẫu train trực tiếp từ webcam.
+Ứng dụng nhận diện vật thể realtime bằng YOLO chạy trên desktop Python + OpenCV. Dự án có:
 
-## Tổng quan
+- giao diện terminal tiếng Việt
+- tự dò cấu hình máy trước khi chạy
+- tự gợi ý mức phù hợp theo `CPU`, `RAM`, `GPU`, `VRAM`, `CUDA`
+- hỗ trợ chụp mẫu train trực tiếp từ camera
+- pipeline train riêng
+- test dashboard để kiểm tra toàn hệ thống
 
-Dự án hiện dùng họ model `YOLO26` và đã hỗ trợ đủ 5 mức:
+Lưu ý quan trọng:
 
-| Mức model | File |
-|---|---|
-| Nhẹ nhất | `yolo26n.pt` |
-| Cân bằng | `yolo26s.pt` |
-| Khá mạnh | `yolo26m.pt` |
-| Mạnh | `yolo26l.pt` |
-| Mạnh nhất | `yolo26x.pt` |
+- repo này chỉ chứa code
+- repo này không kèm model `.pt`
+- repo này không kèm dataset
+- trước khi chạy camera hoặc train, bạn phải tự đặt model vào `models/pretrained/`
 
-Khi chạy `run_app.py` hoặc `run_detect.py`, hệ thống sẽ:
+## 1. Dự án này làm gì
 
-1. dò cấu hình máy thật
-2. đọc `CPU`, `RAM`, `GPU`, `VRAM`, `PyTorch`, `CUDA`
-3. hiển thị gợi ý trong terminal
-4. map lựa chọn người dùng sang model phù hợp nhất mà máy còn chạy ổn định
+Luồng chính của dự án:
 
-Ví dụ logic hiện tại:
+```text
+Webcam -> OpenCV -> YOLO -> Python -> Kết quả detect -> Cửa sổ camera
+```
 
-- máy rất mạnh, `VRAM >= 12GB` -> có thể lên `yolo26x.pt`
-- máy mạnh, `VRAM >= 8GB` -> ưu tiên `yolo26l.pt`
-- máy tầm trung, `VRAM khoảng 4GB` -> thường hợp `yolo26s.pt` hoặc `yolo26m.pt`
-- máy yếu hoặc CPU-only -> hạ xuống `yolo26n.pt`
+Dự án có 4 nhóm chức năng chính:
 
-Mục tiêu của hệ thống không phải ép model lớn nhất bằng mọi giá, mà là chọn mức cao nhất máy còn chạy ổn định.
+1. chạy camera realtime để detect vật thể
+2. tự chọn cấu hình phù hợp theo máy
+3. chụp mẫu train trực tiếp từ webcam
+4. train / validate / export model
 
-## Cách chạy nhanh
+## 2. Các model dự án dùng
 
-Luôn chạy bằng Python trong `.venv`:
+Dự án hiện dùng họ model `YOLO26` với 5 mức:
+
+| Mức | Model | Ý nghĩa |
+|---|---|---|
+| Nhẹ nhất | `yolo26n.pt` | nhẹ nhất, dễ chạy nhất |
+| Cân bằng | `yolo26s.pt` | cân bằng tốc độ và độ chính xác |
+| Khá mạnh | `yolo26m.pt` | nặng hơn, chính xác hơn |
+| Mạnh | `yolo26l.pt` | dùng cho GPU mạnh |
+| Mạnh nhất | `yolo26x.pt` | dùng cho GPU rất mạnh |
+
+Hệ thống sẽ không ép model lớn nhất bằng mọi giá. Nó sẽ cố chọn mức cao nhất mà máy vẫn còn chạy ổn định.
+
+Ví dụ:
+
+- máy rất mạnh, VRAM lớn -> có thể lên `yolo26x.pt`
+- máy tầm trung như RTX 3050 Ti 4GB -> thường hợp `yolo26s.pt` hoặc `yolo26m.pt`
+- máy yếu hoặc CPU-only -> về `yolo26n.pt`
+
+## 3. Trước khi cài
+
+Bạn nên chuẩn bị:
+
+- Windows + PowerShell
+- Python `3.10+`
+- webcam hoạt động bình thường
+- nếu muốn chạy GPU NVIDIA: cài driver và dùng đúng bản PyTorch CUDA
+
+Kiểm tra Python:
+
+```powershell
+python --version
+```
+
+Nếu lệnh này không chạy, bạn cần cài Python trước.
+
+## 4. Cài đặt từ đầu
+
+### Bước 1: clone dự án
+
+```powershell
+git clone <repo-url>
+cd D:\YOLO
+```
+
+Nếu bạn đã có thư mục dự án sẵn rồi thì chỉ cần:
+
+```powershell
+cd D:\YOLO
+```
+
+### Bước 2: tạo môi trường ảo
+
+```powershell
+python -m venv .venv
+```
+
+Ý nghĩa:
+
+- tạo Python riêng cho dự án
+- không làm bẩn Python hệ thống
+- tránh lỗi lệch version package
+
+### Bước 3: kích hoạt môi trường
 
 ```powershell
 .\\.venv\\Scripts\\Activate.ps1
 ```
 
-### Chạy camera
+Khi thành công, terminal sẽ có dạng:
 
 ```powershell
-.\\.venv\\Scripts\\python run_app.py
+(.venv) PS D:\YOLO>
 ```
 
-### Chạy detect
+### Bước 4: cài thư viện
 
 ```powershell
-.\\.venv\\Scripts\\python run_detect.py
+pip install -r requirements.txt
 ```
 
-### Chạy train
+`requirements.txt` hiện gồm các nhóm chính:
+
+- `ultralytics`
+- `opencv-python`
+- `numpy`
+- `pillow`
+- `psutil`
+- `GPUtil`
+- `pandas`
+- `matplotlib`
+- `scikit-learn`
+- `tqdm`
+- `PyYAML`
+- `torch`
+- `torchvision`
+- `torchaudio`
+
+### Bước 5: cài PyTorch đúng loại
+
+#### Nếu chỉ chạy CPU
 
 ```powershell
-.\\.venv\\Scripts\\python run_train.py
+.\\.venv\\Scripts\\python -m pip uninstall -y torch torchvision torchaudio
+.\\.venv\\Scripts\\python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
 
-### Chạy test
+#### Nếu chạy GPU NVIDIA CUDA
+
+```powershell
+.\\.venv\\Scripts\\python -m pip uninstall -y torch torchvision torchaudio
+.\\.venv\\Scripts\\python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+```
+
+### Bước 6: kiểm tra PyTorch và CUDA
+
+```powershell
+.\\.venv\\Scripts\\python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available())"
+```
+
+Ý nghĩa:
+
+- `torch.__version__`: version PyTorch
+- `torch.version.cuda`: bản CUDA build cùng PyTorch
+- `torch.cuda.is_available()`: máy có dùng CUDA thật được không
+
+Nếu `False`:
+
+- có thể bạn đang dùng bản CPU
+- hoặc driver/CUDA chưa khớp
+- hoặc máy không có GPU NVIDIA phù hợp
+
+## 5. Tạo thư mục dự án cần thiết
+
+Chạy:
+
+```powershell
+.\\.venv\\Scripts\\python training/prepare_dataset.py
+```
+
+Lệnh này sẽ tạo sẵn các thư mục như:
+
+- `dataset/raw/images`
+- `dataset/raw/labels`
+- `dataset/processed/images/train`
+- `dataset/processed/images/val`
+- `dataset/processed/images/test`
+- `dataset/processed/labels/train`
+- `dataset/processed/labels/val`
+- `dataset/processed/labels/test`
+- `dataset/sample/images`
+- `dataset/sample/labels`
+- `models/pretrained`
+- `models/trained`
+- `models/exported`
+- `output/`
+- `runs/`
+
+Lệnh này chỉ chuẩn bị cấu trúc thư mục, chưa train gì cả.
+
+## 6. Đặt model vào đúng chỗ
+
+Repo không kèm model. Bạn phải tự chép model vào:
+
+```text
+models/pretrained/
+```
+
+Nên có đủ:
+
+- `models/pretrained/yolo26n.pt`
+- `models/pretrained/yolo26s.pt`
+- `models/pretrained/yolo26m.pt`
+- `models/pretrained/yolo26l.pt`
+- `models/pretrained/yolo26x.pt`
+
+Bạn không bắt buộc phải có đủ 5 file mới chạy được, nhưng nếu muốn hệ thống auto chọn đúng mọi mức thì nên chuẩn bị đủ.
+
+Thứ tự ưu tiên load model hiện tại:
+
+1. `models/trained/best.pt`
+2. model local trong `models/pretrained/`
+3. file cùng tên nếu bạn đặt ở chỗ khác trong working directory
+
+## 7. Chạy test trước khi dùng
 
 ```powershell
 .\\.venv\\Scripts\\python run_tests.py
 ```
 
-### Chạy với mode cố định
+Ý nghĩa:
+
+- kiểm tra toàn bộ hệ thống có lỗi import, logic, dashboard, training pipeline hay không
+- nếu test pass thì môi trường code đang ổn
+
+Trạng thái hiện tại của dự án:
+
+- `50/50 PASS`
+
+## 8. Chạy camera realtime
+
+### Chạy app camera chính
+
+```powershell
+.\\.venv\\Scripts\\python run_app.py
+```
+
+### Chạy detect camera
+
+```powershell
+.\\.venv\\Scripts\\python run_detect.py
+```
+
+Hai file này đều:
+
+- dò phần cứng máy
+- chọn hoặc gợi ý runtime
+- load model
+- mở webcam
+- chạy detect realtime
+
+Khác nhau chủ yếu ở vai trò entrypoint và cách trình bày luồng chạy.
+
+## 9. Menu chọn cấu hình hoạt động ra sao
+
+Người dùng hiện thấy 3 mức:
+
+- `Cao nhất`
+- `Trung bình`
+- `Yếu`
+
+Nhưng bên trong hệ thống sẽ suy luận tiếp dựa trên cấu hình thật của máy.
+
+Ví dụ:
+
+- `Cao nhất`
+  - máy rất mạnh -> có thể dùng `yolo26x.pt`
+  - máy 8GB VRAM -> có thể dùng `yolo26l.pt`
+  - máy 4GB VRAM -> có thể tự hạ xuống `yolo26m.pt`
+- `Trung bình`
+  - máy 4GB VRAM -> thường là `yolo26s.pt`
+- `Yếu`
+  - máy yếu hoặc CPU-only -> `yolo26n.pt`
+
+Mục tiêu là:
+
+- máy mạnh thì chạy cấu hình cao
+- máy trung bình thì chạy mức vừa
+- máy yếu thì chạy mức nhẹ
+- nếu người dùng ép mức quá cao, hệ thống vẫn tự hạ để tránh crash hoặc lag nặng
+
+## 10. Màu trong terminal nghĩa là gì
+
+- xanh lá: chạy được, trạng thái tốt
+- vàng: cảnh báo, trung gian, hoặc còn giới hạn
+- đỏ: lỗi hoặc không đủ điều kiện chạy
+
+Nếu một lệnh không chạy được, terminal sẽ hiện:
+
+- `LÝ DO`
+- `Lý do không chạy`
+- `GỢI Ý`
+- `LỆNH THỬ` hoặc `LỆNH NHANH`
+
+Tức là bạn không cần phải đọc traceback dài mới biết lỗi gì.
+
+## 11. Chạy với mode cố định
 
 ```powershell
 .\\.venv\\Scripts\\python run_app.py --mode high
@@ -76,80 +312,51 @@ Luôn chạy bằng Python trong `.venv`:
 .\\.venv\\Scripts\\python run_app.py --mode low
 ```
 
-### Đổi camera index
+Ý nghĩa:
+
+- `--mode high`: yêu cầu mức cao
+- `--mode medium`: yêu cầu mức cân bằng
+- `--mode low`: yêu cầu mức nhẹ
+
+Nhưng hệ thống vẫn có quyền tự hạ nếu phần cứng không chịu nổi.
+
+## 12. Đổi camera index
+
+Nếu máy có nhiều camera hoặc camera mặc định không đúng:
 
 ```powershell
 .\\.venv\\Scripts\\python run_app.py --camera-index 1
 .\\.venv\\Scripts\\python run_detect.py --camera-index 1
 ```
 
-## 3 mức người dùng sẽ thấy
-
-Menu người dùng hiện được rút về 3 mức:
-
-- `Cao nhất`
-- `Trung bình`
-- `Yếu`
-
-Nhưng bên dưới mỗi mức, hệ thống sẽ tự tính model thật theo cấu hình máy.
-
-Ví dụ:
-
-- `Cao nhất` trên máy mạnh có thể là `yolo26x.pt`
-- `Cao nhất` trên máy 4GB VRAM có thể tự hạ còn `yolo26m.pt`
-- `Trung bình` trên RTX 3050 Ti 4GB thường là `yolo26s.pt`
-- `Yếu` trên máy yếu hoặc CPU-only sẽ về `yolo26n.pt`
-
-## Màu trong terminal
-
-- xanh lá: chạy được, trạng thái tốt
-- vàng: trung gian, cảnh báo, hoặc cần chú ý
-- đỏ: lỗi hoặc không đủ điều kiện chạy
-
-Nếu lệnh không chạy được, terminal sẽ hiện rõ:
-
-- `LÝ DO`
-- `Lý do không chạy`
-- `GỢI Ý`
-- `LỆNH THỬ` hoặc `LỆNH NHANH`
-
-## Chụp mẫu train từ camera
+## 13. Chụp mẫu train trực tiếp từ camera
 
 Khi camera đang chạy:
 
 - bấm `T` để vào chế độ chụp mẫu
-- hệ thống kiểm tra độ ổn định khung hình trong `5` giây
+- hệ thống sẽ kiểm tra độ ổn định trong `5` giây
 - nếu rung/lắc thì đếm lại
-- đủ ổn định thì mở bảng nhập tên mẫu
-- `Enter` để lưu
-- `Backspace` để xóa
-- `Esc` để hủy
+- nếu đủ ổn định thì hiện bảng nhập tên mẫu
 
-Dữ liệu lưu tại:
+Phím dùng trong lúc đặt tên:
+
+- `Enter`: lưu
+- `Backspace`: xóa ký tự
+- `Esc`: hủy
+
+Mẫu sẽ lưu vào:
 
 - `dataset/sample/images/`
 - `dataset/sample/labels/`
 
-`dataset/sample/` chỉ là nơi gom mẫu nhanh. Nguồn train chính thức vẫn là `dataset/raw/`.
+Lưu ý:
 
-## 5 model đang nằm ở đâu
+- `dataset/sample/` chỉ là nơi gom mẫu nhanh
+- nguồn train chính thức vẫn là `dataset/raw/`
 
-Model local hiện được ưu tiên tìm trong:
+## 14. Huấn luyện từ đầu
 
-- `models/trained/`
-- `models/pretrained/`
-
-Trạng thái hiện tại của dự án:
-
-- đã có đủ `yolo26n.pt`, `yolo26s.pt`, `yolo26m.pt`, `yolo26l.pt`, `yolo26x.pt` trong `models/pretrained/`
-
-File model train xong đẹp nhất sẽ nằm ở:
-
-- `models/trained/best.pt`
-
-## Hướng dẫn huấn luyện
-
-Toàn bộ lệnh dưới đây chạy từ thư mục gốc dự án:
+Toàn bộ lệnh dưới đây chạy từ:
 
 ```powershell
 PS D:\YOLO>
@@ -160,16 +367,6 @@ PS D:\YOLO>
 ```powershell
 .\\.venv\\Scripts\\python training/prepare_dataset.py
 ```
-
-Lệnh này tạo sẵn:
-
-- `dataset/raw/images`
-- `dataset/raw/labels`
-- `dataset/processed/...`
-- `dataset/sample/...`
-- `models/pretrained`
-- `models/trained`
-- `models/exported`
 
 ### Bước 2: đưa dữ liệu raw vào đúng chỗ
 
@@ -197,6 +394,11 @@ Ví dụ:
 0 0.512 0.438 0.220 0.310
 ```
 
+Ý nghĩa:
+
+- `class_id`: id class
+- 4 số sau: box đã normalize trong khoảng `0 -> 1`
+
 ### Bước 3: kiểm tra dataset raw
 
 ```powershell
@@ -206,7 +408,7 @@ Ví dụ:
 Lệnh này sẽ báo:
 
 - tổng số ảnh raw
-- ảnh hợp lệ để train
+- ảnh hợp lệ
 - ảnh thiếu label
 - label rỗng
 - label lỗi
@@ -227,7 +429,44 @@ Sau bước này dữ liệu train thật sẽ nằm ở:
 - `dataset/processed/labels/val`
 - `dataset/processed/labels/test`
 
-### Bước 5: train model
+### Bước 5: kiểm tra `training/data.yaml`
+
+File này map `class_id` sang tên class thật.
+
+Ví dụ:
+
+```yaml
+path: ../dataset/processed
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: person
+  1: helmet
+```
+
+Nếu label dùng `class_id` không khớp file này thì train sẽ sai.
+
+### Bước 6: kiểm tra `training/train_config.yaml`
+
+Các mục quan trọng:
+
+- `model`: model chính để train
+- `fallback_model`: model fallback nếu cấu hình chính lỗi
+- `epochs`: số vòng train
+- `imgsz`: kích thước ảnh train
+- `batch`: batch size
+- `device`: GPU hoặc CPU
+- `project`: thư mục `runs`
+- `name`: tên lần train
+
+Nếu máy yếu hoặc thiếu VRAM, nên giảm:
+
+- `imgsz`
+- `batch`
+
+### Bước 7: chạy train
 
 ```powershell
 .\\.venv\\Scripts\\python run_train.py
@@ -236,22 +475,26 @@ Sau bước này dữ liệu train thật sẽ nằm ở:
 Lệnh này sẽ:
 
 1. đọc `training/train_config.yaml`
-2. kiểm tra dataset đã split
+2. kiểm tra dữ liệu đã split
 3. load model train chính
 4. fallback sang model nhẹ hơn nếu cần
 5. copy `best.pt` về `models/trained/best.pt`
 
-### Bước 6: validate model
+### Bước 8: validate model
 
 ```powershell
 .\\.venv\\Scripts\\python training/validate_model.py
 ```
 
-### Bước 7: export model
+Lệnh này dùng tập `val` để đo chất lượng model sau train.
+
+### Bước 9: export model
 
 ```powershell
 .\\.venv\\Scripts\\python training/export_model.py
 ```
+
+Lệnh này lấy `models/trained/best.pt` và export sang ONNX.
 
 ### Chuỗi lệnh đầy đủ
 
@@ -264,19 +507,19 @@ Lệnh này sẽ:
 .\\.venv\\Scripts\\python training/export_model.py
 ```
 
-## Khi nào từng lệnh không chạy được
+## 15. Khi nào từng lệnh không chạy được
 
 | Lệnh | Lý do thường gặp |
 |---|---|
-| `training/prepare_dataset.py` | Hiếm khi lỗi, chủ yếu chỉ tạo thư mục |
-| `training/validate_dataset.py` | Chưa có ảnh trong `dataset/raw/images` |
-| `training/split_dataset.py` | Dataset raw rỗng hoặc raw không hợp lệ |
-| `run_train.py` | Chưa có `dataset/processed/images/train` hoặc `val` |
-| `training/validate_model.py` | Chưa có `dataset/processed/images/val` |
-| `training/export_model.py` | Chưa có `models/trained/best.pt` |
-| `run_app.py` / `run_detect.py` | Không mở được webcam, không load được model, hoặc CUDA không sẵn sàng |
+| `training/prepare_dataset.py` | hiếm khi lỗi, chủ yếu chỉ tạo thư mục |
+| `training/validate_dataset.py` | chưa có ảnh trong `dataset/raw/images` |
+| `training/split_dataset.py` | dataset raw rỗng hoặc raw không hợp lệ |
+| `run_train.py` | chưa có `dataset/processed/images/train` hoặc `val` |
+| `training/validate_model.py` | chưa có `dataset/processed/images/val` |
+| `training/export_model.py` | chưa có `models/trained/best.pt` |
+| `run_app.py` / `run_detect.py` | không mở được webcam, không load được model, hoặc CUDA không sẵn sàng |
 
-## Cấu trúc thư mục chính
+## 16. Cấu trúc thư mục chính
 
 ```text
 YOLO/
@@ -301,19 +544,19 @@ YOLO/
 
 ### Giải thích nhanh
 
-- `app/`: entry helper cho camera app
+- `app/`: helper entry cho camera app
 - `config/`: YAML cấu hình
-- `core/`: lõi detect, load model, chọn runtime
-- `dataset/`: raw, processed, sample
+- `core/`: lõi detect, chọn runtime, load model
+- `dataset/`: dữ liệu raw, processed, sample
 - `docs/`: tài liệu phụ
 - `models/`: pretrained, trained, exported
 - `output/`: ảnh, log, video sinh ra
-- `runs/`: artifact từ Ultralytics
+- `runs/`: artifact do Ultralytics tạo
 - `tests/`: test tự động
 - `training/`: pipeline huấn luyện
 - `utils/`: helper dùng chung
 
-## File quan trọng
+## 17. File quan trọng
 
 - `core/hardware_info.py`: đọc CPU, RAM, GPU, VRAM, CUDA
 - `core/model_selector.py`: chọn model và runtime theo cấu hình máy
@@ -328,17 +571,17 @@ YOLO/
 - `run_train.py`: chạy pipeline train
 - `run_tests.py`: chạy test dashboard
 
-## Trạng thái hệ thống hiện tại
-
-- terminal tiếng Việt có dấu
-- menu chọn mode đã gợi ý theo cấu hình máy
-- đủ bộ `YOLO26 n/s/m/l/x`
-- `run_tests.py` hiện pass `50/50`
-
-## Gợi ý sử dụng thực tế
+## 18. Gợi ý dùng thực tế
 
 - máy rất mạnh: chọn `Cao nhất`
 - máy tầm trung như RTX 3050 Ti 4GB: nên ưu tiên `Trung bình`
 - máy yếu hoặc CPU-only: chọn `Yếu`
 
-Nếu muốn ép `Cao nhất` trên máy yếu, hệ thống vẫn sẽ tự hạ về model hợp lý nhất còn chạy được.
+Nếu bạn ép `Cao nhất` trên máy yếu, hệ thống vẫn sẽ tự hạ về model hợp lý nhất còn chạy được.
+
+## 19. Trạng thái hiện tại
+
+- terminal tiếng Việt có dấu
+- menu chọn mode đã gợi ý theo cấu hình máy
+- hỗ trợ đủ logic cho `YOLO26 n/s/m/l/x`
+- `run_tests.py` hiện pass `50/50`
