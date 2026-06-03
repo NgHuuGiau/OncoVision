@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+import unicodedata
 from typing import Any
 
 
@@ -84,6 +85,12 @@ def _section(title: str, color: str = CYAN) -> str:
 def _row(label: str, value: str = "", color: str = "", *, bounded: bool = True) -> str:
     content = f"{label:<18} {value}".rstrip()
     return _line(_pad(content) if bounded else content, color)
+
+
+def _normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    without_marks = "".join(char for char in normalized if not unicodedata.combining(char))
+    return without_marks.replace("đ", "d").replace("Đ", "D").lower()
 
 
 def mode_label(mode: str) -> str:
@@ -290,7 +297,7 @@ def print_runtime_dashboard(title: str, runtime: Any, hardware: Any, camera_inde
 
 def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]]:
     message = str(error)
-    lower_message = message.lower()
+    lower_message = _normalize_text(message)
 
     if "khong mo duoc camera" in lower_message or "camera lien tuc khong tra ve frame" in lower_message:
         return (

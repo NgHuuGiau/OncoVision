@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 RESET = "\033[0m"
 BOLD = "\033[1m"
 CYAN = "\033[96m"
@@ -12,6 +14,19 @@ CARD_WIDTH = 88
 STATUS_OK = GREEN
 STATUS_WARN = YELLOW
 STATUS_ERROR = RED
+
+
+def _ensure_utf8_console() -> None:
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        return
+
+
+_ensure_utf8_console()
 
 
 def line(text: str = "", color: str = "") -> str:

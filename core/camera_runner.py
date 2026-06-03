@@ -176,7 +176,7 @@ class CameraDetector:
                 self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.runtime.camera_height)
                 self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 if not self.capture.isOpened():
-                    raise RuntimeError("Khong mo duoc camera.")
+                    raise RuntimeError("Không mở được camera.")
                 self.consecutive_read_failures = 0
                 self.last_frame_ts = time.perf_counter()
                 self.last_error_message = ""
@@ -193,7 +193,7 @@ class CameraDetector:
                 self.last_status_message = "Khoi tao runtime that bai, dang thu fallback."
                 logger.warning("Runtime failed, trying fallback: %s", exc)
                 self.release()
-        raise RuntimeError(f"Khong khoi tao duoc detector. Loi cuoi: {last_error}")
+        raise RuntimeError(f"Không khởi tạo được detector. Lỗi cuối: {last_error}")
 
     def read_and_detect(self) -> tuple[bool, Any, list[DetectionRecord], float]:
         if self.capture is None or self.loaded_model is None:
@@ -202,7 +202,7 @@ class CameraDetector:
         ok, frame = self.capture.read()
         if not ok:
             self.consecutive_read_failures += 1
-            self.last_error_message = "Khong doc duoc frame tu camera."
+            self.last_error_message = "Không đọc được frame từ camera."
             self.last_status_message = f"Mat frame camera ({self.consecutive_read_failures}/{self.max_consecutive_read_failures})."
             if self.consecutive_read_failures >= self.max_consecutive_read_failures:
                 raise RuntimeError("Camera lien tuc khong tra ve frame.")
@@ -287,7 +287,7 @@ class CameraDetector:
         image_path = SAMPLE_IMAGE_DIR / f"{base_name}.jpg"
         label_path = SAMPLE_LABEL_DIR / f"{base_name}.txt"
         if not cv2.imwrite(str(image_path), frame):
-            raise RuntimeError(f"Khong luu duoc anh: {image_path}")
+            raise RuntimeError(f"Không lưu được ảnh: {image_path}")
         label_path.write_text(
             "\n".join(_to_yolo_bbox_line(item.class_id, item.bbox, frame.shape) for item in detections),
             encoding="utf-8",
@@ -298,7 +298,7 @@ class CameraDetector:
 
     def save_current_training_sample(self, sample_name: str | None = None) -> tuple[Path, Path]:
         if self.last_raw_frame is None:
-            raise RuntimeError("Chua co frame nao de luu.")
+            raise RuntimeError("Chưa có frame nào để lưu.")
         return self.save_training_sample(
             frame=self.last_raw_frame,
             detections=self.last_detections,

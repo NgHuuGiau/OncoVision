@@ -418,7 +418,7 @@ Lệnh này sẽ kiểm tra:
 Nếu panel đỏ hiện ra, nghĩa là dữ liệu raw chưa đạt yêu cầu. Lúc đó nhìn vào:
 
 - `LY DO`
-- `Ly do khong chay`
+- `Lý do không chạy`
 
 để biết chính xác vì sao chưa đi tiếp được.
 
@@ -511,7 +511,7 @@ Lệnh này sẽ:
 
 Nếu không chạy được, panel đỏ sẽ ghi rõ:
 
-- `Ly do khong chay`
+- `Lý do không chạy`
 - đang thiếu dữ liệu raw hay processed
 - cần chạy lại lệnh nào
 
@@ -733,7 +733,7 @@ Kiểm tra:
 Nếu một lệnh không chạy được, terminal hiện đã ghi rõ:
 
 - `LY DO`
-- `Ly do khong chay`
+- `Lý do không chạy`
 - `GOI Y`
 - `LENH THU` hoặc `LENH NHANH`
 

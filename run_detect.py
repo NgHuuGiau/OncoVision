@@ -18,8 +18,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     return run_camera_entrypoint(
         args=parse_args(),
-        boot_title="YOLO REALTIME CAMERA - DANG CHUAN BI CHE DO CLI",
-        dashboard_title="YOLO REALTIME CAMERA - CHE DO CLI",
+        boot_title="YOLO REALTIME CAMERA - ĐANG CHUẨN BỊ CHẾ ĐỘ CLI",
+        dashboard_title="YOLO REALTIME CAMERA - CHẾ ĐỘ CLI",
         boot_finish_message="San sang mo webcam va bat dau nhan dien",
         error_message="Camera session failed: %s. Goi y: kiem tra webcam, CUDA, model va thu mode low.",
         logger=logger,

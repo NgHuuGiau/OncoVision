@@ -45,7 +45,7 @@ class YoloLoaderTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as context:
             load_yolo_model(runtime)
 
-        self.assertIn("Khong the load bat ky model local nao", str(context.exception))
+        self.assertIn("Không thể load bất kỳ model local nào", str(context.exception))
         self.assertIn("missing.pt: boom", str(context.exception))
 
     @patch("core.model_loader.load_yaml_cached")

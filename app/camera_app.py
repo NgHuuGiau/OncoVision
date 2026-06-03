@@ -57,6 +57,6 @@ def run_camera_entrypoint(
         run_camera_session_fn(runtime=runtime, camera_index=args.camera_index)
     except Exception as exc:
         logger.error(error_message, exc)
-        print_runtime_failure(f"{dashboard_title} :: KHONG THE KHOI CHAY", exc)
+        print_runtime_failure(f"{dashboard_title} :: KHÔNG THỂ KHỞI CHẠY", exc)
         raise
     return 0

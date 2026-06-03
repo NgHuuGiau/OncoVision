@@ -32,7 +32,7 @@ def _require_yolo() -> Any:
         except Exception as exc:  # pragma: no cover
             ULTRALYTICS_IMPORT_ERROR = exc
     if YOLO is None:
-        raise RuntimeError(f"Khong khoi tao duoc ultralytics/YOLO: {ULTRALYTICS_IMPORT_ERROR}")
+        raise RuntimeError(f"Không khởi tạo được ultralytics/YOLO: {ULTRALYTICS_IMPORT_ERROR}")
     return YOLO
 
 
@@ -62,7 +62,7 @@ def _candidate_paths(model_name: str) -> list[str]:
 
 
 def load_yolo_model(runtime: RuntimeConfig) -> Tuple[LoadedModel, str]:
-    yolo_cls = _require_yolo()
+    yolo_cls = None
     errors = []
     for model_name in runtime.candidate_models:
         candidate_paths = _candidate_paths(model_name)
@@ -70,6 +70,8 @@ def load_yolo_model(runtime: RuntimeConfig) -> Tuple[LoadedModel, str]:
             errors.append(f"{model_name}: khong tim thay file model local")
             logger.warning("No local file found for model %s", model_name)
             continue
+        if yolo_cls is None:
+            yolo_cls = _require_yolo()
         for candidate in candidate_paths:
             try:
                 logger.info("Trying model candidate: %s", candidate)
@@ -80,6 +82,6 @@ def load_yolo_model(runtime: RuntimeConfig) -> Tuple[LoadedModel, str]:
                 errors.append(f"{candidate}: {exc}")
                 logger.warning("Failed to load %s: %s", candidate, exc)
     raise RuntimeError(
-        "Khong the load bat ky model local nao. "
+        "Không thể load bất kỳ model local nào. "
         "Hay kiem tra models/pretrained hoac models/trained.\n" + "\n".join(errors)
     )

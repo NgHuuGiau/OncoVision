@@ -27,7 +27,7 @@ def resolve_trained_model_path(*, required: bool, fallback: str | None = None) -
     if fallback is not None:
         return resolve_model_source(fallback)
     if required:
-        raise FileNotFoundError(f"Khong tim thay {TRAINED_BEST_MODEL_PATH}")
+        raise FileNotFoundError(f"Không tìm thấy {TRAINED_BEST_MODEL_PATH}")
     return TRAINED_BEST_MODEL_PATH
 
 
