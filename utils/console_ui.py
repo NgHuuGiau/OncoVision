@@ -34,6 +34,7 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 MAGENTA = "\033[95m"
 RED = "\033[91m"
+ORANGE = "\033[38;5;208m"
 DIM = "\033[2m"
 CARD_WIDTH = 96
 BOOT_BAR_WIDTH = 24
@@ -112,14 +113,23 @@ def progress_bar_colored(score: int, width: int | None = None) -> str:
     if width is None:
         width = min(BOOT_BAR_WIDTH, max(12, (_terminal_columns() - len("0[]100")) // 2))
     filled = round((normalized / 100) * width)
-    active_color = _score_color(normalized)
     parts: list[str] = []
     for index in range(width):
         if index >= filled:
             parts.append(f"{DIM}·{RESET}")
         else:
-            parts.append(f"{active_color}█{RESET}")
+            if index < width // 3:
+                color = YELLOW
+            elif index < (width * 2) // 3:
+                color = ORANGE
+            else:
+                color = RED
+            parts.append(f"{color}█{RESET}")
     return f"0[{' '.join(parts)}]100"
+
+
+def dashboard_boot_bar(width: int = BOOT_BAR_WIDTH) -> str:
+    return progress_bar_colored(100, width)
 
 
 def performance_hint(score: int) -> str:
@@ -251,7 +261,7 @@ def print_runtime_dashboard(title: str, runtime: Any, hardware: Any, camera_inde
         _row("Lua chon", values["chosen_label"], GREEN),
         _row("Muc tieu", f"{values['requested_profile']} -> {values['cuda_target']}", MAGENTA),
         _row("Thuc te", f"{profile_label(values['runtime_profile'])} ({values['runtime_profile']})", values["profile_color"]),
-        _row("Thanh khoi dong", progress_bar_colored(values["score"], width=BOOT_BAR_WIDTH), values["boot_color"], bounded=False),
+        _row("Thanh khoi dong", dashboard_boot_bar(BOOT_BAR_WIDTH), GREEN, bounded=False),
         _line(_rule("-"), CYAN),
         _section("PHAN CUNG", values["hardware_section_color"]),
         _row("CPU", getattr(hardware, "cpu_name", "Khong ro CPU"), GREEN),
