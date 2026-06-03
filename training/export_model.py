@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 try:
@@ -14,15 +15,17 @@ try:
 except ModuleNotFoundError:
     from model_paths import resolve_trained_model_path
 
-try:
-    from ultralytics import YOLO
-    ULTRALYTICS_IMPORT_ERROR = None
-except Exception as exc:  # pragma: no cover
-    YOLO = None
-    ULTRALYTICS_IMPORT_ERROR = exc
+YOLO = None
+ULTRALYTICS_IMPORT_ERROR = None
 
 
 def _require_yolo():
+    global YOLO, ULTRALYTICS_IMPORT_ERROR
+    if YOLO is None and ULTRALYTICS_IMPORT_ERROR is None:
+        try:
+            YOLO = importlib.import_module("ultralytics").YOLO
+        except Exception as exc:  # pragma: no cover
+            ULTRALYTICS_IMPORT_ERROR = exc
     if YOLO is None:
         raise RuntimeError(f"Khong khoi tao duoc ultralytics/YOLO: {ULTRALYTICS_IMPORT_ERROR}")
     return YOLO
