@@ -25,15 +25,15 @@ class YoloLoaderTests(unittest.TestCase):
     @patch("core.model_loader.YOLO")
     def test_load_yolo_model_tries_candidates_until_success(self, yolo_mock, candidate_paths_mock) -> None:
         runtime = self._runtime()
-        runtime.candidate_models = ["yolo26s.pt", "yolo11s.pt"]
+        runtime.candidate_models = ["yolo26s.pt", "yolo26n.pt"]
         candidate_paths_mock.side_effect = [["missing-a.pt", "missing-b.pt"], ["working.pt"]]
         yolo_mock.side_effect = [RuntimeError("missing-a"), RuntimeError("missing-b"), object()]
 
         loaded_model, resolved_device = load_yolo_model(runtime)
 
-        self.assertEqual(loaded_model.model_name, "yolo11s.pt")
+        self.assertEqual(loaded_model.model_name, "yolo26n.pt")
         self.assertEqual(loaded_model.source_path, "working.pt")
-        self.assertEqual(runtime.active_model_name, "yolo11s.pt")
+        self.assertEqual(runtime.active_model_name, "yolo26n.pt")
         self.assertEqual(resolved_device, "cuda:0")
 
     @patch("core.model_loader._candidate_paths", return_value=["missing.pt"])

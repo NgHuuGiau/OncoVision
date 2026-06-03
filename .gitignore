@@ -25,24 +25,24 @@ dist/
 Thumbs.db
 .DS_Store
 
-# Logs
+# Logs / temporary
 *.log
-
-# Project runtime output
-output/
-runs/
-
-# Local datasets and generated training artifacts
-dataset/train/
-dataset/val/
-dataset/test/
-
-# Local model artifacts
-models/trained/
-
-# Temporary files
 *.tmp
 *.bak
 
-# Generated training config
+# Runtime output
+output/
+runs/
+
+# Dataset generated locally
+dataset/raw/
+dataset/processed/
+dataset/sample/
+
+# Local model files
+models/pretrained/
+models/trained/
+models/exported/
+
+# Generated config
 training/.generated_data.yaml

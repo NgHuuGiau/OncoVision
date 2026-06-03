@@ -7,8 +7,8 @@ import unicodedata
 from typing import Any
 
 
-MODE_CHOICES = {"0": "exit", "1": "auto", "2": "high", "3": "medium", "4": "low"}
-MODE_LABELS = {"auto": "Mặc định tự động", "high": "Cao nhất", "medium": "Trung bình", "low": "Yếu"}
+MODE_CHOICES = {"0": "exit", "1": "high", "2": "medium", "3": "low"}
+MODE_LABELS = {"auto": "Tự động theo máy", "high": "Cao nhất", "medium": "Trung bình", "low": "Yếu"}
 PROFILE_LABELS = {
     "high": "GPU cực mạnh",
     "medium": "GPU cân bằng",
@@ -17,10 +17,9 @@ PROFILE_LABELS = {
     "fallback_cpu_weak": "CPU tối thiểu",
 }
 PROMPT_OPTIONS = (
-    ("1 | Tự động", "Cân bằng an toàn | hệ thống tự quyết định.", "\033[92m"),
-    ("2 | Cao nhất", "Ưu tiên chất lượng | yolo26s.pt | imgsz 768.", "\033[92m"),
-    ("3 | Trung bình", "Ưu tiên cân bằng | yolo26s.pt | imgsz 640.", "\033[93m"),
-    ("4 | Yếu", "Ưu tiên mượt | yolo26n.pt | imgsz 512.", "\033[93m"),
+    ("1 | Cao nhất", "Ưu tiên chất lượng cao nhất máy còn gánh ổn.", "\033[92m"),
+    ("2 | Trung bình", "Ưu tiên cân bằng giữa mượt và chính xác.", "\033[93m"),
+    ("3 | Yếu", "Ưu tiên nhẹ nhất để máy chạy ổn định hơn.", "\033[93m"),
 )
 PERFORMANCE_HINTS = (
     (85, "Chế độ rất mạnh, hệ thống đang ưu tiên chất lượng và hiệu năng tối đa."),
@@ -147,19 +146,45 @@ def performance_hint(score: int) -> str:
     return "Chế độ yếu hoặc đang bị giới hạn. Nên kiểm tra lại CUDA, model hoặc cấu hình máy."
 
 
-def _render_prompt(print_fn=print) -> None:
+def _runtime_line(mode: str, runtime: Any) -> str:
+    return (
+        f"{mode_label(mode)} -> thực tế: "
+        f"{profile_label(getattr(runtime, 'profile_name', mode))} | "
+        f"{getattr(runtime, 'primary_model_name', '-')} | "
+        f"{getattr(runtime, 'resolved_device', '-')} | "
+        f"imgsz {getattr(runtime, 'imgsz', '-')}"
+    )
+
+
+def _render_prompt(hardware: Any | None = None, recommendations: dict[str, Any] | None = None, print_fn=print) -> None:
     _clear_terminal()
+    suggested_runtime = recommendations.get("auto") if recommendations else None
+    suggested_mode = getattr(suggested_runtime, "profile_name", "medium") if suggested_runtime else "medium"
+    hardware_summary = (
+        f"CPU: {getattr(hardware, 'cpu_name', 'Không rõ CPU')} | "
+        f"RAM: {float(getattr(hardware, 'ram_gb', 0.0) or 0.0):.1f} GB | "
+        f"GPU: {getattr(hardware, 'gpu_name', 'Không rõ GPU')} | "
+        f"VRAM: {float(getattr(hardware, 'vram_gb', 0.0) or 0.0):.1f} GB"
+        if hardware is not None
+        else "Chưa có dữ liệu phần cứng."
+    )
     lines = [
         _line(_rule("="), CYAN),
         _line(_pad("YOLO REALTIME CAMERA :: CHỌN CẤU HÌNH CHẠY"), BOLD + CYAN),
         _line(_rule("="), CYAN),
-        _row("Gợi ý", "Mode 3 = Trung bình | cân bằng mượt / chính xác", YELLOW),
-        _row("Phong cách", "Lựa chọn cấu hình theo mức ưu tiên và sức mạnh phần cứng", DIM),
+        _row("Phần cứng", hardware_summary, GREEN, bounded=False),
+        _row("Khuyên dùng", f"{mode_label(suggested_mode)} | hệ thống đã dò cấu hình máy trước khi chạy.", YELLOW, bounded=False),
+        _row("Phong cách", "Chọn 1 trong 3 mức, hệ thống sẽ tự hạ về model/device phù hợp nếu máy không gánh nổi.", DIM, bounded=False),
         _line(_rule("-"), CYAN),
         _section("CÁC LỰA CHỌN", MAGENTA),
     ]
     for label, value, color in PROMPT_OPTIONS:
         lines.append(_row(label, value, color))
+        if recommendations:
+            option_mode = MODE_CHOICES[label.split("|", 1)[0].strip()]
+            runtime = recommendations.get(option_mode)
+            if runtime is not None:
+                lines.append(_row("  Máy này", _runtime_line(option_mode, runtime), DIM, bounded=False))
     lines.extend(
         [
             _line(_rule("."), DIM),
@@ -171,17 +196,17 @@ def _render_prompt(print_fn=print) -> None:
         print_fn(line)
 
 
-def prompt_runtime_mode(input_fn=input, print_fn=print) -> str:
+def prompt_runtime_mode(hardware: Any | None = None, recommendations: dict[str, Any] | None = None, input_fn=input, print_fn=print) -> str:
     while True:
-        _render_prompt(print_fn=print_fn)
-        mode = MODE_CHOICES.get(input_fn(_line("Nhập lựa chọn của bạn (0/1/2/3/4): ", BOLD)).strip())
+        _render_prompt(hardware=hardware, recommendations=recommendations, print_fn=print_fn)
+        mode = MODE_CHOICES.get(input_fn(_line("Nhập lựa chọn của bạn (0/1/2/3): ", BOLD)).strip())
         if mode == "exit":
             raise SystemExit(0)
         if mode:
             print_fn("")
             print_fn(_line(f"Đã chọn: {mode_label(mode)}", GREEN))
             return mode
-        print_fn(_line("Lựa chọn không hợp lệ. Vui lòng nhập 0, 1, 2, 3 hoặc 4.", RED))
+        print_fn(_line("Lựa chọn không hợp lệ. Vui lòng nhập 0, 1, 2 hoặc 3.", RED))
         input_fn(_line("Nhấn Enter để chọn lại...", DIM))
 
 

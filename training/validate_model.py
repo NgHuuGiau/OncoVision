@@ -38,7 +38,7 @@ def _require_yolo():
 
 
 def resolve_validation_model_path():
-    return resolve_model_source(resolve_trained_model_path(required=False, fallback="yolo11n.pt"))
+    return resolve_model_source(resolve_trained_model_path(required=False, fallback="yolo26n.pt"))
 
 
 def _ensure_validation_dataset_ready() -> None:

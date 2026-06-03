@@ -19,7 +19,7 @@ class RuntimePromptTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
 
     def test_prompt_runtime_mode_accepts_valid_choice(self) -> None:
-        answers = iter(["3"])
+        answers = iter(["2"])
         printed: list[str] = []
 
         mode = prompt_runtime_mode(
@@ -31,7 +31,7 @@ class RuntimePromptTests(unittest.TestCase):
         self.assertTrue(any("CHỌN CẤU HÌNH CHẠY" in line for line in printed))
 
     def test_prompt_runtime_mode_retries_on_invalid_choice(self) -> None:
-        answers = iter(["9", "", "4"])
+        answers = iter(["9", "", "3"])
         printed: list[str] = []
 
         mode = prompt_runtime_mode(

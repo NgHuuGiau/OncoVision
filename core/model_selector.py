@@ -9,11 +9,11 @@ from utils.file_utils import load_yaml_cached
 
 SETTINGS_PATH = Path("config/settings.yaml")
 MODEL_BACKUPS = {
-    "yolo26s.pt": ("gpu_model", "yolo11s.pt", "yolov8s.pt"),
-    "yolo26n.pt": ("cpu_model", "yolo11n.pt", "yolov8n.pt"),
-    "yolo26m.pt": (None, "yolo11m.pt", "yolov8m.pt"),
-    "yolo11s.pt": (None, "yolov8s.pt"),
-    "yolo11n.pt": (None, "yolov8n.pt"),
+    "yolo26x.pt": (None, "yolo26l.pt", "yolo26m.pt", "yolo26s.pt", "yolo26n.pt"),
+    "yolo26l.pt": (None, "yolo26m.pt", "yolo26s.pt", "yolo26n.pt"),
+    "yolo26m.pt": (None, "yolo26s.pt", "yolo26n.pt"),
+    "yolo26s.pt": (None, "yolo26n.pt"),
+    "yolo26n.pt": (None,),
 }
 MODE_DEVICE_HINTS = {"high": "gpu", "medium": "gpu"}
 FALLBACK_CHAINS = {
@@ -85,7 +85,7 @@ def _camera_preset(settings: dict) -> dict:
 
 
 def build_candidates(model_name: str, settings: dict) -> list[str]:
-    backup_key, *fallbacks = MODEL_BACKUPS.get(model_name, (None, "yolov8n.pt"))
+    backup_key, *fallbacks = MODEL_BACKUPS.get(model_name, (None, "yolo26n.pt"))
     backup_model = settings.get("stable_backup", {}).get(backup_key) if backup_key else None
     return list(dict.fromkeys([model_name, *(item for item in [backup_model, *fallbacks] if item)]))
 
@@ -93,6 +93,46 @@ def build_candidates(model_name: str, settings: dict) -> list[str]:
 def _profile_tuple(profile_name: str, settings: dict) -> tuple[str, str, int]:
     profile = settings["models"][profile_name]
     return profile["device"], profile["model"], int(profile["imgsz"])
+
+
+def _gpu_profile_tuple(profile_name: str, hardware: HardwareInfo) -> tuple[str, int]:
+    vram = float(hardware.vram_gb)
+    if profile_name == "high":
+        if vram >= 12:
+            return "yolo26x.pt", 960
+        if vram >= 8:
+            return "yolo26l.pt", 896
+        if vram >= 4:
+            return "yolo26m.pt", 768
+        if vram >= 3:
+            return "yolo26s.pt", 640
+        return "yolo26n.pt", 512
+    if profile_name == "medium":
+        if vram >= 8:
+            return "yolo26m.pt", 768
+        if vram >= 3.5:
+            return "yolo26s.pt", 640
+        return "yolo26n.pt", 512
+    return ("yolo26s.pt", 640) if vram >= 3 else ("yolo26n.pt", 512)
+
+
+def _cpu_profile_tuple(profile_name: str, hardware: HardwareInfo) -> tuple[str, int]:
+    ram = float(hardware.ram_gb)
+    if profile_name == "high":
+        return ("yolo26s.pt", 416) if ram >= 16 else ("yolo26n.pt", 416)
+    if profile_name in {"medium", "fallback_cpu"}:
+        return "yolo26n.pt", 416
+    return "yolo26n.pt", 320
+
+
+def _resolved_profile_tuple(profile_name: str, hardware: HardwareInfo, settings: dict) -> tuple[str, str, int]:
+    if hardware.cuda_available:
+        device = "gpu"
+        model_name, imgsz = _gpu_profile_tuple(profile_name, hardware)
+        return device, model_name, imgsz
+    device = "cpu"
+    model_name, imgsz = _cpu_profile_tuple(profile_name, hardware)
+    return device, model_name, imgsz
 
 
 def _first_matching_profile(metric: float, profiles: tuple[tuple[str, float, str], ...], default: str) -> str:
@@ -147,7 +187,7 @@ def _requested_profile_name(mode: str) -> str:
 
 def _mode_profile(mode: str, hardware: HardwareInfo, settings: dict) -> tuple[str, str, int, str]:
     profile_name = _coerce_profile_name(mode, hardware, settings)
-    requested_device, model_name, imgsz = _profile_tuple(profile_name, settings)
+    requested_device, model_name, imgsz = _resolved_profile_tuple(profile_name, hardware, settings)
     if requested_device == "auto":
         requested_device = "gpu" if hardware.cuda_available else "cpu"
     return requested_device, model_name, imgsz, profile_name

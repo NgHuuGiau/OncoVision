@@ -36,16 +36,24 @@ def run_camera_entrypoint(
     detect_hardware_fn: Callable[[], Any],
     select_runtime_config_fn: Callable[..., Any],
     run_camera_session_fn: Callable[..., None],
-    prompt_runtime_mode_fn: Callable[[], str],
+    prompt_runtime_mode_fn: Callable[..., str],
 ) -> int:
     ensure_project_directories()
     try:
-        selected_mode = args.mode or prompt_runtime_mode_fn()
-        progress = BootProgress(boot_title)
-        progress.advance_to(12, "Da nhan cau hinh tu nguoi dung")
         hardware = detect_hardware_fn()
+        recommendations = None
+        if args.mode is None:
+            recommendations = {
+                mode: select_runtime_config_fn(mode=mode, hardware=hardware)
+                for mode in ("auto", "high", "medium", "low")
+            }
+        selected_mode = args.mode or prompt_runtime_mode_fn(hardware=hardware, recommendations=recommendations)
+        progress = BootProgress(boot_title)
+        progress.advance_to(12, "Đã nhận cấu hình từ người dùng")
         progress.advance_to(48, "Da kiem tra CPU / GPU / CUDA")
-        runtime = select_runtime_config_fn(mode=selected_mode, hardware=hardware)
+        runtime = recommendations.get(selected_mode) if recommendations else None
+        if runtime is None:
+            runtime = select_runtime_config_fn(mode=selected_mode, hardware=hardware)
         progress.advance_to(82, "Da chon runtime va model phu hop")
         progress.finish(boot_finish_message)
         print_runtime_dashboard(

@@ -21,8 +21,8 @@ class ModelSelectorTests(unittest.TestCase):
         )
         runtime = select_runtime_config("auto", hardware)
         self.assertEqual(runtime.profile_name, "high")
-        self.assertEqual(runtime.primary_model_name, "yolo26s.pt")
-        self.assertEqual(runtime.imgsz, 768)
+        self.assertEqual(runtime.primary_model_name, "yolo26x.pt")
+        self.assertEqual(runtime.imgsz, 960)
         self.assertEqual(runtime.resolved_device, "cuda:0")
         self.assertTrue(runtime.use_half)
 
@@ -73,7 +73,7 @@ class ModelSelectorTests(unittest.TestCase):
         runtime = select_runtime_config("auto", hardware)
         self.assertEqual(runtime.profile_name, "low")
         self.assertEqual(runtime.primary_model_name, "yolo26n.pt")
-        self.assertEqual(runtime.imgsz, 512)
+        self.assertEqual(runtime.imgsz, 320)
         self.assertEqual(runtime.resolved_device, "cpu")
         self.assertFalse(runtime.use_half)
 
@@ -89,7 +89,7 @@ class ModelSelectorTests(unittest.TestCase):
         )
         runtime = select_runtime_config("auto", hardware)
         self.assertEqual(runtime.profile_name, "fallback_cpu_weak")
-        self.assertEqual(runtime.primary_model_name, "yolo11n.pt")
+        self.assertEqual(runtime.primary_model_name, "yolo26n.pt")
         self.assertEqual(runtime.imgsz, 320)
         self.assertEqual(runtime.resolved_device, "cpu")
         self.assertFalse(runtime.use_half)
@@ -123,8 +123,8 @@ class ModelSelectorTests(unittest.TestCase):
         )
         runtime = select_runtime_config("high", hardware)
         self.assertEqual(runtime.profile_name, "low")
-        self.assertEqual(runtime.primary_model_name, "yolo26n.pt")
-        self.assertEqual(runtime.imgsz, 512)
+        self.assertEqual(runtime.primary_model_name, "yolo26s.pt")
+        self.assertEqual(runtime.imgsz, 640)
         self.assertEqual(runtime.resolved_device, "cuda:0")
         self.assertTrue(runtime.use_half)
 
@@ -173,8 +173,8 @@ class ModelSelectorTests(unittest.TestCase):
 
     def test_build_candidates_uses_backup_order(self) -> None:
         settings = load_yaml("config/settings.yaml")
-        candidates = build_candidates("yolo26s.pt", settings)
-        self.assertEqual(candidates, ["yolo26s.pt", "yolo11s.pt", "yolov8s.pt"])
+        candidates = build_candidates("yolo26x.pt", settings)
+        self.assertEqual(candidates, ["yolo26x.pt", "yolo26l.pt", "yolo26m.pt", "yolo26s.pt", "yolo26n.pt"])
 
     def test_fallback_configs_are_unique_and_degrade_to_cpu(self) -> None:
         hardware = HardwareInfo(
@@ -190,4 +190,4 @@ class ModelSelectorTests(unittest.TestCase):
         fallbacks = list(iter_fallback_configs(runtime))
         self.assertGreaterEqual(len(fallbacks), 4)
         self.assertEqual(fallbacks[-1].resolved_device, "cpu")
-        self.assertEqual(fallbacks[-1].primary_model_name, "yolo11n.pt")
+        self.assertEqual(fallbacks[-1].primary_model_name, "yolo26n.pt")

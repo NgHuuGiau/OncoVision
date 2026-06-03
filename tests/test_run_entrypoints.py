@@ -54,7 +54,14 @@ class RunEntrypointsTests(unittest.TestCase):
         run_detect.main()
 
         prompt_mode_mock.assert_called_once()
-        select_runtime_mock.assert_called_once_with(mode="medium", hardware=detect_hardware_mock.return_value)
+        prompt_kwargs = prompt_mode_mock.call_args.kwargs
+        self.assertIs(prompt_kwargs["hardware"], detect_hardware_mock.return_value)
+        self.assertIn("recommendations", prompt_kwargs)
+        self.assertEqual(select_runtime_mock.call_count, 4)
+        self.assertEqual(
+            [call.kwargs["mode"] for call in select_runtime_mock.call_args_list],
+            ["auto", "high", "medium", "low"],
+        )
         run_camera_mock.assert_called_once_with(runtime=runtime, camera_index=0)
 
     @patch("run_detect.logger")
@@ -118,7 +125,14 @@ class RunEntrypointsTests(unittest.TestCase):
         exit_code = run_app.main()
         self.assertEqual(exit_code, 0)
         prompt_mode_mock.assert_called_once()
-        select_runtime_mock.assert_called_once_with(mode="high", hardware=detect_hardware_mock.return_value)
+        prompt_kwargs = prompt_mode_mock.call_args.kwargs
+        self.assertIs(prompt_kwargs["hardware"], detect_hardware_mock.return_value)
+        self.assertIn("recommendations", prompt_kwargs)
+        self.assertEqual(select_runtime_mock.call_count, 4)
+        self.assertEqual(
+            [call.kwargs["mode"] for call in select_runtime_mock.call_args_list],
+            ["auto", "high", "medium", "low"],
+        )
         run_camera_mock.assert_called_once_with(runtime=runtime, camera_index=2)
 
     def test_mode_to_ui_defaults_maps_modes(self) -> None:
