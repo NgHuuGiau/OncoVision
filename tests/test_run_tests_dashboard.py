@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import unittest
+from unittest.mock import Mock, patch
 
 import run_tests
 
@@ -32,3 +33,30 @@ class RunTestsDashboardTests(unittest.TestCase):
         self.assertIn("KẾT QUẢ CUỐI", output)
         self.assertIn("TOÀN BỘ TEST PASS", output)
 
+    @patch("run_tests._open_camera_capture")
+    def test_check_camera_reports_warn_when_camera_cannot_open(self, open_camera_mock) -> None:
+        capture = Mock()
+        capture.isOpened.return_value = False
+        open_camera_mock.return_value = capture
+
+        result = run_tests.check_camera(index=1)
+
+        self.assertEqual(result.level, "WARN")
+        self.assertIn("Không mở được camera index 1", result.summary)
+        capture.release.assert_called_once()
+
+    @patch("run_tests._open_camera_capture")
+    def test_check_camera_reports_pass_when_frame_is_read(self, open_camera_mock) -> None:
+        frame = Mock()
+        frame.shape = (480, 640, 3)
+        capture = Mock()
+        capture.isOpened.return_value = True
+        capture.read.side_effect = [(True, frame)]
+        open_camera_mock.return_value = capture
+
+        result = run_tests.check_camera(index=0)
+
+        self.assertEqual(result.level, "PASS")
+        self.assertIn("Đọc frame thành công", result.summary)
+        self.assertIn("640x480", result.detail)
+        capture.release.assert_called_once()

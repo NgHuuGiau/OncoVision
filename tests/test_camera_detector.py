@@ -8,7 +8,15 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from core.camera_runner import CameraDetector, DetectionRecord, _sanitize_sample_name
+from core.camera_runner import (
+    CAPTURE_STABILITY_SECONDS,
+    CameraDetector,
+    CapturePreparationState,
+    DetectionRecord,
+    STABLE_FRAMES_REQUIRED,
+    _sanitize_sample_name,
+    _update_capture_preparation,
+)
 from core.hardware_info import HardwareInfo
 from core.model_selector import select_runtime_config
 from core.model_loader import LoadedModel
@@ -233,3 +241,58 @@ class CameraDetectorTests(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             detector.read_and_detect()
+
+    def test_capture_preparation_keeps_countdown_at_five_until_baseline_exists(self) -> None:
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        state = CapturePreparationState(stable_since=10.0, previous_gray=None)
+
+        next_state, ready, remaining = _update_capture_preparation(state, frame, now=12.0)
+
+        self.assertFalse(ready)
+        self.assertEqual(remaining, CAPTURE_STABILITY_SECONDS)
+        self.assertEqual(next_state.stable_since, 12.0)
+        self.assertIsNotNone(next_state.previous_gray)
+
+    def test_capture_preparation_resets_to_five_when_frame_is_still_moving(self) -> None:
+        moved_frame = np.full((80, 80, 3), 255, dtype=np.uint8)
+        state = CapturePreparationState(
+            stable_since=20.0,
+            previous_gray=np.zeros((80, 80), dtype=np.uint8),
+        )
+
+        next_state, ready, remaining = _update_capture_preparation(state, moved_frame, now=23.0)
+
+        self.assertFalse(ready)
+        self.assertEqual(remaining, CAPTURE_STABILITY_SECONDS)
+        self.assertEqual(next_state.stable_since, 23.0)
+        self.assertGreater(next_state.motion_score, 0.0)
+
+    def test_capture_preparation_counts_down_only_when_really_stable(self) -> None:
+        frame = np.zeros((80, 80, 3), dtype=np.uint8)
+        state = CapturePreparationState(
+            stable_since=20.0,
+            previous_gray=np.zeros((80, 80), dtype=np.uint8),
+        )
+
+        next_state, ready, remaining = _update_capture_preparation(state, frame, now=22.0)
+
+        self.assertFalse(ready)
+        self.assertEqual(remaining, CAPTURE_STABILITY_SECONDS)
+        self.assertEqual(next_state.stable_since, 22.0)
+        self.assertEqual(next_state.stable_frame_count, 1)
+
+    def test_capture_preparation_requires_multiple_stable_frames_before_countdown_starts(self) -> None:
+        frame = np.zeros((80, 80, 3), dtype=np.uint8)
+        state = CapturePreparationState(
+            stable_since=20.0,
+            previous_gray=np.zeros((80, 80), dtype=np.uint8),
+            stable_frame_count=STABLE_FRAMES_REQUIRED - 1,
+        )
+
+        next_state, ready, remaining = _update_capture_preparation(state, frame, now=22.0)
+
+        self.assertFalse(ready)
+        self.assertLess(remaining, CAPTURE_STABILITY_SECONDS)
+        self.assertGreater(remaining, 0.0)
+        self.assertEqual(next_state.stable_since, 20.0)
+        self.assertEqual(next_state.stable_frame_count, STABLE_FRAMES_REQUIRED)

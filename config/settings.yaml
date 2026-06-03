@@ -94,8 +94,8 @@ camera_large:
   label_font_scale: 1.0
 
 display_camera:
-  width: 1200
-  height: 750
+  width: 800
+  height: 600
   font_size: 26
   box_thickness: 4
   label_font_scale: 1.2

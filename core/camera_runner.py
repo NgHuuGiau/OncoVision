@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import time
 from dataclasses import dataclass
 from functools import lru_cache
@@ -20,13 +21,23 @@ from utils.draw_utils import draw_detection_results
 
 logger = get_logger(__name__)
 WINDOW_NAME = "YOLO Realtime Camera"
-ASSISTANT_WINDOW_NAME = "YOLO Capture Assistant"
 SAMPLE_IMAGE_DIR = Path("dataset/sample/images")
 SAMPLE_LABEL_DIR = Path("dataset/sample/labels")
 CAPTURE_STABILITY_SECONDS = 5.0
+MOTION_STABLE_THRESHOLD = 1.2
 MOTION_RESET_THRESHOLD = 3.5
+STABLE_FRAMES_REQUIRED = 6
 ALLOWED_NAME_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
-ASSISTANT_WINDOW_SIZE = (700, 220)
+CAMERA_BOTTOM_PADDING = 200
+CAPTURE_PANEL_TITLE = "YOLO Capture"
+GWL_STYLE = -16
+WS_MINIMIZEBOX = 0x00020000
+WS_MAXIMIZEBOX = 0x00010000
+WS_THICKFRAME = 0x00040000
+SWP_NOMOVE = 0x0002
+SWP_NOSIZE = 0x0001
+SWP_NOZORDER = 0x0004
+SWP_FRAMECHANGED = 0x0020
 IDLE_ASSISTANT_TITLE = "Trợ lý chụp mẫu train"
 PREPARE_ASSISTANT_TITLE = "Chuẩn bị chụp mẫu"
 NAME_PROMPT_TITLE = "Đặt tên mẫu"
@@ -50,6 +61,7 @@ class CapturePreparationState:
     stable_since: float
     previous_gray: np.ndarray | None = None
     motion_score: float = 0.0
+    stable_frame_count: int = 0
     status: str = "Giữ camera ổn định trong 5 giây."
 
 
@@ -96,26 +108,16 @@ def _load_unicode_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFon
     return ImageFont.load_default()
 
 
-def _render_assistant_window(title: str, lines: list[str]) -> np.ndarray:
-    width, height = ASSISTANT_WINDOW_SIZE
-    image = Image.new("RGB", (width, height), color=(30, 30, 30))
-    draw = ImageDraw.Draw(image)
-    draw.rectangle([(8, 8), (width - 8, height - 8)], outline=(0, 220, 255), width=3)
-    draw.text((22, 18), title, fill=(0, 220, 255), font=_load_unicode_font(28))
-    body_font = _load_unicode_font(18)
-    y = 62
-    for line in lines:
-        draw.text((22, y), line, fill=(240, 240, 240), font=body_font)
-        y += 30
-    return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-
-
 def _assistant_lines_for_preparation(remaining_seconds: float, motion_score: float, status: str) -> list[str]:
     return [
         f"Đếm ngược: {int(np.ceil(remaining_seconds))} giây",
-        f"Rung/lắc: {motion_score:.2f} | Ngưỡng reset: {MOTION_RESET_THRESHOLD:.2f}",
+        (
+            f"Rung/lắc hiện tại: {motion_score:.2f} | "
+            f"Cho phép đếm khi <= {MOTION_STABLE_THRESHOLD:.2f} | "
+            f"Đặt lại khi > {MOTION_RESET_THRESHOLD:.2f}"
+        ),
         status,
-        "Giữ yên camera và vật thể. Nếu rung, bộ đếm sẽ bắt đầu lại.",
+        f"Cần ổn định liên tục {STABLE_FRAMES_REQUIRED} frame trước khi bắt đầu đếm 5 giây.",
     ]
 
 
@@ -126,25 +128,6 @@ def _assistant_lines_for_name_prompt(sample_name: str, detection_count: int) -> 
         "Gõ tên rồi nhấn Enter để lưu.",
         "Backspace để xóa, Esc để hủy.",
     ]
-
-
-def _render_capture_preparation_overlay(*, remaining_seconds: float, motion_score: float, status: str) -> np.ndarray:
-    return _render_assistant_window(
-        title=PREPARE_ASSISTANT_TITLE,
-        lines=_assistant_lines_for_preparation(remaining_seconds, motion_score, status),
-    )
-
-
-def _render_name_prompt(sample_name: str, detection_count: int) -> np.ndarray:
-    return _render_assistant_window(
-        title=NAME_PROMPT_TITLE,
-        lines=_assistant_lines_for_name_prompt(sample_name, detection_count),
-    )
-
-
-@lru_cache(maxsize=1)
-def _render_idle_assistant() -> np.ndarray:
-    return _render_assistant_window(title=IDLE_ASSISTANT_TITLE, lines=list(IDLE_ASSISTANT_LINES))
 
 
 class CameraDetector:
@@ -331,19 +314,51 @@ def _update_capture_preparation(
     frame: np.ndarray,
     now: float,
 ) -> tuple[CapturePreparationState, bool, float]:
+    if state.previous_gray is None:
+        current_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        return (
+            CapturePreparationState(
+                stable_since=now,
+                previous_gray=current_gray,
+                motion_score=0.0,
+                stable_frame_count=0,
+                status="Đang kiểm tra độ ổn định ban đầu. Giữ yên để chuẩn bị đếm 5 giây.",
+            ),
+            False,
+            CAPTURE_STABILITY_SECONDS,
+        )
+
     motion_score, current_gray = _compute_motion_score(frame, state.previous_gray)
-    stable_since = now if motion_score > MOTION_RESET_THRESHOLD else state.stable_since
-    status = (
-        "Phát hiện rung/lắc. Giữ yên lại để đếm ngược từ đầu."
-        if motion_score > MOTION_RESET_THRESHOLD
-        else "Khung hình đang ổn định. Tiếp tục giữ yên."
-    )
-    remaining = max(0.0, CAPTURE_STABILITY_SECONDS - (now - stable_since))
+    stable_since = state.stable_since
+    stable_frame_count = state.stable_frame_count
+    if motion_score > MOTION_RESET_THRESHOLD:
+        stable_since = now
+        stable_frame_count = 0
+        status = "Phát hiện rung/lắc mạnh. Bộ đếm đã quay lại 5 giây."
+        remaining = CAPTURE_STABILITY_SECONDS
+    elif motion_score > MOTION_STABLE_THRESHOLD:
+        stable_since = now
+        stable_frame_count = 0
+        status = "Vật thể hoặc camera chưa đứng yên. Hãy giữ cố định để chuẩn bị đếm 5 giây."
+        remaining = CAPTURE_STABILITY_SECONDS
+    else:
+        stable_frame_count += 1
+        if stable_frame_count < STABLE_FRAMES_REQUIRED:
+            stable_since = now
+            status = (
+                f"Khung hình gần ổn định. "
+                f"Cần giữ thêm {STABLE_FRAMES_REQUIRED - stable_frame_count} frame liên tục."
+            )
+            remaining = CAPTURE_STABILITY_SECONDS
+        else:
+            status = "Khung hình đã ổn định. Tiếp tục giữ yên để bộ đếm chạy xuống."
+            remaining = max(0.0, CAPTURE_STABILITY_SECONDS - (now - stable_since))
     return (
         CapturePreparationState(
             stable_since=stable_since,
             previous_gray=current_gray,
             motion_score=motion_score,
+            stable_frame_count=stable_frame_count,
             status=status,
         ),
         remaining <= 0.0,
@@ -369,17 +384,65 @@ def _reset_capture_flow() -> tuple[bool, np.ndarray | None, list[DetectionRecord
     return False, None, [], ""
 
 
-def _show_assistant(panel: np.ndarray) -> None:
-    cv2.namedWindow(ASSISTANT_WINDOW_NAME, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(ASSISTANT_WINDOW_NAME, *ASSISTANT_WINDOW_SIZE)
-    cv2.imshow(ASSISTANT_WINDOW_NAME, panel)
+def _compose_camera_frame(frame: np.ndarray, title: str, lines: list[str], padding: int = CAMERA_BOTTOM_PADDING) -> np.ndarray:
+    if padding <= 0:
+        return frame
+    frame_height, frame_width = frame.shape[:2]
+    panel = Image.new("RGB", (frame_width, padding), color=(255, 255, 255))
+    draw = ImageDraw.Draw(panel)
+    draw.rectangle([(0, 0), (frame_width - 1, padding - 1)], outline=(220, 220, 220), width=1)
+    if title or lines:
+        draw.text((24, 18), title, fill=(20, 20, 20), font=_load_unicode_font(28))
+        body_font = _load_unicode_font(20)
+        y = 64
+        for line in lines[:4]:
+            draw.text((24, y), line, fill=(45, 45, 45), font=body_font)
+            y += 34
+    panel_bgr = cv2.cvtColor(np.array(panel), cv2.COLOR_RGB2BGR)
+    canvas = np.zeros((frame_height + padding, frame_width, 3), dtype=frame.dtype)
+    canvas[:frame_height, :frame_width] = frame
+    canvas[frame_height:, :frame_width] = panel_bgr
+    return canvas
 
 
-def _close_assistant() -> None:
+def _center_window(window_name: str, width: int, height: int) -> None:
     try:
-        cv2.destroyWindow(ASSISTANT_WINDOW_NAME)
-    except cv2.error:
-        pass
+        user32 = ctypes.windll.user32
+        screen_width = int(user32.GetSystemMetrics(0))
+        screen_height = int(user32.GetSystemMetrics(1))
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (screen_height - height) // 2)
+        cv2.moveWindow(window_name, x, y)
+    except Exception:
+        return
+
+
+def _lock_window_controls(window_name: str) -> None:
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, window_name)
+        if not hwnd:
+            return
+        style = int(user32.GetWindowLongW(hwnd, GWL_STYLE))
+        style &= ~WS_MINIMIZEBOX
+        style &= ~WS_MAXIMIZEBOX
+        style &= ~WS_THICKFRAME
+        user32.SetWindowLongW(hwnd, GWL_STYLE, style)
+        user32.SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+        )
+    except Exception:
+        return
+
+
+def _panel_lines_for_live_view(detector: CameraDetector) -> list[str]:
+    return []
 
 
 def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
@@ -391,8 +454,9 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
     frozen_frame: np.ndarray | None = None
     frozen_detections: list[DetectionRecord] = []
     try:
-        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(WINDOW_NAME, runtime.camera_width, runtime.camera_height)
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_AUTOSIZE)
+        _lock_window_controls(WINDOW_NAME)
+        _center_window(WINDOW_NAME, runtime.camera_width, runtime.camera_height + CAMERA_BOTTOM_PADDING)
 
         while True:
             ok, frame, _detections, _fps = detector.read_and_detect()
@@ -406,13 +470,6 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     detector.last_raw_frame,
                     time.perf_counter(),
                 )
-                _show_assistant(
-                    _render_capture_preparation_overlay(
-                        remaining_seconds=remaining,
-                        motion_score=capture_prep.motion_score,
-                        status=capture_prep.status,
-                    ),
-                )
                 if ready and detector.last_raw_frame is not None:
                     capture_prep = None
                     naming_mode = True
@@ -420,7 +477,6 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     frozen_frame = detector.last_raw_frame.copy()
                     frozen_detections = list(detector.last_detections)
                     detector.last_status_message = "Khung hinh da on dinh. Hay dat ten de luu."
-                    _show_assistant(_render_name_prompt(typed_name, len(frozen_detections)))
             elif naming_mode and frozen_frame is not None:
                 display_frame = draw_detection_results(
                     image=frozen_frame.copy(),
@@ -428,9 +484,22 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     box_thickness=runtime.box_thickness,
                     label_font_scale=runtime.label_font_scale,
                 )
-                _show_assistant(_render_name_prompt(typed_name, len(frozen_detections)))
 
-            cv2.imshow(WINDOW_NAME, display_frame)
+            panel_title = ""
+            if capture_prep is not None:
+                panel_title = CAPTURE_PANEL_TITLE
+                panel_lines = _assistant_lines_for_preparation(
+                    remaining_seconds=remaining,
+                    motion_score=capture_prep.motion_score,
+                    status=capture_prep.status,
+                )
+            elif naming_mode:
+                panel_title = CAPTURE_PANEL_TITLE
+                panel_lines = _assistant_lines_for_name_prompt(typed_name, len(frozen_detections))
+            else:
+                panel_lines = _panel_lines_for_live_view(detector)
+
+            cv2.imshow(WINDOW_NAME, _compose_camera_frame(display_frame, panel_title, panel_lines))
             key = cv2.waitKey(1) & 0xFF
 
             if naming_mode:
@@ -438,7 +507,6 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                 if should_cancel:
                     naming_mode, frozen_frame, frozen_detections, typed_name = _reset_capture_flow()
                     detector.last_status_message = "Da huy luu mau train."
-                    _close_assistant()
                     continue
                 if should_save and frozen_frame is not None:
                     image_path, label_path = detector.save_training_sample(
@@ -448,14 +516,12 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     )
                     logger.info("Da luu %s va %s", image_path.name, label_path.name)
                     naming_mode, frozen_frame, frozen_detections, typed_name = _reset_capture_flow()
-                    _close_assistant()
                 continue
 
             if capture_prep is not None:
                 if key == 27:
                     capture_prep = None
                     detector.last_status_message = "Da huy che do chup mau train."
-                    _close_assistant()
                 continue
 
             if key in (ord("t"), ord("T")):

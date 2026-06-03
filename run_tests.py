@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import logging
@@ -7,6 +8,7 @@ import math
 import sys
 import time
 import unittest
+from dataclasses import dataclass
 
 from utils.file_utils import ensure_project_directories
 
@@ -18,7 +20,6 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
 MAGENTA = "\033[95m"
-DIM = "\033[2m"
 ORANGE = "\033[38;5;208m"
 CARD_WIDTH = 88
 
@@ -53,6 +54,73 @@ def status_meter(current: int, total: int, ok_style: str, hot_style: str | None 
     text = meter(current, total)
     style = hot_style if current else ok_style
     return text, style
+
+
+@dataclass
+class CameraCheckResult:
+    level: str
+    summary: str
+    detail: str
+
+    @property
+    def style(self) -> str:
+        return {"PASS": GREEN, "WARN": YELLOW, "ERROR": RED}.get(self.level, CYAN)
+
+    @property
+    def ok(self) -> bool:
+        return self.level == "PASS"
+
+
+def _open_camera_capture(index: int):
+    import cv2
+
+    return cv2.VideoCapture(index)
+
+
+def check_camera(index: int = 0, attempts: int = 3) -> CameraCheckResult:
+    try:
+        capture = _open_camera_capture(index)
+    except Exception as exc:
+        return CameraCheckResult(
+            level="ERROR",
+            summary=f"Camera thật       ERROR | Không tạo được camera index {index}",
+            detail=f"Lý do không chạy   {exc}",
+        )
+
+    if capture is None or not capture.isOpened():
+        if capture is not None:
+            capture.release()
+        return CameraCheckResult(
+            level="WARN",
+            summary=f"Camera thật       WARN  | Không mở được camera index {index}",
+            detail="Lý do không chạy   Camera không sẵn sàng, đang bị app khác chiếm hoặc không có webcam.",
+        )
+
+    frame_width = 0
+    frame_height = 0
+    got_frame = False
+    try:
+        for _ in range(max(1, attempts)):
+            success, frame = capture.read()
+            if success and frame is not None:
+                frame_height, frame_width = frame.shape[:2]
+                got_frame = True
+                break
+    finally:
+        capture.release()
+
+    if not got_frame:
+        return CameraCheckResult(
+            level="WARN",
+            summary=f"Camera thật       WARN  | Mở được camera index {index} nhưng không đọc được frame",
+            detail="Lý do không chạy   Webcam mở được nhưng không trả về khung hình hợp lệ.",
+        )
+
+    return CameraCheckResult(
+        level="PASS",
+        summary=f"Camera thật       PASS  | Đọc frame thành công tại index {index}",
+        detail=f"Chi tiết          {frame_width}x{frame_height}",
+    )
 
 
 class PrettyTestResult(unittest.TextTestResult):
@@ -175,14 +243,35 @@ class SilentStream:
 class PrettyTestRunner(unittest.TextTestRunner):
     resultclass = PrettyTestResult
 
-    def __init__(self, *args, total_tests: int = 0, **kwargs):
+    def __init__(
+        self,
+        *args,
+        total_tests: int = 0,
+        camera_result: CameraCheckResult | None = None,
+        strict_camera: bool = False,
+        **kwargs,
+    ):
         stream = kwargs.pop("stream", sys.stderr)
         super().__init__(*args, stream=SilentStream(stream), **kwargs)
         self.output_stream = stream
         self.total_tests = total_tests
+        self.camera_result = camera_result
+        self.strict_camera = strict_camera
 
     def _makeResult(self):
         return self.resultclass(self.stream, self.descriptions, self.verbosity, total_tests=self.total_tests)
+
+    def _write_camera_section(self) -> None:
+        if self.camera_result is None:
+            return
+        self.output_stream.write(section("KIỂM TRA THIẾT BỊ", YELLOW) + "\n")
+        self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
+        self.output_stream.write(color(pad(self.camera_result.detail), self.camera_result.style) + "\n")
+        if self.strict_camera and not self.camera_result.ok:
+            self.output_stream.write(color(pad("Chế độ camera     STRICT | Camera không đạt sẽ làm bài test tổng thể fail"), RED) + "\n")
+        else:
+            self.output_stream.write(color(pad("Chế độ camera     MỀM   | Camera không đạt chỉ cảnh báo, không chặn unit test"), YELLOW) + "\n")
+        self.output_stream.write(color(rule("-"), CYAN) + "\n")
 
     def run(self, test):
         self.output_stream.write(color(rule("="), CYAN) + "\n")
@@ -194,6 +283,7 @@ class PrettyTestRunner(unittest.TextTestRunner):
         self.output_stream.write(color(pad(f"Tiến độ khởi động  [{meter(0, self.total_tests)}] 0/{self.total_tests}"), YELLOW) + "\n")
         self.output_stream.write(color(pad("Trạng thái        Đang quét toàn bộ hệ thống..."), YELLOW) + "\n")
         self.output_stream.write(color(rule("-"), CYAN) + "\n")
+        self._write_camera_section()
         self.output_stream.flush()
 
         start = time.perf_counter()
@@ -215,6 +305,8 @@ class PrettyTestRunner(unittest.TextTestRunner):
         self.output_stream.write(color(pad(f"ERROR             [{error_bar}] {result.error_count}"), error_style) + "\n")
         self.output_stream.write(color(pad(f"SKIP              [{skip_bar}] {result.skipped_count}"), skip_style) + "\n")
         self.output_stream.write(color(pad(f"Thời gian tổng    {duration:.3f}s"), CYAN) + "\n")
+        if self.camera_result is not None:
+            self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
 
         if result.failures or result.errors:
             self.output_stream.write("\n" + color(rule("-"), RED) + "\n")
@@ -229,25 +321,56 @@ class PrettyTestRunner(unittest.TextTestRunner):
                 self.output_stream.write(traceback_text + "\n")
 
         self.output_stream.write(color(rule("-"), CYAN) + "\n")
-        if result.wasSuccessful():
+        suite_ok = result.wasSuccessful()
+        camera_ok = self.camera_result is None or self.camera_result.ok or not self.strict_camera
+        if suite_ok and camera_ok:
             self.output_stream.write(color(pad("KẾT QUẢ CUỐI      TOÀN BỘ TEST PASS"), BOLD + GREEN) + "\n")
+        elif suite_ok and not camera_ok:
+            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      UNIT TEST PASS, NHƯNG CAMERA THẬT KHÔNG ĐẠT"), BOLD + RED) + "\n")
         else:
             self.output_stream.write(color(pad("KẾT QUẢ CUỐI      CÓ TEST LỖI, CẦN KIỂM TRA LẠI"), BOLD + RED) + "\n")
         self.output_stream.flush()
         return result
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Chạy test toàn hệ thống cho dự án YOLO.")
+    parser.add_argument("--camera-index", type=int, default=0, help="Camera index để kiểm tra camera thật.")
+    parser.add_argument(
+        "--skip-camera-check",
+        action="store_true",
+        help="Bỏ qua bước kiểm tra camera thật trước khi chạy unit test.",
+    )
+    parser.add_argument(
+        "--strict-camera",
+        action="store_true",
+        help="Nếu camera thật không đạt thì coi như bài test tổng thể fail.",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     ensure_project_directories()
     suite = unittest.defaultTestLoader.discover("tests")
-    runner = PrettyTestRunner(verbosity=0, total_tests=suite.countTestCases(), stream=sys.stdout)
+    camera_result = None if args.skip_camera_check else check_camera(index=args.camera_index)
+    runner = PrettyTestRunner(
+        verbosity=0,
+        total_tests=suite.countTestCases(),
+        stream=sys.stdout,
+        camera_result=camera_result,
+        strict_camera=args.strict_camera,
+    )
     previous_disable_level = logging.root.manager.disable
     logging.disable(logging.CRITICAL)
     try:
         result = runner.run(suite)
     finally:
         logging.disable(previous_disable_level)
-    return 0 if result.wasSuccessful() else 1
+
+    suite_ok = result.wasSuccessful()
+    camera_ok = camera_result is None or camera_result.ok or not args.strict_camera
+    return 0 if suite_ok and camera_ok else 1
 
 
 if __name__ == "__main__":
