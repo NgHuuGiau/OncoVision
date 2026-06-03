@@ -69,10 +69,12 @@ class TrainingPipelineTests(unittest.TestCase):
                 elif original is not None:
                     target.write_bytes(original)
 
+    @patch("training.validate_model._ensure_validation_dataset_ready")
     @patch("training.validate_model.YOLO")
-    def test_validate_model_falls_back_to_yolo11n_when_best_missing(self, yolo_mock) -> None:
+    def test_validate_model_falls_back_to_yolo11n_when_best_missing(self, yolo_mock, ensure_validation_ready_mock) -> None:
         model = MagicMock()
         yolo_mock.return_value = model
+        ensure_validation_ready_mock.return_value = None
         with patch("training.validate_model.resolve_trained_model_path", return_value=Path("yolo11n.pt")):
             validate_model.main()
         yolo_mock.assert_called_once_with(str(Path("models/pretrained/yolo11n.pt")))

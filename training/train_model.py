@@ -16,6 +16,11 @@ try:
 except ModuleNotFoundError:
     from model_paths import TRAINED_BEST_MODEL_PATH, resolve_data_config_path, resolve_model_source
 
+try:
+    from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
+except ModuleNotFoundError:
+    from terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
+
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
 
@@ -29,15 +34,6 @@ PROCESSED_VAL_DIR = Path("dataset/processed/images/val")
 RAW_IMAGES_DIR = Path("dataset/raw/images")
 RAW_LABELS_DIR = Path("dataset/raw/labels")
 
-RESET = "\033[0m"
-BOLD = "\033[1m"
-CYAN = "\033[96m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-DIM = "\033[2m"
-CARD_WIDTH = 88
-
 
 def _require_yolo():
     global YOLO, ULTRALYTICS_IMPORT_ERROR
@@ -47,7 +43,7 @@ def _require_yolo():
         except Exception as exc:  # pragma: no cover
             ULTRALYTICS_IMPORT_ERROR = exc
     if YOLO is None:
-        raise RuntimeError(f"Khong khoi tao duoc ultralytics/YOLO: {ULTRALYTICS_IMPORT_ERROR}")
+        raise RuntimeError(f"Không khởi tạo được ultralytics/YOLO: {ULTRALYTICS_IMPORT_ERROR}")
     return YOLO
 
 
@@ -63,13 +59,13 @@ def _training_kwargs(config: dict) -> dict:
 def _ensure_training_dataset_ready() -> None:
     if not PROCESSED_TRAIN_DIR.exists() or not any(PROCESSED_TRAIN_DIR.iterdir()):
         raise FileNotFoundError(
-            "Chua co anh trong dataset/processed/images/train. "
-            "Hay bo du lieu vao dataset/raw va chay training/split_dataset.py truoc."
+            "Chưa có ảnh trong dataset/processed/images/train. "
+            "Hãy bỏ dữ liệu vào dataset/raw và chạy training/split_dataset.py trước."
         )
     if not PROCESSED_VAL_DIR.exists() or not any(PROCESSED_VAL_DIR.iterdir()):
         raise FileNotFoundError(
-            "Chua co anh trong dataset/processed/images/val. "
-            "Hay bo du lieu vao dataset/raw va chay training/split_dataset.py truoc."
+            "Chưa có ảnh trong dataset/processed/images/val. "
+            "Hãy bỏ dữ liệu vào dataset/raw và chạy training/split_dataset.py trước."
         )
 
 
@@ -82,54 +78,35 @@ def _copy_best_weight(run_dir: Path) -> None:
         logger.info("Copied best.pt to %s", target)
 
 
-def _line(text: str = "", color: str = "") -> str:
-    return f"{color}{text}{RESET}" if color else text
-
-
-def _pad(text: str, width: int = CARD_WIDTH) -> str:
-    return text[:width].ljust(width)
-
-
-def _rule(char: str = "=") -> str:
-    return char * CARD_WIDTH
-
-
-def _section(title: str, color: str) -> str:
-    return _line(_pad(f"[ {title} ]"), BOLD + color)
-
-
-def _row(label: str, value: str = "", color: str = "", *, bounded: bool = True) -> str:
-    content = f"{label:<18} {value}".rstrip()
-    return _line(_pad(content) if bounded else content, color)
-
-
 def _print_dataset_ready_help(error: FileNotFoundError) -> None:
     raw_images_count = len(list(RAW_IMAGES_DIR.glob("*"))) if RAW_IMAGES_DIR.exists() else 0
     raw_labels_count = len(list(RAW_LABELS_DIR.glob("*"))) if RAW_LABELS_DIR.exists() else 0
     raw_images_color = GREEN if raw_images_count > 0 else RED
     raw_labels_color = GREEN if raw_labels_count > 0 else RED
-    print(_line(_rule("="), CYAN))
-    print(_line(_pad("YOLO TRAINING :: DU LIEU CHUA SAN SANG"), BOLD + CYAN))
-    print(_line(_rule("="), CYAN))
-    print(_section("LY DO", RED))
-    print(_row("Trang thai", str(error), RED, bounded=False))
-    print(_line(_rule("-"), CYAN))
-    print(_section("KIEM TRA NHANH", YELLOW))
-    print(_row("Raw images", f"{RAW_IMAGES_DIR} ({raw_images_count} file)", raw_images_color, bounded=False))
-    print(_row("Raw labels", f"{RAW_LABELS_DIR} ({raw_labels_count} file)", raw_labels_color, bounded=False))
-    print(_line(_rule("-"), CYAN))
-    print(_section("CAC BUOC CAN LAM", GREEN))
-    print(_row("Buoc 1", f"Bo anh vao {RAW_IMAGES_DIR}" if raw_images_count == 0 else f"Da co {raw_images_count} anh trong {RAW_IMAGES_DIR}", raw_images_color, bounded=False))
-    print(_row("Buoc 2", f"Bo label vao {RAW_LABELS_DIR}" if raw_labels_count == 0 else f"Da co {raw_labels_count} label trong {RAW_LABELS_DIR}", raw_labels_color, bounded=False))
-    print(_row("Buoc 3", "Chay training/validate_dataset.py", YELLOW))
-    print(_row("Buoc 4", "Chay training/split_dataset.py", YELLOW))
-    print(_row("Buoc 5", "Chay lai run_train.py", GREEN))
-    print(_line(_rule("-"), CYAN))
-    print(_section("LENH NHANH", CYAN))
-    print(_row("Lenh 1", r".\.venv\Scripts\python training\validate_dataset.py", CYAN, bounded=False))
-    print(_row("Lenh 2", r".\.venv\Scripts\python training\split_dataset.py", CYAN, bounded=False))
-    print(_row("Lenh 3", r".\.venv\Scripts\python run_train.py", CYAN, bounded=False))
-    print(_line(_rule("="), CYAN))
+    for item in header("YOLO TRAINING :: DỮ LIỆU CHƯA SẴN SÀNG", color=RED):
+        print(item)
+    print(section("LÝ DO", RED))
+    print(row("Lý do không chạy", str(error), RED, bounded=False))
+    print(line(rule("-"), CYAN))
+    print(section("KIỂM TRA NHANH", YELLOW))
+    print(row("Raw images", f"{RAW_IMAGES_DIR} ({raw_images_count} file)", raw_images_color, bounded=False))
+    print(row("Raw labels", f"{RAW_LABELS_DIR} ({raw_labels_count} file)", raw_labels_color, bounded=False))
+    print(line(rule("-"), CYAN))
+    print(section("CÁC BƯỚC CẦN LÀM", GREEN))
+    print(row("Bước 1", f"Bỏ ảnh vào {RAW_IMAGES_DIR}" if raw_images_count == 0 else f"Đã có {raw_images_count} ảnh trong {RAW_IMAGES_DIR}", raw_images_color, bounded=False))
+    print(row("Bước 2", f"Bỏ label vào {RAW_LABELS_DIR}" if raw_labels_count == 0 else f"Đã có {raw_labels_count} label trong {RAW_LABELS_DIR}", raw_labels_color, bounded=False))
+    print(row("Bước 3", "Chạy training/validate_dataset.py", YELLOW))
+    print(row("Bước 4", "Chạy training/split_dataset.py", YELLOW))
+    print(row("Bước 5", "Chạy lại run_train.py", GREEN))
+    print(line(rule("-"), CYAN))
+    print(section("Ý NGHĨA LỆNH", CYAN))
+    print(row("Lệnh này", "Đọc dataset đã split trong dataset/processed và bắt đầu huấn luyện.", YELLOW, bounded=False))
+    print(line(rule("-"), CYAN))
+    print(section("LỆNH NHANH", CYAN))
+    print(command_row(1, r".\.venv\Scripts\python training\validate_dataset.py"))
+    print(command_row(2, r".\.venv\Scripts\python training\split_dataset.py"))
+    print(command_row(3, r".\.venv\Scripts\python run_train.py"))
+    print(line(rule("="), CYAN))
 
 
 def main() -> None:

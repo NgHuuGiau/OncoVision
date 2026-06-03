@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 from utils.file_utils import ensure_project_directories
-from utils.console_ui import BootProgress, print_runtime_dashboard
+from utils.console_ui import BootProgress, print_runtime_dashboard, print_runtime_failure
 
 
 def build_runtime_arg_parser(description: str) -> argparse.ArgumentParser:
@@ -39,23 +39,24 @@ def run_camera_entrypoint(
     prompt_runtime_mode_fn: Callable[[], str],
 ) -> int:
     ensure_project_directories()
-    selected_mode = args.mode or prompt_runtime_mode_fn()
-    progress = BootProgress(boot_title)
-    progress.advance_to(12, "Da nhan cau hinh tu nguoi dung")
-    hardware = detect_hardware_fn()
-    progress.advance_to(48, "Da kiem tra CPU / GPU / CUDA")
-    runtime = select_runtime_config_fn(mode=selected_mode, hardware=hardware)
-    progress.advance_to(82, "Da chon runtime va model phu hop")
-    progress.finish(boot_finish_message)
-    print_runtime_dashboard(
-        title=dashboard_title,
-        runtime=runtime,
-        hardware=hardware,
-        camera_index=args.camera_index,
-    )
     try:
+        selected_mode = args.mode or prompt_runtime_mode_fn()
+        progress = BootProgress(boot_title)
+        progress.advance_to(12, "Da nhan cau hinh tu nguoi dung")
+        hardware = detect_hardware_fn()
+        progress.advance_to(48, "Da kiem tra CPU / GPU / CUDA")
+        runtime = select_runtime_config_fn(mode=selected_mode, hardware=hardware)
+        progress.advance_to(82, "Da chon runtime va model phu hop")
+        progress.finish(boot_finish_message)
+        print_runtime_dashboard(
+            title=dashboard_title,
+            runtime=runtime,
+            hardware=hardware,
+            camera_index=args.camera_index,
+        )
         run_camera_session_fn(runtime=runtime, camera_index=args.camera_index)
     except Exception as exc:
         logger.error(error_message, exc)
+        print_runtime_failure(f"{dashboard_title} :: KHONG THE KHOI CHAY", exc)
         raise
     return 0

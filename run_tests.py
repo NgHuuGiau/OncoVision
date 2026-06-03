@@ -112,14 +112,14 @@ class PrettyTestResult(unittest.TextTestResult):
     def addSuccess(self, test):
         elapsed = time.perf_counter() - self.test_start_time
         self.passed_count += 1
-        self.stream.write(color(pad(f"    PASS   {elapsed:.3f}s   | da pass {self.passed_count}/{self.total_tests}"), GREEN) + "\n")
+        self.stream.write(color(pad(f"    PASS   {elapsed:.3f}s   | đã pass {self.passed_count}/{self.total_tests}"), GREEN) + "\n")
         self.stream.flush()
         super().addSuccess(test)
 
     def addFailure(self, test, err):
         elapsed = time.perf_counter() - self.test_start_time
         self.failed_count += 1
-        self.stream.write(color(pad(f"    FAIL   {elapsed:.3f}s   | loi {self.failed_count}"), RED) + "\n")
+        self.stream.write(color(pad(f"    FAIL   {elapsed:.3f}s   | lỗi {self.failed_count}"), RED) + "\n")
         self.stream.flush()
         super().addFailure(test, err)
 
@@ -181,9 +181,6 @@ class PrettyTestRunner(unittest.TextTestRunner):
         self.output_stream = stream
         self.total_tests = total_tests
 
-    def _render_progress(self, current: int, total: int, style: str = CYAN) -> str:
-        return color(pad(f"[{meter(current, total)}] {current}/{total}"), style)
-
     def _makeResult(self):
         return self.resultclass(self.stream, self.descriptions, self.verbosity, total_tests=self.total_tests)
 
@@ -191,11 +188,11 @@ class PrettyTestRunner(unittest.TextTestRunner):
         self.output_stream.write(color(rule("="), CYAN) + "\n")
         self.output_stream.write(color(pad("YOLO PROJECT :: SYSTEM TEST DASHBOARD"), BOLD + CYAN) + "\n")
         self.output_stream.write(color(rule("="), CYAN) + "\n")
-        self.output_stream.write(section("TONG QUAN", GREEN) + "\n")
-        self.output_stream.write(color(pad(f"Tong so test      {self.total_tests}"), GREEN) + "\n")
-        self.output_stream.write(color(pad("Che do            Chay tung test, hien ket qua theo thoi gian that"), GREEN) + "\n")
-        self.output_stream.write(color(pad(f"Tien do khoi dong  [{meter(0, self.total_tests)}] 0/{self.total_tests}"), YELLOW) + "\n")
-        self.output_stream.write(color(pad("Trang thai        Dang quet toan bo he thong..."), YELLOW) + "\n")
+        self.output_stream.write(section("TỔNG QUAN", GREEN) + "\n")
+        self.output_stream.write(color(pad(f"Tổng số test      {self.total_tests}"), GREEN) + "\n")
+        self.output_stream.write(color(pad("Chế độ            Chạy từng test, hiện kết quả theo thời gian thực"), GREEN) + "\n")
+        self.output_stream.write(color(pad(f"Tiến độ khởi động  [{meter(0, self.total_tests)}] 0/{self.total_tests}"), YELLOW) + "\n")
+        self.output_stream.write(color(pad("Trạng thái        Đang quét toàn bộ hệ thống..."), YELLOW) + "\n")
         self.output_stream.write(color(rule("-"), CYAN) + "\n")
         self.output_stream.flush()
 
@@ -209,19 +206,19 @@ class PrettyTestRunner(unittest.TextTestRunner):
         skip_bar, skip_style = status_meter(result.skipped_count, self.total_tests, GREEN, YELLOW)
 
         self.output_stream.write("\n" + color(rule("="), CYAN) + "\n")
-        self.output_stream.write(color(pad("YOLO PROJECT :: TONG KET KIEM THU"), BOLD + CYAN) + "\n")
+        self.output_stream.write(color(pad("YOLO PROJECT :: TỔNG KẾT KIỂM THỬ"), BOLD + CYAN) + "\n")
         self.output_stream.write(color(rule("="), CYAN) + "\n")
-        self.output_stream.write(section("TONG KET", CYAN) + "\n")
-        self.output_stream.write(color(pad(f"Tien do tong      [{meter(result.current_test, self.total_tests)}] {result.current_test}/{self.total_tests}"), CYAN) + "\n")
+        self.output_stream.write(section("TỔNG KẾT", CYAN) + "\n")
+        self.output_stream.write(color(pad(f"Tiến độ tổng      [{meter(result.current_test, self.total_tests)}] {result.current_test}/{self.total_tests}"), CYAN) + "\n")
         self.output_stream.write(color(pad(f"PASS              [{pass_bar}] {result.passed_count}/{self.total_tests}"), pass_style) + "\n")
         self.output_stream.write(color(pad(f"FAIL              [{fail_bar}] {result.failed_count}"), fail_style) + "\n")
         self.output_stream.write(color(pad(f"ERROR             [{error_bar}] {result.error_count}"), error_style) + "\n")
         self.output_stream.write(color(pad(f"SKIP              [{skip_bar}] {result.skipped_count}"), skip_style) + "\n")
-        self.output_stream.write(color(pad(f"Thoi gian tong    {duration:.3f}s"), CYAN) + "\n")
+        self.output_stream.write(color(pad(f"Thời gian tổng    {duration:.3f}s"), CYAN) + "\n")
 
         if result.failures or result.errors:
             self.output_stream.write("\n" + color(rule("-"), RED) + "\n")
-            self.output_stream.write(section("CHI TIET TEST LOI", RED) + "\n")
+            self.output_stream.write(section("CHI TIẾT TEST LỖI", RED) + "\n")
             self.output_stream.write(color(rule("-"), RED) + "\n")
             for test, traceback_text in result.failures + result.errors:
                 self.output_stream.write(color(f"{self.resultclass.getDescription(result, test)}\n", RED))
@@ -233,9 +230,9 @@ class PrettyTestRunner(unittest.TextTestRunner):
 
         self.output_stream.write(color(rule("-"), CYAN) + "\n")
         if result.wasSuccessful():
-            self.output_stream.write(color(pad("KET QUA CUOI      TOAN BO TEST PASS"), BOLD + GREEN) + "\n")
+            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      TOÀN BỘ TEST PASS"), BOLD + GREEN) + "\n")
         else:
-            self.output_stream.write(color(pad("KET QUA CUOI      CO TEST LOI, CAN KIEM TRA LAI"), BOLD + RED) + "\n")
+            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      CÓ TEST LỖI, CẦN KIỂM TRA LẠI"), BOLD + RED) + "\n")
         self.output_stream.flush()
         return result
 

@@ -6,7 +6,7 @@
 [![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-Ứng dụng nhận diện vật thể realtime bằng YOLO, chạy thuần Python + OpenCV, có chọn mode trong terminal, có fallback theo phần cứng, có pipeline train/validate/export, và có chức năng chụp mẫu train trực tiếp từ camera.
+Ứng dụng nhận diện vật thể realtime bằng YOLO, chạy thuần Python + OpenCV, có chọn mode trong terminal, có fallback theo phần cứng, có pipeline train riêng, và có chức năng chụp mẫu train trực tiếp từ camera.
 
 ---
 
@@ -25,7 +25,7 @@
 
 ### Dự án làm gì
 
-Dự án mở webcam, chạy YOLO để nhận diện vật thể theo thời gian thực và hiển thị kết quả trực tiếp trên cửa sổ OpenCV.
+Dự án mở webcam, chạy YOLO để nhận diện vật thể theo thời gian thực, rồi hiển thị kết quả trực tiếp trên cửa sổ OpenCV.
 
 Luồng cơ bản:
 
@@ -52,9 +52,13 @@ Webcam -> OpenCV -> YOLO -> Python -> Bounding boxes -> Camera window
   - PyTorch
   - CUDA
 - Có fallback runtime và fallback model
-- Có pipeline train riêng
+- Có pipeline train / validate / export riêng
 - Có test dashboard `run_tests.py`
-- Có chức năng bấm `T` để chụp mẫu train
+- Có chức năng bấm `T` để chụp mẫu train từ camera
+- Có giao diện terminal màu:
+  - xanh lá: chạy được
+  - vàng: cảnh báo / trạng thái trung gian
+  - đỏ: lỗi hoặc không đủ điều kiện chạy
 
 ### Camera hiển thị gì
 
@@ -217,7 +221,7 @@ Khi camera đang chạy:
 - hệ thống kiểm tra độ ổn định khung hình trong `5` giây
 - nếu rung/lắc vượt ngưỡng, bộ đếm sẽ reset
 - đủ ổn định thì hiện cửa sổ `YOLO Capture Assistant`
-- nhập tên mẫu
+- nhập tên mẫu:
   - `Enter` để lưu
   - `Backspace` để xóa
   - `Esc` để hủy
@@ -259,20 +263,52 @@ Trạng thái hiện tại:
 
 ## 4. Hướng dẫn huấn luyện
 
-### Dữ liệu train lấy ở đâu
+### Cần đứng ở đâu để chạy lệnh
+
+Tất cả lệnh training trong README này được chạy từ thư mục gốc của dự án:
+
+```powershell
+D:\YOLO
+```
+
+Tức là trước khi chạy, bạn nên thấy prompt đang ở:
+
+```powershell
+PS D:\YOLO>
+```
+
+Nếu đang ở thư mục khác thì di chuyển về thư mục gốc:
+
+```powershell
+cd D:\YOLO
+```
+
+Sau đó kích hoạt môi trường:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+### Huấn luyện lấy dữ liệu từ đâu
 
 Nguồn train chính thức là:
 
 - `dataset/raw/images/`
 - `dataset/raw/labels/`
 
-Không train trực tiếp từ `dataset/sample/`.
+Không train trực tiếp từ:
 
-### Cấu trúc dataset YOLO
+- `dataset/sample/`
+- video gốc
+- ảnh nằm ở chỗ khác mà chưa copy vào `dataset/raw/`
+
+Nếu bạn chụp mẫu bằng camera với phím `T`, dữ liệu sẽ vào `dataset/sample/`. Lúc đó bạn nên kiểm tra lại rồi chuyển mẫu tốt sang `dataset/raw/` để train thật.
+
+### Dữ liệu cần chuẩn bị như thế nào
 
 Mỗi ảnh phải có file `.txt` cùng tên.
 
-Ví dụ:
+Ví dụ đúng:
 
 ```text
 dataset/
@@ -285,11 +321,37 @@ dataset/
         `-- frame_002.txt
 ```
 
-Format mỗi dòng trong label:
+Nội dung mỗi dòng trong file label theo format YOLO:
 
 ```text
 <class_id> <x_center> <y_center> <width> <height>
 ```
+
+Ví dụ:
+
+```text
+0 0.512 0.438 0.220 0.310
+1 0.300 0.620 0.180 0.250
+```
+
+Ý nghĩa:
+
+- số đầu tiên: `class_id`
+- 4 số sau: tọa độ box đã normalize trong khoảng `0 -> 1`
+
+### Trình tự huấn luyện đúng
+
+Huấn luyện trong dự án này nên chạy đúng thứ tự sau:
+
+1. Tạo sẵn thư mục dataset
+2. Bỏ ảnh + label vào `dataset/raw/`
+3. Kiểm tra dataset raw
+4. Chia train / val / test
+5. Chỉnh class trong `training/data.yaml`
+6. Chỉnh cấu hình train trong `training/train_config.yaml`
+7. Chạy train
+8. Validate model
+9. Export model nếu cần
 
 ### Bước 1: tạo sẵn thư mục dataset
 
@@ -297,36 +359,97 @@ Format mỗi dòng trong label:
 .\.venv\Scripts\python training/prepare_dataset.py
 ```
 
-### Bước 2: kiểm tra dataset raw
+Lệnh này chỉ làm 1 việc:
+
+- tạo sẵn khung thư mục cho dataset, models, output, runs
+
+Lệnh này không làm:
+
+- không train
+- không chia dữ liệu
+- không kiểm tra label
+
+Sau khi chạy xong, tối thiểu bạn sẽ có:
+
+- `dataset/raw/images`
+- `dataset/raw/labels`
+- `dataset/processed/images/train`
+- `dataset/processed/images/val`
+- `dataset/processed/images/test`
+- `dataset/processed/labels/train`
+- `dataset/processed/labels/val`
+- `dataset/processed/labels/test`
+
+### Bước 2: bỏ dữ liệu vào đúng chỗ
+
+Bạn tự copy dữ liệu vào:
+
+- ảnh vào `dataset/raw/images/`
+- label `.txt` vào `dataset/raw/labels/`
+
+Ví dụ:
+
+```text
+dataset/raw/images/anh_001.jpg
+dataset/raw/labels/anh_001.txt
+```
+
+Lưu ý quan trọng:
+
+- tên ảnh và tên label phải trùng nhau, chỉ khác đuôi file
+- không được để ảnh có mà không có label
+- không được để label dùng class id không có trong `training/data.yaml`
+
+### Bước 3: kiểm tra dataset raw
 
 ```powershell
 .\.venv\Scripts\python training/validate_dataset.py
 ```
 
-Script này sẽ báo:
+Lệnh này sẽ kiểm tra:
 
-- ảnh thiếu label
-- label lỗi format
-- label mồ côi
-- label rỗng
+- tổng số ảnh raw
+- bao nhiêu ảnh hợp lệ để train
+- ảnh nào thiếu label
+- label nào rỗng
+- label nào sai format
+- label nào mồ côi, có file txt nhưng không có ảnh
 
-### Bước 3: chia train / val / test
+Nếu panel đỏ hiện ra, nghĩa là dữ liệu raw chưa đạt yêu cầu. Lúc đó nhìn vào:
+
+- `LY DO`
+- `Ly do khong chay`
+
+để biết chính xác vì sao chưa đi tiếp được.
+
+### Bước 4: chia train / val / test
 
 ```powershell
 .\.venv\Scripts\python training/split_dataset.py
 ```
 
-Script sẽ:
+Lệnh này:
 
-- đọc từ `dataset/raw/`
-- chia dữ liệu sang `dataset/processed/`
-- dùng tỷ lệ:
+- đọc dữ liệu hợp lệ từ `dataset/raw/`
+- copy sang `dataset/processed/`
+- chia theo tỉ lệ:
   - `train = 70%`
   - `val = 15%`
   - `test = 15%`
 - xóa dữ liệu cũ trong `dataset/processed/` trước khi chia lại
 
-### Bước 4: cập nhật class trong `training/data.yaml`
+Sau khi chạy xong, dữ liệu train thật sẽ nằm ở:
+
+- `dataset/processed/images/train`
+- `dataset/processed/images/val`
+- `dataset/processed/images/test`
+- `dataset/processed/labels/train`
+- `dataset/processed/labels/val`
+- `dataset/processed/labels/test`
+
+### Bước 5: cập nhật class trong `training/data.yaml`
+
+File này là nơi map `class_id` sang tên class thật.
 
 Ví dụ:
 
@@ -343,46 +466,91 @@ names:
   3: helmet
 ```
 
-### Bước 5: kiểm tra `training/train_config.yaml`
+Ý nghĩa:
+
+- nếu trong label có dòng bắt đầu bằng `0`, model sẽ hiểu đó là `person`
+- nếu trong label có dòng bắt đầu bằng `3`, model sẽ hiểu đó là `helmet`
+
+Nếu file label dùng `class_id` không khớp file này, kết quả train sẽ sai.
+
+### Bước 6: kiểm tra `training/train_config.yaml`
+
+File này là cấu hình huấn luyện.
 
 Các trường quan trọng:
 
-- `model`
-- `fallback_model`
-- `epochs`
+- `model`: model chính để train
+- `fallback_model`: model fallback nếu cấu hình chính lỗi
+- `epochs`: số vòng train
+- `imgsz`: kích thước ảnh đưa vào model
+- `batch`: batch size
+- `device`: GPU / CPU
+- `project`: thư mục runs
+- `name`: tên lần train
+
+Nếu máy yếu hoặc thiếu VRAM, hãy giảm:
+
 - `imgsz`
 - `batch`
-- `device`
-- `project`
-- `name`
 
-### Bước 6: chạy train
+### Bước 7: chạy train
 
 ```powershell
 .\.venv\Scripts\python run_train.py
 ```
 
-Luồng train:
+Lệnh này sẽ:
 
-1. đọc `training/train_config.yaml`
-2. kiểm tra `dataset/processed/images/train` và `val`
-3. train với model chính
-4. nếu lỗi thì fallback model nhẹ hơn
-5. copy `best.pt` về `models/trained/best.pt`
+1. Đọc `training/train_config.yaml`
+2. Kiểm tra `dataset/processed/images/train`
+3. Kiểm tra `dataset/processed/images/val`
+4. Load model chính
+5. Train
+6. Nếu lỗi thì fallback model nhẹ hơn
+7. Copy `best.pt` về `models/trained/best.pt`
 
-### Bước 7: validate model
+Nếu không chạy được, panel đỏ sẽ ghi rõ:
+
+- `Ly do khong chay`
+- đang thiếu dữ liệu raw hay processed
+- cần chạy lại lệnh nào
+
+### Bước 8: validate model
 
 ```powershell
 .\.venv\Scripts\python training/validate_model.py
 ```
 
-### Bước 8: export ONNX
+Lệnh này dùng tập:
+
+- `dataset/processed/images/val`
+
+để đo chất lượng model sau train.
+
+Nếu lệnh này không chạy được, lý do thường là:
+
+- chưa có dữ liệu `val`
+- chưa split dataset
+
+### Bước 9: export model
 
 ```powershell
 .\.venv\Scripts\python training/export_model.py
 ```
 
-### Quy trình đầy đủ
+Lệnh này:
+
+- lấy `models/trained/best.pt`
+- export sang ONNX
+
+Điều kiện để chạy:
+
+- phải train xong trước
+- phải có `models/trained/best.pt`
+
+### Quy trình đầy đủ để copy và chạy
+
+Nếu đã có sẵn ảnh và label trong `dataset/raw/`, thì chạy theo đúng thứ tự này:
 
 ```powershell
 .\.venv\Scripts\python training/prepare_dataset.py
@@ -392,6 +560,17 @@ Luồng train:
 .\.venv\Scripts\python training/validate_model.py
 .\.venv\Scripts\python training/export_model.py
 ```
+
+### Khi nào từng lệnh không chạy được
+
+| Lệnh | Lý do thường gặp |
+|---|---|
+| `training/prepare_dataset.py` | Hiếm khi lỗi, vì chủ yếu chỉ tạo thư mục |
+| `training/validate_dataset.py` | Chưa có ảnh trong `dataset/raw/images` |
+| `training/split_dataset.py` | Dataset raw rỗng hoặc raw không hợp lệ |
+| `run_train.py` | Chưa có `dataset/processed/images/train` hoặc `val` |
+| `training/validate_model.py` | Chưa có `dataset/processed/images/val` |
+| `training/export_model.py` | Chưa có `models/trained/best.pt` |
 
 ### Sau khi train xong app có tự dùng model mới không
 
@@ -482,6 +661,7 @@ YOLO/
 | `training/export_model.py` | Export ONNX |
 | `training/model_paths.py` | Resolve đường dẫn model và data |
 | `training/_training_bootstrap.py` | Bootstrap import path |
+| `training/terminal_ui.py` | Giao diện terminal cho pipeline train |
 | `training/train_config.yaml` | Hyperparameter train |
 | `training/data.yaml` | Dataset config cho YOLO |
 
@@ -491,8 +671,16 @@ YOLO/
 |---|---|
 | `utils/file_utils.py` | Tạo thư mục, đọc/ghi YAML |
 | `utils/logger.py` | Logger dùng chung |
-| `utils/console_ui.py` | Prompt mode và dashboard terminal |
+| `utils/console_ui.py` | Prompt mode, dashboard terminal, panel lỗi |
 | `utils/draw_utils.py` | Vẽ detect lên frame |
+
+### `docs/`
+
+| File | Vai trò |
+|---|---|
+| `docs/install_guide.md` | Ghi chú cài đặt |
+| `docs/project_overview.md` | Mô tả tổng quan dự án |
+| `docs/training_guide.md` | Ghi chú riêng về training |
 
 ---
 
@@ -540,6 +728,17 @@ Kiểm tra:
 - `models/trained/best.pt`
 - `config/model_config.yaml`
 
+### Khi terminal báo đỏ
+
+Nếu một lệnh không chạy được, terminal hiện đã ghi rõ:
+
+- `LY DO`
+- `Ly do khong chay`
+- `GOI Y`
+- `LENH THU` hoặc `LENH NHANH`
+
+Tức là bạn không cần đọc traceback dài mới biết lỗi.
+
 ---
 
 ## Ghi chú
@@ -547,4 +746,4 @@ Kiểm tra:
 - Nên chạy toàn bộ dự án bằng Python trong `.venv`
 - Nếu muốn dùng GPU NVIDIA, cần cài đúng bản PyTorch có CUDA
 - Sau khi train xong, app sẽ tự ưu tiên `models/trained/best.pt`
-- Trạng thái hiện tại của test hệ thống: `45/45 PASS`
+- Trạng thái test hệ thống hiện tại: `45/45 PASS`

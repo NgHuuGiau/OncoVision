@@ -28,7 +28,7 @@ class RuntimePromptTests(unittest.TestCase):
         )
 
         self.assertEqual(mode, "medium")
-        self.assertTrue(any("CHON CAU HINH CHAY" in line for line in printed))
+        self.assertTrue(any("CHỌN CẤU HÌNH CHẠY" in line for line in printed))
 
     def test_prompt_runtime_mode_retries_on_invalid_choice(self) -> None:
         answers = iter(["9", "", "4"])
@@ -40,7 +40,7 @@ class RuntimePromptTests(unittest.TestCase):
         )
 
         self.assertEqual(mode, "low")
-        self.assertTrue(any("Lua chon khong hop le" in line for line in printed))
+        self.assertTrue(any("Lựa chọn không hợp lệ" in line for line in printed))
 
     def test_mode_to_ui_defaults_maps_values(self) -> None:
         self.assertEqual(mode_to_ui_defaults("auto"), ("auto", "medium"))

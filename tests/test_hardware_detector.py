@@ -21,7 +21,7 @@ class HardwareDetectorTests(unittest.TestCase):
         report = info.pretty_report()
         self.assertIn("CPU: Intel Core i7", report)
         self.assertIn("GPU: RTX 3050 Ti", report)
-        self.assertIn("CUDA: Co", report)
+        self.assertIn("CUDA: Có", report)
 
     @patch("core.hardware_info.platform.release", return_value="11")
     @patch("core.hardware_info.platform.system", return_value="Windows")

@@ -21,6 +21,6 @@ class PrepareDatasetTests(unittest.TestCase):
                     prepare_dataset.main()
                 self.assertTrue(Path("dataset/raw/images").exists())
                 self.assertTrue(Path("dataset/raw/labels").exists())
-                self.assertIn("Dataset folders are ready.", output.getvalue())
+                self.assertIn("Đã tạo sẵn các thư mục dataset.", output.getvalue())
             finally:
                 os.chdir(previous_cwd)

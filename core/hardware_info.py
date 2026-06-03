@@ -24,20 +24,20 @@ class HardwareInfo:
     cuda_available: bool
     os_name: str
     gpu_count: int
-    torch_version: str = "Khong co PyTorch"
+    torch_version: str = "Không có PyTorch"
     torch_cuda_version: str = "CPU-only"
-    cuda_runtime_status: str = "Khong"
-    cuda_runtime_reason: str = "Chua kiem tra"
+    cuda_runtime_status: str = "Không"
+    cuda_runtime_reason: str = "Chưa kiểm tra"
     gpu_hardware_available: bool = False
 
     def pretty_report(self) -> str:
         return (
-            "===== KIEM TRA CAU HINH =====\n"
+            "===== KIỂM TRA CẤU HÌNH =====\n"
             f"CPU: {self.cpu_name}\n"
             f"RAM: {self.ram_gb:.1f} GB\n"
             f"GPU: {self.gpu_name}\n"
             f"VRAM: {self.vram_gb:.1f} GB\n"
-            f"CUDA: {'Co' if self.cuda_available else 'Khong'}\n"
+            f"CUDA: {'Có' if self.cuda_available else 'Không'}\n"
             f"PyTorch: {self.torch_version}\n"
             f"CUDA build: {self.torch_cuda_version}\n"
             f"OS: {self.os_name}"
@@ -64,18 +64,18 @@ def _detect_cpu_name() -> str:
     cpu_name = platform.processor().strip()
     if cpu_name:
         return cpu_name
-    return platform.uname().processor or "Unknown CPU"
+    return platform.uname().processor or "Không rõ CPU"
 
 
 def _detect_gpu_from_gputil() -> tuple[str, float, int]:
     if GPUtil is None:
-        return "Khong phat hien GPU", 0.0, 0
+        return "Không phát hiện GPU", 0.0, 0
     try:
         gpus: List = GPUtil.getGPUs()
     except Exception:
-        return "Khong phat hien GPU", 0.0, 0
+        return "Không phát hiện GPU", 0.0, 0
     if not gpus:
-        return "Khong phat hien GPU", 0.0, 0
+        return "Không phát hiện GPU", 0.0, 0
     primary = gpus[0]
     return primary.name, round(primary.memoryTotal / 1024, 2), len(gpus)
 
@@ -100,24 +100,24 @@ def detect_hardware() -> HardwareInfo:
     gpu_name, vram_gb, gpu_count = _detect_gpu_from_gputil()
     gpu_hardware_available = gpu_count > 0
     cuda_available = bool(torch_module and torch_module.cuda.is_available())
-    torch_version = getattr(torch_module, "__version__", "Khong co PyTorch") if torch_module is not None else "Khong co PyTorch"
+    torch_version = getattr(torch_module, "__version__", "Không có PyTorch") if torch_module is not None else "Không có PyTorch"
     torch_cuda_version = getattr(getattr(torch_module, "version", None), "cuda", None) if torch_module is not None else None
     torch_cuda_label = torch_cuda_version or "CPU-only"
-    cuda_runtime_status = "Co" if cuda_available else "Khong"
-    cuda_runtime_reason = "PyTorch CUDA runtime san sang"
+    cuda_runtime_status = "Có" if cuda_available else "Không"
+    cuda_runtime_reason = "PyTorch CUDA runtime sẵn sàng"
 
     if torch_module is None:
         cuda_runtime_reason = (
-            f"Khong khoi tao duoc PyTorch: {TORCH_IMPORT_ERROR}"
+            f"Không khởi tạo được PyTorch: {TORCH_IMPORT_ERROR}"
             if TORCH_IMPORT_ERROR is not None
-            else "Chua cai PyTorch trong moi truong hien tai"
+            else "Chưa cài PyTorch trong môi trường hiện tại"
         )
     elif gpu_hardware_available and not torch_cuda_version:
-        cuda_runtime_reason = "PyTorch hien tai la ban CPU-only, chua ho tro CUDA"
+        cuda_runtime_reason = "PyTorch hiện tại là bản CPU-only, chưa hỗ trợ CUDA"
     elif gpu_hardware_available and torch_cuda_version and not cuda_available:
-        cuda_runtime_reason = "PyTorch co CUDA build nhung runtime chua khoi tao duoc GPU"
+        cuda_runtime_reason = "PyTorch có CUDA build nhưng runtime chưa khởi tạo được GPU"
     elif not gpu_hardware_available:
-        cuda_runtime_reason = "Khong phat hien GPU tuong thich de chay CUDA"
+        cuda_runtime_reason = "Không phát hiện GPU tương thích để chạy CUDA"
 
     if cuda_available and torch_module is not None:
         index = torch_module.cuda.current_device()

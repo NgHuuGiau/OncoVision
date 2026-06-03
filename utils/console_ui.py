@@ -7,24 +7,24 @@ from typing import Any
 
 
 MODE_CHOICES = {"0": "exit", "1": "auto", "2": "high", "3": "medium", "4": "low"}
-MODE_LABELS = {"auto": "Mac dinh tu dong", "high": "Cao nhat", "medium": "Trung binh", "low": "Yeu"}
+MODE_LABELS = {"auto": "Mặc định tự động", "high": "Cao nhất", "medium": "Trung bình", "low": "Yếu"}
 PROFILE_LABELS = {
-    "high": "GPU cuc manh",
-    "medium": "GPU can bang",
-    "low": "GPU/CPU uu tien muot",
-    "fallback_cpu": "CPU an toan",
-    "fallback_cpu_weak": "CPU toi thieu",
+    "high": "GPU cực mạnh",
+    "medium": "GPU cân bằng",
+    "low": "GPU/CPU ưu tiên mượt",
+    "fallback_cpu": "CPU an toàn",
+    "fallback_cpu_weak": "CPU tối thiểu",
 }
 PROMPT_OPTIONS = (
-    ("1 | Tu dong", "Can bang an toan | he thong tu quyet dinh.", "\033[92m"),
-    ("2 | Cao nhat", "Uu tien chat luong | yolo26s.pt | imgsz 768.", "\033[92m"),
-    ("3 | Trung binh", "Uu tien can bang | yolo26s.pt | imgsz 640.", "\033[93m"),
-    ("4 | Yeu", "Uu tien muot | yolo26n.pt | imgsz 512.", "\033[93m"),
+    ("1 | Tự động", "Cân bằng an toàn | hệ thống tự quyết định.", "\033[92m"),
+    ("2 | Cao nhất", "Ưu tiên chất lượng | yolo26s.pt | imgsz 768.", "\033[92m"),
+    ("3 | Trung bình", "Ưu tiên cân bằng | yolo26s.pt | imgsz 640.", "\033[93m"),
+    ("4 | Yếu", "Ưu tiên mượt | yolo26n.pt | imgsz 512.", "\033[93m"),
 )
 PERFORMANCE_HINTS = (
-    (85, "Che do rat manh, he thong dang uu tien chat luong va hieu nang toi da."),
-    (65, "Che do can bang manh, hop cho da so may tam trung va manh."),
-    (40, "Che do tam on, dang chay duoc nhung uu tien do an toan hon hieu nang."),
+    (85, "Chế độ rất mạnh, hệ thống đang ưu tiên chất lượng và hiệu năng tối đa."),
+    (65, "Chế độ cân bằng mạnh, hợp cho đa số máy tầm trung và mạnh."),
+    (40, "Chế độ tạm ổn, đang chạy được nhưng ưu tiên độ an toàn hơn hiệu năng."),
 )
 
 RESET = "\033[0m"
@@ -41,10 +41,11 @@ BOOT_BAR_WIDTH = 24
 
 
 def _ensure_utf8_console() -> None:
-    if not hasattr(sys.stdout, "reconfigure"):
-        return
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         return
 
@@ -136,26 +137,26 @@ def performance_hint(score: int) -> str:
     for minimum, message in PERFORMANCE_HINTS:
         if score >= minimum:
             return message
-    return "Che do yeu hoac dang bi gioi han. Nen kiem tra lai CUDA, model hoac cau hinh may."
+    return "Chế độ yếu hoặc đang bị giới hạn. Nên kiểm tra lại CUDA, model hoặc cấu hình máy."
 
 
 def _render_prompt(print_fn=print) -> None:
     _clear_terminal()
     lines = [
         _line(_rule("="), CYAN),
-        _line(_pad("YOLO REALTIME CAMERA :: CHON CAU HINH CHAY"), BOLD + CYAN),
+        _line(_pad("YOLO REALTIME CAMERA :: CHỌN CẤU HÌNH CHẠY"), BOLD + CYAN),
         _line(_rule("="), CYAN),
-        _row("Goi y", "Mode 3 = Trung binh | can bang muot / chinh xac", YELLOW),
-        _row("Phong cach", "Lua chon cau hinh theo muc uu tien va suc manh phan cung", DIM),
+        _row("Gợi ý", "Mode 3 = Trung bình | cân bằng mượt / chính xác", YELLOW),
+        _row("Phong cách", "Lựa chọn cấu hình theo mức ưu tiên và sức mạnh phần cứng", DIM),
         _line(_rule("-"), CYAN),
-        _section("CAC LUA CHON", MAGENTA),
+        _section("CÁC LỰA CHỌN", MAGENTA),
     ]
     for label, value, color in PROMPT_OPTIONS:
         lines.append(_row(label, value, color))
     lines.extend(
         [
             _line(_rule("."), DIM),
-            _row("0 | Thoat", "Thoat khoi chuong trinh ngay tai day.", RED),
+            _row("0 | Thoát", "Thoát khỏi chương trình ngay tại đây.", RED),
             _line(_rule("-"), CYAN),
         ]
     )
@@ -166,15 +167,15 @@ def _render_prompt(print_fn=print) -> None:
 def prompt_runtime_mode(input_fn=input, print_fn=print) -> str:
     while True:
         _render_prompt(print_fn=print_fn)
-        mode = MODE_CHOICES.get(input_fn(_line("Nhap lua chon cua ban (0/1/2/3/4): ", BOLD)).strip())
+        mode = MODE_CHOICES.get(input_fn(_line("Nhập lựa chọn của bạn (0/1/2/3/4): ", BOLD)).strip())
         if mode == "exit":
             raise SystemExit(0)
         if mode:
             print_fn("")
-            print_fn(_line(f"Da chon: {mode_label(mode)}", GREEN))
+            print_fn(_line(f"Đã chọn: {mode_label(mode)}", GREEN))
             return mode
-        print_fn(_line("Lua chon khong hop le. Vui long nhap 0, 1, 2, 3 hoac 4.", RED))
-        input_fn(_line("Nhan Enter de chon lai...", DIM))
+        print_fn(_line("Lựa chọn không hợp lệ. Vui lòng nhập 0, 1, 2, 3 hoặc 4.", RED))
+        input_fn(_line("Nhấn Enter để chọn lại...", DIM))
 
 
 def mode_to_ui_defaults(mode: str) -> tuple[str, str]:
@@ -195,14 +196,14 @@ def _dashboard_values(runtime: Any, hardware: Any, camera_index: int) -> dict[st
     requested_gpu_mode = requested_profile in {"high", "medium"} or requested_device == "gpu"
     runtime_on_gpu = resolved_device.startswith("cuda")
     profile_match = getattr(runtime, "profile_name", "") == requested_profile if requested_profile != "auto" else True
-    cuda_target = "Tu dong theo phan cung" if requested_profile == "auto" else f"{requested_model_name} / {requested_device} / imgsz {requested_imgsz}"
+    cuda_target = "Tự động theo phần cứng" if requested_profile == "auto" else f"{requested_model_name} / {requested_device} / imgsz {requested_imgsz}"
 
     if runtime_on_gpu:
         cuda_model_status = primary_model_name
     elif gpu_hardware_available:
-        cuda_model_status = "GPU co san nhung moi truong PyTorch hien tai chua dung duoc CUDA"
+        cuda_model_status = "GPU có sẵn nhưng môi trường PyTorch hiện tại chưa dùng được CUDA"
     else:
-        cuda_model_status = "Khong co GPU/CUDA de chay model bang CUDA"
+        cuda_model_status = "Không có GPU/CUDA để chạy model bằng CUDA"
 
     if cuda_available:
         cuda_color = GREEN
@@ -258,31 +259,112 @@ def print_runtime_dashboard(title: str, runtime: Any, hardware: Any, camera_inde
         _line(_rule("="), CYAN),
         _line(_pad(title), BOLD + CYAN),
         _line(_rule("="), CYAN),
-        _row("Lua chon", values["chosen_label"], GREEN),
-        _row("Muc tieu", f"{values['requested_profile']} -> {values['cuda_target']}", MAGENTA),
-        _row("Thuc te", f"{profile_label(values['runtime_profile'])} ({values['runtime_profile']})", values["profile_color"]),
-        _row("Thanh khoi dong", dashboard_boot_bar(BOOT_BAR_WIDTH), GREEN, bounded=False),
+        _row("Lựa chọn", values["chosen_label"], GREEN),
+        _row("Mục tiêu", f"{values['requested_profile']} -> {values['cuda_target']}", MAGENTA),
+        _row("Thực tế", f"{profile_label(values['runtime_profile'])} ({values['runtime_profile']})", values["profile_color"]),
+        _row("Thanh khởi động", dashboard_boot_bar(BOOT_BAR_WIDTH), GREEN, bounded=False),
         _line(_rule("-"), CYAN),
-        _section("PHAN CUNG", values["hardware_section_color"]),
-        _row("CPU", getattr(hardware, "cpu_name", "Khong ro CPU"), GREEN),
-        _row("RAM / OS", f"{float(getattr(hardware, 'ram_gb', 0.0) or 0.0):.1f} GB / {getattr(hardware, 'os_name', 'Khong ro OS')}", GREEN),
-        _row("GPU", getattr(hardware, "gpu_name", "Khong ro"), values["hardware_section_color"]),
+        _section("PHẦN CỨNG", values["hardware_section_color"]),
+        _row("CPU", getattr(hardware, "cpu_name", "Không rõ CPU"), GREEN),
+        _row("RAM / OS", f"{float(getattr(hardware, 'ram_gb', 0.0) or 0.0):.1f} GB / {getattr(hardware, 'os_name', 'Không rõ OS')}", GREEN),
+        _row("GPU", getattr(hardware, "gpu_name", "Không rõ"), values["hardware_section_color"]),
         _row("VRAM / GPU count", f"{float(getattr(hardware, 'vram_gb', 0.0) or 0.0):.1f} GB / {int(getattr(hardware, 'gpu_count', 0) or 0)}", values["hardware_section_color"]),
-        _row("Torch / build", f"{getattr(hardware, 'torch_version', 'Khong co PyTorch')} / {getattr(hardware, 'torch_cuda_version', 'CPU-only')}", values["torch_color"]),
-        _row("CUDA runtime", getattr(hardware, "cuda_runtime_status", "Khong"), values["cuda_color"]),
-        _row("Ly do CUDA", getattr(hardware, "cuda_runtime_reason", "Chua kiem tra"), values["reason_color"], bounded=False),
+        _row("Torch / build", f"{getattr(hardware, 'torch_version', 'Không có PyTorch')} / {getattr(hardware, 'torch_cuda_version', 'CPU-only')}", values["torch_color"]),
+        _row("CUDA runtime", getattr(hardware, "cuda_runtime_status", "Không"), values["cuda_color"]),
+        _row("Lý do CUDA", getattr(hardware, "cuda_runtime_reason", "Chưa kiểm tra"), values["reason_color"], bounded=False),
         _line(_rule("-"), CYAN),
         _section("RUNTIME", values["runtime_section_color"]),
-        _row("Model dang chay", values["actual_runtime"], values["model_color"]),
+        _row("Model đang chạy", values["actual_runtime"], values["model_color"]),
         _row("Model CUDA", values["cuda_model_status"], values["model_color"], bounded=False),
         _row("imgsz / max_det", f"{getattr(runtime, 'imgsz', '-')} / {getattr(runtime, 'max_det', '-')}", CYAN),
         _row("Camera / Index", f"{getattr(runtime, 'camera_width', '-')}x{getattr(runtime, 'camera_height', '-')} / {camera_index}", CYAN),
-        _row("Half precision", "Bat" if getattr(runtime, "use_half", False) else "Tat", GREEN if getattr(runtime, "use_half", False) else YELLOW),
+        _row("Half precision", "Bật" if getattr(runtime, "use_half", False) else "Tắt", GREEN if getattr(runtime, "use_half", False) else YELLOW),
         _line(_rule("-"), CYAN),
-        _section("SAN SANG", values["ready_section_color"]),
-        _row("Trang thai", performance_hint(values["score"]), values["ready_text_color"], bounded=False),
+        _section("SẴN SÀNG", values["ready_section_color"]),
+        _row("Trạng thái", performance_hint(values["score"]), values["ready_text_color"], bounded=False),
         _line(_rule("-"), CYAN),
     ]
+    for line in lines:
+        print_fn(line)
+
+
+def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]]:
+    message = str(error)
+    lower_message = message.lower()
+
+    if "khong mo duoc camera" in lower_message or "camera lien tuc khong tra ve frame" in lower_message:
+        return (
+            "Không mở được webcam hoặc webcam không trả về frame.",
+            [
+                "Kiểm tra webcam đang được cắm và không bị app khác chiếm.",
+                "Thử đổi camera index sang 1 hoặc 2.",
+                "Nếu đang mở app camera khác, hãy tắt trước khi chạy lại.",
+            ],
+            [
+                r".\.venv\Scripts\python run_app.py --camera-index 1",
+                r".\.venv\Scripts\python run_detect.py --camera-index 1",
+            ],
+        )
+
+    if "khong khoi tao duoc ultralytics" in lower_message or "khong khoi tao duoc detector" in lower_message:
+        return (
+            "Không nạp được YOLO / ultralytics để bắt đầu nhận diện.",
+            [
+                "Kiểm tra môi trường .venv và gói cài đặt ultralytics, torch, torchvision.",
+                "Kiểm tra model local trong models/pretrained hoặc models/trained.",
+                "Nếu máy yếu hoặc lỗi CUDA, thử mode low.",
+            ],
+            [
+                r".\.venv\Scripts\python run_app.py --mode low",
+                r".\.venv\Scripts\python run_detect.py --mode low",
+            ],
+        )
+
+    if "cuda" in lower_message or "pytorch" in lower_message or "torch" in lower_message:
+        return (
+            "Môi trường PyTorch / CUDA đang có vấn đề hoặc không sẵn sàng.",
+            [
+                "Kiểm tra torch.cuda.is_available() trong .venv.",
+                "Nếu không cần GPU, thử mode low để chạy nhẹ hơn.",
+                "Nếu cần GPU, cài lại bản torch đúng với CUDA của máy.",
+            ],
+            [
+                r".\.venv\Scripts\python -c \"import torch; print(torch.cuda.is_available())\"",
+                r".\.venv\Scripts\python run_app.py --mode low",
+            ],
+        )
+
+    return (
+        message or "Không xác định được lỗi cụ thể.",
+        [
+            "Kiểm tra webcam, model local, PyTorch / CUDA và quyền truy cập camera.",
+            "Thử chạy lại bằng mode low để giảm tải runtime.",
+        ],
+        [
+            r".\.venv\Scripts\python run_app.py --mode low",
+            r".\.venv\Scripts\python run_detect.py --mode low",
+        ],
+    )
+
+
+def print_runtime_failure(title: str, error: Exception, *, print_fn=print) -> None:
+    reason, suggestions, commands = explain_runtime_failure(error)
+    lines = [
+        _line(_rule("="), CYAN),
+        _line(_pad(title), BOLD + RED),
+        _line(_rule("="), CYAN),
+        _section("LÝ DO", RED),
+        _row("Lý do không chạy", reason, RED, bounded=False),
+        _row("Chi tiết", str(error), YELLOW, bounded=False),
+        _line(_rule("-"), CYAN),
+        _section("GỢI Ý", GREEN),
+    ]
+    for index, suggestion in enumerate(suggestions, start=1):
+        lines.append(_row(f"Bước {index}", suggestion, GREEN if index == len(suggestions) else YELLOW, bounded=False))
+    lines.extend([_line(_rule("-"), CYAN), _section("LỆNH THỬ", CYAN)])
+    for index, command in enumerate(commands, start=1):
+        lines.append(_row(f"Lệnh {index}", command, CYAN, bounded=False))
+    lines.append(_line(_rule("="), CYAN))
     for line in lines:
         print_fn(line)
 
@@ -318,7 +400,7 @@ class BootProgress:
             self._render_line()
             time.sleep(0.01 if self.current < 90 else 0.016)
 
-    def finish(self, label: str = "San sang mo camera") -> None:
+    def finish(self, label: str = "Sẵn sàng mở camera") -> None:
         self.advance_to(100, label)
         if self.enabled:
             self._clear_line()
