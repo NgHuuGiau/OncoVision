@@ -1116,6 +1116,47 @@ def _lock_window_controls(window_name: str) -> None:
         return
 
 
+def _get_window_client_size(window_name: str) -> tuple[int, int] | None:
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, window_name)
+        if not hwnd:
+            return None
+
+        class RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long),
+                ("top", ctypes.c_long),
+                ("right", ctypes.c_long),
+                ("bottom", ctypes.c_long),
+            ]
+
+        rect = RECT()
+        if not user32.GetClientRect(hwnd, ctypes.byref(rect)):
+            return None
+        width = rect.right - rect.left
+        height = rect.bottom - rect.top
+        if width <= 0 or height <= 0:
+            return None
+        return width, height
+    except Exception:
+        return None
+
+
+def _resize_to_window(frame: np.ndarray, window_name: str) -> np.ndarray:
+    client_size = _get_window_client_size(window_name)
+    if not client_size:
+        return frame
+    width, height = client_size
+    if width == frame.shape[1] and height == frame.shape[0]:
+        return frame
+    interpolation = cv2.INTER_AREA if width < frame.shape[1] or height < frame.shape[0] else cv2.INTER_LANCZOS4
+    try:
+        return cv2.resize(frame, (width, height), interpolation=interpolation)
+    except Exception:
+        return frame
+
+
 def _panel_lines_for_live_view(detector: CameraDetector, hardware: Any) -> list[str]:
     usage = get_live_usage_snapshot()
 
@@ -1281,6 +1322,8 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                     compact_title = chat_title
                     compact_lines = chat_lines
                 composed = _compose_compact_camera_frame(display_frame, compact_title, compact_lines)
+
+            composed = _resize_to_window(composed, WINDOW_NAME)
             cv2.imshow(WINDOW_NAME, composed)
             if not window_positioned:
                 cv2.resizeWindow(WINDOW_NAME, composed.shape[1], composed.shape[0])
