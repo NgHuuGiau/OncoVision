@@ -64,7 +64,7 @@ class ModelSelectorTests(unittest.TestCase):
         hardware = HardwareInfo(
             cpu_name="Intel Core i7-11800H",
             ram_gb=16.0,
-            gpu_name="Khong phat hien GPU",
+            gpu_name="Không phát hiện GPU",
             vram_gb=0.0,
             cuda_available=False,
             os_name="Windows 11",
@@ -81,7 +81,7 @@ class ModelSelectorTests(unittest.TestCase):
         hardware = HardwareInfo(
             cpu_name="Intel Core i3",
             ram_gb=4.0,
-            gpu_name="Khong phat hien GPU",
+            gpu_name="Không phát hiện GPU",
             vram_gb=0.0,
             cuda_available=False,
             os_name="Windows 10",
@@ -98,7 +98,7 @@ class ModelSelectorTests(unittest.TestCase):
         hardware = HardwareInfo(
             cpu_name="AMD Ryzen 5",
             ram_gb=8.0,
-            gpu_name="Khong phat hien GPU",
+            gpu_name="Không phát hiện GPU",
             vram_gb=0.0,
             cuda_available=False,
             os_name="Windows 11",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+from dataclasses import dataclass
 from pathlib import Path
 
 from core.hardware_info import detect_hardware
@@ -16,6 +18,17 @@ PROCESSED_TRAIN_DIR = Path("dataset/processed/images/train")
 PROCESSED_VAL_DIR = Path("dataset/processed/images/val")
 
 
+@dataclass
+class CameraProbeResult:
+    level: str
+    summary: str
+    detail: str
+
+    @property
+    def color(self) -> str:
+        return {"PASS": GREEN, "WARN": YELLOW, "ERROR": RED}.get(self.level, CYAN)
+
+
 def _count_files(path: Path) -> int:
     if not path.exists():
         return 0
@@ -28,7 +41,71 @@ def _present_and_missing_models(model_dir: Path = PRETRAINED_DIR) -> tuple[list[
     return present, missing
 
 
+def _open_camera_capture(index: int):
+    import cv2
+
+    return cv2.VideoCapture(index, cv2.CAP_DSHOW) if hasattr(cv2, "CAP_DSHOW") else cv2.VideoCapture(index)
+
+
+def _probe_camera(index: int = 0) -> CameraProbeResult:
+    try:
+        capture = _open_camera_capture(index)
+    except Exception as exc:
+        return CameraProbeResult(
+            level="ERROR",
+            summary=f"Camera thật       ERROR | Không tạo được camera index {index}",
+            detail=f"Lý do không chạy   {exc}",
+        )
+
+    if capture is None or not capture.isOpened():
+        if capture is not None:
+            capture.release()
+        return CameraProbeResult(
+            level="WARN",
+            summary=f"Camera thật       WARN  | Không mở được camera index {index}",
+            detail="Lý do không chạy   Webcam không sẵn sàng, đang bị app khác chiếm hoặc chưa cắm.",
+        )
+
+    width = 0
+    height = 0
+    ok = False
+    try:
+        for _ in range(3):
+            success, frame = capture.read()
+            if success and frame is not None:
+                height, width = frame.shape[:2]
+                ok = True
+                break
+    finally:
+        capture.release()
+
+    if not ok:
+        return CameraProbeResult(
+            level="WARN",
+            summary=f"Camera thật       WARN  | Mở được camera index {index} nhưng không đọc được frame",
+            detail="Lý do không chạy   Webcam mở được nhưng không trả về khung hình hợp lệ.",
+        )
+
+    return CameraProbeResult(
+        level="PASS",
+        summary=f"Camera thật       PASS  | Đọc frame thành công tại index {index}",
+        detail=f"Chi tiết          {width}x{height}",
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Kiểm tra sức khỏe toàn hệ thống cho dự án YOLO.")
+    parser.add_argument("--camera-index", type=int, default=0, help="Camera index để kiểm tra webcam thật.")
+    parser.add_argument(
+        "--skip-camera-check",
+        action="store_true",
+        help="Bỏ qua bước kiểm tra camera thật.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     ensure_project_directories()
     hardware = detect_hardware()
     present_models, missing_models = _present_and_missing_models()
@@ -36,6 +113,7 @@ def main() -> None:
     raw_labels = _count_files(RAW_LABELS_DIR)
     train_images = _count_files(PROCESSED_TRAIN_DIR)
     val_images = _count_files(PROCESSED_VAL_DIR)
+    camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
 
     recommendations = {
         "Cao nhất": select_runtime_config("high", hardware),
@@ -54,6 +132,12 @@ def main() -> None:
     print(row("PyTorch", hardware.torch_version, GREEN if hardware.torch_version != "Không có PyTorch" else RED, bounded=False))
     print(row("CUDA", hardware.cuda_runtime_reason, GREEN if hardware.cuda_available else YELLOW, bounded=False))
 
+    if camera_probe is not None:
+        print(line(rule("-"), CYAN))
+        print(section("CAMERA THẬT", camera_probe.color))
+        print(row("Trạng thái", camera_probe.summary.split("|", 1)[-1].strip(), camera_probe.color, bounded=False))
+        print(row("Chi tiết", camera_probe.detail.replace("Chi tiết          ", "").replace("Lý do không chạy   ", ""), camera_probe.color, bounded=False))
+
     print(line(rule("-"), CYAN))
     print(section("MODEL YOLO26", GREEN if not missing_models else YELLOW))
     print(row("Đã có", ", ".join(present_models) if present_models else "Chưa có model nào", GREEN if present_models else RED, bounded=False))
@@ -66,7 +150,8 @@ def main() -> None:
     print(section("GỢI Ý CHẠY THEO MÁY", GREEN))
     for label, runtime in recommendations.items():
         value = f"{runtime.primary_model_name} / {runtime.resolved_device} / imgsz {runtime.imgsz}"
-        print(row(label, value, GREEN if runtime.primary_model_name != "yolo26n.pt" else YELLOW, bounded=False))
+        color = GREEN if runtime.primary_model_name not in {"yolo26n.pt"} else YELLOW
+        print(row(label, value, color, bounded=False))
 
     print(line(rule("-"), CYAN))
     dataset_ok = raw_images > 0 and raw_labels > 0
@@ -86,6 +171,10 @@ def main() -> None:
         print(row("Lý do", "Máy vẫn chạy được, nhưng chưa có đủ 5 model để chọn hết mọi mức.", YELLOW, bounded=False))
     else:
         print(row("Model", "Đã sẵn sàng để chạy đủ các mức YOLO26.", GREEN, bounded=False))
+
+    if camera_probe is not None and camera_probe.level != "PASS":
+        print(row("Camera", camera_probe.detail.replace("Lý do không chạy   ", ""), YELLOW, bounded=False))
+
     if not dataset_ok:
         print(row("Dataset", "Chưa có dữ liệu raw để train.", YELLOW, bounded=False))
     elif not split_ok:
@@ -95,16 +184,22 @@ def main() -> None:
 
     print(line(rule("-"), CYAN))
     print(section("LỆNH NÊN CHẠY", CYAN))
+    command_index = 1
     if missing_models:
-        print(command_row(1, r".\.venv\Scripts\python training\download_models.py"))
+        print(command_row(command_index, r".\.venv\Scripts\python training\download_models.py"))
+        command_index += 1
     if not dataset_ok:
-        print(command_row(2, r".\.venv\Scripts\python training\prepare_dataset.py"))
+        print(command_row(command_index, r".\.venv\Scripts\python training\prepare_dataset.py"))
+        command_index += 1
     elif not split_ok:
-        print(command_row(2, r".\.venv\Scripts\python training\validate_dataset.py"))
-        print(command_row(3, r".\.venv\Scripts\python training\split_dataset.py"))
+        print(command_row(command_index, r".\.venv\Scripts\python training\validate_dataset.py"))
+        command_index += 1
+        print(command_row(command_index, r".\.venv\Scripts\python training\split_dataset.py"))
+        command_index += 1
     else:
-        print(command_row(2, r".\.venv\Scripts\python run_app.py"))
-        print(command_row(3, r".\.venv\Scripts\python run_train.py"))
+        print(command_row(command_index, r".\.venv\Scripts\python run_app.py"))
+        command_index += 1
+        print(command_row(command_index, r".\.venv\Scripts\python run_train.py"))
     print(line(rule("="), CYAN))
 
 

@@ -83,5 +83,5 @@ def load_yolo_model(runtime: RuntimeConfig) -> Tuple[LoadedModel, str]:
                 logger.warning("Failed to load %s: %s", candidate, exc)
     raise RuntimeError(
         "Không thể load bất kỳ model local nào. "
-        "Hay kiem tra models/pretrained hoac models/trained.\n" + "\n".join(errors)
+        "Hãy kiểm tra models/pretrained hoặc models/trained.\n" + "\n".join(errors)
     )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import run_doctor
 
@@ -20,6 +20,17 @@ class DoctorTests(unittest.TestCase):
 
     def test_count_files_ignores_missing_directory(self) -> None:
         self.assertEqual(run_doctor._count_files(Path("missing-dir-for-doctor-test")), 0)
+
+    @patch("run_doctor._open_camera_capture")
+    def test_probe_camera_reports_warn_when_camera_cannot_open(self, open_camera_mock) -> None:
+        capture = Mock()
+        capture.isOpened.return_value = False
+        open_camera_mock.return_value = capture
+
+        result = run_doctor._probe_camera(0)
+
+        self.assertEqual(result.level, "WARN")
+        self.assertIn("Không mở được camera index 0", result.summary)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,19 @@ from dataclasses import dataclass
 from utils.file_utils import ensure_project_directories
 
 
+def _ensure_utf8_console() -> None:
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        return
+
+
+_ensure_utf8_console()
+
+
 RESET = "\033[0m"
 BOLD = "\033[1m"
 CYAN = "\033[96m"

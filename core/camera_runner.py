@@ -38,15 +38,6 @@ SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
 SWP_NOZORDER = 0x0004
 SWP_FRAMECHANGED = 0x0020
-IDLE_ASSISTANT_TITLE = "Trợ lý chụp mẫu train"
-PREPARE_ASSISTANT_TITLE = "Chuẩn bị chụp mẫu"
-NAME_PROMPT_TITLE = "Đặt tên mẫu"
-IDLE_ASSISTANT_LINES = (
-    "Bấm T để chụp dữ liệu huấn luyện.",
-    "Hệ thống đếm 5 giây ổn định trước khi lưu.",
-    "Cửa sổ này tách riêng khỏi camera để dễ thao tác.",
-)
-
 
 @dataclass
 class DetectionRecord:
@@ -111,11 +102,7 @@ def _load_unicode_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFon
 def _assistant_lines_for_preparation(remaining_seconds: float, motion_score: float, status: str) -> list[str]:
     return [
         f"Đếm ngược: {int(np.ceil(remaining_seconds))} giây",
-        (
-            f"Rung/lắc hiện tại: {motion_score:.2f} | "
-            f"Cho phép đếm khi <= {MOTION_STABLE_THRESHOLD:.2f} | "
-            f"Đặt lại khi > {MOTION_RESET_THRESHOLD:.2f}"
-        ),
+        f"Rung/lắc hiện tại: {motion_score:.2f}",
         status,
         f"Cần ổn định liên tục {STABLE_FRAMES_REQUIRED} frame trước khi bắt đầu đếm 5 giây.",
     ]
