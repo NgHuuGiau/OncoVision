@@ -28,3 +28,28 @@ Tool trong thư mục `tools/` dùng để xem cấu hình máy hiện tại và
 
 - `run_tools.py` là lệnh chạy chính.
 - Trong `tools/` chỉ có 1 script: `runtime_tool.py`.
+
+## Chat AI
+
+Sau khi có API key Gemini, chạy chat AI:
+
+```powershell
+.\.venv\Scripts\python -c "from app.chat_ai_app import build_chat_arg_parser, launch_chat_ai_app; import sys; args = build_chat_arg_parser('Chat AI').parse_args([]); launch_chat_ai_app(window_title='YOLO Chat AI', camera_index=0)"
+```
+
+Hoặc tạo file `run_chat.py` đơn giản để chạy nhanh:
+
+```python
+from app.chat_ai_app import build_chat_arg_parser, launch_chat_ai_app
+
+if __name__ == "__main__":
+    args = build_chat_arg_parser("YOLO Chat AI").parse_args()
+    launch_chat_ai_app(window_title="YOLO Chat AI", camera_index=args.camera_index)
+```
+
+Tính năng chat AI bao gồm:
+
+- Giao diện chat đa ngôn ngữ (Tiếng Anh/Tiếng Việt)
+- Gửi ảnh, text file, hoặc chụp từ camera làm attachment
+- Nhận dạng giọng nói (Whisper)
+- Lưu trữ cuộc trò chuyện bằng SQLite

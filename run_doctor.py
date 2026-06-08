@@ -9,6 +9,11 @@ from core.model_selector import select_runtime_config
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 from utils.file_utils import ensure_project_directories
 
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 
 YOLO11_MODELS = ("yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt")
 PRETRAINED_DIR = Path("models/pretrained")
@@ -16,6 +21,8 @@ RAW_IMAGES_DIR = Path("dataset/raw/images")
 RAW_LABELS_DIR = Path("dataset/raw/labels")
 PROCESSED_TRAIN_DIR = Path("dataset/processed/images/train")
 PROCESSED_VAL_DIR = Path("dataset/processed/images/val")
+ICONS_DIR = Path("assets/icons")
+DB_PATH = Path("output/chat_history.db")
 
 
 @dataclass
@@ -93,6 +100,40 @@ def _probe_camera(index: int = 0) -> CameraProbeResult:
     )
 
 
+def _check_ai_env() -> dict[str, bool]:
+    status = {}
+    try:
+        import google.generativeai
+        status["gemini_lib"] = True
+    except ImportError:
+        status["gemini_lib"] = False
+
+    try:
+        from faster_whisper import WhisperModel
+        status["whisper_lib"] = True
+    except ImportError:
+        status["whisper_lib"] = False
+
+    env_path = Path(".env")
+    status["api_key"] = False
+    status["api_active"] = False
+    if env_path.exists():
+        content = env_path.read_text()
+        if "GEMINI_API_KEY=" in content:
+            key = content.split("GEMINI_API_KEY=")[1].strip().split('\n')[0]
+            if len(key) > 10:
+                status["api_key"] = True
+                if genai:
+                    try:
+                        genai.configure(api_key=key)
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        model.generate_content("ping", generation_config={"max_output_tokens": 1})
+                        status["api_active"] = True
+                    except Exception:
+                        status["api_active"] = False
+    return status
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Kiểm tra sức khỏe toàn hệ thống cho dự án YOLO.")
     parser.add_argument("--camera-index", type=int, default=0, help="Camera index để kiểm tra webcam thật.")
@@ -101,12 +142,30 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Bỏ qua bước kiểm tra camera thật.",
     )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Tự động sửa các lỗi cơ bản như thiếu icon hoặc file .env.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     ensure_project_directories()
+    
+    if args.fix:
+        print(line(rule("-"), CYAN))
+        print(section("AUTO-FIX", YELLOW))
+        if not ICONS_DIR.exists() or sum(1 for _ in ICONS_DIR.iterdir()) < 5:
+            print(row("Icons", "Đang tạo bộ icon mặc định...", YELLOW))
+            from tools.download_icons import create_default_icons
+            create_default_icons()
+        if not Path(".env").exists():
+            print(row(".env", "Đang tạo file .env mẫu...", YELLOW))
+            Path(".env").write_text("GEMINI_API_KEY=YOUR_KEY_HERE\n")
+        print(row("Trạng thái", "Đã chạy xong Auto-fix!", GREEN))
+
     hardware = detect_hardware()
     present_models, missing_models = _present_and_missing_models()
     raw_images = _count_files(RAW_IMAGES_DIR)
@@ -114,6 +173,10 @@ def main() -> None:
     train_images = _count_files(PROCESSED_TRAIN_DIR)
     val_images = _count_files(PROCESSED_VAL_DIR)
     camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
+    ai_status = _check_ai_env()
+    
+    icon_count = _count_files(ICONS_DIR)
+    db_exists = DB_PATH.exists()
 
     recommendations = {
         "Cao nhất": select_runtime_config("high", hardware),
@@ -137,6 +200,24 @@ def main() -> None:
         print(section("CAMERA THẬT", camera_probe.color))
         print(row("Trạng thái", camera_probe.summary.split("|", 1)[-1].strip(), camera_probe.color, bounded=False))
         print(row("Chi tiết", camera_probe.detail.replace("Chi tiết          ", "").replace("Lý do không chạy   ", ""), camera_probe.color, bounded=False))
+
+    print(line(rule("-"), CYAN))
+    print(section("TRÍ TUỆ NHÂN TẠO (AI)", GREEN if all(ai_status.values()) else YELLOW))
+    print(row("Gemini API", "Sẵn sàng" if ai_status["gemini_lib"] else "Chưa cài thư viện", GREEN if ai_status["gemini_lib"] else RED, bounded=False))
+    key_status = "Đã cấu hình" if ai_status["api_key"] else "Thiếu mã"
+    key_color = GREEN if ai_status["api_key"] else YELLOW
+    print(row("Mã API Key", f"{key_status} ({'Hoạt động' if ai_status['api_active'] else 'Lỗi kết nối'})", GREEN if ai_status["api_active"] else key_color, bounded=False))
+    print(row("Voice (Whisper)", "Sẵn sàng" if ai_status["whisper_lib"] else "Chưa cài thư viện", GREEN if ai_status["whisper_lib"] else YELLOW, bounded=False))
+
+    print(line(rule("-"), CYAN))
+    assets_ok = icon_count >= 10 and db_exists
+    print(section("GIAO DIỆN & DỮ LIỆU", GREEN if assets_ok else YELLOW))
+    print(row("Icons (.svg)", f"{icon_count} file trong assets/icons", GREEN if icon_count >= 10 else RED, bounded=False))
+    print(row("Database SQL", "Đã khởi tạo" if db_exists else "Chưa có dữ liệu", GREEN if db_exists else YELLOW, bounded=False))
+    if not db_exists:
+        print(row("Lưu ý", "Database sẽ tự tạo khi bạn mở Chat AI lần đầu.", CYAN, bounded=False))
+    if icon_count < 10:
+        print(row("Cảnh báo", "Thiếu icon sẽ làm giao diện bị đen trắng.", RED, bounded=False))
 
     print(line(rule("-"), CYAN))
     print(section("MODEL YOLO11", GREEN if not missing_models else YELLOW))
@@ -186,20 +267,26 @@ def main() -> None:
     print(section("LỆNH NÊN CHẠY", CYAN))
     command_index = 1
     if missing_models:
-        print(command_row(command_index, r".\.venv\Scripts\python training\download_models.py"))
+        print(command_row(command_index, "python training\\download_models.py"))
+        command_index += 1
+    if icon_count < 10:
+        print(command_row(command_index, "python tools\\download_icons.py"))
+        command_index += 1
+    if not ai_status["gemini_lib"] or not ai_status["whisper_lib"]:
+        print(command_row(command_index, "pip install google-generativeai faster-whisper pyaudio"))
         command_index += 1
     if not dataset_ok:
-        print(command_row(command_index, r".\.venv\Scripts\python training\prepare_dataset.py"))
+        print(command_row(command_index, "python training\\prepare_dataset.py"))
         command_index += 1
     elif not split_ok:
-        print(command_row(command_index, r".\.venv\Scripts\python training\validate_dataset.py"))
+        print(command_row(command_index, "python training\\validate_dataset.py"))
         command_index += 1
-        print(command_row(command_index, r".\.venv\Scripts\python training\split_dataset.py"))
+        print(command_row(command_index, "python training\\split_dataset.py"))
         command_index += 1
     else:
-        print(command_row(command_index, r".\.venv\Scripts\python run_app.py"))
+        print(command_row(command_index, "python run_app.py"))
         command_index += 1
-        print(command_row(command_index, r".\.venv\Scripts\python run_train.py"))
+        print(command_row(command_index, "python run_train.py"))
     print(line(rule("="), CYAN))
 
 

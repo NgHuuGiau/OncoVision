@@ -12,3 +12,9 @@ PyYAML
 torch
 torchvision
 torchaudio
+sounddevice
+speechrecognition
+PySide6
+google-generativeai
+faster-whisper
+pyaudio

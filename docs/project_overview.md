@@ -15,6 +15,8 @@
 - menu tổng để chạy nhanh các file chính
 - bộ test để kiểm tra toàn hệ thống
 - tự động fallback khi model hoặc cấu hình chính lỗi
+- chat AI với Gemini API (PySide6 GUI)
+- nhận dạng giọng nói (Whisper)
 
 ## Ngôn ngữ và thư viện đang dùng
 
@@ -41,6 +43,13 @@
 - `PyYAML`
 - `psutil`
 - `GPUtil`
+
+**Thư viện Chat AI**
+
+- `PySide6`
+- `google-generativeai`
+- `faster-whisper`
+- `pyaudio`
 
 ## 5 model YOLO11 đang dùng
 
@@ -159,6 +168,7 @@ YOLO/
 |   |-- train_config.yaml
 |   |-- train_model.py
 |   `-- validate_model.py
+|   `-- validate_dataset.py
 |
 |-- utils/
 |   |-- console_ui.py
@@ -175,6 +185,7 @@ YOLO/
 |-- run_tests.py
 |-- run_train.py
 |-- run_tools.py
+|   `-- run_chat.py
 ```
 
 ### Giải thích nhanh từng nhóm
@@ -183,6 +194,7 @@ YOLO/
 
 - chứa luồng app camera cấp cao
 - `camera_app.py`: nối phần cứng, chọn mode, terminal UI và camera runtime
+- `chat_ai_app.py`: giao diện chat AI với Gemini API (PySide6)
 
 `config/`
 
@@ -244,6 +256,7 @@ YOLO/
 - `split_dataset.py`: chia raw thành processed theo tỉ lệ 70/15/15
 - `train_model.py`: train model với auto-prepare + fallback
 - `validate_model.py`: kiểm tra model sau train
+- `validate_dataset.py`: kiểm tra dữ liệu raw trước khi train
 - `export_model.py`: export model sang ONNX
 - `terminal_ui.py`: giao diện terminal cho pipeline training
 - `model_paths.py`: resolve path model và data
@@ -261,6 +274,7 @@ YOLO/
 - `run_menu.py` = menu tổng
 - `run_app.py` = chạy app camera chính (desktop)
 - `run_detect.py` = detect camera (CLI)
+- `run_chat.py` = chat AI với Gemini
 - `run_tools.py` = xem cấu hình máy và 3 mức tối ưu
 - `run_doctor.py` = kiểm tra hệ thống
 - `run_tests.py` = kiểm tra code

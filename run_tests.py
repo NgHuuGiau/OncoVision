@@ -86,8 +86,8 @@ class CameraCheckResult:
 
 def _open_camera_capture(index: int):
     import cv2
-
-    return cv2.VideoCapture(index)
+    # Sử dụng CAP_DSHOW để khởi động camera nhanh và ổn định hơn trên Windows
+    return cv2.VideoCapture(index, cv2.CAP_DSHOW) if hasattr(cv2, "CAP_DSHOW") else cv2.VideoCapture(index)
 
 
 def check_camera(index: int = 0, attempts: int = 3) -> CameraCheckResult:
@@ -271,20 +271,37 @@ class PrettyTestRunner(unittest.TextTestRunner):
         self.camera_result = camera_result
         self.strict_camera = strict_camera
 
+    def _check_dependencies(self) -> list[str]:
+        missing = []
+        deps = {
+            "PySide6": "Giao diện (UI)",
+            "google.generativeai": "Gemini AI",
+            "faster_whisper": "Voice Recognition",
+            "pyaudio": "Audio Input",
+            "pygments": "Syntax Highlighting"
+        }
+        import importlib.util
+        for lib, desc in deps.items():
+            if importlib.util.find_spec(lib.split('.')[0]) is None:
+                missing.append(f"{lib} ({desc})")
+        return missing
+
     def _makeResult(self):
         return self.resultclass(self.stream, self.descriptions, self.verbosity, total_tests=self.total_tests)
 
     def _write_camera_section(self) -> None:
-        if self.camera_result is None:
-            return
-        self.output_stream.write(section("KIỂM TRA THIẾT BỊ", YELLOW) + "\n")
-        self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
-        self.output_stream.write(color(pad(self.camera_result.detail), self.camera_result.style) + "\n")
-        if self.strict_camera and not self.camera_result.ok:
-            self.output_stream.write(color(pad("Chế độ camera     STRICT | Camera không đạt sẽ làm bài test tổng thể fail"), RED) + "\n")
-        else:
-            self.output_stream.write(color(pad("Chế độ camera     MỀM   | Camera không đạt chỉ cảnh báo, không chặn unit test"), YELLOW) + "\n")
-        self.output_stream.write(color(rule("-"), CYAN) + "\n")
+        if self.camera_result is not None:
+            self.output_stream.write(section("KIỂM TRA THIẾT BỊ", YELLOW) + "\n")
+            self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
+            self.output_stream.write(color(pad(self.camera_result.detail), self.camera_result.style) + "\n")
+            self.output_stream.write(color(rule("-"), CYAN) + "\n")
+
+        missing_deps = self._check_dependencies()
+        if missing_deps:
+            self.output_stream.write(section("CẢNH BÁO THƯ VIỆN", RED) + "\n")
+            for dep in missing_deps:
+                self.output_stream.write(color(pad(f"Thiếu: {dep}"), YELLOW) + "\n")
+            self.output_stream.write(color(rule("-"), CYAN) + "\n")
 
     def run(self, test):
         self.output_stream.write(color(rule("="), CYAN) + "\n")

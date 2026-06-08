@@ -1,13 +1,37 @@
 from __future__ import annotations
 
 import argparse
+import math
+import re
 import sys
+import json
 import tempfile
+import time
+import random
+import sqlite3
 from dataclasses import dataclass, field
 import os
+import platform
 from pathlib import Path
 from typing import Literal
 
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
+try:
+    from pygments import highlight
+    from pygments.lexers import get_lexer_by_name, guess_lexer
+    from pygments.formatters import HtmlFormatter
+    PYGMENTS_AVAILABLE = True
+except ImportError:
+    PYGMENTS_AVAILABLE = False
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 @dataclass
 class ChatMessage:
@@ -15,6 +39,7 @@ class ChatMessage:
     text: str
     attachment_path: str | None = None
     attachment_kind: Literal["image", "text", "camera"] | None = None
+    id: int | None = None
 
 
 @dataclass
@@ -22,6 +47,7 @@ class Conversation:
     title: str
     subtitle: str
     messages: list[ChatMessage] = field(default_factory=list)
+    id: int | None = None
 
 
 def build_chat_arg_parser(description: str) -> argparse.ArgumentParser:
@@ -48,8 +74,9 @@ def build_chat_arg_parser(description: str) -> argparse.ArgumentParser:
 
 def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: str = "desktop", selected_model: str | None = None) -> int:
     try:
-        from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, Signal
-        from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap
+        from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, Signal, QThread, QVariantAnimation, QEasingCurve, QTemporaryFile, QRectF, QPropertyAnimation, QPoint, QParallelAnimationGroup
+        from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap, QColor, QPen
+        from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap, QColor, QPen, QShortcut, QKeySequence
         from PySide6.QtSvg import QSvgRenderer
         from PySide6.QtWidgets import (
             QApplication,
@@ -65,16 +92,31 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             QMainWindow,
             QMenu,
             QMessageBox,
+            QToolTip,
+            QSystemTrayIcon,
             QPushButton,
+            QProgressBar,
             QPlainTextEdit,
             QScrollArea,
             QSizePolicy,
             QSpacerItem,
+            QGraphicsDropShadowEffect,
+            QGraphicsBlurEffect,
             QVBoxLayout,
             QWidget,
         )
     except ImportError as exc:
         raise RuntimeError("Missing PySide6. Install with: pip install PySide6 opencv-python") from exc
+
+    try:
+        import numpy as np
+        import pyaudio
+        import wave
+        import torch
+        from faster_whisper import WhisperModel
+        VOICE_AI_AVAILABLE = True
+    except ImportError:
+        VOICE_AI_AVAILABLE = False
 
     try:
         import cv2
@@ -109,9 +151,13 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "txt_title": "File preview",
             "ai_reply_text": "I received the content and will process it in this chat context.",
             "ai_reply_image": "Image received. I will use it as input for this chat.",
+            "image_model_error": "⚠️ This model does not support image input. Please switch to a vision-capable model (gemini-1.5-pro) in Settings or remove the attachment.",
             "ai_reply_camera": "Camera snapshot received and added to the chat.",
             "empty_send": "Enter a message before sending.",
             "info_title": "Info",
+            "loading_model": "Waking up Voice AI...",
+            "recording_status": "Listening...",
+            "voice_error": "Could not recognize voice or Mic error.",
             "settings_title": "Settings",
             "camera_window": "Camera",
             "attach_image_label": "Selected image",
@@ -123,8 +169,19 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "days_ago": "days ago",
             "english": "English",
             "vietnamese": "Vietnamese",
+            "delete_chat": "Delete chat",
+            "confirm_delete_title": "Confirm Delete",
+            "confirm_delete_msg": "Are you sure you want to delete this conversation?",
+            "api_key_label": "Gemini API Key",
+            "api_key_hint": "Enter your Google AI Studio key...",
+            "api_key_desc": "Mã này dùng để kết nối với trí tuệ nhân tạo Gemini.",
         },
         "vi": {
+            "api_key_label": "Mã API Gemini",
+            "api_key_hint": "Nhập mã từ Google AI Studio...",
+            "api_key_desc": "Mã này dùng để kết nối với trí tuệ nhân tạo Gemini.",
+            "copied_hint": "Đã sao chép vào bộ nhớ tạm!",
+            "new_message": "Tin nhắn mới từ AI",
             "new_chat": "Chat mới",
             "search": "Tìm kiếm đoạn chat",
             "history": "Lịch sử chat",
@@ -151,9 +208,13 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "txt_title": "Xem trước tệp",
             "ai_reply_text": "Tôi đã nhận nội dung và sẽ xử lý trong ngữ cảnh đoạn chat này.",
             "ai_reply_image": "Đã nhận ảnh. Tôi sẽ dùng ảnh làm dữ liệu đầu vào cho đoạn chat này.",
+            "image_model_error": "⚠️ Mô hình này không hỗ trợ đầu vào hình ảnh. Vui lòng đổi sang mô hình hỗ trợ thị giác (gemini-1.5-pro) trong Cài đặt hoặc xóa ảnh đính kèm.",
             "ai_reply_camera": "Đã nhận ảnh chụp từ camera và thêm vào đoạn chat.",
             "empty_send": "Hãy nhập tin nhắn trước khi gửi.",
             "info_title": "Thông tin",
+            "loading_model": "Đang nạp AI giọng nói...",
+            "recording_status": "Đang lắng nghe...",
+            "voice_error": "Không nhận diện được giọng nói hoặc lỗi Mic.",
             "settings_title": "Cài đặt",
             "camera_window": "Camera",
             "attach_image_label": "Ảnh đã chọn",
@@ -165,33 +226,43 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "days_ago": "ngày trước",
             "english": "Tiếng Anh",
             "vietnamese": "Tiếng Việt",
+            "delete_chat": "Xóa đoạn chat",
+            "confirm_delete_title": "Xác nhận xóa",
+            "confirm_delete_msg": "Bạn có chắc chắn muốn xóa đoạn chat này không?",
         }
     }
 
     DARK_STYLESHEET = """
-    QMainWindow, QDialog, QWidget {
-        background: #202123;
+    QMainWindow, QDialog, QWidget#Root {
+        background: #0b0b0b;
         font-family: "Segoe UI", "Arial", sans-serif;
+        font-family: "Inter", "Segoe UI", "Roboto", "Arial", sans-serif;
     }
-    QWidget#Root,
     QWidget#ChatPanel,
+    QWidget#ScrollContainer,
     QWidget#MessagesHost {
-        background: #202123;
+        background: transparent;
     }
     QLabel {
         background: transparent;
-        color: #ececf1;
+        color: #e3e3e3;
+        font-weight: normal;
     }
     QLabel#Subtle {
-        color: #9a9ca8;
+        color: #b4b4b4;
     }
-    QLabel#Headline {
+    QLabel#GreetingTitle {
         font-size: 34px;
         font-weight: 700;
         color: #ffffff;
     }
     QLabel#BrandText {
-        font-size: 26px;
+        font-size: 22px;
+        font-weight: 700;
+        color: #e3e3e3;
+    }
+    QLabel#ChatHeaderTitle {
+        font-size: 24px;
         font-weight: 700;
         color: #ffffff;
     }
@@ -200,13 +271,35 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         font-size: 15px;
         font-weight: 600;
     }
+    QLabel#ModeBadge {
+        color: #c7c7cc;
+        font-size: 13px;
+    }
+    QLabel#GreetingAvatar {
+        min-width: 56px;
+        max-width: 56px;
+        min-height: 56px;
+        max-height: 56px;
+        border-radius: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+    }
     QLabel#Attachment {
         color: #d7e0ff;
         font-weight: 600;
     }
     QFrame#Sidebar {
-        background: #171717;
-        border-right: 1px solid #2b2d31;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 rgba(18, 19, 24, 0.98),
+            stop:1 rgba(13, 14, 18, 0.98));
+        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        border-top-right-radius: 30px;
+        border-bottom-right-radius: 30px;
+    }
+    QFrame#TopBar {
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     QFrame#SidebarHeader {
         background: transparent;
@@ -214,83 +307,98 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     }
     QFrame#SidebarButton,
     QFrame#GreetingCard,
+    QFrame#ChatBoard,
     QFrame#SettingsCard {
-        background: #1f2023;
-        border: 1px solid #30333a;
+        background: transparent;
+        border: none;
         border-radius: 20px;
     }
     QFrame#Composer {
-        background: #2c2d31;
-        border: 1px solid #3a3d45;
-        border-radius: 18px;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 rgba(27, 28, 34, 0.98),
+            stop:1 rgba(20, 21, 26, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 36px;
     }
     QFrame#HistoryPanel {
-        background: #1d1f24;
-        border: 1px solid #2b2f36;
-        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 24px;
     }
     QFrame#SearchBox {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 20px;
+    }
+    QFrame#MessageScroll {
         background: transparent;
         border: none;
-        border-radius: 18px;
     }
-    QFrame#SettingsShell {
-        background: #17181c;
-        border: 1px solid #2d3138;
+    QFrame#SettingsShell,
+    QFrame#ImagePreviewShell { /* Thêm ID cho shell của ImagePreviewDialog */
+        background: #111111;
+        border: 1px solid #3a3a3a;
         border-radius: 28px;
     }
     QFrame#SettingsNav {
-        background: #1b1c20;
-        border: 1px solid #2f333a;
+        background: transparent;
+        border: none;
         border-radius: 22px;
     }
     QFrame#SettingsContent {
-        background: #1c1e22;
-        border: 1px solid #2f333a;
+        background: transparent;
+        border: none;
         border-radius: 22px;
     }
     QFrame#SettingsOptionCard {
-        background: #202228;
-        border: 1px solid #31353d;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 20px;
     }
     QFrame#HistoryItem {
-        background: #23252c;
-        border: 1px solid #2f343d;
-        border-radius: 14px;
+        background: transparent;
+        border: none;
+        border-radius: 16px;
+    }
+    QFrame#HistoryItem:hover {
+        background: rgba(255, 255, 255, 0.05);
     }
     QFrame#HistoryItem[selected="true"] {
-        background: #2c3038;
-        border: 1px solid #3a404b;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.06);
     }
     QFrame#BubbleUser {
-        background: #2b2c31;
-        border: 1px solid #343841;
-        border-radius: 22px;
+        background: rgba(77, 184, 255, 0.14);
+        border: 1px solid rgba(77, 184, 255, 0.12);
+        border-radius: 34px;
     }
     QFrame#BubbleAI {
-        background: #26282d;
-        border: 1px solid #343841;
-        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 34px;
     }
     QLabel#Avatar {
-        min-width: 38px;
-        max-width: 38px;
-        min-height: 38px;
-        max-height: 38px;
-        border-radius: 19px;
-        border: 1px solid #3a3d45;
-        background: #202228;
+        min-width: 32px; /* Nhỏ hơn */
+        max-width: 32px;
+        min-height: 32px;
+        max-height: 32px;
+        border-radius: 16px; /* Bo tròn */
+        border: none;
+        background: #4db8ff; /* Màu xanh Gemini */
         color: white;
         font-weight: 700;
         qproperty-alignment: AlignCenter;
     }
     QLineEdit, QPlainTextEdit, QComboBox, QListWidget {
-        background: #1a1b1f;
-        border: 1px solid #30333a;
-        border-radius: 18px;
-        color: #ececf1;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        color: #e3e3e3; /* Màu chữ */
         padding: 12px 14px;
+    }
+    QScrollArea#MessageScroll {
+        border: none;
+        background: transparent;
     }
     QFrame#Composer QPlainTextEdit {
         background: transparent;
@@ -298,17 +406,17 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border-radius: 0;
         color: #ececf1;
         font-size: 15px;
-        padding: 2px 4px;
-        min-height: 26px;
+        padding: 7px 2px 7px 2px;
+        min-height: 30px;
         max-height: 120px;
     }
     QPlainTextEdit#ComposerInput,
-    QPlainTextEdit#ComposerInput QWidget {
+    QPlainTextEdit#ComposerInput QWidget { /* Đảm bảo viewport trong suốt */
         background: transparent;
         border: none;
     }
     QPlainTextEdit {
-        padding-top: 14px;
+        padding-top: 12px; /* Điều chỉnh padding */
     }
     QPushButton#ModeButton {
         background: #3a3d45;
@@ -336,18 +444,17 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border: none;
     }
     QPushButton {
-        background: #23252b;
-        color: #ececf1;
-        border: 1px solid #30333a;
+        background: transparent;
+        color: #ffffff;
+        border: none;
         border-radius: 18px;
         padding: 10px 14px;
         text-align: left;
     }
     QPushButton:hover {
-        background: #2b2e35;
+        background: rgba(255, 255, 255, 0.05);
     }
-    QPushButton#SidebarPrimaryButton,
-    QPushButton#SidebarFooterButton {
+    QPushButton#SidebarPrimaryButton {
         min-height: 54px;
         padding-left: 16px;
         font-size: 15px;
@@ -356,16 +463,29 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     }
     QPushButton#SidebarPrimaryButton {
         background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
     }
-    QPushButton#SidebarFooterButton {
+    QPushButton#TopActionButton {
+        min-width: 40px;
+        max-width: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        padding: 0;
+        border-radius: 20px;
         background: transparent;
+        color: #e3e3e3;
+        font-size: 18px;
+        text-align: center;
+    }
+    QPushButton#TopActionButton:hover {
+        background: rgba(255, 255, 255, 0.08);
     }
     QPushButton#SidebarPrimaryButton:hover,
-    QPushButton#SidebarFooterButton:hover,
     QPushButton#SidebarCompactButton:hover,
     QPushButton#SidebarCompactSearchButton:hover,
     QFrame#SearchBox:hover {
-        background: #2b2e35;
+        background: rgba(255, 255, 255, 0.07);
     }
     QPushButton#SidebarAppButton {
         background: transparent;
@@ -386,7 +506,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         min-height: 52px;
         max-height: 52px;
         padding: 0;
-        border-radius: 18px;
+        border-radius: 20px;
         text-align: center;
         border: none;
         background: transparent;
@@ -397,46 +517,46 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         min-height: 52px;
         max-height: 52px;
         padding: 0;
-        border-radius: 18px;
+        border-radius: 20px;
         text-align: center;
         border: none;
         background: transparent;
     }
     QPushButton#RoundButton {
-        min-width: 38px;
-        max-width: 38px;
-        min-height: 38px;
-        max-height: 38px;
-        border-radius: 19px;
-        border: 1px solid #3a3d45;
-        background: #3a3d45;
-        color: #ececf1;
-        font-size: 18px;
+        min-width: 44px;
+        max-width: 44px;
+        min-height: 44px;
+        max-height: 44px;
+        border-radius: 22px;
+        border: none;
+        background: transparent;
+        color: #e3e3e3;
+        font-size: 20px;
         padding: 0;
         text-align: center;
     }
     QPushButton#RoundButton:hover {
-        background: #50545e;
+        background: rgba(255, 255, 255, 0.14);
     }
     QPushButton#SendButton {
-        min-width: 38px;
-        max-width: 38px;
-        min-height: 38px;
-        max-height: 38px;
-        border-radius: 19px;
+        min-width: 44px;
+        max-width: 44px;
+        min-height: 44px;
+        max-height: 44px;
+        border-radius: 22px;
         border: none;
-        background: #f4f4f5;
-        color: #111214;
+        background: #4db8ff; /* Màu xanh Gemini */
+        color: #ffffff;
         font-size: 18px;
         font-weight: 700;
     }
     QPushButton#SendButton:hover {
-        background: #ffffff;
+        background: #86cbff; /* Hover sáng hơn */
     }
     QPushButton#SettingsNavButton {
-        background: #2a2d33;
-        border: 1px solid #363b44;
-        border-radius: 18px;
+        background: #242424;
+        border: 1px solid #3a3a3a;
+        border-radius: 12px;
         text-align: left;
         padding: 14px 18px;
         font-weight: 600;
@@ -444,12 +564,12 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QPushButton#SettingsCloseButton {
         background: transparent;
         border: none;
-        color: #d7d9df;
+        color: #e3e3e3;
         font-size: 18px;
         padding: 0;
     }
     QPushButton#SettingsCloseButton:hover {
-        color: #ffffff;
+        color: #e3e3e3; /* Giữ nguyên, không đổi hover */
         background: transparent;
     }
     QComboBox#SettingsCombo {
@@ -458,6 +578,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         padding: 10px 14px;
         font-size: 15px;
         font-weight: 600;
+        color: #000000;
+        background: #ffffff;
     }
     QComboBox#SettingsCombo::drop-down {
         border: none;
@@ -466,40 +588,50 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QComboBox#SettingsCombo::down-arrow {
         image: none;
     }
+    QComboBox#SettingsCombo QAbstractItemView {
+        background: #ffffff;
+        color: #000000;
+        selection-background-color: #dbeafe;
+        selection-color: #000000;
+        border: 1px solid #d9d9df;
+        outline: none;
+    }
     QMenu {
         background: #1b1c20;
-        border: 1px solid #30333a;
+        border: 1px solid #3a3a3a;
         border-radius: 16px;
         padding: 8px;
     }
     QMenu::item {
         padding: 10px 18px;
         border-radius: 10px;
+        color: #ffffff;
     }
     QMenu::item:selected {
-        background: #2b2e35;
+        background: #242424;
     }
     """
 
     LIGHT_STYLESHEET = """
-    QMainWindow, QDialog, QWidget {
-        background: #f3f4f6;
+    QMainWindow, QDialog, QWidget#Root {
+        background: #f7f7f8;
         font-family: "Segoe UI", "Arial", sans-serif;
+        font-family: "Inter", "Segoe UI", "Roboto", "Arial", sans-serif;
     }
-    QWidget#Root,
     QWidget#ChatPanel,
+    QWidget#ScrollContainer,
     QWidget#MessagesHost {
-        background: #f3f4f6;
+        background: transparent;
     }
     QLabel {
         background: transparent;
-        color: #0a0a0a;
-        font-weight: 500;
+        color: #111827;
+        font-weight: normal;
     }
     QLabel#Subtle {
         color: #374151;
     }
-    QLabel#Headline {
+    QLabel#GreetingTitle {
         font-size: 34px;
         font-weight: 700;
         color: #000000;
@@ -509,102 +641,140 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         font-weight: 700;
         color: #000000;
     }
+    QLabel#ChatHeaderTitle {
+        font-size: 24px;
+        font-weight: 700;
+        color: #111827;
+    }
     QLabel#SectionTitle {
         color: #000000;
         font-size: 15px;
         font-weight: 600;
+    }
+    QLabel#ModeBadge {
+        color: #6b7280;
+        font-size: 13px;
+    }
+    QLabel#GreetingAvatar {
+        min-width: 56px;
+        max-width: 56px;
+        min-height: 56px;
+        max-height: 56px;
+        border-radius: 28px;
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        background: rgba(17, 24, 39, 0.03);
     }
     QLabel#Attachment {
         color: #000000;
         font-weight: 600;
     }
     QFrame#Sidebar {
-        background: #eceef2;
-        border-right: 1px solid #d7dce4;
+        background: rgba(255, 255, 255, 0.92);
+        border-right: 1px solid rgba(17, 24, 39, 0.08);
+        border-top-right-radius: 30px;
+        border-bottom-right-radius: 30px;
+    }
+    QFrame#TopBar {
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid rgba(17, 24, 39, 0.08);
     }
     QFrame#SidebarHeader {
         background: transparent;
         border: none;
     }
     QFrame#SidebarButton,
-    QFrame#GreetingCard,
+    QFrame#GreetingCard, 
+    QFrame#ChatBoard,
     QFrame#SettingsCard {
-        background: #ffffff;
-        border: 1px solid #d7dce4;
+        background: transparent;
+        border: none;
         border-radius: 20px;
     }
     QFrame#Composer {
-        background: #f0f1f3;
-        border: 1px solid #d0d5de;
-        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 34px;
     }
     QFrame#HistoryPanel {
-        background: #f8f9fb;
-        border: 1px solid #d7dce4;
-        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.65);
+        border: 1px solid rgba(17, 24, 39, 0.06);
+        border-radius: 24px;
     }
     QFrame#SearchBox {
+        background: rgba(17, 24, 39, 0.03);
+        border: 1px solid rgba(17, 24, 39, 0.06);
+        border-radius: 20px;
+    }
+    QFrame#MessageScroll {
         background: transparent;
         border: none;
-        border-radius: 18px;
     }
-    QFrame#SettingsShell {
-        background: #eef1f5;
-        border: 1px solid #d7dce4;
+    QFrame#SettingsShell,
+    QFrame#ImagePreviewShell { /* Thêm ID cho shell của ImagePreviewDialog */
+        background: #ffffff;
+        border: 1px solid #d9d9df;
         border-radius: 28px;
     }
     QFrame#SettingsNav {
-        background: #ffffff;
-        border: 1px solid #d7dce4;
+        background: transparent;
+        border: none;
         border-radius: 22px;
     }
     QFrame#SettingsContent {
-        background: #ffffff;
-        border: 1px solid #d7dce4;
+        background: transparent;
+        border: none;
         border-radius: 22px;
     }
     QFrame#SettingsOptionCard {
-        background: #f8fafc;
-        border: 1px solid #dfe4eb;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(17, 24, 39, 0.08);
         border-radius: 20px;
     }
     QFrame#HistoryItem {
-        background: #ffffff;
-        border: 1px solid #d7dce4;
-        border-radius: 14px;
+        background: transparent;
+        border: none;
+        border-radius: 16px;
+    }
+    QFrame#HistoryItem:hover {
+        background: rgba(17, 24, 39, 0.05);
     }
     QFrame#HistoryItem[selected="true"] {
-        background: #e9edf6;
-        border: 1px solid #cad4e2;
+        background: rgba(17, 24, 39, 0.08);
+        border: 1px solid rgba(17, 24, 39, 0.05);
     }
     QFrame#BubbleUser {
-        background: #ebeff7;
-        border: 1px solid #d7dce4;
-        border-radius: 22px;
+        background: rgba(77, 184, 255, 0.12);
+        border: 1px solid rgba(77, 184, 255, 0.12);
+        border-radius: 34px;
     }
     QFrame#BubbleAI {
-        background: #ffffff;
-        border: 1px solid #d7dce4;
-        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(17, 24, 39, 0.06);
+        border-radius: 34px;
     }
     QLabel#Avatar {
-        min-width: 38px;
-        max-width: 38px;
-        min-height: 38px;
-        max-height: 38px;
-        border-radius: 19px;
-        border: 1px solid #d7dce4;
-        background: #ffffff;
+        min-width: 32px;
+        max-width: 32px;
+        min-height: 32px;
+        max-height: 32px;
+        border-radius: 16px;
+        border: none;
+        background: #4db8ff;
         color: #111827;
         font-weight: 700;
         qproperty-alignment: AlignCenter;
     }
     QLineEdit, QPlainTextEdit, QComboBox, QListWidget {
-        background: #ffffff;
-        border: 1px solid #d7dce4;
-        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 16px;
         color: #111827;
         padding: 12px 14px;
+    }
+    QScrollArea#MessageScroll {
+        border: none;
+        background: transparent;
     }
     QFrame#Composer QPlainTextEdit {
         background: transparent;
@@ -612,17 +782,17 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border-radius: 0;
         color: #111827;
         font-size: 15px;
-        padding: 2px 4px;
-        min-height: 26px;
+        padding: 7px 2px 7px 2px;
+        min-height: 30px;
         max-height: 120px;
     }
     QPlainTextEdit#ComposerInput,
-    QPlainTextEdit#ComposerInput QWidget {
+    QPlainTextEdit#ComposerInput QWidget { /* Đảm bảo viewport trong suốt */
         background: transparent;
         border: none;
     }
     QPlainTextEdit {
-        padding-top: 14px;
+        padding-top: 12px; /* Điều chỉnh padding */
     }
     QPushButton#ModeButton {
         background: #e4e7ed;
@@ -650,18 +820,17 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border: none;
     }
     QPushButton {
-        background: #ffffff;
+        background: transparent;
         color: #111827;
-        border: 1px solid #d7dce4;
+        border: none;
         border-radius: 18px;
         padding: 10px 14px;
         text-align: left;
     }
     QPushButton:hover {
-        background: #f8fafc;
+        background: rgba(17, 24, 39, 0.05);
     }
-    QPushButton#SidebarPrimaryButton,
-    QPushButton#SidebarFooterButton {
+    QPushButton#SidebarPrimaryButton {
         min-height: 54px;
         padding-left: 16px;
         font-size: 15px;
@@ -670,16 +839,29 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     }
     QPushButton#SidebarPrimaryButton {
         background: transparent;
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 16px;
     }
-    QPushButton#SidebarFooterButton {
+    QPushButton#TopActionButton {
+        min-width: 40px;
+        max-width: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        padding: 0;
+        border-radius: 20px;
         background: transparent;
+        color: #111827;
+        font-size: 18px;
+        text-align: center;
+    }
+    QPushButton#TopActionButton:hover {
+        background: rgba(17, 24, 39, 0.08);
     }
     QPushButton#SidebarPrimaryButton:hover,
-    QPushButton#SidebarFooterButton:hover,
     QPushButton#SidebarCompactButton:hover,
     QPushButton#SidebarCompactSearchButton:hover,
     QFrame#SearchBox:hover {
-        background: #e2e5e9;
+        background: rgba(17, 24, 39, 0.06);
     }
     QPushButton#SidebarAppButton {
         background: transparent;
@@ -700,7 +882,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         min-height: 52px;
         max-height: 52px;
         padding: 0;
-        border-radius: 18px;
+        border-radius: 20px;
         text-align: center;
         border: none;
         background: transparent;
@@ -711,46 +893,46 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         min-height: 52px;
         max-height: 52px;
         padding: 0;
-        border-radius: 18px;
+        border-radius: 20px;
         text-align: center;
         border: none;
         background: transparent;
     }
     QPushButton#RoundButton {
-        min-width: 38px;
-        max-width: 38px;
-        min-height: 38px;
-        max-height: 38px;
-        border-radius: 19px;
-        border: 1px solid #d0d5de;
-        background: #e4e7ed;
-        color: #374151;
-        font-size: 18px;
+        min-width: 44px;
+        max-width: 44px;
+        min-height: 44px;
+        max-height: 44px;
+        border-radius: 22px;
+        border: none;
+        background: transparent;
+        color: #111827;
+        font-size: 20px;
         padding: 0;
         text-align: center;
     }
     QPushButton#RoundButton:hover {
-        background: #d8dbe4;
+        background: rgba(17, 24, 39, 0.08);
     }
     QPushButton#SendButton {
-        min-width: 38px;
-        max-width: 38px;
-        min-height: 38px;
-        max-height: 38px;
-        border-radius: 19px;
+        min-width: 44px;
+        max-width: 44px;
+        min-height: 44px;
+        max-height: 44px;
+        border-radius: 22px;
         border: none;
-        background: #111827;
+        background: #4db8ff;
         color: #ffffff;
         font-size: 18px;
         font-weight: 700;
     }
     QPushButton#SendButton:hover {
-        background: #0f172a;
+        background: #86cbff;
     }
     QPushButton#SettingsNavButton {
-        background: #eef2f7;
-        border: 1px solid #d7dce4;
-        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #d9d9df;
+        border-radius: 12px;
         text-align: left;
         padding: 14px 18px;
         font-weight: 600;
@@ -758,12 +940,12 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QPushButton#SettingsCloseButton {
         background: transparent;
         border: none;
-        color: #374151;
+        color: #111827;
         font-size: 18px;
         padding: 0;
     }
     QPushButton#SettingsCloseButton:hover {
-        color: #111827;
+        color: #111827; /* Không hover đổi màu/nền */
         background: transparent;
     }
     QComboBox#SettingsCombo {
@@ -772,6 +954,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         padding: 10px 14px;
         font-size: 15px;
         font-weight: 600;
+        color: #000000;
+        background: #ffffff;
     }
     QComboBox#SettingsCombo::drop-down {
         border: none;
@@ -780,18 +964,27 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QComboBox#SettingsCombo::down-arrow {
         image: none;
     }
+    QComboBox#SettingsCombo QAbstractItemView {
+        background: #ffffff;
+        color: #000000;
+        selection-background-color: #dbeafe;
+        selection-color: #000000;
+        border: 1px solid #d9d9df;
+        outline: none;
+    }
     QMenu {
         background: #ffffff;
-        border: 1px solid #d7dce4;
+        border: 1px solid #d9d9df;
         border-radius: 16px;
         padding: 8px;
     }
     QMenu::item {
         padding: 10px 18px;
         border-radius: 10px;
+        color: #111827;
     }
     QMenu::item:selected {
-        background: #eef2f7;
+        background: #f7f7f8;
     }
     """
 
@@ -933,6 +1126,71 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 self.capture = None
             super().closeEvent(event)
 
+    class TypingIndicator(QWidget):
+        """Hiệu ứng 3 dấu chấm nhảy động kiểu Gemini."""
+        def __init__(self, color: QColor, parent: QWidget | None = None) -> None:
+            super().__init__(parent)
+            self.setFixedSize(60, 24)
+            self.color = color
+            self.start_time = time.time()
+            self.timer = QTimer(self)
+            self.timer.timeout.connect(self.update)
+            self.timer.start(30)
+
+        def paintEvent(self, event) -> None:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setPen(Qt.NoPen)
+            t = time.time() - self.start_time
+            for i in range(3):
+                # Hiệu ứng nhảy và mờ dần bằng hàm lượng giác
+                offset = math.sin(t * 7 - i * 0.9) * 4
+                alpha = int(160 + 95 * math.sin(t * 7 - i * 0.9))
+                c = QColor(self.color)
+                c.setAlpha(max(0, min(255, alpha)))
+                painter.setBrush(c)
+                painter.drawEllipse(10 + i * 14, 12 + offset, 5, 5)
+
+    class AIWorker(QThread):
+        response_ready = Signal(str)
+        error_occurred = Signal(str)
+
+        def __init__(self, api_key: str, prompt: str, history: list[dict] = None, attachment_path: str = None, attachment_kind: str = None):
+            super().__init__()
+            self.api_key = api_key
+            self.prompt = prompt
+            self.history = history or []
+            self.attachment_path = attachment_path
+            self.attachment_kind = attachment_kind
+
+        def run(self):
+            if not genai or not self.api_key:
+                self.error_occurred.emit("API Key missing or library not installed.")
+                return
+            
+            try:
+                genai.configure(api_key=self.api_key)
+                # Sử dụng system_instruction để ép AI trả lời theo ngôn ngữ người dùng
+                model = genai.GenerativeModel(
+                    model_name="gemini-1.5-pro",
+                    system_instruction="You are a helpful assistant. Always respond using the same language as the user's input."
+                )
+                chat = model.start_chat(history=self.history)
+                
+                content_parts = [self.prompt]
+                
+                if self.attachment_path and self.attachment_kind in ["image", "camera"]:
+                    from PIL import Image
+                    content_parts.append(Image.open(self.attachment_path))
+                elif self.attachment_path and self.attachment_kind == "text":
+                    content = Path(self.attachment_path).read_text(encoding="utf-8", errors="ignore")
+                    content_parts.append(f"\n\n[File Content]:\n{content}")
+
+                response = chat.send_message(content_parts)
+                self.response_ready.emit(response.text)
+            except Exception as e:
+                self.error_occurred.emit(str(e))
+
     class SettingsDialog(QDialog):
         def __init__(self, *, parent_window: "ChatWindow") -> None:
             super().__init__(parent_window)
@@ -1047,6 +1305,49 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             language_card_layout.addWidget(self.language_combo, 0, Qt.AlignVCenter)
             content_layout.addWidget(self.language_card)
 
+            self.api_card = QFrame()
+            self.api_card.setObjectName("SettingsOptionCard")
+            api_layout = QVBoxLayout(self.api_card)
+            api_layout.setContentsMargins(22, 18, 22, 18)
+            api_layout.setSpacing(10)
+
+            self.api_label = QLabel()
+            self.api_label.setStyleSheet("font-size: 18px; font-weight: 700;")
+            api_layout.addWidget(self.api_label)
+
+            input_row = QHBoxLayout()
+            input_row.setSpacing(8)
+
+            self.api_input = QLineEdit()
+            self.api_input.setEchoMode(QLineEdit.Password)
+            self.api_input.textChanged.connect(self.on_api_key_changed)
+            input_row.addWidget(self.api_input, 1)
+
+            # Nút Hiện/Ẩn mật khẩu
+            self.toggle_api_view = QPushButton()
+            self.toggle_api_view.setFixedSize(36, 36)
+            self.toggle_api_view.setCursor(Qt.PointingHandCursor)
+            self.toggle_api_view.setStyleSheet("border-radius: 10px; padding: 0;")
+            self.toggle_api_view.clicked.connect(self.toggle_api_visibility)
+            input_row.addWidget(self.toggle_api_view)
+
+            # Nút Copy
+            self.copy_api_button = QPushButton()
+            self.copy_api_button.setFixedSize(36, 36)
+            self.copy_api_button.setCursor(Qt.PointingHandCursor)
+            self.copy_api_button.setStyleSheet("border-radius: 10px; padding: 0;")
+            self.copy_api_button.clicked.connect(self.copy_api_to_clipboard)
+            input_row.addWidget(self.copy_api_button)
+
+            api_layout.addLayout(input_row)
+
+            self.api_desc = QLabel()
+            self.api_desc.setObjectName("Subtle")
+            self.api_desc.setWordWrap(True)
+            api_layout.addWidget(self.api_desc)
+
+            content_layout.addWidget(self.api_card)
+
             content_layout.addStretch(1)
             body_row.addWidget(content, 5)
             shell_layout.addLayout(body_row)
@@ -1061,6 +1362,20 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.window.retranslate_ui()
             self.retranslate_dialog()
 
+        def on_api_key_changed(self, text: str):
+            self.window.db.set_setting("gemini_api_key", text)
+
+        def toggle_api_visibility(self):
+            is_password = self.api_input.echoMode() == QLineEdit.Password
+            self.api_input.setEchoMode(QLineEdit.Normal if is_password else QLineEdit.Password)
+            icon_name = "eye_off.svg" if is_password else "eye.svg"
+            self.toggle_api_view.setIcon(themed_icon(icon_name, self.window.icon_color(), 18))
+
+        def copy_api_to_clipboard(self):
+            QApplication.clipboard().setText(self.api_input.text())
+            self.copy_api_button.setIcon(themed_icon("check.svg", "#4CAF50", 18))
+            QTimer.singleShot(1500, lambda: self.copy_api_button.setIcon(themed_icon("copy.svg", self.window.icon_color(), 18)))
+
         def retranslate_dialog(self) -> None:
             language = self.window.language
             self.setWindowTitle(tr(language, "settings_title"))
@@ -1072,6 +1387,13 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.appearance_desc.setText(tr(language, "appearance_desc"))
             self.language_label.setText(tr(language, "language"))
             self.language_desc.setText(tr(language, "language_desc"))
+            self.api_label.setText(tr(language, "api_key_label"))
+            self.api_input.setPlaceholderText(tr(language, "api_key_hint"))
+            self.api_input.setText(self.window.db.get_setting("gemini_api_key", ""))
+            self.api_desc.setText(tr(language, "api_key_desc"))
+            
+            self.toggle_api_view.setIcon(themed_icon("eye.svg", self.window.icon_color(), 18))
+            self.copy_api_button.setIcon(themed_icon("copy.svg", self.window.icon_color(), 18))
 
             theme_index = {"system": 0, "dark": 1, "light": 2}.get(self.window.theme_mode, 0)
             self.theme_combo.blockSignals(True)
@@ -1100,6 +1422,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             super().__init__(parent)
             self.setObjectName("HistoryItem")
             self.setProperty("selected", selected)
+            self.setCursor(Qt.PointingHandCursor)
             layout = QHBoxLayout(self)
             layout.setContentsMargins(14, 12, 14, 12)
             layout.setSpacing(10)
@@ -1123,26 +1446,374 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             layout.addLayout(text_layout, 1)
             self.setFixedHeight(68)
 
-    class ChatBubble(QFrame):
-        def __init__(self, message: ChatMessage, *, language: str, align_right: bool, parent: QWidget | None = None) -> None:
+    class ChatDatabase:
+        def __init__(self, db_path: str):
+            self.db_path = db_path
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+            self._init_db()
+
+        def _init_db(self):
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS conversations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT,
+                        subtitle TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        conversation_id INTEGER,
+                        sender TEXT,
+                        text TEXT,
+                        attachment_path TEXT,
+                        attachment_kind TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT
+                    )
+                """)
+
+        def get_setting(self, key: str, default: str) -> str:
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
+                    row = cursor.fetchone()
+                    return row[0] if row else default
+            except Exception:
+                return default
+
+        def set_setting(self, key: str, value: str):
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+            
+            # Nếu là API Key, đồng bộ thêm vào file .env để bảo mật
+            if key == "gemini_api_key":
+                self._update_env_file(value)
+
+        def _update_env_file(self, api_key: str):
+            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+            lines = []
+            key_found = False
+            
+            if os.path.exists(env_path):
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("GEMINI_API_KEY="):
+                            lines.append(f"GEMINI_API_KEY={api_key}\n")
+                            key_found = True
+                        else:
+                            lines.append(line)
+            
+            if not key_found:
+                lines.append(f"GEMINI_API_KEY={api_key}\n")
+            
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+
+        def get_all_conversations(self) -> list[Conversation]:
+            convs = []
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.execute("SELECT id, title, subtitle FROM conversations ORDER BY id DESC")
+                    for row in cursor:
+                        c_id, title, subtitle = row
+                        messages = []
+                        m_cursor = conn.execute(
+                            "SELECT sender, text, attachment_path, attachment_kind, id FROM messages WHERE conversation_id = ? ORDER BY id ASC",
+                            (c_id,)
+                        )
+                        for m_row in m_cursor:
+                            sender, text, path, kind, m_id = m_row
+                            messages.append(ChatMessage(sender=sender, text=text, attachment_path=path, attachment_kind=kind, id=m_id))
+                        convs.append(Conversation(title=title, subtitle=subtitle, messages=messages, id=c_id))
+            except Exception as e:
+                print(f"Database error: {e}")
+            return convs
+
+        def create_conversation(self, title: str, subtitle: str) -> int:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("INSERT INTO conversations (title, subtitle) VALUES (?, ?)", (title, subtitle))
+                return cursor.lastrowid
+
+        def update_conversation_title(self, conv_id: int, title: str):
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("UPDATE conversations SET title = ? WHERE id = ?", (title, conv_id))
+
+        def add_message(self, conv_id: int, msg: ChatMessage) -> int:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    "INSERT INTO messages (conversation_id, sender, text, attachment_path, attachment_kind) VALUES (?, ?, ?, ?, ?)",
+                    (conv_id, msg.sender, msg.text, msg.attachment_path, msg.attachment_kind)
+                )
+                return cursor.lastrowid
+
+        def delete_conversation(self, conv_id: int):
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
+
+        def clear_all_conversations(self):
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("DELETE FROM conversations")
+
+        def clear_all_messages(self):
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("DELETE FROM messages")
+
+        def search_conversations_by_message(self, query: str) -> list[int]:
+            if not query:
+                return []
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.execute("SELECT DISTINCT conversation_id FROM messages WHERE text LIKE ?", (f"%{query}%",))
+                    return [row[0] for row in cursor]
+            except Exception:
+                return []
+
+    class WaveformWidget(QWidget):
+        def __init__(self, color: str, parent: QWidget | None = None) -> None:
             super().__init__(parent)
+            self.setFixedSize(100, 30)
+            self.values = [0] * 12
+            self.color = QColor(color)
+
+        def set_intensity(self, value: int) -> None:
+            self.values.pop(0)
+            self.values.append(value)
+            self.update()
+
+        def paintEvent(self, event) -> None:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            w, h = self.width(), self.height()
+            spacing = 4
+            bar_w = (w - (len(self.values) - 1) * spacing) / len(self.values)
+            for i, val in enumerate(self.values):
+                # Tạo hiệu ứng sóng đối xứng từ giữa
+                bar_h = max(4, (val / 100.0) * h)
+                x = i * (bar_w + spacing)
+                y = (h - bar_h) / 2
+                painter.setBrush(self.color)
+                painter.setPen(Qt.NoPen)
+                painter.drawRoundedRect(QRectF(x, y, bar_w, bar_h), 2, 2)
+
+    class RecordingPanel(QFrame):
+        def __init__(self, language: str, parent: QWidget | None = None, window: QMainWindow | None = None) -> None:
+            super().__init__(parent)
+            self.setObjectName("RecordingPanel")
+            self._window = window
+            self.setGraphicsEffect(QGraphicsDropShadowEffect(blurRadius=15, xOffset=0, yOffset=4, color=QColor(0,0,0,60)))
+            layout = QHBoxLayout(self)
+            layout.setContentsMargins(16, 8, 16, 8)
+            layout.setSpacing(12)
+            
+            self.waveform = WaveformWidget("#FF5252")
+            layout.addWidget(self.waveform)
+            
+            self.label = QLabel(tr(language, "recording_status"))
+            self.label.setStyleSheet("color: #FF5252; font-weight: 700; font-size: 14px;")
+            layout.addWidget(self.label)
+            self.hide()
+            self.setup_styles()
+
+        def setup_styles(self) -> None:
+            if self._window and getattr(self._window, "effective_theme", "dark") == "light":
+                self.setStyleSheet("background: rgba(0,0,0,0.55); border: none; border-radius: 16px;")
+                self.label.setStyleSheet("color: #111827; font-weight: 700; font-size: 14px;")
+            else:
+                self.setStyleSheet("background: rgba(0,0,0,0.6); border: none; border-radius: 16px;")
+                self.label.setStyleSheet("color: white; font-weight: 700; font-size: 14px;")
+
+    if VOICE_AI_AVAILABLE:
+        class VoiceWorker(QThread):
+            result_ready = Signal(str)
+            intensity_changed = Signal(int)
+            finished = Signal()
+            error = Signal()
+
+            def __init__(self, language: str):
+                super().__init__()
+                self.lang_code = "vi" if language == "vi" else "en"
+                self.is_running = True
+
+            def run(self):
+                import tempfile
+                chunk = 1024
+                fs = 16000 # Chuẩn Whisper
+                p = pyaudio.PyAudio()
+                try:
+                    stream = p.open(format=pyaudio.paInt16, channels=1, rate=fs,
+                                    frames_per_buffer=chunk, input=True)
+                    frames = []
+                    silent_chunks = 0
+                    while self.is_running:
+                        data = stream.read(chunk, exception_on_overflow=False)
+                        frames.append(data)
+                        
+                        audio_data = np.frombuffer(data, dtype=np.int16)
+                        rms = np.sqrt(np.mean(audio_data**2)) if len(audio_data) > 0 else 0
+                        
+                        # Tinh chỉnh độ nhạy: khuếch đại giọng nhỏ bằng hàm lũy thừa
+                        intensity = int(min(100, (rms ** 0.65) * 2.2))
+                        self.intensity_changed.emit(intensity)
+
+                        if rms < 80: silent_chunks += 1
+                        else: silent_chunks = 0
+                        
+                        if silent_chunks > int(fs / chunk * 1.8): break
+                        if len(frames) > int(fs / chunk * 12): break
+
+                    stream.stop_stream()
+                    stream.close()
+                    
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                        wf = wave.open(tmp.name, 'wb')
+                        wf.setnchannels(1)
+                        wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
+                        wf.setframerate(fs)
+                        wf.writeframes(b''.join(frames))
+                        wf.close()
+
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                        model = WhisperModel("base", device=device, compute_type="int8" if device=="cpu" else "float16")
+                        segments, _ = model.transcribe(tmp.name, language=self.lang_code)
+                        text = "".join([s.text for s in segments])
+                        
+                        self.result_ready.emit(text.strip())
+                        try: os.unlink(tmp.name)
+                        except: pass
+                except Exception:
+                    self.error.emit()
+                finally:
+                    p.terminate()
+                    self.finished.emit()
+
+            def stop(self):
+                self.is_running = False
+
+    # XÓA CLASS IMAGEPREVIEWDIALOG TRÙNG LẶP (Dòng 1021-1048)
+    # CHỈ GIỮ LẠI BẢN CÓ HIỆU ỨNG BLUR Ở DÒI 1050
+
+    class ImagePreviewDialog(QDialog):
+        def __init__(self, image_path: str, parent: QWidget | None = None, effective_theme: str = "dark") -> None:
+            super().__init__(parent)
+            self.setWindowTitle("Image Preview")
+            self.setModal(True)
+            self.resize(1000, 800)
+            self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+            self.setAttribute(Qt.WA_TranslucentBackground, True)
+            self.setWindowOpacity(0.0)
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(10, 10, 10, 10)
+            shell = QFrame()
+            shell.setObjectName("ImagePreviewShell")
+            shell_layout = QVBoxLayout(shell)
+            shell_layout.setContentsMargins(20, 20, 20, 20)
+            layout.addWidget(shell)
+
+            self.blur = QGraphicsBlurEffect()
+            self.blur.setBlurRadius(20)
+            shell.setGraphicsEffect(self.blur)
+
+            if effective_theme == "light":
+                shell.setStyleSheet("background: rgba(255,255,255,0.85); border-radius: 28px; border: 1px solid rgba(0,0,0,0.08);")
+            else:
+                shell.setStyleSheet("background: rgba(18,19,24,0.92); border-radius: 28px; border: 1px solid rgba(255,255,255,0.06);")
+            self.scroll = QScrollArea()
+            self.scroll.setWidgetResizable(True)
+            self.scroll.setAlignment(Qt.AlignCenter)
+            self.scroll.setStyleSheet("background: transparent; border: none; border-radius: 20px;")
+            self.img_label = QLabel()
+            self.img_label.setPixmap(QPixmap(image_path).scaled(960, 740, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.scroll.setWidget(self.img_label)
+            shell_layout.addWidget(self.scroll)
+            close_btn = QPushButton("✕", shell)
+            close_btn.setObjectName("SettingsCloseButton")
+            close_btn.setFixedSize(40, 40)
+            close_btn.move(940, 10)
+            close_btn.clicked.connect(self.accept)
+
+        def keyPressEvent(self, event):
+            if event.key() == Qt.Key_Escape:
+                self.accept()
+            else:
+                super().keyPressEvent(event)
+
+        def showEvent(self, event):
+            self.group = QParallelAnimationGroup(self)
+            self.fade = QPropertyAnimation(self, b"windowOpacity")
+            self.fade.setDuration(300)
+            self.fade.setStartValue(0.0)
+            self.fade.setEndValue(1.0)
+            
+            self.blur_anim = QPropertyAnimation(self.blur, b"blurRadius")
+            self.blur_anim.setDuration(500)
+            self.blur_anim.setStartValue(20)
+            self.blur_anim.setEndValue(0)
+            
+            self.group.addAnimation(self.fade)
+            self.group.addAnimation(self.blur_anim)
+            self.group.start()
+            super().showEvent(event)
+
+    class MessageInput(QPlainTextEdit):
+        def __init__(self, parent: QWidget | None = None) -> None:
+            super().__init__(parent)
+            self.textChanged.connect(self._adjust_height)
+
+        def _adjust_height(self):
+            self.document().setTextWidth(self.viewport().width())
+            height = self.document().size().height() + self.contentsMargins().top() + self.contentsMargins().bottom()
+            self.setFixedHeight(max(34, min(int(height), 96)))
+
+        """Ô nhập liệu hỗ trợ Enter để gửi và Shift+Enter để xuống dòng."""
+        enter_pressed = Signal()
+
+        def keyPressEvent(self, event):
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                if event.modifiers() & Qt.ShiftModifier:
+                    # Nếu nhấn Shift+Enter thì xuống dòng như bình thường
+                    super().keyPressEvent(event)
+                else:
+                    # Nếu chỉ nhấn Enter thì gửi tin nhắn
+                    self.enter_pressed.emit()
+            else:
+                super().keyPressEvent(event)
+
+    class ChatBubble(QWidget):
+        def __init__(self, message: ChatMessage, *, language: str, align_right: bool, parent: QWidget | None = None, window: QMainWindow = None) -> None:
+            super().__init__(parent)
+            self.chat_window = window
+            self.effective_theme = getattr(window, "effective_theme", "dark")
             outer = QHBoxLayout(self)
-            outer.setContentsMargins(0, 0, 0, 0)
+            outer.setContentsMargins(0 , 8, 0, 8)
             outer.setSpacing(12)
 
             if align_right:
                 outer.addStretch(1)
-            else:
-                avatar = QLabel("AI")
-                avatar.setObjectName("Avatar")
-                outer.addWidget(avatar, alignment=Qt.AlignTop)
 
-            bubble = QFrame()
-            bubble.setObjectName("BubbleUser" if align_right else "BubbleAI")
-            bubble.setMaximumWidth(760)
-            bubble_layout = QVBoxLayout(bubble)
-            bubble_layout.setContentsMargins(18, 14, 18, 14)
-            bubble_layout.setSpacing(8)
+            self.bubble = QFrame()
+            self.bubble.setObjectName("BubbleUser" if align_right else "BubbleAI")
+            self.bubble.setMaximumWidth(680)
+            self.bubble.setAttribute(Qt.WA_StyledBackground, True)
+
+            shadow = QGraphicsDropShadowEffect(self.bubble)
+            shadow.setBlurRadius(15 if align_right else 10)
+            shadow.setXOffset(0)
+            shadow.setYOffset(8 if align_right else 4)
+            shadow.setColor(QColor(0, 0, 0, 90 if align_right else 40))
+            self.bubble.setGraphicsEffect(shadow)
+
+            self.bubble_layout = QVBoxLayout(self.bubble)
+            self.bubble_layout.setContentsMargins(18, 14, 18, 14)
+            self.bubble_layout.setSpacing(8) # Giữ nguyên spacing
 
             if message.attachment_path:
                 attachment_key = {
@@ -1154,47 +1825,213 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                     f"{tr(language, attachment_key)}: {Path(message.attachment_path).name}"
                 )
                 attachment_label.setObjectName("Attachment")
-                bubble_layout.addWidget(attachment_label)
+                self.bubble_layout.addWidget(attachment_label) # Sửa lỗi trùng lặp
                 if message.attachment_kind in {"image", "camera"}:
                     pixmap = QPixmap(message.attachment_path)
                     if not pixmap.isNull():
-                        preview = QLabel()
-                        preview.setPixmap(pixmap.scaled(280, 170, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                        bubble_layout.addWidget(preview)
+                        self.preview_img = QLabel()
+                        self.preview_img.setPixmap(pixmap.scaled(320, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        self.preview_img.setCursor(Qt.PointingHandCursor)
+                        self.preview_img.mousePressEvent = lambda e: self.show_image_full(message.attachment_path)
+                        self.bubble_layout.addWidget(self.preview_img)
 
-            text_label = QLabel(message.text)
-            text_label.setWordWrap(True)
-            text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            text_label.setStyleSheet("font-size: 15px;")
-            bubble_layout.addWidget(text_label)
-            outer.addWidget(bubble, 0, Qt.AlignTop)
+            self.text_label = QLabel()
+            self.typing_indicator = None
+            self.update_display_text(message.text or "")
+            self.text_label.setWordWrap(True)
+            self.text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            self.text_label.setStyleSheet("font-size: 15px;")
+            self.bubble_layout.addWidget(self.text_label)
+            outer.addWidget(self.bubble, 0, Qt.AlignTop)
 
             if not align_right:
                 outer.addStretch(1)
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            # Hiệu ứng nhảy (bounce) khi tin nhắn mới xuất hiện
+            self.anim = QPropertyAnimation(self.bubble, b"pos")
+            self.anim.setDuration(500)
+            # Lấy vị trí hiện tại và tạo điểm bắt đầu thấp hơn 20px
+            curr = self.bubble.pos()
+            self.anim.setStartValue(QPoint(curr.x(), curr.y() + 20))
+            self.anim.setEndValue(curr)
+            self.anim.setEasingCurve(QEasingCurve.OutBack)
+            self.anim.start()
+
+        def show_image_full(self, path: str):
+            try:
+                dialog = ImagePreviewDialog(path, self.window(), effective_theme=self.window().effective_theme)
+                dialog.exec()
+            except Exception as e:
+                print(f"Error previewing image: {e}")
+
+        def update_display_text(self, text: str):
+            if text == "[TYPING]":
+                self.text_label.hide()
+                if not self.typing_indicator:
+                    self.typing_indicator = TypingIndicator(QColor("#4db8ff"))
+                    self.bubble_layout.addWidget(self.typing_indicator)
+                self.typing_indicator.show()
+                return
+            
+            if self.typing_indicator:
+                self.typing_indicator.hide()
+            self.text_label.show()
+
+            is_error = text.startswith("API Error:") or text.startswith("Error:")
+            if self.effective_theme == "light" and is_error:
+                error_style = 'color: #b00020; font-weight: bold; background: rgba(176,0,32,0.08); padding: 5px; border-radius: 8px;'
+            elif is_error:
+                error_style = 'color: #ff5252; font-weight: bold; background: rgba(255,82,82,0.1); padding: 5px; border-radius: 8px;'
+            elif self.effective_theme == "light":
+                error_style = 'color: #111827; background: rgba(0,0,0,0.04); padding: 5px; border-radius: 8px;'
+            else:
+                error_style = ''
+
+            if self.effective_theme == "light":
+                code_bg = '#f3f4f6'
+                code_color = '#111827'
+                inline_code_bg = '#e5e7eb'
+            else:
+                code_bg = '#1e1e1e'
+                code_color = '#d4d4d4'
+                inline_code_bg = '#444444'
+
+            parts = re.split(r'(```[\s\S]*?```)', text)
+            formatted = ""
+            for part in parts:
+                if part.startswith('```'):
+                    code_content = part.strip('`').strip()
+                    lines = code_content.split('\n', 1)
+                    lang = lines[0].strip() if len(lines) > 1 else ""
+                    code = lines[1] if len(lines) > 1 else lines[0]
+                    
+                    if PYGMENTS_AVAILABLE:
+                        try:
+                            lexer = get_lexer_by_name(lang) if lang else guess_lexer(code)
+                            formatter = HtmlFormatter(noclasses=True, style='monokai')
+                            formatted += highlight(code, lexer, formatter)
+                            continue
+                        except: pass
+                    formatted += f'<pre style="background: {code_bg}; color: {code_color}; padding: 10px; border-radius: 5px;"><code>{code}</code></pre>'
+                else:
+                    p = part.replace("\n", "<br>")
+                    p = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', p)
+                    p = re.sub(r'`(.*?)`', fr'<code style="background: {inline_code_bg}; padding: 2px;">\1</code>', p)
+                    formatted += p
+            self.text_label.setText(f"<div style='{error_style}'>{formatted}</div>")
 
     class ChatWindow(QMainWindow):
         def __init__(self, *, title: str, initial_camera_index: int, mode_label: str, model_label: str | None) -> None:
             super().__init__()
             self.language = "vi"
-            self.theme_mode = "dark"
-            self.effective_theme = "dark"
+            self.theme_mode = "system"
+            self.effective_theme = "system"
             self.sidebar_expanded = True
             self.is_refreshing_history = False
+            self.is_recording = False
+            self.typing_timer = QTimer()
             self.initial_camera_index = initial_camera_index
             self.mode_label = mode_label
             self.model_label = model_label or ""
             self.conversations: list[Conversation] = []
+            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "chat_history.db")
+            self.db = ChatDatabase(db_path)
+            self.db.clear_all_messages()
+            self.db.clear_all_conversations()
+
+            # Tải cài đặt từ Database
+            self.language = self.db.get_setting("language", "vi")
+            self.theme_mode = self.db.get_setting("theme", "dark")
+            
             self.active_conversation_index = 0
+            self.setup_tray_icon()
+            self.setup_voice_animation()
             self.setWindowTitle(title)
             self.resize(1480, 920)
+            self.setAcceptDrops(True)
             self.build_ui()
-            self.seed_default_conversations()
-            self.apply_theme()
+            self.conversations = [
+                Conversation(
+                    title=tr(self.language, "new_chat"),
+                    subtitle=tr(self.language, "today"),
+                    messages=[],
+                    id=None,
+                )
+            ]
             self.retranslate_ui()
+
+        def setup_tray_icon(self) -> None:
+            self.tray_icon = QSystemTrayIcon(self)
+            self.tray_icon.setIcon(themed_icon("sidebar_app.svg", self.icon_color(), 24))
+            self.tray_icon.show()
+
+        def show_tray_notification(self, message: str) -> None:
+            if QSystemTrayIcon.supportsMessages() and hasattr(self, "tray_icon"):
+                snippet = (message[:60] + "...") if len(message) > 60 else message
+                self.tray_icon.showMessage(
+                    tr(self.language, "new_message"),
+                    snippet,
+                    QSystemTrayIcon.Information,
+                    3000
+                )
+
+        def scroll_to_bottom(self) -> None:
+            if hasattr(self, "scroll_area"):
+                bar = self.scroll_area.verticalScrollBar()
+                QTimer.singleShot(50, lambda: bar.setValue(bar.maximum()))
+
+        def setup_voice_animation(self) -> None:
+            self.pulse_anim = QVariantAnimation(self)
+            self.pulse_anim.setDuration(700)
+            self.pulse_anim.setStartValue(QColor("#FF5252")) # Đỏ sáng
+            self.pulse_anim.setEndValue(QColor("#7F2929"))   # Đỏ tối
+            self.pulse_anim.setEasingCurve(QEasingCurve.InOutSine)
+            self.pulse_anim.setLoopCount(-1)
+            self.pulse_anim.valueChanged.connect(self.update_mic_style)
+
+        def update_mic_style(self, color: QColor) -> None:
+            self.micro_button.setStyleSheet(f"""
+                QPushButton#RoundButton {{
+                    background-color: {color.name()};
+                    border: 2px solid {color.name()};
+                }}
+            """)
+
+        def dragEnterEvent(self, event):
+            if event.mimeData().hasUrls():
+                event.accept()
+            else:
+                event.ignore()
+
+        def dropEvent(self, event):
+            for url in event.mimeData().urls():
+                path = url.toLocalFile()
+                if path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.webp')):
+                    self.handle_dropped_image(path)
+                elif path.lower().endswith('.txt'):
+                    self.handle_dropped_text(path)
+
+        def handle_dropped_image(self, path: str):
+            self.add_message(ChatMessage(sender="user", text=tr(self.language, "attach_image_label"), attachment_path=path, attachment_kind="image"))
+            self.generate_ai_response("Analyze this image.", path, "image")
+
+        def handle_dropped_text(self, path: str):
+            content = Path(path).read_text(encoding="utf-8", errors="ignore")[:500]
+            self.add_message(ChatMessage(sender="user", text=f"File: {Path(path).name}\n{content}...", attachment_path=path, attachment_kind="text"))
+            self.generate_ai_response("Summarize this text.", path, "text")
 
         def build_ui(self) -> None:
             root_widget = QWidget()
             root_widget.setObjectName("Root")
+            
+            self.sidebar_shadow = QGraphicsDropShadowEffect(root_widget)
+            self.sidebar_shadow.setBlurRadius(30)
+            self.sidebar_shadow.setXOffset(10)
+            self.sidebar_shadow.setYOffset(0)
+            self.sidebar_shadow.setColor(QColor(0, 0, 0, 100))
+            
             root = QHBoxLayout(root_widget)
             root.setContentsMargins(0, 0, 0, 0)
             root.setSpacing(0)
@@ -1202,8 +2039,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
             self.sidebar = QFrame()
             self.sidebar.setObjectName("Sidebar")
-            self.sidebar.setMinimumWidth(92)
+            self.sidebar.setMinimumWidth(320)
             self.sidebar.setMaximumWidth(360)
+            self.sidebar.setGraphicsEffect(self.sidebar_shadow)
             sidebar_layout = QVBoxLayout(self.sidebar)
             sidebar_layout.setContentsMargins(16, 16, 16, 16)
             sidebar_layout.setSpacing(14)
@@ -1265,7 +2103,10 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.history_list = QListWidget()
             self.history_list.setFrameShape(QFrame.NoFrame)
             self.history_list.setSpacing(10)
-            self.history_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+            self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # Ẩn thanh cuộn dọc
+            self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # Ẩn thanh cuộn ngang
+            self.history_list.setContextMenuPolicy(Qt.CustomContextMenu) # Kích hoạt menu ngữ cảnh
+            self.history_list.customContextMenuRequested.connect(self.show_history_context_menu) # Kết nối sự kiện chuột phải
             self.history_list.currentRowChanged.connect(self.select_conversation)
             history_panel_layout.addWidget(self.history_list)
             sidebar_layout.addWidget(self.history_panel)
@@ -1284,28 +2125,25 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.chat_panel = QWidget()
             self.chat_panel.setObjectName("ChatPanel")
             chat_layout = QVBoxLayout(self.chat_panel)
-            chat_layout.setContentsMargins(38, 22, 38, 26)
-            chat_layout.setSpacing(18)
+            chat_layout.setContentsMargins(22, 14, 22, 16)
+            chat_layout.setSpacing(12)
 
             top_row = QHBoxLayout()
             top_row.addStretch(1)
             self.mode_badge = QLabel()
             self.mode_badge.setObjectName("Subtle")
             top_row.addWidget(self.mode_badge)
-            self.theme_hint = QLabel("\u2600")
-            self.theme_hint.setObjectName("Subtle")
-            self.theme_hint.setStyleSheet("font-size: 22px;")
-            top_row.addWidget(self.theme_hint)
-            self.more_hint = QLabel("\u22ef")
-            self.more_hint.setObjectName("Subtle")
-            self.more_hint.setStyleSheet("font-size: 22px;")
-            top_row.addWidget(self.more_hint)
+            self.theme_button = QPushButton()
+            self.theme_button.setObjectName("RoundButton")
+            self.theme_button.setFixedSize(36, 36)
+            self.theme_button.clicked.connect(self.cycle_theme_mode)
+            top_row.addWidget(self.theme_button)
             chat_layout.addLayout(top_row)
 
             self.greeting_card = QFrame()
             self.greeting_card.setObjectName("GreetingCard")
             greeting_layout = QVBoxLayout(self.greeting_card)
-            greeting_layout.setContentsMargins(28, 26, 28, 26)
+            greeting_layout.setContentsMargins(24, 18, 24, 18)
             greeting_layout.setSpacing(8)
             self.greeting_title = QLabel()
             self.greeting_title.setObjectName("Headline")
@@ -1313,12 +2151,16 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.greeting_text.setObjectName("Subtle")
             self.greeting_text.setStyleSheet("font-size: 16px;")
             greeting_layout.addWidget(self.greeting_title)
+            self.greeting_title.setAlignment(Qt.AlignCenter)
             greeting_layout.addWidget(self.greeting_text)
+            self.greeting_text.setAlignment(Qt.AlignCenter)
             chat_layout.addWidget(self.greeting_card)
 
             self.scroll_area = QScrollArea()
+            self.scroll_area.setObjectName("MessageScroll")
             self.scroll_area.setWidgetResizable(True)
             self.scroll_area.setFrameShape(QFrame.NoFrame)
+            self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.messages_host = QWidget()
             self.messages_host.setObjectName("MessagesHost")
             self.messages_layout = QVBoxLayout(self.messages_host)
@@ -1328,47 +2170,122 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.scroll_area.setWidget(self.messages_host)
             chat_layout.addWidget(self.scroll_area, 1)
 
+            self.recording_panel = RecordingPanel(self.language, window=self)
+            self.recording_panel.hide()
+            chat_layout.addWidget(self.recording_panel, 0, Qt.AlignCenter)
+
             self.composer = QFrame()
             self.composer.setObjectName("Composer")
             composer_layout = QHBoxLayout(self.composer)
-            composer_layout.setContentsMargins(14, 10, 10, 10)
-            composer_layout.setSpacing(8)
+            composer_layout.setContentsMargins(20, 16, 16, 16)
+            composer_layout.setSpacing(12)
+            self.composer.setMinimumHeight(80)
 
             self.plus_button = QPushButton("")
-            self.plus_button.setObjectName("RoundButton")
+            self.plus_button.setFixedSize(44, 44)
             self.plus_button.clicked.connect(self.show_plus_menu)
             composer_layout.addWidget(self.plus_button, 0, Qt.AlignVCenter)
 
-            self.message_input = QPlainTextEdit()
+            self.message_input = MessageInput()
             self.message_input.setObjectName("ComposerInput")
-            self.message_input.setMinimumHeight(26)
-            self.message_input.setMaximumHeight(120)
+            self.message_input.setMinimumHeight(30)
+            self.message_input.setMaximumHeight(72)
             self.message_input.setFrameShape(QFrame.NoFrame)
             self.message_input.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.message_input.viewport().setAutoFillBackground(False)
             self.message_input.viewport().setStyleSheet("background: transparent;")
+            self.message_input.enter_pressed.connect(self.send_message)
             composer_layout.addWidget(self.message_input, 1)
 
             self.micro_button = QPushButton("")
             self.micro_button.setObjectName("RoundButton")
+            self.micro_button.setFixedSize(44, 44)
             self.micro_button.clicked.connect(self.start_voice_input)
             composer_layout.addWidget(self.micro_button, 0, Qt.AlignVCenter)
 
             self.send_button = QPushButton("↑")
             self.send_button.setObjectName("SendButton")
+            self.send_button.setFixedSize(44, 44)
             self.send_button.clicked.connect(self.send_message)
             composer_layout.addWidget(self.send_button, 0, Qt.AlignVCenter)
             chat_layout.addWidget(self.composer)
+
+            # Đăng ký phím tắt Ctrl+K để tìm kiếm
+            self.search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+            self.search_shortcut.activated.connect(self.focus_search)
+
             root.addWidget(self.chat_panel, 4)
 
-        def apply_theme(self) -> None:
+        def apply_dark_theme(self) -> None:
+            self.effective_theme = "dark"
             app = QApplication.instance()
-            if app is None:
-                return
-            self.effective_theme = "dark" if self.theme_mode == "system" else self.theme_mode
-            app.setStyleSheet(DARK_STYLESHEET if self.effective_theme == "dark" else LIGHT_STYLESHEET)
+            if app:
+                app.setStyleSheet(DARK_STYLESHEET)
             self.apply_theme_assets()
             self.refresh_history()
+
+        def apply_light_theme(self) -> None:
+            self.effective_theme = "light"
+            app = QApplication.instance()
+            if app:
+                app.setStyleSheet(LIGHT_STYLESHEET)
+            self.apply_theme_assets()
+            self.refresh_history()
+
+        def detect_system_theme(self) -> str:
+            if platform.system() == "Windows":
+                try:
+                    import winreg
+                    registry = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+                    key = winreg.OpenKey(registry, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+                    value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+                    return "light" if value == 1 else "dark"
+                except Exception:
+                    pass
+            return "dark"
+
+        def apply_theme(self) -> None:
+            target = self.theme_mode
+            if target == "system":
+                target = self.detect_system_theme()
+
+            # Fade out before switching theme
+            self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
+            self.fade_anim.setDuration(150)
+            self.fade_anim.setStartValue(1.0)
+            self.fade_anim.setEndValue(0.7)
+
+            def on_fade_done():
+                if target == "light":
+                    self.effective_theme = "light"
+                    app = QApplication.instance()
+                    if app:
+                        app.setStyleSheet(LIGHT_STYLESHEET)
+                else:
+                    self.effective_theme = "dark"
+                    app = QApplication.instance()
+                    if app:
+                        app.setStyleSheet(DARK_STYLESHEET)
+
+                self.db.set_setting("theme", self.theme_mode)
+                self.apply_theme_assets()
+                self.refresh_history()
+
+                self.fade_in = QPropertyAnimation(self, b"windowOpacity")
+                self.fade_in.setDuration(200)
+                self.fade_in.setStartValue(0.7)
+                self.fade_in.setEndValue(1.0)
+                self.fade_in.start()
+
+            self.fade_anim.finished.connect(on_fade_done)
+            self.fade_anim.start()
+
+        def cycle_theme_mode(self) -> None:
+            order = ["system", "dark", "light"]
+            current = self.theme_mode if self.theme_mode in order else "system"
+            next_index = (order.index(current) + 1) % len(order)
+            self.theme_mode = order[next_index]
+            self.apply_theme()
 
         def icon_color(self) -> str:
             return "#ECECF1" if self.effective_theme == "dark" else "#111827"
@@ -1389,15 +2306,16 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.micro_button.setIcon(themed_icon("mic.svg", strong, 18))
             self.micro_button.setIconSize(QSize(18, 18))
             self.send_button.setText("\u2191")
-            self.theme_hint.setText("\u263E" if self.effective_theme == "dark" else "\u2600")
-            self.more_hint.setText("\u22EF")
+            self.theme_button.setText("\u2600" if self.effective_theme == "dark" else "\u263E")
 
         def retranslate_ui(self) -> None:
             self.new_chat_button.setText(tr(self.language, "new_chat"))
             self.search_input.setPlaceholderText(tr(self.language, "search"))
             self.history_title.setText(tr(self.language, "history"))
             self.settings_button.setText(tr(self.language, "settings"))
+            self.search_input.setPlaceholderText(tr(self.language, "search"))
             self.greeting_title.setText(tr(self.language, "greeting_title"))
+            self.db.set_setting("language", self.language)
             self.greeting_text.setText(tr(self.language, "greeting_text"))
             self.message_input.setPlaceholderText(tr(self.language, "input_placeholder"))
             badge = f"{tr(self.language, 'mode_badge')}: {self.mode_label}"
@@ -1406,11 +2324,34 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.mode_badge.setText(badge)
             self.update_sidebar_ui()
             self.refresh_history()
+            self.apply_theme()
             self.render_messages()
 
         def toggle_sidebar(self) -> None:
-            self.sidebar_expanded = not self.sidebar_expanded
-            self.update_sidebar_ui()
+            target_width = 88 if self.sidebar_expanded else 320
+            
+            self.sidebar_anim = QPropertyAnimation(self.sidebar, b"minimumWidth")
+            self.sidebar_anim.setDuration(250)
+            self.sidebar_anim.setStartValue(self.sidebar.width())
+            self.sidebar_anim.setEndValue(target_width)
+            self.sidebar_anim.setEasingCurve(QEasingCurve.InOutQuad)
+            
+            self.sidebar_max_anim = QPropertyAnimation(self.sidebar, b"maximumWidth")
+            self.sidebar_max_anim.setDuration(250)
+            self.sidebar_max_anim.setStartValue(self.sidebar.width())
+            self.sidebar_max_anim.setEndValue(target_width)
+            self.sidebar_max_anim.setEasingCurve(QEasingCurve.InOutQuad)
+
+            self.sidebar_group = QParallelAnimationGroup()
+            self.sidebar_group.addAnimation(self.sidebar_anim)
+            self.sidebar_group.addAnimation(self.sidebar_max_anim)
+            
+            def on_finished():
+                self.sidebar_expanded = not self.sidebar_expanded
+                self.update_sidebar_ui()
+            
+            self.sidebar_group.finished.connect(on_finished)
+            self.sidebar_group.start()
 
         def focus_search(self) -> None:
             if not self.sidebar_expanded:
@@ -1420,7 +2361,6 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
         def update_sidebar_ui(self) -> None:
             expanded = self.sidebar_expanded
-            self.sidebar.setFixedWidth(320 if expanded else 88)
             self.brand_text.setVisible(expanded)
             self.search_box.setVisible(expanded)
             self.search_compact_button.setVisible(not expanded)
@@ -1456,40 +2396,65 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 self.settings_button.setIconSize(QSize(22, 22))
 
         def seed_default_conversations(self) -> None:
+            self.conversations = []
             day = tr(self.language, "days_ago")
-            self.conversations = [
-                Conversation(
-                    title="Design chat AI interface",
-                    subtitle=tr(self.language, "today"),
-                    messages=[
-                        ChatMessage(sender="ai", text=tr(self.language, "greeting_text")),
-                    ],
-                ),
-                Conversation("Configure YOLO11 imgsz", tr(self.language, "yesterday")),
-                Conversation("Choose YOLO11 version", f"2 {day}"),
-                Conversation("YOLO config error", f"2 {day}"),
-                Conversation("YOLO11 FPS RTX 3050 Ti", f"3 {day}"),
-                Conversation("YOLO11 version and selection", f"3 {day}"),
-                Conversation("Interface design request", f"4 {day}"),
-                Conversation("AI health analysis", f"4 {day}"),
+            defaults = [
+                ("Design chat AI interface", tr(self.language, "today"), [ChatMessage(sender="ai", text=tr(self.language, "greeting_text"))]),
+                ("Configure YOLO11 imgsz", tr(self.language, "yesterday"), []),
+                ("Choose YOLO11 version", f"2 {day}", []),
+                ("YOLO config error", f"2 {day}", []),
+                ("YOLO11 FPS RTX 3050 Ti", f"3 {day}", []),
+                ("YOLO11 version and selection", f"3 {day}", []),
+                ("Interface design request", f"4 {day}", []),
+                ("AI health analysis", f"4 {day}", []),
             ]
+            for title, subtitle, msgs in defaults:
+                c_id = self.db.create_conversation(title, subtitle)
+                conv = Conversation(title=title, subtitle=subtitle, messages=[], id=c_id)
+                for m in msgs:
+                    m.id = self.db.add_message(c_id, m)
+                    conv.messages.append(m)
+                self.conversations.append(conv)
+
             self.active_conversation_index = 0
             self.refresh_history()
             self.history_list.setCurrentRow(0)
             self.render_messages()
 
         def active_conversation(self) -> Conversation:
+            if not self.conversations:
+                self.conversations.append(
+                    Conversation(
+                        title=tr(self.language, "new_chat"),
+                        subtitle=tr(self.language, "today"),
+                        messages=[],
+                        id=None,
+                    )
+                )
+                self.active_conversation_index = 0
             return self.conversations[self.active_conversation_index]
 
         def refresh_history(self) -> None:
             query = self.search_input.text().strip().lower() if hasattr(self, "search_input") else ""
+            
+            # Tìm các ID cuộc hội thoại có tin nhắn chứa từ khóa thông qua SQL
+            matching_conv_ids = set()
+            if query:
+                matching_conv_ids = set(self.db.search_conversations_by_message(query))
+
             self.is_refreshing_history = True
             self.history_list.blockSignals(True)
             self.history_list.clear()
             current_item_row = 0
             visible_row = 0
             for index, conversation in enumerate(self.conversations):
-                if query and query not in conversation.title.lower():
+                if conversation.id is None:
+                    continue
+                # Hiển thị nếu tiêu đề khớp HOẶC nội dung tin nhắn khớp (dựa trên ID tìm được từ SQL)
+                matches_title = query in conversation.title.lower()
+                matches_message = conversation.id in matching_conv_ids
+                
+                if query and not (matches_title or matches_message):
                     continue
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, index)
@@ -1522,14 +2487,54 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.active_conversation_index = int(source_index)
             self.render_messages()
 
+        def show_history_context_menu(self, pos: QPoint) -> None:
+            item = self.history_list.itemAt(pos)
+            if not item:
+                return
+            
+            index = item.data(Qt.UserRole) # Lấy chỉ mục thực của đoạn chat
+            menu = QMenu(self)
+            delete_action = QAction(tr(self.language, "delete_chat"), self)
+            delete_action.triggered.connect(lambda: self.delete_conversation(index))
+            menu.addAction(delete_action)
+            menu.exec(self.history_list.mapToGlobal(pos))
+
+        def delete_conversation(self, index_to_delete: int) -> None:
+            if not (0 <= index_to_delete < len(self.conversations)):
+                return
+            
+            conv_id = self.conversations[index_to_delete].id
+            if conv_id is not None:
+                self.db.delete_conversation(conv_id)
+
+            self.conversations.pop(index_to_delete)
+            if not self.conversations:
+                self.seed_default_conversations() # Nếu xóa hết, tạo lại các đoạn chat mặc định
+            elif self.active_conversation_index >= index_to_delete:
+                self.active_conversation_index = max(0, self.active_conversation_index - 1) # Điều chỉnh chỉ mục nếu đoạn chat hiện tại bị xóa hoặc đoạn chat trước đó bị xóa
+            
+            self.refresh_history()
+            self.render_messages()
+
+        def clear_all_history(self) -> None:
+            self.db.clear_all_conversations()
+            self.conversations = []
+            self.start_new_chat()
+            self.refresh_history()
+            self.render_messages()
+
         def render_messages(self) -> None:
             while self.messages_layout.count() > 1:
                 item = self.messages_layout.takeAt(0)
                 widget = item.widget()
                 if widget is not None:
                     widget.deleteLater()
-            for message in self.active_conversation().messages:
-                bubble = ChatBubble(message, language=self.language, align_right=message.sender == "user")
+            
+            messages = self.active_conversation().messages
+            self.greeting_card.setVisible(len(messages) == 0)
+            
+            for message in messages:
+                bubble = ChatBubble(message, language=self.language, align_right=message.sender == "user", window=self)
                 self.messages_layout.insertWidget(self.messages_layout.count() - 1, bubble)
             QTimer.singleShot(
                 0,
@@ -1542,7 +2547,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             conversation = Conversation(
                 title=tr(self.language, "new_chat"),
                 subtitle=tr(self.language, "today"),
-                messages=[ChatMessage(sender="ai", text=tr(self.language, "greeting_text"))],
+                messages=[],
+                id=None,
             )
             self.conversations.insert(0, conversation)
             self.active_conversation_index = 0
@@ -1553,10 +2559,19 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         def show_plus_menu(self) -> None:
             menu = QMenu(self)
             image_action = QAction(tr(self.language, "choose_image"), self)
+            strong = self.icon_color()
+            
+            image_action = QAction(themed_icon("image.svg", strong, 18), tr(self.language, "choose_image"), self)
             image_action.triggered.connect(self.pick_image)
             menu.addAction(image_action)
 
+            text_action = QAction(tr(self.language, "choose_text"), self)
+            text_action = QAction(themed_icon("file_text.svg", strong, 18), tr(self.language, "choose_text"), self)
+            text_action.triggered.connect(self.pick_text_file)
+            menu.addAction(text_action)
+
             camera_action = QAction(tr(self.language, "camera"), self)
+            camera_action = QAction(themed_icon("camera.svg", strong, 18), tr(self.language, "camera"), self)
             camera_action.triggered.connect(self.open_camera)
             menu.addAction(camera_action)
 
@@ -1564,10 +2579,15 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
         def add_message(self, message: ChatMessage) -> None:
             conversation = self.active_conversation()
+            if conversation.id is None:
+                conversation.id = self.db.create_conversation(conversation.title, conversation.subtitle)
+            message.id = self.db.add_message(conversation.id, message)
             conversation.messages.append(message)
             if conversation.title == tr(self.language, "new_chat") and message.sender == "user":
                 first_line = message.text.strip().splitlines()[0] if message.text.strip() else ""
-                conversation.title = (first_line[:28] or tr(self.language, "new_chat")).strip()
+                new_title = (first_line[:28] or tr(self.language, "new_chat")).strip()
+                conversation.title = new_title
+                self.db.update_conversation_title(conversation.id, new_title)
             conversation.subtitle = tr(self.language, "today")
             self.refresh_history()
             self.render_messages()
@@ -1579,10 +2599,117 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 return
             self.add_message(ChatMessage(sender="user", text=text))
             self.message_input.clear()
-            self.add_message(ChatMessage(sender="ai", text=self.build_ai_reply(text=text, source="text")))
+            self.generate_ai_response(text)
+
+        def generate_ai_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
+            api_key = self.db.get_setting("gemini_api_key", "")
+            if not api_key:
+                self.add_message(ChatMessage(sender="ai", text="Please set your Gemini API Key in Settings first!"))
+                return
+
+            # Create a 'thinking' bubble
+            ai_msg = ChatMessage(sender="ai", text="[TYPING]")
+            self.add_message(ai_msg)
+
+            # Chuẩn bị lịch sử hội thoại (loại bỏ tin nhắn hiện tại và bong bóng đang chờ)
+            history = []
+            conv = self.active_conversation()
+            # Chỉ lấy các tin nhắn có nội dung thực tế để tránh lỗi API
+            for m in conv.messages[:-2]: 
+                if m.text and m.text != "...":
+                    role = "user" if m.sender == "user" else "model"
+                    history.append({"role": role, "parts": [m.text]})
+            
+            self.ai_worker = AIWorker(api_key, prompt, history, attach_path, attach_kind) # Sửa lỗi trùng lặp
+            # Đảm bảo thread không bị hủy giữa chừng
+            self.ai_worker.finished.connect(self.ai_worker.deleteLater)
+            self.ai_worker.response_ready.connect(lambda text: self.start_typewriter(text))
+            self.ai_worker.error_occurred.connect(lambda err: self.update_last_message(self._format_error(err)))
+            self.ai_worker.start()
+            self.scroll_to_bottom()
+
+        def start_typewriter(self, full_text: str):
+            self.typewriter_content = full_text
+            self.typewriter_idx = 0
+            self.current_ai_text = ""
+            
+            if self.typing_timer.isActive():
+                self.typing_timer.stop()
+            
+            self.typewriter_tick()
+
+        def typewriter_tick(self):
+            if self.typewriter_idx < len(self.typewriter_content):
+                char = self.typewriter_content[self.typewriter_idx]
+                self.current_ai_text += char
+                self.update_last_message(self.current_ai_text)
+                self.typewriter_idx += 1
+                
+                # Tốc độ gõ biến thiên: gõ nhanh chậm ngẫu nhiên
+                delay = random.randint(10, 45)
+                
+                # Nghỉ lâu hơn ở các dấu câu để tạo cảm giác tự nhiên
+                if char in ".?!":
+                    delay += 400
+                elif char in ",;:":
+                    delay += 200
+                
+                QTimer.singleShot(delay, self.typewriter_tick)
+                self.scroll_to_bottom()
+            else:
+                self.show_tray_notification(self.typewriter_content)
+
+        def update_last_message(self, text: str):
+            conv = self.active_conversation()
+            if conv.messages:
+                conv.messages[-1].text = text
+                # count()-1 là Spacer, count()-2 là tin nhắn cuối cùng
+                idx = self.messages_layout.count() - 2
+                if idx >= 0:
+                    item = self.messages_layout.itemAt(idx)
+                    if item and item.widget():
+                        last_bubble = item.widget()
+                        if isinstance(last_bubble, ChatBubble):
+                            last_bubble.update_display_text(text)
 
         def start_voice_input(self) -> None:
-            QMessageBox.information(self, tr(self.language, "info_title"), "Voice input not yet implemented.")
+            if not VOICE_AI_AVAILABLE:
+                return
+
+            if self.is_recording:
+                self.worker.stop()
+                return
+
+            self.is_recording = True
+            self.message_input.setPlaceholderText(tr(self.language, "loading_model"))
+            self.message_input.setEnabled(False)
+            self.recording_panel.show()
+            self.pulse_anim.start()
+
+            self.worker = VoiceWorker(self.language)
+            self.worker.result_ready.connect(self.on_voice_success)
+            self.worker.intensity_changed.connect(self.recording_panel.waveform.set_intensity)
+            self.worker.error.connect(self.on_voice_error)
+            self.worker.finished.connect(self.on_voice_complete)
+            self.worker.start()
+            self.message_input.setPlaceholderText(tr(self.language, "recording_status"))
+
+        def on_voice_success(self, text: str):
+            if text:
+                self.message_input.setPlainText(text)
+
+        def on_voice_error(self):
+            QMessageBox.warning(self, tr(self.language, "info_title"), tr(self.language, "voice_error"))
+
+        def on_voice_complete(self):
+            self.is_recording = False
+            self.pulse_anim.stop()
+            self.recording_panel.hide()
+            self.micro_button.setStyleSheet("")
+            self.micro_button.setIcon(themed_icon("mic.svg", self.icon_color(), 18))
+            self.message_input.setPlaceholderText(tr(self.language, "input_placeholder"))
+            self.message_input.setEnabled(True)
+            self.message_input.setFocus()
 
         def build_ai_reply(self, *, text: str, source: str) -> str:
             if source == "image":
@@ -1592,6 +2719,11 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             if source == "text_file":
                 return tr(self.language, "ai_reply_text")
             return f"{tr(self.language, 'ai_reply_text')} {text[:120]}".strip()
+
+        def _format_error(self, err: str) -> str:
+            if "does not support image input" in err or "Cannot read" in err:
+                return tr(self.language, "image_model_error")
+            return f"API Error: {err}"
 
         def pick_image(self) -> None:
             path, _ = QFileDialog.getOpenFileName(
@@ -1610,7 +2742,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                     attachment_kind="image",
                 )
             )
-            self.add_message(ChatMessage(sender="ai", text=self.build_ai_reply(text=path, source="image")))
+            self.generate_ai_response("Analyze this image.", path, "image")
 
         def pick_text_file(self) -> None:
             path, _ = QFileDialog.getOpenFileName(

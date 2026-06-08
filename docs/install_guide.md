@@ -7,6 +7,13 @@
 - webcam hoạt động bình thường nếu muốn dùng camera
 - nếu muốn chạy GPU NVIDIA thì cần PyTorch CUDA phù hợp
 
+### 1.1. Phụ thuộc Chat AI (tùy chọn)
+
+Nếu muốn dùng chat AI với Gemini:
+
+- Gemini API key (lấy tại https://aistudio.google.com/app/apikey)
+- Cài đặt thêm: `PySide6`, `google-generativeai`, `faster-whisper`, `pyaudio`
+
 ## 2. Vào thư mục dự án
 
 ```powershell
@@ -166,16 +173,17 @@ Lệnh này sẽ kiểm tra:
 .\.venv\Scripts\python run_menu.py
 ```
 
-Menu có 6 tùy chọn:
+Menu có 7 tùy chọn:
 
 | Phím | Lệnh | Mô tả |
 |------|------|-------|
 | `1` | `run_app.py` | Camera app - chế độ desktop |
 | `2` | `run_detect.py` | Detect camera - chế độ CLI |
-| `3` | `run_tools.py` | Xem cấu hình máy và 3 mức tối ưu |
-| `4` | `run_train.py` | Huấn luyện model |
-| `5` | `run_tests.py` | Chạy toàn bộ test |
+| `3` | `run_chat.py` | Chat AI với Gemini |
+| `4` | `run_tools.py` | Xem cấu hình máy và 3 mức tối ưu |
+| `5` | `run_train.py` | Huấn luyện model |
 | `6` | `run_doctor.py` | Kiểm tra toàn hệ thống |
+| `7` | `run_tests.py` | Chạy toàn bộ test |
 | `0` | | Thoát |
 
 ### 13.2. Chạy camera app chính
@@ -207,7 +215,20 @@ App sẽ:
 
 Giống `run_app.py` nhưng chạy ở chế độ CLI detect trực tiếp.
 
-### 13.4. Xem cấu hình máy và 3 mức tối ưu
+### 13.4. Chat AI với Gemini
+
+```powershell
+.\.venv\Scripts\python -c "from app.chat_ai_app import build_chat_arg_parser, launch_chat_ai_app; args = build_chat_arg_parser('Chat AI').parse_args([]); launch_chat_ai_app(window_title='YOLO Chat AI')"
+```
+
+Tính năng chat AI bao gồm:
+
+- Giao diện chat đa ngôn ngữ (Tiếng Anh/Tiếng Việt)
+- Gửi ảnh, text file, hoặc chụp từ camera làm attachment
+- Nhận dạng giọng nói (Whisper)
+- Lưu trữ cuộc trò chuyện bằng SQLite
+
+### 13.5. Xem cấu hình máy và 3 mức tối ưu
 
 ```powershell
 .\.venv\Scripts\python run_tools.py
@@ -221,13 +242,13 @@ Hiển thị chi tiết:
 - model, device, imgsz, max_det cho từng mức
 - phân hạng GPU và tải hệ thống hiện tại
 
-### 13.5. Chạy train
+### 13.6. Chạy train
 
 ```powershell
 .\.venv\Scripts\python run_train.py
 ```
 
-### 13.6. Kiểm tra sức khỏe nhanh
+### 13.7. Kiểm tra sức khỏe nhanh
 
 ```powershell
 .\.venv\Scripts\python run_doctor.py
@@ -240,7 +261,7 @@ Nên chạy lệnh này khi:
 - nghi ngờ CUDA không hoạt động
 - muốn biết máy nên chạy mức nào
 
-### 13.7. Chạy test hệ thống
+### 13.8. Chạy test hệ thống
 
 ```powershell
 .\.venv\Scripts\python run_tests.py
@@ -262,3 +283,16 @@ Nên chạy lệnh này khi:
   - `name`: nhập tên class thủ công
 - mẫu chụp sẽ được lưu vào `dataset/sample/` với ảnh và label YOLO format
 - cửa sổ luôn cố định kích thước 800×600
+
+## 17. Validate dataset (trước khi train)
+
+```powershell
+.\.venv\Scripts\python training\validate_dataset.py
+```
+
+Kiểm tra dữ liệu trong `raw`:
+
+- ảnh thiếu label
+- label rỗng
+- label lỗi (sai format)
+- label mồ côi (không có ảnh tương ứng)

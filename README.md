@@ -25,6 +25,8 @@ Dự án hiện có:
 - menu tổng để chạy nhanh các file chính
 - bộ test để kiểm tra toàn hệ thống
 - tự động fallback khi model hoặc cấu hình chính lỗi
+- chat AI với Gemini API (PySide6 GUI)
+- nhận dạng giọng nói (Whisper)
 
 ### Ngôn ngữ và thư viện đang dùng
 
@@ -51,6 +53,13 @@ Dự án hiện có:
 - `PyYAML`
 - `psutil`
 - `GPUtil`
+
+**Thư viện Chat AI**
+
+- `PySide6`
+- `google-generativeai`
+- `faster-whisper`
+- `pyaudio`
 
 ### 5 model YOLO11 đang dùng
 
