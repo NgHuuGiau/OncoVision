@@ -9,11 +9,15 @@ import tempfile
 import time
 import random
 import sqlite3
+import warnings
 from dataclasses import dataclass, field
 import os
 import platform
 from pathlib import Path
 from typing import Literal
+
+# Suppress deprecation warning for google.generativeai (will migrate to google.genai later)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 try:
     import google.generativeai as genai
@@ -75,7 +79,6 @@ def build_chat_arg_parser(description: str) -> argparse.ArgumentParser:
 def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: str = "desktop", selected_model: str | None = None) -> int:
     try:
         from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, Signal, QThread, QVariantAnimation, QEasingCurve, QTemporaryFile, QRectF, QPropertyAnimation, QPoint, QParallelAnimationGroup
-        from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap, QColor, QPen
         from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap, QColor, QPen, QShortcut, QKeySequence
         from PySide6.QtSvg import QSvgRenderer
         from PySide6.QtWidgets import (

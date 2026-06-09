@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
+
+# Suppress deprecation warning for google.generativeai (will migrate to google.genai later)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 from core.hardware_info import detect_hardware
 from core.model_selector import select_runtime_config
@@ -118,7 +122,7 @@ def _check_ai_env() -> dict[str, bool]:
     status["api_key"] = False
     status["api_active"] = False
     if env_path.exists():
-        content = env_path.read_text()
+        content = env_path.read_text(encoding="utf-8", errors="ignore")
         if "GEMINI_API_KEY=" in content:
             key = content.split("GEMINI_API_KEY=")[1].strip().split('\n')[0]
             if len(key) > 10:
