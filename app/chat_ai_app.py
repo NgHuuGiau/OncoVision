@@ -4,7 +4,6 @@ import argparse
 import math
 import re
 import sys
-import json
 import tempfile
 import time
 import random
@@ -146,9 +145,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "search": "Search chats",
             "history": "Chat history",
             "settings": "Settings",
-            "greeting_title": "Hello!",
-            "greeting_text": "How can I help today?",
-            "input_placeholder": "Type your message...",
+            "greeting_title": "👋 Hello!",
+            "greeting_text": "What would you like to ask today?",
+            "input_placeholder": "Enter your message...",
             "camera": "Open camera",
             "choose_image": "Choose image",
             "choose_text": "Choose .txt file",
@@ -198,9 +197,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "search": "Tìm kiếm đoạn chat",
             "history": "Lịch sử chat",
             "settings": "Cài đặt",
-            "greeting_title": "Chào bạn!",
-            "greeting_text": "Hôm nay bạn cần tôi hỗ trợ gì?",
-            "input_placeholder": "Nhập tin nhắn...",
+            "greeting_title": "👋 Xin chào, Hữu Giàu!",
+            "greeting_text": "Hôm nay bạn muốn hỏi điều gì?",
+            "input_placeholder": "Nhập tin nhắn của bạn...",
             "camera": "Mở camera",
             "choose_image": "Chọn ảnh",
             "choose_text": "Chọn tệp .txt",
@@ -247,7 +246,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
     DARK_STYLESHEET = """
     QMainWindow, QDialog, QWidget#Root {
-        background: #0b0b0b;
+        background: #07111f;
         font-family: "Segoe UI", "Arial", sans-serif;
         font-family: "Inter", "Segoe UI", "Roboto", "Arial", sans-serif;
     }
@@ -262,15 +261,15 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         font-weight: normal;
     }
     QLabel#Subtle {
-        color: #b4b4b4;
+        color: #94a3b8;
     }
     QLabel#GreetingTitle {
-        font-size: 34px;
+        font-size: 32px;
         font-weight: 700;
         color: #ffffff;
     }
     QLabel#BrandText {
-        font-size: 22px;
+        font-size: 18px;
         font-weight: 700;
         color: #e3e3e3;
     }
@@ -302,12 +301,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         font-weight: 600;
     }
     QFrame#Sidebar {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 rgba(18, 19, 24, 0.98),
-            stop:1 rgba(13, 14, 18, 0.98));
-        border-right: 1px solid rgba(255, 255, 255, 0.06);
-        border-top-right-radius: 30px;
-        border-bottom-right-radius: 30px;
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
     }
     QFrame#TopBar {
         background: transparent;
@@ -327,11 +323,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border-radius: 20px;
     }
     QFrame#Composer {
-        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-            stop:0 rgba(30, 32, 39, 0.99),
-            stop:1 rgba(18, 20, 26, 0.99));
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        border-radius: 30px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
     }
     QFrame#ComposerInputRow,
     QWidget#ComposerPreviewHost {
@@ -341,7 +335,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QFrame#ComposerInputRow {
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 24px;
+        border-radius: 14px;
         padding: 2px 4px;
     }
     QScrollArea#ComposerPreviewScroll {
@@ -374,7 +368,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QFrame#SearchBox {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 20px;
+        border-radius: 14px;
     }
     QFrame#MessageScroll {
         background: transparent;
@@ -382,14 +376,14 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     }
     QFrame#SettingsShell,
     QFrame#ImagePreviewShell { /* Thêm ID cho shell của ImagePreviewDialog */
-        background: #111111;
-        border: 1px solid #3a3a3a;
-        border-radius: 28px;
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
     }
     QFrame#SettingsNav {
         background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 22px;
+        border: none;
+        border-radius: 0px;
     }
     QFrame#SettingsContent {
         background: transparent;
@@ -399,7 +393,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QFrame#SettingsOptionCard {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 20px;
+        border-radius: 16px;
     }
     QFrame#HistoryItem {
         background: transparent;
@@ -416,12 +410,18 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QFrame#BubbleUser {
         background: rgba(77, 184, 255, 0.14);
         border: 1px solid rgba(77, 184, 255, 0.12);
-        border-radius: 34px;
+        border-top-left-radius: 24px;
+        border-top-right-radius: 8px;
+        border-bottom-left-radius: 24px;
+        border-bottom-right-radius: 24px;
     }
     QFrame#BubbleAI {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 34px;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 24px;
+        border-bottom-left-radius: 24px;
+        border-bottom-right-radius: 24px;
     }
     QLabel#Avatar {
         min-width: 32px; /* Nhỏ hơn */
@@ -473,7 +473,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border: 1px solid #50545e;
         border-radius: 14px;
         color: #ececf1;
-        font-size: 13px;
+        font-size: 15px;
         font-weight: 600;
         padding: 6px 14px;
         text-align: center;
@@ -505,16 +505,17 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         background: rgba(255, 255, 255, 0.05);
     }
     QPushButton#SidebarPrimaryButton {
-        min-height: 54px;
+        min-height: 44px;
         padding-left: 16px;
         font-size: 15px;
         font-weight: 600;
         border: none;
     }
     QPushButton#SidebarPrimaryButton {
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 16px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563ff, stop:1 #1d4ed8);
+        border: none;
+        border-radius: 12px;
+        color: #ffffff;
     }
     QPushButton#TopActionButton {
         min-width: 40px;
@@ -522,7 +523,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         min-height: 40px;
         max-height: 40px;
         padding: 0;
-        border-radius: 20px;
+        border-radius: 14px;
         background: transparent;
         color: #e3e3e3;
         font-size: 18px;
@@ -610,10 +611,28 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         background: #62c0ff;
     }
     QPushButton#SendButton {
-        background: #1f9cff;
+        background: #2563ff;
     }
     QPushButton#SendButton:hover {
-        background: #58b9ff;
+        background: #1d4ed8;
+    }
+    QPushButton#SidebarFooterButton {
+        min-height: 44px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 0 14px;
+        font-size: 15px;
+        font-weight: 600;
+    }
+    QPushButton#SidebarFooterButton:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+    QPushButton#SidebarToggleButton {
+        background: transparent;
+        border: none;
+        text-align: center;
+        padding: 0;
     }
     QPushButton#SettingsNavButton {
         background: rgba(255, 255, 255, 0.04);
@@ -679,7 +698,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
     LIGHT_STYLESHEET = """
     QMainWindow, QDialog, QWidget#Root {
-        background: #f7f7f8;
+        background: #f7f9fd;
         font-family: "Segoe UI", "Arial", sans-serif;
         font-family: "Inter", "Segoe UI", "Roboto", "Arial", sans-serif;
     }
@@ -694,15 +713,15 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         font-weight: normal;
     }
     QLabel#Subtle {
-        color: #374151;
+        color: #64748b;
     }
     QLabel#GreetingTitle {
-        font-size: 34px;
+        font-size: 32px;
         font-weight: 700;
         color: #000000;
     }
     QLabel#BrandText {
-        font-size: 26px;
+        font-size: 18px;
         font-weight: 700;
         color: #000000;
     }
@@ -734,10 +753,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         font-weight: 600;
     }
     QFrame#Sidebar {
-        background: rgba(255, 255, 255, 0.92);
-        border-right: 1px solid rgba(17, 24, 39, 0.08);
-        border-top-right-radius: 30px;
-        border-bottom-right-radius: 30px;
+        background: #ffffff;
+        border: 1px solid #e8edf5;
+        border-radius: 20px;
     }
     QFrame#TopBar {
         background: transparent;
@@ -757,9 +775,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border-radius: 20px;
     }
     QFrame#Composer {
-        background: rgba(255, 255, 255, 0.98);
-        border: 1px solid rgba(17, 24, 39, 0.10);
-        border-radius: 30px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
     }
     QFrame#ComposerInputRow,
     QWidget#ComposerPreviewHost {
@@ -767,9 +785,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border: none;
     }
     QFrame#ComposerInputRow {
-        background: rgba(17, 24, 39, 0.035);
-        border: 1px solid rgba(17, 24, 39, 0.08);
-        border-radius: 24px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
         padding: 2px 4px;
     }
     QScrollArea#ComposerPreviewScroll {
@@ -802,7 +820,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QFrame#SearchBox {
         background: rgba(17, 24, 39, 0.03);
         border: 1px solid rgba(17, 24, 39, 0.06);
-        border-radius: 20px;
+        border-radius: 14px;
     }
     QFrame#MessageScroll {
         background: transparent;
@@ -811,13 +829,13 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QFrame#SettingsShell,
     QFrame#ImagePreviewShell { /* Thêm ID cho shell của ImagePreviewDialog */
         background: #ffffff;
-        border: 1px solid #d9d9df;
-        border-radius: 28px;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
     }
     QFrame#SettingsNav {
-        background: rgba(17, 24, 39, 0.03);
-        border: 1px solid rgba(17, 24, 39, 0.06);
-        border-radius: 22px;
+        background: rgba(37, 99, 255, 0.03);
+        border: none;
+        border-radius: 0px;
     }
     QFrame#SettingsContent {
         background: transparent;
@@ -825,9 +843,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border-radius: 22px;
     }
     QFrame#SettingsOptionCard {
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(17, 24, 39, 0.08);
-        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
     }
     QFrame#HistoryItem {
         background: transparent;
@@ -844,12 +862,18 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
     QFrame#BubbleUser {
         background: rgba(77, 184, 255, 0.12);
         border: 1px solid rgba(77, 184, 255, 0.12);
-        border-radius: 34px;
+        border-top-left-radius: 24px;
+        border-top-right-radius: 8px;
+        border-bottom-left-radius: 24px;
+        border-bottom-right-radius: 24px;
     }
     QFrame#BubbleAI {
         background: rgba(255, 255, 255, 0.9);
         border: 1px solid rgba(17, 24, 39, 0.06);
-        border-radius: 34px;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 24px;
+        border-bottom-left-radius: 24px;
+        border-bottom-right-radius: 24px;
     }
     QLabel#Avatar {
         min-width: 32px;
@@ -901,7 +925,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border: 1px solid #c8cdd8;
         border-radius: 14px;
         color: #374151;
-        font-size: 13px;
+        font-size: 15px;
         font-weight: 600;
         padding: 6px 14px;
         text-align: center;
@@ -933,16 +957,17 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         background: rgba(17, 24, 39, 0.05);
     }
     QPushButton#SidebarPrimaryButton {
-        min-height: 54px;
+        min-height: 44px;
         padding-left: 16px;
         font-size: 15px;
         font-weight: 600;
         border: none;
     }
     QPushButton#SidebarPrimaryButton {
-        background: transparent;
-        border: 1px solid rgba(17, 24, 39, 0.08);
-        border-radius: 16px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563ff, stop:1 #1d4ed8);
+        border: none;
+        border-radius: 12px;
+        color: #ffffff;
     }
     QPushButton#TopActionButton {
         min-width: 40px;
@@ -950,7 +975,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         min-height: 40px;
         max-height: 40px;
         padding: 0;
-        border-radius: 20px;
+        border-radius: 14px;
         background: transparent;
         color: #111827;
         font-size: 18px;
@@ -1023,21 +1048,39 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         max-height: 44px;
         border-radius: 20px;
         border: none;
-        background: #4db8ff;
+        background: #2563ff;
         color: #ffffff;
         font-size: 18px;
         font-weight: 700;
     }
     QPushButton#SendButton:hover {
-        background: #86cbff;
+        background: #1d4ed8;
     }
     QPushButton#SettingsNavButton {
-        background: rgba(255, 255, 255, 0.92);
-        border: 1px solid rgba(17, 24, 39, 0.08);
+        background: #eef4ff;
+        border: 1px solid #dbe7ff;
         border-radius: 16px;
         text-align: left;
         padding: 14px 18px;
         font-weight: 600;
+    }
+    QPushButton#SidebarFooterButton {
+        min-height: 44px;
+        border-radius: 14px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        padding: 0 14px;
+        font-size: 15px;
+        font-weight: 600;
+    }
+    QPushButton#SidebarFooterButton:hover {
+        background: #f8fbff;
+    }
+    QPushButton#SidebarToggleButton {
+        background: transparent;
+        border: none;
+        text-align: center;
+        padding: 0;
     }
     QPushButton#SettingsCloseButton {
         background: transparent;
@@ -1258,6 +1301,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
             self.setAttribute(Qt.WA_TranslucentBackground, True)
             self.resize(1060, 700)
+            self.theme_buttons: dict[str, QPushButton] = {}
             self.build_ui()
 
         def build_ui(self) -> None:
@@ -1270,10 +1314,11 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             outer.addWidget(shell)
 
             shell_layout = QVBoxLayout(shell)
-            shell_layout.setContentsMargins(24, 22, 24, 24)
-            shell_layout.setSpacing(18)
+            shell_layout.setContentsMargins(0, 0, 0, 0)
+            shell_layout.setSpacing(0)
 
             header_row = QHBoxLayout()
+            header_row.setContentsMargins(28, 24, 28, 20)
             header_row.setSpacing(12)
             self.dialog_title = QLabel(tr(self.window.language, "settings_title"))
             self.dialog_title.setStyleSheet("font-size: 28px; font-weight: 700;")
@@ -1281,18 +1326,27 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             header_row.addStretch(1)
             close_button = QPushButton("✕")
             close_button.setObjectName("SettingsCloseButton")
-            close_button.setFixedSize(28, 28)
+            close_button.setFixedSize(32, 32)
             close_button.clicked.connect(self.accept)
             header_row.addWidget(close_button)
             shell_layout.addLayout(header_row)
 
+            header_divider = QFrame()
+            header_divider.setFixedHeight(1)
+            header_divider.setStyleSheet(
+                "background: rgba(255, 255, 255, 0.08); border: none;"
+                if self.window.effective_theme == "dark"
+                else "background: rgba(15, 23, 42, 0.08); border: none;"
+            )
+            shell_layout.addWidget(header_divider)
+
             body_row = QHBoxLayout()
-            body_row.setSpacing(18)
+            body_row.setSpacing(0)
 
             sidebar = QFrame()
             sidebar.setObjectName("SettingsNav")
             sidebar_layout = QVBoxLayout(sidebar)
-            sidebar_layout.setContentsMargins(18, 18, 18, 18)
+            sidebar_layout.setContentsMargins(16, 16, 16, 16)
             sidebar_layout.setSpacing(14)
 
             self.general_button = QPushButton()
@@ -1314,62 +1368,61 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             content = QFrame()
             content.setObjectName("SettingsContent")
             content_layout = QVBoxLayout(content)
-            content_layout.setContentsMargins(28, 26, 28, 26)
-            content_layout.setSpacing(18)
+            content_layout.setContentsMargins(28, 22, 28, 28)
+            content_layout.setSpacing(22)
 
             self.section_title = QLabel()
             self.section_title.setObjectName("SectionTitle")
-            self.section_title.setStyleSheet("font-size: 30px; font-weight: 700;")
+            self.section_title.setStyleSheet("font-size: 22px; font-weight: 700;")
             content_layout.addWidget(self.section_title)
-
-            self.section_intro = QLabel()
-            self.section_intro.setObjectName("Subtle")
-            self.section_intro.setWordWrap(True)
-            self.section_intro.setStyleSheet("font-size: 15px;")
-            content_layout.addWidget(self.section_intro)
 
             self.appearance_card = QFrame()
             self.appearance_card.setObjectName("SettingsOptionCard")
-            appearance_card_layout = QHBoxLayout(self.appearance_card)
+            appearance_card_layout = QVBoxLayout(self.appearance_card)
             appearance_card_layout.setContentsMargins(22, 20, 22, 20)
             appearance_card_layout.setSpacing(18)
-            appearance_text = QVBoxLayout()
-            appearance_text.setSpacing(6)
+            appearance_row = QHBoxLayout()
+            appearance_row.setSpacing(10)
+            self.appearance_icon = QLabel("◔")
+            self.appearance_icon.setStyleSheet("font-size: 18px; font-weight: 700;")
+            appearance_row.addWidget(self.appearance_icon, 0, Qt.AlignTop)
             self.appearance_label = QLabel()
             self.appearance_label.setStyleSheet("font-size: 18px; font-weight: 700;")
-            self.appearance_desc = QLabel()
-            self.appearance_desc.setObjectName("Subtle")
-            self.appearance_desc.setWordWrap(True)
-            appearance_text.addWidget(self.appearance_label)
-            appearance_text.addWidget(self.appearance_desc)
-            appearance_card_layout.addLayout(appearance_text, 1)
+            appearance_row.addWidget(self.appearance_label, 1)
+            appearance_card_layout.addLayout(appearance_row)
 
-            self.theme_combo = QComboBox()
-            self.theme_combo.setObjectName("SettingsCombo")
-            self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
-            appearance_card_layout.addWidget(self.theme_combo, 0, Qt.AlignVCenter)
+            theme_options = QHBoxLayout()
+            theme_options.setSpacing(12)
+            for key in ("light", "dark", "system"):
+                button = QPushButton()
+                button.setObjectName("ThemeChoiceButton")
+                button.setMinimumHeight(44)
+                button.clicked.connect(lambda _checked=False, mode=key: self.set_theme_mode(mode))
+                self.theme_buttons[key] = button
+                theme_options.addWidget(button)
+            appearance_card_layout.addLayout(theme_options)
             content_layout.addWidget(self.appearance_card)
 
             self.language_card = QFrame()
             self.language_card.setObjectName("SettingsOptionCard")
-            language_card_layout = QHBoxLayout(self.language_card)
+            language_card_layout = QVBoxLayout(self.language_card)
             language_card_layout.setContentsMargins(22, 20, 22, 20)
             language_card_layout.setSpacing(18)
-            language_text = QVBoxLayout()
-            language_text.setSpacing(6)
+            language_row = QHBoxLayout()
+            language_row.setSpacing(10)
+            self.language_icon = QLabel("🌐")
+            self.language_icon.setStyleSheet("font-size: 18px;")
+            language_row.addWidget(self.language_icon, 0, Qt.AlignTop)
             self.language_label = QLabel()
             self.language_label.setStyleSheet("font-size: 18px; font-weight: 700;")
-            self.language_desc = QLabel()
-            self.language_desc.setObjectName("Subtle")
-            self.language_desc.setWordWrap(True)
-            language_text.addWidget(self.language_label)
-            language_text.addWidget(self.language_desc)
-            language_card_layout.addLayout(language_text, 1)
+            language_row.addWidget(self.language_label, 1)
+            language_card_layout.addLayout(language_row)
 
             self.language_combo = QComboBox()
             self.language_combo.setObjectName("SettingsCombo")
+            self.language_combo.setMinimumHeight(46)
             self.language_combo.currentIndexChanged.connect(self.on_language_changed)
-            language_card_layout.addWidget(self.language_combo, 0, Qt.AlignVCenter)
+            language_card_layout.addWidget(self.language_combo)
             content_layout.addWidget(self.language_card)
 
             content_layout.addStretch(1)
@@ -1377,9 +1430,10 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             shell_layout.addLayout(body_row)
             self.retranslate_dialog()
 
-        def on_theme_changed(self, index: int) -> None:
-            self.window.theme_mode = {0: "system", 1: "dark", 2: "light"}[index]
+        def set_theme_mode(self, mode: str) -> None:
+            self.window.theme_mode = mode
             self.window.apply_theme()
+            self.refresh_theme_buttons()
 
         def on_language_changed(self, index: int) -> None:
             self.window.language = "en" if index == 0 else "vi"
@@ -1390,20 +1444,14 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             language = self.window.language
             self.setWindowTitle(tr(language, "settings_title"))
             self.dialog_title.setText(tr(language, "settings_title"))
-            self.general_button.setText(tr(language, "general"))
+            self.general_button.setText(f"⌂  {tr(language, 'general')}")
             self.section_title.setText(tr(language, "general"))
-            self.section_intro.setText(tr(language, "settings_intro"))
             self.appearance_label.setText(tr(language, "appearance"))
-            self.appearance_desc.setText(tr(language, "appearance_desc"))
             self.language_label.setText(tr(language, "language"))
-            self.language_desc.setText(tr(language, "language_desc"))
-
-            theme_index = {"system": 0, "dark": 1, "light": 2}.get(self.window.theme_mode, 0)
-            self.theme_combo.blockSignals(True)
-            self.theme_combo.clear()
-            self.theme_combo.addItems([tr(language, "system"), tr(language, "dark"), tr(language, "light")])
-            self.theme_combo.setCurrentIndex(theme_index)
-            self.theme_combo.blockSignals(False)
+            self.theme_buttons["light"].setText(f"☼  {tr(language, 'light')}")
+            self.theme_buttons["dark"].setText(f"☾  {tr(language, 'dark')}")
+            self.theme_buttons["system"].setText(f"▣  {tr(language, 'system')}")
+            self.refresh_theme_buttons()
 
             language_index = 0 if self.window.language == "en" else 1
             self.language_combo.blockSignals(True)
@@ -1411,6 +1459,27 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.language_combo.addItems([tr(language, "english"), tr(language, "vietnamese")])
             self.language_combo.setCurrentIndex(language_index)
             self.language_combo.blockSignals(False)
+
+        def refresh_theme_buttons(self) -> None:
+            active_mode = self.window.theme_mode
+            preview_theme = active_mode
+            if preview_theme == "system":
+                preview_theme = self.window.detect_system_theme()
+            dark_mode = preview_theme == "dark"
+            for mode, button in self.theme_buttons.items():
+                is_active = mode == active_mode
+                if dark_mode:
+                    button.setStyleSheet(
+                        "background: rgba(37, 99, 255, 0.22); color: #f8fbff; border: 1px solid #2563ff; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                        if is_active
+                        else "background: rgba(15, 23, 42, 0.88); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                    )
+                else:
+                    button.setStyleSheet(
+                        "background: #eef4ff; color: #0f172a; border: 1px solid #2563ff; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
+                        if is_active
+                        else "background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                    )
 
     class HistoryItemWidget(QFrame):
         def __init__(
@@ -1814,6 +1883,10 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             )
             self.setFixedHeight(max(40, min(int(height), 88)))
 
+        def resizeEvent(self, event) -> None:
+            super().resizeEvent(event)
+            self._adjust_height()
+
         enter_pressed = Signal()
 
         def keyPressEvent(self, event):
@@ -1880,6 +1953,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.bubble = QFrame()
             self.bubble.setObjectName("BubbleUser" if align_right else "BubbleAI")
             self.bubble.setMaximumWidth(680)
+            self.bubble.setMinimumWidth(96)
+            self.bubble.setMinimumHeight(52)
             self.bubble.setAttribute(Qt.WA_StyledBackground, True)
 
             shadow = QGraphicsDropShadowEffect(self.bubble)
@@ -1890,8 +1965,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.bubble.setGraphicsEffect(shadow)
 
             self.bubble_layout = QVBoxLayout(self.bubble)
-            self.bubble_layout.setContentsMargins(18, 14, 18, 14)
-            self.bubble_layout.setSpacing(8) # Giữ nguyên spacing
+            self.bubble_layout.setContentsMargins(18, 12, 18, 12)
+            self.bubble_layout.setSpacing(8)
 
             if message.attachment_path:
                 attachment_key = {
@@ -1917,6 +1992,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.typing_indicator = None
             self.update_display_text(message.text or "")
             self.text_label.setWordWrap(True)
+            self.text_label.setTextFormat(Qt.PlainText)
+            self.text_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             self.text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
             self.text_label.setStyleSheet("font-size: 15px;")
             self.bubble_layout.addWidget(self.text_label)
@@ -1957,46 +2034,19 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
             is_error = text.startswith("API Error:") or text.startswith("Error:")
             if self.effective_theme == "light" and is_error:
-                error_style = 'color: #b00020; font-weight: bold; background: rgba(176,0,32,0.08); padding: 5px; border-radius: 8px;'
+                self.text_label.setStyleSheet(
+                    "font-size: 15px; color: #b00020; font-weight: 700; background: rgba(176,0,32,0.08); padding: 6px; border-radius: 8px;"
+                )
             elif is_error:
-                error_style = 'color: #ff5252; font-weight: bold; background: rgba(255,82,82,0.1); padding: 5px; border-radius: 8px;'
-            elif self.effective_theme == "light":
-                error_style = 'color: #111827; background: rgba(0,0,0,0.04); padding: 5px; border-radius: 8px;'
+                self.text_label.setStyleSheet(
+                    "font-size: 15px; color: #ff5252; font-weight: 700; background: rgba(255,82,82,0.1); padding: 6px; border-radius: 8px;"
+                )
             else:
-                error_style = ''
-
-            if self.effective_theme == "light":
-                code_bg = '#f3f4f6'
-                code_color = '#111827'
-                inline_code_bg = '#e5e7eb'
-            else:
-                code_bg = '#1e1e1e'
-                code_color = '#d4d4d4'
-                inline_code_bg = '#444444'
-
-            parts = re.split(r'(```[\s\S]*?```)', text)
-            formatted = ""
-            for part in parts:
-                if part.startswith('```'):
-                    code_content = part.strip('`').strip()
-                    lines = code_content.split('\n', 1)
-                    lang = lines[0].strip() if len(lines) > 1 else ""
-                    code = lines[1] if len(lines) > 1 else lines[0]
-                    
-                    if PYGMENTS_AVAILABLE:
-                        try:
-                            lexer = get_lexer_by_name(lang) if lang else guess_lexer(code)
-                            formatter = HtmlFormatter(noclasses=True, style='monokai')
-                            formatted += highlight(code, lexer, formatter)
-                            continue
-                        except: pass
-                    formatted += f'<pre style="background: {code_bg}; color: {code_color}; padding: 10px; border-radius: 5px;"><code>{code}</code></pre>'
-                else:
-                    p = part.replace("\n", "<br>")
-                    p = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', p)
-                    p = re.sub(r'`(.*?)`', fr'<code style="background: {inline_code_bg}; padding: 2px;">\1</code>', p)
-                    formatted += p
-            self.text_label.setText(f"<div style='{error_style}'>{formatted}</div>")
+                base_color = "#111827" if self.effective_theme == "light" else "#f8fafc"
+                self.text_label.setStyleSheet(
+                    f"font-size: 15px; color: {base_color}; background: transparent; padding: 0;"
+                )
+            self.text_label.setText(text)
 
     class ChatWindow(QMainWindow):
         def __init__(self, *, title: str, initial_camera_index: int, mode_label: str, model_label: str | None) -> None:
@@ -2110,17 +2160,17 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.sidebar_shadow.setColor(QColor(0, 0, 0, 100))
             
             root = QHBoxLayout(root_widget)
-            root.setContentsMargins(0, 0, 0, 0)
-            root.setSpacing(0)
+            root.setContentsMargins(14, 14, 14, 14)
+            root.setSpacing(16)
             self.setCentralWidget(root_widget)
 
             self.sidebar = QFrame()
             self.sidebar.setObjectName("Sidebar")
-            self.sidebar.setMinimumWidth(320)
-            self.sidebar.setMaximumWidth(360)
+            self.sidebar.setMinimumWidth(240)
+            self.sidebar.setMaximumWidth(240)
             self.sidebar.setGraphicsEffect(self.sidebar_shadow)
             sidebar_layout = QVBoxLayout(self.sidebar)
-            sidebar_layout.setContentsMargins(16, 16, 16, 16)
+            sidebar_layout.setContentsMargins(14, 14, 14, 14)
             sidebar_layout.setSpacing(14)
 
             header_frame = QFrame()
@@ -2128,15 +2178,20 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             header = QHBoxLayout(header_frame)
             header.setContentsMargins(0, 0, 0, 0)
             header.setSpacing(12)
-            self.brand_text = QLabel("Chat AI")
-            self.brand_text.setObjectName("BrandText")
             self.sidebar_app_button = QPushButton()
             self.sidebar_app_button.setObjectName("SidebarAppButton")
             self.sidebar_app_button.setIconSize(QSize(28, 28))
-            self.sidebar_app_button.clicked.connect(self.toggle_sidebar)
+            self.sidebar_app_button.setEnabled(False)
+            self.brand_text = QLabel("YOLO Chat AI")
+            self.brand_text.setObjectName("BrandText")
+            self.sidebar_toggle_button = QPushButton("«")
+            self.sidebar_toggle_button.setObjectName("SidebarToggleButton")
+            self.sidebar_toggle_button.setFixedSize(28, 28)
+            self.sidebar_toggle_button.clicked.connect(self.toggle_sidebar)
+            header.addWidget(self.sidebar_app_button, 0, Qt.AlignLeft)
             header.addWidget(self.brand_text)
             header.addStretch(1)
-            header.addWidget(self.sidebar_app_button, 0, Qt.AlignRight)
+            header.addWidget(self.sidebar_toggle_button, 0, Qt.AlignRight)
             sidebar_layout.addWidget(header_frame)
 
             self.new_chat_button = QPushButton()
@@ -2158,6 +2213,11 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.search_input.setStyleSheet("border: none; background: transparent; padding: 0;")
             self.search_input.textChanged.connect(self.refresh_history)
             search_layout.addWidget(self.search_input, 1)
+            self.search_filter_label = QLabel("☰")
+            self.search_filter_label.setObjectName("Subtle")
+            self.search_filter_label.setAlignment(Qt.AlignCenter)
+            self.search_filter_label.setFixedSize(18, 18)
+            search_layout.addWidget(self.search_filter_label)
             sidebar_layout.addWidget(self.search_box)
 
             self.search_compact_button = QPushButton()
@@ -2174,7 +2234,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.history_panel = QFrame()
             self.history_panel.setObjectName("HistoryPanel")
             history_panel_layout = QVBoxLayout(self.history_panel)
-            history_panel_layout.setContentsMargins(10, 10, 10, 10)
+            history_panel_layout.setContentsMargins(0, 0, 0, 0)
             history_panel_layout.setSpacing(0)
 
             self.history_list = QListWidget()
@@ -2197,41 +2257,69 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.settings_button.setIconSize(QSize(20, 20))
             self.settings_button.clicked.connect(self.open_settings)
             sidebar_layout.addWidget(self.settings_button)
-            root.addWidget(self.sidebar, 1)
+            root.addWidget(self.sidebar, 0)
 
             self.chat_panel = QWidget()
             self.chat_panel.setObjectName("ChatPanel")
             chat_layout = QVBoxLayout(self.chat_panel)
-            chat_layout.setContentsMargins(12, 14, 12, 16)
-            chat_layout.setSpacing(12)
+            chat_layout.setContentsMargins(18, 12, 18, 16)
+            chat_layout.setSpacing(18)
 
             top_row = QHBoxLayout()
+            top_row.setSpacing(12)
             top_row.addStretch(1)
-            self.mode_badge = QLabel()
-            self.mode_badge.setObjectName("Subtle")
-            top_row.addWidget(self.mode_badge)
-            self.theme_button = QPushButton()
-            self.theme_button.setObjectName("RoundButton")
-            self.theme_button.setFixedSize(36, 36)
-            self.theme_button.clicked.connect(self.cycle_theme_mode)
-            top_row.addWidget(self.theme_button)
+            self.light_mode_button = QPushButton()
+            self.light_mode_button.setObjectName("ModeButton")
+            self.light_mode_button.setMinimumSize(86, 40)
+            self.light_mode_button.clicked.connect(lambda: self.set_theme_mode("light"))
+            top_row.addWidget(self.light_mode_button)
+            self.dark_mode_button = QPushButton()
+            self.dark_mode_button.setObjectName("ModeButton")
+            self.dark_mode_button.setMinimumSize(72, 40)
+            self.dark_mode_button.clicked.connect(lambda: self.set_theme_mode("dark"))
+            top_row.addWidget(self.dark_mode_button)
+            self.desktop_button = QPushButton()
+            self.desktop_button.setObjectName("ModeButton")
+            self.desktop_button.setMinimumSize(116, 40)
+            top_row.addWidget(self.desktop_button)
             chat_layout.addLayout(top_row)
 
             self.greeting_card = QFrame()
             self.greeting_card.setObjectName("GreetingCard")
             greeting_layout = QVBoxLayout(self.greeting_card)
-            greeting_layout.setContentsMargins(24, 18, 24, 18)
+            greeting_layout.setContentsMargins(12, 6, 12, 0)
             greeting_layout.setSpacing(8)
             self.greeting_title = QLabel()
-            self.greeting_title.setObjectName("Headline")
+            self.greeting_title.setObjectName("GreetingTitle")
             self.greeting_text = QLabel()
             self.greeting_text.setObjectName("Subtle")
             self.greeting_text.setStyleSheet("font-size: 16px;")
             greeting_layout.addWidget(self.greeting_title)
-            self.greeting_title.setAlignment(Qt.AlignCenter)
+            self.greeting_title.setAlignment(Qt.AlignLeft)
             greeting_layout.addWidget(self.greeting_text)
-            self.greeting_text.setAlignment(Qt.AlignCenter)
+            self.greeting_text.setAlignment(Qt.AlignLeft)
             chat_layout.addWidget(self.greeting_card)
+
+            self.empty_state = QFrame()
+            self.empty_state.setObjectName("ChatBoard")
+            empty_layout = QVBoxLayout(self.empty_state)
+            empty_layout.setContentsMargins(24, 32, 24, 24)
+            empty_layout.setSpacing(12)
+            empty_layout.addStretch(1)
+            self.robot_mark = QLabel("🤖")
+            self.robot_mark.setAlignment(Qt.AlignCenter)
+            self.robot_mark.setStyleSheet("font-size: 86px;")
+            empty_layout.addWidget(self.robot_mark)
+            self.empty_title = QLabel("Bắt đầu cuộc trò chuyện")
+            self.empty_title.setAlignment(Qt.AlignCenter)
+            self.empty_title.setStyleSheet("font-size: 20px; font-weight: 700;")
+            empty_layout.addWidget(self.empty_title)
+            self.empty_subtitle = QLabel("Đặt câu hỏi cho YOLO Chat AI để nhận câu trả lời hữu ích!")
+            self.empty_subtitle.setObjectName("Subtle")
+            self.empty_subtitle.setAlignment(Qt.AlignCenter)
+            empty_layout.addWidget(self.empty_subtitle)
+            empty_layout.addStretch(1)
+            chat_layout.addWidget(self.empty_state, 1)
 
             self.scroll_area = QScrollArea()
             self.scroll_area.setObjectName("MessageScroll")
@@ -2245,6 +2333,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.messages_layout.setSpacing(16)
             self.messages_layout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
             self.scroll_area.setWidget(self.messages_host)
+            self.scroll_area.hide()
             chat_layout.addWidget(self.scroll_area, 1)
 
             self.recording_panel = RecordingPanel(self.language, window=self)
@@ -2283,11 +2372,6 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             input_row_layout.setContentsMargins(6, 4, 6, 4)
             input_row_layout.setSpacing(6)
 
-            self.plus_button = QPushButton("")
-            self.plus_button.setFixedSize(44, 44)
-            self.plus_button.clicked.connect(self.show_plus_menu)
-            input_row_layout.addWidget(self.plus_button, 0, Qt.AlignVCenter)
-
             self.message_input = MessageInput()
             self.message_input.setObjectName("ComposerInput")
             self.message_input.setMinimumHeight(40)
@@ -2305,7 +2389,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.micro_button.clicked.connect(self.start_voice_input)
             input_row_layout.addWidget(self.micro_button, 0, Qt.AlignVCenter)
 
-            self.send_button = QPushButton("↑")
+            self.send_button = QPushButton("➜")
             self.send_button.setObjectName("SendButton")
             self.send_button.setFixedSize(44, 44)
             self.send_button.clicked.connect(self.send_message)
@@ -2313,10 +2397,15 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             composer_layout.addWidget(self.message_input_row)
             chat_layout.addWidget(self.composer)
 
+            self.disclaimer_label = QLabel("YOLO Chat AI có thể mắc lỗi. Hãy kiểm tra lại thông tin quan trọng.")
+            self.disclaimer_label.setObjectName("Subtle")
+            self.disclaimer_label.setAlignment(Qt.AlignCenter)
+            chat_layout.addWidget(self.disclaimer_label)
+
             self.search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
             self.search_shortcut.activated.connect(self.focus_search)
 
-            root.addWidget(self.chat_panel, 4)
+            root.addWidget(self.chat_panel, 1)
 
         def apply_dark_theme(self) -> None:
             self.effective_theme = "dark"
@@ -2388,6 +2477,10 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.theme_mode = order[next_index]
             self.apply_theme()
 
+        def set_theme_mode(self, mode: str) -> None:
+            self.theme_mode = mode
+            self.apply_theme()
+
         def icon_color(self) -> str:
             return "#ECECF1" if self.effective_theme == "dark" else "#111827"
 
@@ -2402,13 +2495,50 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.search_compact_button.setIcon(themed_icon("search.svg", subtle, 22))
             self.settings_button.setIcon(themed_icon("settings.svg", strong, 22))
             self.search_icon.setPixmap(themed_pixmap("search.svg", subtle, 18))
-            self.plus_button.setIcon(themed_icon("plus.svg", strong, 18))
-            self.plus_button.setIconSize(QSize(18, 18))
             self.micro_button.setIcon(themed_icon("mic.svg", strong, 18))
             self.micro_button.setIconSize(QSize(18, 18))
-            self.send_button.setText("\u2191")
-            self.theme_button.setText("\u2600" if self.effective_theme == "dark" else "\u263E")
             self.message_input.apply_visual_style(dark_mode=self.effective_theme == "dark")
+            self.refresh_topbar_buttons()
+            self.refresh_empty_state_theme()
+            self.sidebar_toggle_button.setStyleSheet(
+                f"color: {strong}; background: transparent; border: none; font-size: 18px; font-weight: 700;"
+            )
+
+        def refresh_topbar_buttons(self) -> None:
+            dark_mode = self.effective_theme == "dark"
+            active = self.theme_mode
+            palette = {
+                "base": "#0f172a" if dark_mode else "#ffffff",
+                "border": "rgba(255, 255, 255, 0.08)" if dark_mode else "#e2e8f0",
+                "text": "#f8fafc" if dark_mode else "#0f172a",
+                "selected_bg": "rgba(37, 99, 255, 0.22)" if dark_mode else "#eef4ff",
+                "selected_text": "#f8fbff" if dark_mode else "#2563ff",
+                "selected_border": "#2563ff",
+            }
+            buttons = (
+                (self.light_mode_button, "light"),
+                (self.dark_mode_button, "dark"),
+            )
+            for button, mode in buttons:
+                is_active = active == mode
+                button.setStyleSheet(
+                    f"background: {palette['selected_bg'] if is_active else palette['base']};"
+                    f"color: {palette['selected_text'] if is_active else palette['text']};"
+                    f"border: 1px solid {palette['selected_border'] if is_active else palette['border']};"
+                    "border-radius: 14px; font-size: 14px; font-weight: 600; padding: 0 16px;"
+                )
+            self.desktop_button.setStyleSheet(
+                f"background: {palette['base']}; color: {palette['text']}; border: 1px solid {palette['border']};"
+                "border-radius: 14px; font-size: 14px; font-weight: 600; padding: 0 16px;"
+            )
+
+        def refresh_empty_state_theme(self) -> None:
+            if self.effective_theme == "dark":
+                self.robot_mark.setStyleSheet("font-size: 86px; color: #3b82f6;")
+                self.empty_title.setStyleSheet("font-size: 20px; font-weight: 700; color: #f8fafc;")
+            else:
+                self.robot_mark.setStyleSheet("font-size: 86px; color: #2563ff;")
+                self.empty_title.setStyleSheet("font-size: 20px; font-weight: 700; color: #0f172a;")
 
         def retranslate_ui(self) -> None:
             self.new_chat_button.setText(tr(self.language, "new_chat"))
@@ -2420,17 +2550,16 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.db.set_setting("language", self.language)
             self.greeting_text.setText(tr(self.language, "greeting_text"))
             self.message_input.setPlaceholderText(tr(self.language, "input_placeholder"))
-            badge = f"{tr(self.language, 'mode_badge')}: {self.mode_label}"
-            if self.model_label:
-                badge = f"{badge} | {self.model_label}"
-            self.mode_badge.setText(badge)
+            self.light_mode_button.setText(f"☼  {tr(self.language, 'light')}")
+            self.dark_mode_button.setText(f"☾  {tr(self.language, 'dark')}")
+            self.desktop_button.setText("▣  Desktop  ▾")
             self.update_sidebar_ui()
             self.refresh_history()
             self.apply_theme()
             self.render_messages()
 
         def toggle_sidebar(self) -> None:
-            target_width = 88 if self.sidebar_expanded else 320
+            target_width = 88 if self.sidebar_expanded else 240
             
             self.sidebar_anim = QPropertyAnimation(self.sidebar, b"minimumWidth")
             self.sidebar_anim.setDuration(250)
@@ -2468,6 +2597,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.search_compact_button.setVisible(not expanded)
             self.history_title.setVisible(expanded)
             self.history_panel.setVisible(expanded)
+            self.sidebar_toggle_button.setText("«" if expanded else "»")
             self.sidebar.layout().setStretchFactor(self.history_panel, 1 if expanded else 0)
             self.sidebar.layout().setStretchFactor(self.sidebar_spacer, 0 if expanded else 1)
 
@@ -2512,7 +2642,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
         def refresh_history(self) -> None:
             query = self.search_input.text().strip().lower() if hasattr(self, "search_input") else ""
-            
+
             matching_conv_ids = set()
             if query:
                 matching_conv_ids = set(self.db.search_conversations_by_message(query))
@@ -2523,13 +2653,13 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             current_item_row = 0
             visible_row = 0
             for index, conversation in enumerate(self.conversations):
-                if conversation.id is None:
+                if conversation.id is None and not conversation.messages:
                     continue
                 matches_title = query in conversation.title.lower()
                 matches_message = conversation.id in matching_conv_ids
-                
                 if query and not (matches_title or matches_message):
                     continue
+
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, index)
                 item.setSizeHint(QSize(0, 68))
@@ -2614,6 +2744,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             
             messages = self.active_conversation().messages
             self.greeting_card.setVisible(len(messages) == 0)
+            self.empty_state.setVisible(len(messages) == 0)
+            self.scroll_area.setVisible(len(messages) > 0)
             
             for message in messages:
                 bubble = ChatBubble(message, language=self.language, align_right=message.sender == "user", window=self)
@@ -2750,7 +2882,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             )
 
         def generate_ai_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
-            self.add_message(ChatMessage(sender="ai", text=tr(self.language, "ai_unavailable")))
+            self.add_message(ChatMessage(sender="ai", text="..."))
             self.scroll_to_bottom()
 
         def start_typewriter(self, full_text: str):

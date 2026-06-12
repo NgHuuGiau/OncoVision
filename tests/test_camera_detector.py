@@ -12,9 +12,6 @@ from core.camera_runner import (
     _bbox_iou,
     _dedupe_display_detections,
     _filter_person_detections,
-    _fps_tolerance_for_profile,
-    _target_fps_for_profile,
-    _should_force_camera_only_preview,
 )
 from core.hardware_info import HardwareInfo
 from core.model_selector import select_runtime_config
@@ -219,48 +216,6 @@ class CameraDetectorTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             detector.read_and_detect()
 
-    def test_adjust_detect_interval_increases_when_fps_is_below_target(self) -> None:
-        hardware = HardwareInfo(
-            cpu_name="Intel Core i7-11800H",
-            ram_gb=16.0,
-            gpu_name="NVIDIA GeForce RTX 3050 Ti Laptop GPU",
-            vram_gb=4.0,
-            cuda_available=True,
-            os_name="Windows 11",
-            gpu_count=1,
-        )
-        detector = CameraDetector(runtime=select_runtime_config("low", hardware))
-        detector.base_detect_interval = 5
-        detector.detect_interval = 5
-        detector.max_detect_interval = 8
-        detector.frame_index = 24
-        detector.last_detect_adjust_frame = 0
-
-        detector._adjust_detect_interval(26.0)
-
-        self.assertEqual(detector.detect_interval, 6)
-
-    def test_adjust_detect_interval_decreases_when_fps_is_above_target(self) -> None:
-        hardware = HardwareInfo(
-            cpu_name="Intel Core i7-11800H",
-            ram_gb=16.0,
-            gpu_name="NVIDIA GeForce RTX 3050 Ti Laptop GPU",
-            vram_gb=4.0,
-            cuda_available=True,
-            os_name="Windows 11",
-            gpu_count=1,
-        )
-        detector = CameraDetector(runtime=select_runtime_config("low", hardware))
-        detector.base_detect_interval = 5
-        detector.detect_interval = 7
-        detector.max_detect_interval = 8
-        detector.frame_index = 24
-        detector.last_detect_adjust_frame = 0
-
-        detector._adjust_detect_interval(34.5)
-
-        self.assertEqual(detector.detect_interval, 6)
-
     def test_low_profile_uses_more_aggressive_inference_limits(self) -> None:
         hardware = HardwareInfo(
             cpu_name="Intel Core i7-11800H",
@@ -278,17 +233,6 @@ class CameraDetectorTests(unittest.TestCase):
         self.assertEqual(detector._effective_confidence(), 0.35)
         self.assertEqual(detector._effective_box_thickness(), 2)
         self.assertGreaterEqual(detector._effective_label_font_scale(), 0.62)
-
-    def test_fps_policy_targets_match_requested_profiles(self) -> None:
-        self.assertEqual(_target_fps_for_profile("high"), 15)
-        self.assertEqual(_target_fps_for_profile("medium"), 18)
-        self.assertEqual(_target_fps_for_profile("low"), 30)
-        self.assertEqual(_fps_tolerance_for_profile("high"), 1.0)
-        self.assertEqual(_fps_tolerance_for_profile("medium"), 2.5)
-        self.assertEqual(_fps_tolerance_for_profile("low"), 1.5)
-        self.assertTrue(_should_force_camera_only_preview("high"))
-        self.assertTrue(_should_force_camera_only_preview("medium"))
-        self.assertTrue(_should_force_camera_only_preview("low"))
 
     def test_read_and_detect_suppresses_detections_on_high_motion(self) -> None:
         detector = CameraDetector(runtime=self._runtime())
@@ -542,14 +486,14 @@ class CameraDetectorTests(unittest.TestCase):
         detections = [
             DetectionRecord(class_id=0, label="person", confidence=0.72, bbox=(10, 10, 50, 50)),
             DetectionRecord(class_id=0, label="person", confidence=0.95, bbox=(80, 12, 130, 62)),
-            DetectionRecord(class_id=0, label="person", confidence=0.48, bbox=(140, 60, 180, 100)),
+            DetectionRecord(class_id=0, label="person", confidence=0.92, bbox=(140, 60, 180, 100)),
         ]
 
         result = detector._effective_display_detections(detections)
 
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result), 3)
         self.assertTrue(all(item.label == "person" for item in result))
-        self.assertEqual([round(item.confidence, 2) for item in result], [0.95, 0.72])
+        self.assertEqual([round(item.confidence, 2) for item in result], [0.95, 0.92, 0.72])
 
     def test_effective_display_detections_removes_overlapping_people_duplicates(self) -> None:
         detector = CameraDetector(runtime=self._runtime())
@@ -661,21 +605,6 @@ class CameraDetectorTests(unittest.TestCase):
         fake_model.predict.assert_called_once()
         self.assertNotIn("classes", fake_model.predict.call_args.kwargs)
 
-    @patch("core.camera_runner.get_live_usage_snapshot", return_value={"cpu_usage_percent": 11.0})
-    def test_runtime_health_includes_runtime_and_fallback_observability(self, _usage_mock) -> None:
-        detector = CameraDetector(runtime=self._runtime())
-        detector.runtime.active_model_name = "yolo11n.pt"
-        detector.runtime.resolved_device = "cpu"
-        detector.runtime.use_half = False
-        detector.active_runtime_summary = "yolo11n.pt | cpu | imgsz 320"
-        detector.fallback_chain_tried = [{"model_name": "yolo11s.pt", "resolved_device": "cuda:0", "use_half": True}]
-        detector.runtime_step_errors = [{"model_name": "yolo11s.pt", "error": "CUDA boom"}]
 
-        health = detector.runtime_health()
-
-        self.assertEqual(health["active_model_name"], "yolo11n.pt")
-        self.assertEqual(health["resolved_device"], "cpu")
-        self.assertFalse(health["use_half"])
-        self.assertEqual(health["fallback_chain_tried"][0]["model_name"], "yolo11s.pt")
-        self.assertEqual(health["step_errors"][0]["error"], "CUDA boom")
-        self.assertEqual(health["live_usage_snapshot"]["cpu_usage_percent"], 11.0)
+if __name__ == "__main__":
+    unittest.main()

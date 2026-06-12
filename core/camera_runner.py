@@ -10,7 +10,6 @@ import cv2
 import numpy as np
 
 from core.fallback_manager import iter_fallback_configs
-from core.hardware_info import detect_hardware, get_live_usage_snapshot
 from core.model_selector import RuntimeConfig
 from core.model_loader import LoadedModel, load_yolo_model
 from utils.logger import get_logger
@@ -30,15 +29,10 @@ DISPLAY_NMS_IOU = 0.45
 PERSON_MAX_AREA_RATIO = 0.6
 PERSON_MAX_WIDTH_HEIGHT_RATIO = 1.35
 PERSON_EDGE_TOUCH_RATIO = 0.02
-PERSON_CENTER_BIAS_WEIGHT = 0.35
 FACE_LABEL = "face"
 PERSON_LABEL = "person"
 PHONE_LABEL = "phone"
 PHONE_LABEL_ALIASES = {PHONE_LABEL, "cell phone", "mobile phone", "smartphone"}
-FACE_REFINEMENT_MIN_HEIGHT_RATIO = 1.15
-FACE_BOX_WIDTH_RATIO = 0.58
-FACE_BOX_TOP_RATIO = 0.08
-FACE_BOX_BOTTOM_RATIO = 0.38
 FACE_TRACKING_STICKY_ALPHA = 0.96
 FACE_TRACKING_STABLE_MOTION_RATIO = 0.16
 FACE_JITTER_FREEZE_RATIO = 0.05
@@ -52,6 +46,7 @@ TRACKING_PREDICTION_MOTION_RATIO = 0.30
 TRACKING_STABLE_MOTION_RATIO = 0.10
 TRACK_TRAIL_MAX_POINTS = 10
 TRACK_TRAIL_MIN_MOVEMENT_PX = 4.0
+FRAME_READY_MAX_AGE_SECONDS = 0.25
 
 @dataclass
 class DetectionRecord:
@@ -280,47 +275,6 @@ def _person_shape_is_plausible(box: tuple[int, int, int, int]) -> bool:
     return (width / height) <= PERSON_MAX_WIDTH_HEIGHT_RATIO
 
 
-def _person_priority_score(box: tuple[int, int, int, int], confidence: float, frame_shape: tuple[int, ...]) -> float:
-    frame_h, frame_w = frame_shape[:2]
-    x1, y1, x2, y2 = box
-    center_x = (x1 + x2) / 2.0
-    frame_center_x = frame_w / 2.0
-    center_distance = abs(center_x - frame_center_x) / max(1.0, frame_center_x)
-    center_bonus = max(0.0, 1.0 - center_distance)
-    return float(confidence) + (center_bonus * PERSON_CENTER_BIAS_WEIGHT)
-
-
-def _is_face_detection_label(label: str) -> bool:
-    return str(label).lower() in {PERSON_LABEL, FACE_LABEL}
-
-
-def _refine_person_bbox_to_face(bbox: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
-    x1, y1, x2, y2 = bbox
-    width = max(1, x2 - x1)
-    height = max(1, y2 - y1)
-    if (height / width) < FACE_REFINEMENT_MIN_HEIGHT_RATIO:
-        return bbox
-
-    refined_width = max(1, int(round(width * FACE_BOX_WIDTH_RATIO)))
-    horizontal_margin = max(0, int(round((width - refined_width) / 2.0)))
-    refined_x1 = x1 + horizontal_margin
-    refined_x2 = refined_x1 + refined_width
-    refined_y1 = y1 + int(round(height * FACE_BOX_TOP_RATIO))
-    refined_y2 = y1 + int(round(height * FACE_BOX_BOTTOM_RATIO))
-    refined_y2 = max(refined_y1 + 1, refined_y2)
-    return (refined_x1, refined_y1, refined_x2, refined_y2)
-
-
-def _normalize_detection_label_and_bbox(
-    label: str,
-    bbox: tuple[int, int, int, int],
-) -> tuple[str, tuple[int, int, int, int]]:
-    normalized_label = str(label).strip().lower()
-    if normalized_label in PHONE_LABEL_ALIASES:
-        return PHONE_LABEL, bbox
-    return normalized_label, bbox
-
-
 def _is_refined_face_label(label: str) -> bool:
     return str(label).lower() == FACE_LABEL
 
@@ -339,6 +293,16 @@ def _stabilize_face_bbox(
     if movement_ratio <= FACE_TRACKING_STABLE_MOTION_RATIO:
         face_alpha = max(face_alpha, FACE_TRACKING_STICKY_ALPHA)
     return _smooth_bbox(previous_display_bbox, current_bbox, alpha=face_alpha)
+
+
+def _normalize_detection_label_and_bbox(
+    label: str,
+    bbox: tuple[int, int, int, int],
+) -> tuple[str, tuple[int, int, int, int]]:
+    normalized_label = str(label).strip().lower()
+    if normalized_label in PHONE_LABEL_ALIASES:
+        return PHONE_LABEL, bbox
+    return normalized_label, bbox
 
 
 def _filter_person_detections(
@@ -390,6 +354,7 @@ class CameraStream:
         self.capture_ready_event = threading.Event()
         self.capture_lock = threading.Lock()
         self.latest_captured_frame: np.ndarray | None = None
+        self.latest_frame_timestamp = 0.0
 
     def open(self, width: int, height: int) -> None:
         self.release()
@@ -403,6 +368,7 @@ class CameraStream:
         self.last_error_message = ""
         self.last_status_message = "Đã mở camera thành công."
         self.latest_captured_frame = None
+        self.latest_frame_timestamp = 0.0
         self.capture_ready_event.clear()
         self._start_capture_worker()
 
@@ -411,16 +377,7 @@ class CameraStream:
         if frame is not None:
             return frame
         self.capture_ready_event.wait(wait_seconds)
-        frame = self._take_latest_frame()
-        if frame is not None:
-            return frame
-        ok, frame = self._read_capture_frame(track_failures=True)
-        if ok and frame is not None:
-            with self.capture_lock:
-                self.latest_captured_frame = frame.copy()
-            self.capture_ready_event.set()
-            return frame
-        return None
+        return self._take_latest_frame()
 
     def release(self) -> None:
         self._stop_capture_worker()
@@ -449,15 +406,17 @@ class CameraStream:
         self.capture_ready_event.clear()
         with self.capture_lock:
             self.latest_captured_frame = None
+            self.latest_frame_timestamp = 0.0
 
     def _capture_worker_loop(self) -> None:
         while not self.capture_stop_event.is_set():
-            ok, frame = self._read_capture_frame(track_failures=False)
+            ok, frame = self._read_capture_frame(track_failures=True)
             if not ok or frame is None:
                 time.sleep(0.01)
                 continue
             with self.capture_lock:
                 self.latest_captured_frame = frame
+                self.latest_frame_timestamp = time.perf_counter()
             self.capture_ready_event.set()
 
     def _read_capture_frame(self, track_failures: bool) -> tuple[bool, np.ndarray | None]:
@@ -484,6 +443,8 @@ class CameraStream:
         with self.capture_lock:
             if self.latest_captured_frame is None:
                 return None
+            if (time.perf_counter() - self.latest_frame_timestamp) > FRAME_READY_MAX_AGE_SECONDS:
+                return None
             return self.latest_captured_frame.copy()
 
     def _open_capture(self) -> cv2.VideoCapture:
@@ -503,28 +464,19 @@ class CameraDetector:
         self.recovery_count = 0
         self.last_status_message = "Sẵn sàng khởi tạo camera."
         self.last_error_message = ""
-        self.active_runtime_summary = ""
-        self.fallback_chain_tried: list[dict[str, Any]] = []
-        self.runtime_step_errors: list[dict[str, Any]] = []
-        self.last_raw_frame: np.ndarray | None = None
         self.last_detections: list[DetectionRecord] = []
         self.previous_display_detections: list[DetectionRecord] = []
         self.previous_observed_detections: list[DetectionRecord] = []
         self.display_trails: dict[int, list[tuple[int, int]]] = {}
         self.next_track_id = 1
         self.frame_index = 0
-        self.detect_interval = 1
-        self.base_detect_interval = 1
-        self.max_detect_interval = 1
-        self.last_detect_adjust_frame = 0
-        self.inference_thread: threading.Thread | None = None
-        self.inference_stop_event = threading.Event()
-        self.inference_ready_event = threading.Event()
-        self.inference_lock = threading.Lock()
-        self.pending_inference_frame: np.ndarray | None = None
-        self.pending_inference_error: Exception | None = None
         self.previous_gray: np.ndarray | None = None
         self.last_motion_score: float = 0.0
+        self.last_raw_frame: np.ndarray | None = None
+        self.no_frame_poll_failures = 0
+        self.fallback_chain_tried: list[dict[str, Any]] = []
+        self.runtime_step_errors: list[dict[str, Any]] = []
+        self.active_runtime_summary = ""
 
     @property
     def capture(self) -> cv2.VideoCapture | None:
@@ -552,7 +504,6 @@ class CameraDetector:
             }
             self.fallback_chain_tried.append(attempt)
             try:
-                self._stop_inference_worker()
                 self.runtime = runtime
                 self.loaded_model = None
                 self.release()
@@ -562,20 +513,7 @@ class CameraDetector:
                 self.runtime.resolved_device = resolved_device
                 self.runtime.active_model_name = self.loaded_model.model_name
                 self.last_frame_ts = time.perf_counter()
-                self.frame_index = 0
-                self.base_detect_interval = 1
-                self.max_detect_interval = 1
-                self.detect_interval = 1
-                self.last_detect_adjust_frame = 0
-                self.last_detections = []
-                self.previous_display_detections = []
-                self.previous_observed_detections = []
-                self.display_trails = {}
-                self.next_track_id = 1
-                self.pending_inference_error = None
-                self.pending_inference_frame = None
-                self.previous_gray = None
-                self.last_motion_score = 0.0
+                self._reset_runtime_state()
                 self.last_error_message = ""
                 self.active_runtime_summary = (
                     f"camera {self.runtime.camera_width}x{self.runtime.camera_height} | "
@@ -596,24 +534,17 @@ class CameraDetector:
     def read_and_detect(self) -> tuple[bool, Any, list[DetectionRecord], float]:
         if self.camera_stream is None or self.loaded_model is None:
             raise RuntimeError("Detector chưa được khởi tạo.")
-        if self.pending_inference_error is not None:
-            exc = self.pending_inference_error
-            self.pending_inference_error = None
-            logger.warning("Inference failed on %s: %s", self.runtime.primary_model_name, exc)
-            self.recovery_count += 1
-            self.last_error_message = str(exc)
-            self.last_status_message = "Suy luận bị lỗi, hệ thống đang tự phục hồi và thử cấu hình an toàn hơn."
-            self.initialize()
-            return False, None, [], 0.0
 
         frame = self.camera_stream.read_latest_frame(wait_seconds=0.05)
         if frame is None:
+            self.no_frame_poll_failures += 1
             self.last_error_message = self.camera_stream.last_error_message
             self.last_status_message = self.camera_stream.last_status_message
-            if self.camera_stream.consecutive_read_failures >= self.camera_stream.max_consecutive_read_failures:
+            if self.no_frame_poll_failures >= self.camera_stream.max_consecutive_read_failures:
                 raise RuntimeError("Camera liên tục không trả về frame.")
             return False, None, [], 0.0
-        self.last_raw_frame = frame.copy()
+        self.no_frame_poll_failures = 0
+        self.last_raw_frame = frame
         self.frame_index += 1
         try:
             current_detections = self._predict_frame(frame)
@@ -646,66 +577,6 @@ class CameraDetector:
         )
         fps = self._update_fps()
         return True, processed_frame, detections, fps
-
-    def _queue_inference(self, frame: np.ndarray) -> None:
-        should_submit = self.frame_index == 1 or (self.frame_index % self.detect_interval) == 1
-        if not should_submit:
-            return
-        with self.inference_lock:
-            self.pending_inference_frame = frame.copy()
-        self.inference_ready_event.set()
-
-    def _adjust_detect_interval(self, fps: float) -> None:
-        target_fps = _target_fps_for_profile(self.runtime.profile_name)
-        tolerance = _fps_tolerance_for_profile(self.runtime.profile_name)
-        if fps < target_fps - tolerance and self.detect_interval < self.max_detect_interval:
-            self.detect_interval += 1
-        elif fps > target_fps + tolerance and self.detect_interval > self.base_detect_interval:
-            self.detect_interval -= 1
-        self.last_detect_adjust_frame = self.frame_index
-
-    def _start_inference_worker(self) -> None:
-        self.inference_stop_event.clear()
-        self.inference_ready_event.clear()
-        self.inference_thread = threading.Thread(
-            target=self._inference_worker_loop,
-            name="yolo-inference-worker",
-            daemon=True,
-        )
-        self.inference_thread.start()
-
-    def _stop_inference_worker(self) -> None:
-        if self.inference_thread is None:
-            return
-        self.inference_stop_event.set()
-        self.inference_ready_event.set()
-        self.inference_thread.join(timeout=1.0)
-        self.inference_thread = None
-        self.inference_stop_event.clear()
-        self.inference_ready_event.clear()
-        self.pending_inference_frame = None
-
-    def _inference_worker_loop(self) -> None:
-        while not self.inference_stop_event.is_set():
-            self.inference_ready_event.wait(0.05)
-            if self.inference_stop_event.is_set():
-                return
-            with self.inference_lock:
-                frame = self.pending_inference_frame
-                self.pending_inference_frame = None
-                if frame is None:
-                    self.inference_ready_event.clear()
-                    continue
-            try:
-                if self.loaded_model is None:
-                    continue
-                self.last_detections = self._predict_frame(frame)
-            except Exception as exc:
-                self.pending_inference_error = exc
-            finally:
-                with self.inference_lock:
-                    if self.pending_inference_frame is None:
-                        self.inference_ready_event.clear()
 
     def _predict_frame(self, frame: np.ndarray) -> list[DetectionRecord]:
         if self.loaded_model is None:
@@ -748,24 +619,7 @@ class CameraDetector:
         self,
         detections: list[DetectionRecord],
     ) -> list[DetectionRecord]:
-        filtered: list[DetectionRecord] = []
-
-        for item in detections:
-            label = str(item.label).lower()
-
-            if label == PERSON_LABEL:
-                min_confidence = PERSON_MIN_CONFIDENCE
-            elif label == FACE_LABEL:
-                min_confidence = PERSON_MIN_CONFIDENCE
-            elif label == PHONE_LABEL:
-                min_confidence = PHONE_MIN_CONFIDENCE
-            else:
-                min_confidence = DISPLAY_MIN_CONFIDENCE
-
-            if item.confidence >= min_confidence:
-                filtered.append(item)
-
-        cleaned = _dedupe_display_detections(filtered)
+        cleaned = _dedupe_display_detections(detections)
 
         if self.runtime.profile_name == "low":
             return cleaned[:5]
@@ -784,6 +638,18 @@ class CameraDetector:
         self.previous_display_detections = list(smoothed)
         self.previous_observed_detections = list(detections)
         return smoothed
+
+    def _reset_runtime_state(self) -> None:
+        self.frame_index = 0
+        self.last_detections = []
+        self.previous_display_detections = []
+        self.previous_observed_detections = []
+        self.display_trails = {}
+        self.next_track_id = 1
+        self.previous_gray = None
+        self.last_motion_score = 0.0
+        self.last_raw_frame = None
+        self.no_frame_poll_failures = 0
 
     def _assign_track_ids(self, detections: list[DetectionRecord]) -> None:
         for detection in detections:
@@ -856,7 +722,6 @@ class CameraDetector:
         return parsed
 
     def release(self) -> None:
-        self._stop_inference_worker()
         self.previous_display_detections = []
         self.previous_observed_detections = []
         self.display_trails = {}
@@ -864,22 +729,6 @@ class CameraDetector:
             self.camera_stream.release()
         self.camera_stream = None
         self.last_status_message = "Camera đã dừng."
-
-    def runtime_health(self) -> dict:
-        return {
-            "status": self.last_status_message,
-            "last_error": self.last_error_message,
-            "recovery_count": self.recovery_count,
-            "runtime": self.active_runtime_summary,
-            "detect_interval": self.detect_interval,
-            "active_model_name": self.runtime.active_model_name or self.runtime.primary_model_name,
-            "resolved_device": self.runtime.resolved_device,
-            "use_half": bool(self.runtime.use_half),
-            "fallback_chain_tried": list(self.fallback_chain_tried),
-            "step_errors": list(self.runtime_step_errors),
-            "live_usage_snapshot": get_live_usage_snapshot(),
-        }
-
 
 
 def _compute_motion_score(current_frame: np.ndarray, previous_gray: np.ndarray | None) -> tuple[float, np.ndarray]:
@@ -893,7 +742,9 @@ def _compute_motion_score(current_frame: np.ndarray, previous_gray: np.ndarray |
     return float(cv2.absdiff(current_gray, previous_gray).mean()), current_gray
 
 
-def _compose_camera_only_layout(frame: np.ndarray) -> np.ndarray:
+def _compose_camera_only_layout(frame: np.ndarray, profile_name: str | None = None) -> np.ndarray:
+    if profile_name == "high":
+        return frame
     interpolation = cv2.INTER_AREA if frame.shape[1] > CAMERA_ONLY_WIDTH or frame.shape[0] > CAMERA_ONLY_HEIGHT else cv2.INTER_LINEAR
     return cv2.resize(frame, (CAMERA_ONLY_WIDTH, CAMERA_ONLY_HEIGHT), interpolation=interpolation)
 
@@ -934,18 +785,6 @@ def _center_window(window_name: str, width: int, height: int) -> None:
 
 
 
-def _target_fps_for_profile(profile_name: str) -> int:
-    return {"high": 15, "medium": 18, "low": 30}.get(profile_name, 18)
-
-
-def _fps_tolerance_for_profile(profile_name: str) -> float:
-    return {"high": 1.0, "medium": 2.5, "low": 1.5}.get(profile_name, 2.0)
-
-
-def _should_force_camera_only_preview(profile_name: str) -> bool:
-    return profile_name in {"high", "medium", "low"}
-
-
 def _fps_panel_line(fps: float) -> str:
     if fps <= 0:
         return "unknown"
@@ -980,7 +819,6 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
         while True:
-            loop_started_at = time.perf_counter()
             ok, frame, _detections, _fps = detector.read_and_detect()
             if not ok:
                 key = _poll_window_key(1)
@@ -991,7 +829,7 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
             display_frame = frame
 
             fps_text = _fps_panel_line(_fps)
-            composed = _compose_camera_only_layout(display_frame)
+            composed = _compose_camera_only_layout(display_frame, runtime.profile_name)
             if fps_text:
                 cv2.putText(composed, fps_text, (composed.shape[1] - 80, composed.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (245, 245, 245), 2, cv2.LINE_AA)
 
