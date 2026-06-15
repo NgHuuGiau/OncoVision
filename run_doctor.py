@@ -7,6 +7,7 @@ from pathlib import Path
 from core.hardware_info import detect_hardware
 from core.runtime_advisor import select_runtime_config_optimized
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
+from utils.camera_utils import open_camera_capture
 from utils.file_utils import ensure_project_directories
 
 
@@ -42,10 +43,7 @@ def _present_and_missing_models(model_dir: Path = PRETRAINED_DIR) -> tuple[list[
     return present, missing
 
 
-def _open_camera_capture(index: int):
-    import cv2
-
-    return cv2.VideoCapture(index, cv2.CAP_DSHOW) if hasattr(cv2, "CAP_DSHOW") else cv2.VideoCapture(index)
+_open_camera_capture = open_camera_capture
 
 
 def _probe_camera(index: int = 0) -> CameraProbeResult:

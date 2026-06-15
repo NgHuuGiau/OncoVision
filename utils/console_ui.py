@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import sys
 import time
@@ -98,6 +99,25 @@ def _normalize_text(value: str) -> str:
 
 def line(text: str = "", color: str = "") -> str:
     return _line(text, color)
+
+
+def color(text: str, style: str = "") -> str:
+    return _line(text, style)
+
+
+def meter(current: int, total: int, width: int = 18, filled_char: str = "█", empty_char: str = "·") -> str:
+    if total <= 0:
+        return " ".join([empty_char] * width)
+    filled = min(width, math.ceil((current / total) * width))
+    cells = [filled_char] * filled + [empty_char] * (width - filled)
+    return " ".join(cells)
+
+
+def status_meter(current: int, total: int, ok_style: str, hot_style: str | None = None) -> tuple[str, str]:
+    hot_style = hot_style or ok_style
+    text = meter(current, total)
+    style = hot_style if current else ok_style
+    return text, style
 
 
 def pad(text: str, width: int = CARD_WIDTH) -> str:

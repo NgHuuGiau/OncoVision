@@ -1,45 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 from core.hardware_info import detect_hardware
-from core.model_selector import RuntimeConfig, build_candidates, load_settings, select_runtime_config
+from core.model_selector import RuntimeConfig, select_runtime_config
 
 
-GPU_PROFILE_SPECS = {
-    "enthusiast": {
-        "high": {"model": "yolo11x.pt", "device": "cuda:0", "imgsz": 960, "max_det": 200},
-        "medium": {"model": "yolo11l.pt", "device": "cuda:0", "imgsz": 768, "max_det": 170},
-        "low": {"model": "yolo11m.pt", "device": "cuda:0", "imgsz": 640, "max_det": 140},
-    },
-    "strong": {
-        "high": {"model": "yolo11l.pt", "device": "cuda:0", "imgsz": 768, "max_det": 180},
-        "medium": {"model": "yolo11m.pt", "device": "cuda:0", "imgsz": 640, "max_det": 150},
-        "low": {"model": "yolo11s.pt", "device": "cuda:0", "imgsz": 512, "max_det": 120},
-    },
-    "entry": {
-        "high": {"model": "yolo11s.pt", "device": "cuda:0", "imgsz": 640, "max_det": 150},
-        "medium": {"model": "yolo11s.pt", "device": "cuda:0", "imgsz": 512, "max_det": 120},
-        "low": {"model": "yolo11n.pt", "device": "cuda:0", "imgsz": 416, "max_det": 100},
-    },
-    "weak": {
-        "high": {"model": "yolo11s.pt", "device": "cuda:0", "imgsz": 416, "max_det": 100},
-        "medium": {"model": "yolo11n.pt", "device": "cuda:0", "imgsz": 416, "max_det": 90},
-        "low": {"model": "yolo11n.pt", "device": "cuda:0", "imgsz": 320, "max_det": 70},
-    },
-}
-CPU_PROFILE_SPECS = {
-    "strong": {
-        "high": {"model": "yolo11n.pt", "device": "cpu", "imgsz": 416, "max_det": 80},
-        "medium": {"model": "yolo11n.pt", "device": "cpu", "imgsz": 352, "max_det": 60},
-        "low": {"model": "yolo11n.pt", "device": "cpu", "imgsz": 320, "max_det": 50},
-    },
-    "weak": {
-        "high": {"model": "yolo11n.pt", "device": "cpu", "imgsz": 320, "max_det": 60},
-        "medium": {"model": "yolo11n.pt", "device": "cpu", "imgsz": 320, "max_det": 50},
-        "low": {"model": "yolo11n.pt", "device": "cpu", "imgsz": 256, "max_det": 40},
-    },
-}
 MODEL_QUALITY_SCORES = {
     "yolo11x.pt": 100,
     "yolo11l.pt": 92,
@@ -98,11 +62,19 @@ def gpu_tier(hardware) -> str:
 
 
 def profile_specs_for_hardware(hardware) -> dict[str, dict]:
-    tier = gpu_tier(hardware)
-    ram_gb = float(getattr(hardware, "ram_gb", 0.0) or 0.0)
-    if tier in GPU_PROFILE_SPECS:
-        return GPU_PROFILE_SPECS[tier]
-    return CPU_PROFILE_SPECS["strong" if ram_gb >= 16 else "weak"]
+    return {
+        mode: {
+            "model": runtime.primary_model_name,
+            "device": runtime.resolved_device,
+            "imgsz": runtime.imgsz,
+            "max_det": runtime.max_det,
+        }
+        for mode, runtime in {
+            "high": select_runtime_config("high", hardware),
+            "medium": select_runtime_config("medium", hardware),
+            "low": select_runtime_config("low", hardware),
+        }.items()
+    }
 
 
 def default_mode_for_hardware(hardware) -> str:
@@ -142,26 +114,9 @@ def stability_score(mode: str, hardware) -> int:
 
 
 def optimized_runtime(mode: str, hardware) -> RuntimeConfig:
-    settings = load_settings()
-    base = select_runtime_config(mode=mode, hardware=hardware)
-    spec = profile_specs_for_hardware(hardware)[mode]
-    resolved_device = spec["device"]
-    requested_device = "gpu" if resolved_device.startswith("cuda") else "cpu"
-    return replace(
-        base,
-        mode=mode,
-        profile_name=mode,
-        requested_profile_name=mode,
-        requested_device=requested_device,
-        resolved_device=resolved_device,
-        requested_model_name=spec["model"],
-        primary_model_name=spec["model"],
-        candidate_models=build_candidates(spec["model"], settings),
-        requested_imgsz=int(spec["imgsz"]),
-        imgsz=int(spec["imgsz"]),
-        max_det=int(spec["max_det"]),
-        use_half=bool(settings["inference"].get("use_half_for_cuda", False)) and resolved_device.startswith("cuda"),
-    )
+    if mode == "auto":
+        return select_runtime_config(default_mode_for_hardware(hardware), hardware)
+    return select_runtime_config(mode, hardware)
 
 
 def select_runtime_config_optimized(mode: str, hardware):

@@ -12,6 +12,7 @@ import numpy as np
 from core.fallback_manager import iter_fallback_configs
 from core.model_selector import RuntimeConfig
 from core.model_loader import LoadedModel, load_yolo_model
+from utils.camera_utils import open_camera_capture
 from utils.logger import get_logger
 from utils.draw_utils import draw_detection_results
 
@@ -452,9 +453,10 @@ class CameraStream:
             return self.latest_captured_frame.copy()
 
     def _open_capture(self) -> cv2.VideoCapture:
-        if hasattr(cv2, "CAP_DSHOW"):
-            return cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
-        return cv2.VideoCapture(self.camera_index)
+        capture = open_camera_capture(self.camera_index)
+        if capture is None:
+            raise RuntimeError("Không tạo được camera capture.")
+        return capture
 
 
 class CameraDetector:

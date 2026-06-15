@@ -100,46 +100,34 @@ class RuntimeAdvisorTests(unittest.TestCase):
         self.assertEqual(stability_score("high", _hardware(cpu_usage_percent=90.0)), 44)
         self.assertEqual(stability_score("low", _hardware(cpu_usage_percent=10.0)), 96)
 
-    @patch("core.runtime_advisor.build_candidates")
-    @patch("core.runtime_advisor.load_settings")
     @patch("core.runtime_advisor.select_runtime_config")
-    def test_optimized_runtime_overrides_base_runtime_with_profile_specs(
-        self,
-        select_runtime_config_mock,
-        load_settings_mock,
-        build_candidates_mock,
-    ) -> None:
-        select_runtime_config_mock.return_value = _runtime(
+    def test_optimized_runtime_uses_model_selector_without_duplicate_specs(self, select_runtime_config_mock) -> None:
+        expected = _runtime(
             primary_model_name="base.pt",
             candidate_models=["base.pt"],
             imgsz=320,
             max_det=60,
             use_half=False,
         )
-        load_settings_mock.return_value = {"inference": {"use_half_for_cuda": True}}
-        build_candidates_mock.return_value = ["yolo11l.pt", "yolo11m.pt"]
+        select_runtime_config_mock.return_value = expected
 
-        runtime = optimized_runtime("high", _hardware(gpu_name="RTX 3080", vram_gb=10.0))
+        hardware = _hardware(gpu_name="RTX 3080", vram_gb=10.0)
 
-        self.assertEqual(runtime.profile_name, "high")
-        self.assertEqual(runtime.primary_model_name, "yolo11l.pt")
-        self.assertEqual(runtime.requested_device, "gpu")
-        self.assertEqual(runtime.resolved_device, "cuda:0")
-        self.assertEqual(runtime.imgsz, 768)
-        self.assertEqual(runtime.max_det, 180)
-        self.assertEqual(runtime.candidate_models, ["yolo11l.pt", "yolo11m.pt"])
-        self.assertTrue(runtime.use_half)
-
-    @patch("core.runtime_advisor.optimized_runtime")
-    def test_select_runtime_config_optimized_auto_uses_default_mode(self, optimized_runtime_mock) -> None:
-        expected = _runtime(mode="medium", profile_name="medium")
-        optimized_runtime_mock.return_value = expected
-
-        runtime = select_runtime_config_optimized("auto", _hardware(gpu_name="RTX 3050", vram_gb=4.0, cpu_usage_percent=75.0))
+        runtime = optimized_runtime("high", hardware)
 
         self.assertIs(runtime, expected)
-        optimized_runtime_mock.assert_called_once()
-        self.assertEqual(optimized_runtime_mock.call_args.args[0], "medium")
+        select_runtime_config_mock.assert_called_once_with("high", hardware)
+
+    @patch("core.runtime_advisor.select_runtime_config")
+    def test_select_runtime_config_optimized_auto_uses_default_mode(self, select_runtime_config_mock) -> None:
+        expected = _runtime(mode="medium", profile_name="medium")
+        select_runtime_config_mock.return_value = expected
+        hardware = _hardware(gpu_name="RTX 3050", vram_gb=4.0, cpu_usage_percent=75.0)
+
+        runtime = select_runtime_config_optimized("auto", hardware)
+
+        self.assertIs(runtime, expected)
+        select_runtime_config_mock.assert_called_once_with("medium", hardware)
 
     @patch("core.runtime_advisor.select_runtime_config_optimized")
     @patch("core.runtime_advisor.detect_hardware")

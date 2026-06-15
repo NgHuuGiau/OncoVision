@@ -4,61 +4,17 @@ import argparse
 import contextlib
 import io
 import logging
-import math
+import sys
 import time
 import unittest
 from dataclasses import dataclass
 
+from utils.camera_utils import open_camera_capture
+from utils.console_ui import BOLD, CYAN, GREEN, MAGENTA, ORANGE, RED, YELLOW, color, meter, pad, rule, section, status_meter
 from utils.file_utils import ensure_project_directories
-from utils.terminal_encoding import ensure_utf8_console
-
-import sys
 
 
-ensure_utf8_console()
-
-
-RESET = "\033[0m"
-BOLD = "\033[1m"
-CYAN = "\033[96m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-MAGENTA = "\033[95m"
-ORANGE = "\033[38;5;208m"
-CARD_WIDTH = 88
-
-
-def color(text: str, style: str = "") -> str:
-    return f"{style}{text}{RESET}" if style else text
-
-
-def pad(text: str, width: int = CARD_WIDTH) -> str:
-    trimmed = text[:width]
-    return trimmed + (" " * max(0, width - len(trimmed)))
-
-
-def rule(char: str = "=") -> str:
-    return char * CARD_WIDTH
-
-
-def section(title: str, style: str = CYAN) -> str:
-    return color(pad(f"[ {title} ]"), BOLD + style)
-
-
-def meter(current: int, total: int, width: int = 18, filled_char: str = "█", empty_char: str = "·") -> str:
-    if total <= 0:
-        return " ".join([empty_char] * width)
-    filled = min(width, math.ceil((current / total) * width))
-    cells = [filled_char] * filled + [empty_char] * (width - filled)
-    return " ".join(cells)
-
-
-def status_meter(current: int, total: int, ok_style: str, hot_style: str | None = None) -> tuple[str, str]:
-    hot_style = hot_style or ok_style
-    text = meter(current, total)
-    style = hot_style if current else ok_style
-    return text, style
+_open_camera_capture = open_camera_capture
 
 
 @dataclass
@@ -74,12 +30,6 @@ class CameraCheckResult:
     @property
     def ok(self) -> bool:
         return self.level == "PASS"
-
-
-def _open_camera_capture(index: int):
-    import cv2
-    # Sử dụng CAP_DSHOW để khởi động camera nhanh và ổn định hơn trên Windows
-    return cv2.VideoCapture(index, cv2.CAP_DSHOW) if hasattr(cv2, "CAP_DSHOW") else cv2.VideoCapture(index)
 
 
 def check_camera(index: int = 0, attempts: int = 3) -> CameraCheckResult:
