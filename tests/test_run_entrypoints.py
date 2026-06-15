@@ -44,7 +44,7 @@ class RunEntrypointsTests(unittest.TestCase):
         progress = boot_progress_mock.return_value
         args = type("Args", (), {"mode": None, "model": None, "camera_index": 2})()
         parse_args_mock.return_value = args
-        runtime = SimpleNamespace(show_fps=True, show_model=True, show_device=True, show_imgsz=True)
+        runtime = SimpleNamespace(show_fps=True)
         hardware = object()
         resolve_start_bundle_mock.return_value = SimpleNamespace(
             selected_mode="high",
@@ -64,11 +64,11 @@ class RunEntrypointsTests(unittest.TestCase):
             preferred_target="camera",
         )
         boot_progress_mock.assert_called_once_with("YOLO Camera Realtime")
-        progress.advance_to.assert_any_call(16, "Dang nhan cau hinh khoi dong")
-        progress.advance_to.assert_any_call(42, "Dang kiem tra CPU / GPU / CUDA")
-        progress.advance_to.assert_any_call(68, "Dang chon model va runtime phu hop")
-        progress.advance_to.assert_any_call(88, "Dang chuan bi mo camera")
-        progress.finish.assert_called_once_with("San sang mo camera")
+        progress.advance_to.assert_any_call(16, "Đang nhận cấu hình khởi động")
+        progress.advance_to.assert_any_call(42, "Đang kiểm tra CPU / GPU / CUDA")
+        progress.advance_to.assert_any_call(68, "Đang chọn model và runtime phù hợp")
+        progress.advance_to.assert_any_call(88, "Đang chuẩn bị mở camera")
+        progress.finish.assert_called_once_with("Sẵn sàng mở camera")
         print_dashboard_mock.assert_called_once_with(
             title="YOLO Camera Realtime",
             runtime=runtime,

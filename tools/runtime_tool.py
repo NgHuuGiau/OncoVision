@@ -38,7 +38,7 @@ MODE_PROMPT_CHOICES = {"0": "exit", "1": "high", "2": "medium", "3": "low"}
 
 def _usage_text(value) -> str:
     if value is None:
-        return "khong ro"
+        return "không rõ"
     return f"{float(value):.1f}%"
 
 
@@ -69,7 +69,7 @@ def _summary_line(mode: str, runtime) -> str:
     return (
         f"{mode_title(mode)} ({mode}) -> "
         f"model={runtime.primary_model_name}, "
-        f"thiet bi={runtime.resolved_device}, "
+        f"thiết bị={runtime.resolved_device}, "
         f"imgsz={runtime.imgsz}, "
         f"max_det={runtime.max_det}, "
         f"fallback={', '.join(runtime.candidate_models)}"
@@ -80,22 +80,22 @@ def _mode_reason(mode: str, runtime, hardware) -> str:
     quality = quality_score(runtime)
     stability = stability_score(mode, hardware)
     if mode == "high":
-        return f"Tran cao nhat may con ganh duoc. chat luong={quality}/100, on dinh={stability}/100."
+        return f"Trần cao nhất máy còn gánh được. chất lượng={quality}/100, ổn định={stability}/100."
     if mode == "medium":
-        return f"Muc can bang dep nhat de dung thuong xuyen. chat luong={quality}/100, on dinh={stability}/100."
-    return f"Muc an toan nhat khi uu tien do muot. chat luong={quality}/100, on dinh={stability}/100."
+        return f"Mức cân bằng đẹp nhất để dùng thường xuyên. chất lượng={quality}/100, ổn định={stability}/100."
+    return f"Mức an toàn nhất khi ưu tiên độ mượt. chất lượng={quality}/100, ổn định={stability}/100."
 
 
 def _best_solution_text(auto_runtime, hardware) -> str:
     load_text = {
-        "cool": "tai hien tai nhe",
-        "warm": "tai hien tai trung binh",
-        "busy": "tai hien tai kha cao",
-        "very_busy": "tai hien tai rat cao",
+        "cool": "tải hiện tại nhẹ",
+        "warm": "tải hiện tại trung bình",
+        "busy": "tải hiện tại khá cao",
+        "very_busy": "tải hiện tại rất cao",
     }[load_level(hardware)]
     return (
-        f"De xuat nen chay ngay la {mode_label(auto_runtime.mode)} vi {load_text}, "
-        f"voi {auto_runtime.primary_model_name} / {auto_runtime.resolved_device} / "
+        f"Đề xuất nên chạy ngay là {mode_label(auto_runtime.mode)} vì {load_text}, "
+        f"với {auto_runtime.primary_model_name} / {auto_runtime.resolved_device} / "
         f"imgsz {auto_runtime.imgsz} / max_det {auto_runtime.max_det}."
     )
 
@@ -105,22 +105,22 @@ def _wow_conclusion(hardware, recommendations, auto_runtime) -> list[str]:
     ceiling_runtime = recommendations[ceiling_mode]
     return [
         (
-            f"tran toi da may dang ganh duoc: {mode_label(ceiling_mode)} ({ceiling_mode}) / "
+            f"trần tối đa máy đang gánh được: {mode_label(ceiling_mode)} ({ceiling_mode}) / "
             f"{ceiling_runtime.primary_model_name} / {ceiling_runtime.resolved_device} / "
             f"imgsz {ceiling_runtime.imgsz} / max_det {ceiling_runtime.max_det}"
         ),
         (
-            f"muc dep nhat de chay thuong xuyen: trung binh / "
+            f"mức đẹp nhất để chạy thường xuyên: trung bình / "
             f"{recommendations['medium'].primary_model_name} / {recommendations['medium'].resolved_device} / "
             f"imgsz {recommendations['medium'].imgsz} / max_det {recommendations['medium'].max_det}"
         ),
         (
-            f"muc an toan nhat khi muon muot: yeu nhat / "
+            f"mức an toàn nhất khi muốn mượt: yếu nhất / "
             f"{recommendations['low'].primary_model_name} / {recommendations['low'].resolved_device} / "
             f"imgsz {recommendations['low'].imgsz} / max_det {recommendations['low'].max_det}"
         ),
         (
-            f"de xuat chay ngay luc nay: {mode_label(auto_runtime.mode)} ({auto_runtime.mode}) / "
+            f"đề xuất chạy ngay lúc này: {mode_label(auto_runtime.mode)} ({auto_runtime.mode}) / "
             f"{auto_runtime.primary_model_name} / {auto_runtime.resolved_device} / "
             f"imgsz {auto_runtime.imgsz} / max_det {auto_runtime.max_det}"
         ),
@@ -133,7 +133,7 @@ def _print_lines(lines: list[str], *, print_fn=print) -> None:
 
 
 def _model_local_text(models: list[str]) -> str:
-    return ", ".join(models) if models else "khong co model local nao"
+    return ", ".join(models) if models else "không có model local nào"
 
 
 def _recommended_models_for_mode(mode: str, recommendations: dict[str, object] | None) -> list[str]:
@@ -170,39 +170,39 @@ def _runtime_overview_lines(
     priority_order = model_config.get("priority_order", [])
 
     lines: list[str] = []
-    lines.extend(header("BO TU VAN RUNTIME YOLO :: THAM DO MAY VA DE XUAT 3 MUC TOI UU"))
+    lines.extend(header("BỘ TƯ VẤN RUNTIME YOLO :: THĂM DÒ MÁY VÀ ĐỀ XUẤT 3 MỨC TỐI ƯU"))
     lines.extend(
         [
-            section("TONG QUAN MAY", GREEN),
+            section("TỔNG QUAN MÁY", GREEN),
             row("CPU", hardware.cpu_name, GREEN, bounded=False),
             row("RAM / OS", f"{hardware.ram_gb:.1f} GB / {hardware.os_name}", GREEN, bounded=False),
             row("GPU", hardware.gpu_name, GREEN if hardware.cuda_available else YELLOW, bounded=False),
             row("VRAM", f"{hardware.vram_gb:.1f} GB", GREEN if hardware.vram_gb else YELLOW, bounded=False),
-            row("CUDA", "co" if hardware.cuda_available else "khong", GREEN if hardware.cuda_available else RED, bounded=False),
+            row("CUDA", "có" if hardware.cuda_available else "không", GREEN if hardware.cuda_available else RED, bounded=False),
             row("PyTorch", hardware.torch_version, CYAN, bounded=False),
             row("CUDA build", hardware.torch_cuda_version, CYAN, bounded=False),
-            row("Phan hang GPU", gpu_tier(hardware), YELLOW, bounded=False),
-            row("Tai CPU", _usage_text(hardware.cpu_usage_percent), _usage_color(hardware.cpu_usage_percent), bounded=False),
-            row("Tai GPU", _usage_text(hardware.gpu_usage_percent), _usage_color(hardware.gpu_usage_percent), bounded=False),
-            row("Tai VRAM", _usage_text(hardware.vram_usage_percent), _usage_color(hardware.vram_usage_percent), bounded=False),
-            row("Trang thai tai", load_level(hardware), MAGENTA, bounded=False),
+            row("Phân hạng GPU", gpu_tier(hardware), YELLOW, bounded=False),
+            row("Tải CPU", _usage_text(hardware.cpu_usage_percent), _usage_color(hardware.cpu_usage_percent), bounded=False),
+            row("Tải GPU", _usage_text(hardware.gpu_usage_percent), _usage_color(hardware.gpu_usage_percent), bounded=False),
+            row("Tải VRAM", _usage_text(hardware.vram_usage_percent), _usage_color(hardware.vram_usage_percent), bounded=False),
+            row("Trạng thái tải", load_level(hardware), MAGENTA, bounded=False),
             line(rule("-"), CYAN),
-            section("YOLO11 VA MODEL LOCAL", MAGENTA),
-            row("5 phien ban", ", ".join(YOLO11_VARIANTS), CYAN, bounded=False),
-            row("Model san sang", _model_local_text(available_models), GREEN, bounded=False),
+            section("YOLO11 VÀ MODEL LOCAL", MAGENTA),
+            row("5 phiên bản", ", ".join(YOLO11_VARIANTS), CYAN, bounded=False),
+            row("Model sẵn sàng", _model_local_text(available_models), GREEN, bounded=False),
             row(
-                "Model con thieu",
-                _model_local_text(missing_models) if missing_models else "da co du cac model chinh",
+                "Model còn thiếu",
+                _model_local_text(missing_models) if missing_models else "đã có đủ các model chính",
                 YELLOW,
                 bounded=False,
             ),
             line(rule("-"), CYAN),
-            section("DINH NGHIA 3 MUC", YELLOW),
-            row("Manh nhat", "muc cao nhat may con ganh duoc", GREEN, bounded=False),
-            row("Trung binh", "muc can bang dep nhat de chay thuong xuyen", YELLOW, bounded=False),
-            row("Yeu nhat", "muc nhe nhat de uu tien do muot va an toan", MAGENTA, bounded=False),
+            section("ĐỊNH NGHĨA 3 MỨC", YELLOW),
+            row("Mạnh nhất", "mức cao nhất máy còn gánh được", GREEN, bounded=False),
+            row("Trung bình", "mức cân bằng đẹp nhất để chạy thường xuyên", YELLOW, bounded=False),
+            row("Yếu nhất", "mức nhẹ nhất để ưu tiên độ mượt và an toàn", MAGENTA, bounded=False),
             line(rule("-"), CYAN),
-            section("3 MUC TOI UU TREN MAY NAY", CYAN),
+            section("3 MỨC TỐI ƯU TRÊN MÁY NÀY", CYAN),
         ]
     )
 
@@ -213,12 +213,12 @@ def _runtime_overview_lines(
             [
                 row(mode_title(mode), _summary_line(mode, runtime), color, bounded=False),
                 row(
-                    "  Danh gia",
-                    f"chat luong {quality_score(runtime)}/100 | on dinh {stability_score(mode, hardware)}/100",
+                    "  Đánh giá",
+                    f"chất lượng {quality_score(runtime)}/100 | ổn định {stability_score(mode, hardware)}/100",
                     DIM,
                     bounded=False,
                 ),
-                row("  Giai thich", _mode_reason(mode, runtime, hardware), DIM, bounded=False),
+                row("  Giải thích", _mode_reason(mode, runtime, hardware), DIM, bounded=False),
                 line(rule("."), DIM),
             ]
         )
@@ -226,16 +226,16 @@ def _runtime_overview_lines(
     lines.extend(
         [
             line(rule("-"), CYAN),
-            section("CAU HINH DU AN", GREEN),
-            row("Thiet lap high", _project_model_text(settings, "high"), GREEN, bounded=False),
-            row("Thiet lap medium", _project_model_text(settings, "medium"), YELLOW, bounded=False),
-            row("Thiet lap low", _project_model_text(settings, "low"), MAGENTA, bounded=False),
+            section("CẤU HÌNH DỰ ÁN", GREEN),
+            row("Thiết lập high", _project_model_text(settings, "high"), GREEN, bounded=False),
+            row("Thiết lập medium", _project_model_text(settings, "medium"), YELLOW, bounded=False),
+            row("Thiết lập low", _project_model_text(settings, "low"), MAGENTA, bounded=False),
             row(
-                "Model uu tien",
+                "Model ưu tiên",
                 (
-                    f"primary {preferred.get('primary_gpu', 'khong ro')} | "
-                    f"backup GPU {preferred.get('stable_backup_gpu', 'khong ro')} | "
-                    f"backup CPU {preferred.get('stable_backup_cpu', 'khong ro')}"
+                    f"primary {preferred.get('primary_gpu', 'không rõ')} | "
+                    f"backup GPU {preferred.get('stable_backup_gpu', 'không rõ')} | "
+                    f"backup CPU {preferred.get('stable_backup_cpu', 'không rõ')}"
                 ),
                 CYAN,
                 bounded=False,
@@ -243,30 +243,30 @@ def _runtime_overview_lines(
         ]
     )
     if priority_order:
-        lines.append(row("Thu tu load", ", ".join(priority_order), DIM, bounded=False))
+        lines.append(row("Thứ tự load", ", ".join(priority_order), DIM, bounded=False))
 
     lines.extend(
         [
             line(rule("-"), CYAN),
-            section("KET LUAN WOW", MAGENTA),
+            section("KẾT LUẬN NHANH", MAGENTA),
         ]
     )
     for item in _wow_conclusion(hardware, recommendations, auto_runtime):
-        lines.append(row("Giai phap", item, GREEN, bounded=False))
-    lines.append(row("De xuat tot nhat", _best_solution_text(auto_runtime, hardware), YELLOW, bounded=False))
+        lines.append(row("Giải pháp", item, GREEN, bounded=False))
+    lines.append(row("Đề xuất tốt nhất", _best_solution_text(auto_runtime, hardware), YELLOW, bounded=False))
     return lines
 
 
 def _runtime_mode_choice_lines(hardware, recommendations: dict[str, object]) -> list[str]:
     return [
         line(rule("-"), CYAN),
-        section("CHON CHE DO SE CHAY", CYAN),
-        row("De xuat", _best_solution_text(recommendations["auto"], hardware), YELLOW, bounded=False),
-        row("1 | MANH NHAT", _summary_line("high", recommendations["high"]), GREEN, bounded=False),
-        row("2 | TRUNG BINH", _summary_line("medium", recommendations["medium"]), YELLOW, bounded=False),
-        row("3 | YEU NHAT", _summary_line("low", recommendations["low"]), MAGENTA, bounded=False),
+        section("CHỌN CHẾ ĐỘ SẼ CHẠY", CYAN),
+        row("Đề xuất", _best_solution_text(recommendations["auto"], hardware), YELLOW, bounded=False),
+        row("1 | MẠNH NHẤT", _summary_line("high", recommendations["high"]), GREEN, bounded=False),
+        row("2 | TRUNG BÌNH", _summary_line("medium", recommendations["medium"]), YELLOW, bounded=False),
+        row("3 | YẾU NHẤT", _summary_line("low", recommendations["low"]), MAGENTA, bounded=False),
         line(rule("."), DIM),
-        row("0 | THOAT", "Dong chuong trinh ngay tai day.", RED, bounded=False),
+        row("0 | THOÁT", "Đóng chương trình ngay tại đây.", RED, bounded=False),
         line(rule("="), CYAN),
     ]
 
@@ -289,15 +289,15 @@ def prompt_runtime_mode(hardware=None, recommendations=None, input_fn=input, pri
         )
         _print_lines(_runtime_mode_choice_lines(hardware, recommendations), print_fn=print_fn)
 
-        raw_value = input_fn(line("Nhap lua chon cua ban (0/1/2/3): ", GREEN)).strip()
+        raw_value = input_fn(line("Nhập lựa chọn của bạn (0/1/2/3): ", GREEN)).strip()
         selected_mode = MODE_PROMPT_CHOICES.get(raw_value)
         if selected_mode == "exit":
             raise SystemExit(0)
         if selected_mode:
             print_fn("")
-            print_fn(line(f"Da chon che do: {mode_label(selected_mode)}", GREEN))
+            print_fn(line(f"Đã chọn chế độ: {mode_label(selected_mode)}", GREEN))
             return selected_mode
-        print_fn(line("Lua chon khong hop le. Vui long nhap 0, 1, 2 hoac 3.", RED))
+        print_fn(line("Lựa chọn không hợp lệ. Vui lòng nhập 0, 1, 2 hoặc 3.", RED))
 
 
 def prompt_runtime_model(
@@ -311,31 +311,31 @@ def prompt_runtime_model(
     recommended = _recommended_models_for_mode(selected_mode, recommendations)
     options = list(dict.fromkeys([*recommended, *available_models]))
     if not options:
-        raise RuntimeError("Khong co model local nao de chon. Hay chay training\\download_models.py truoc.")
+        raise RuntimeError("Không có model local nào để chọn. Hãy chạy training\\download_models.py trước.")
     if len(options) == 1:
         chosen = options[0]
         print_fn("")
-        print_fn(line(f"Tu dong chon model duy nhat: {chosen}", GREEN))
+        print_fn(line(f"Tự động chọn model duy nhất: {chosen}", GREEN))
         return chosen
 
     while True:
         print_fn(line(rule("="), CYAN))
-        print_fn(section("CHON MODEL SE CHAY", CYAN))
-        print_fn(row("Che do da chon", mode_title(selected_mode), _mode_color(selected_mode), bounded=False))
+        print_fn(section("CHỌN MODEL SẼ CHẠY", CYAN))
+        print_fn(row("Chế độ đã chọn", mode_title(selected_mode), _mode_color(selected_mode), bounded=False))
         if recommended:
-            print_fn(row("Model nen dung", ", ".join(recommended), GREEN, bounded=False))
+            print_fn(row("Model nên dùng", ", ".join(recommended), GREEN, bounded=False))
         if missing_models:
-            print_fn(row("Model con thieu", ", ".join(missing_models), YELLOW, bounded=False))
+            print_fn(row("Model còn thiếu", ", ".join(missing_models), YELLOW, bounded=False))
         print_fn(line(rule("-"), CYAN))
         for index, model_name in enumerate(options, start=1):
-            hint = "khuyen nghi" if model_name in recommended else "co san"
+            hint = "khuyến nghị" if model_name in recommended else "có sẵn"
             color = GREEN if model_name in recommended else CYAN
             print_fn(row(f"{index} | {model_name}", hint, color))
         print_fn(line(rule("."), DIM))
-        print_fn(row("0 | THOAT", "Dong chuong trinh ngay tai day.", RED))
+        print_fn(row("0 | THOÁT", "Đóng chương trình ngay tại đây.", RED))
         print_fn(line(rule("-"), CYAN))
 
-        raw_value = input_fn(line(f"Nhap lua chon cua ban (0-{len(options)}): ")).strip()
+        raw_value = input_fn(line(f"Nhập lựa chọn của bạn (0-{len(options)}): ")).strip()
         if raw_value == "0":
             raise SystemExit(0)
         if raw_value.isdigit():
@@ -343,10 +343,10 @@ def prompt_runtime_model(
             if 0 <= selected_index < len(options):
                 selected_model = options[selected_index]
                 print_fn("")
-                print_fn(line(f"Da chon model: {selected_model}", GREEN))
+                print_fn(line(f"Đã chọn model: {selected_model}", GREEN))
                 return selected_model
-        print_fn(line("Lua chon khong hop le. Vui long nhap so trong danh sach.", RED))
-        input_fn(line("Nhan Enter de chon lai...", DIM))
+        print_fn(line("Lựa chọn không hợp lệ. Vui lòng nhập số trong danh sách.", RED))
+        input_fn(line("Nhấn Enter để chọn lại...", DIM))
 
 
 def main() -> None:

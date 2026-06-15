@@ -4,11 +4,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.runtime_entry import run_targeted_entrypoint
+from app.camera_runtime.entrypoint import run_targeted_entrypoint
 
 
 class RuntimeEntryTests(unittest.TestCase):
-    @patch("app.runtime_entry.BootProgress")
+    @patch("app.camera_runtime.entrypoint.BootProgress")
     def test_camera_target_runs_boot_progress_before_dashboard_and_camera(self, boot_progress_mock) -> None:
         progress = MagicMock()
         boot_progress_mock.return_value = progress
@@ -53,7 +53,7 @@ class RuntimeEntryTests(unittest.TestCase):
         )
         run_camera_session.assert_called_once_with(runtime=runtime, camera_index=1)
 
-    @patch("app.runtime_entry.BootProgress")
+    @patch("app.camera_runtime.entrypoint.BootProgress")
     def test_ui_target_skips_boot_progress_dashboard_and_camera_path(self, boot_progress_mock) -> None:
         launch_chat_ai_app = MagicMock(return_value=7)
         print_runtime_dashboard = MagicMock()

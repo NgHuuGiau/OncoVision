@@ -18,8 +18,8 @@ MODE_LABELS = {
     "low": "Yếu nhất",
 }
 START_TARGET_LABELS = {
-    "ui": "UX/UI desktop (run_chat.py)",
-    "camera": "Camera realtime",
+    "ui": "Giao diện UX/UI desktop (run_chat.py)",
+    "camera": "Camera thời gian thực",
 }
 PROFILE_LABELS = {
     "high": "Mạnh nhất",
@@ -225,8 +225,8 @@ def _render_prompt(hardware: Any | None = None, recommendations: dict[str, Any] 
         _row("GPU", getattr(hardware, "gpu_name", "Không rõ GPU") if hardware is not None else "-", GREEN if hardware is not None else YELLOW, bounded=False),
         _row("VRAM", f"{float(getattr(hardware, 'vram_gb', 0.0) or 0.0):.1f} GB" if hardware is not None else "-", GREEN if hardware is not None else YELLOW, bounded=False),
         _line(_rule("-"), CYAN),
-        _row("Đề xuất", f"{mode_label(suggested_mode)} | hệ thống đã thăm dò máy trước khi chạy.", YELLOW, bounded=False),
-        _row("Ý nghĩa", "Chọn 1 trong 3 mức mạnh nhất / trung bình / yếu nhất.", DIM, bounded=False),
+        _row("Đề xuất", f"{mode_label(suggested_mode)} | hệ thống đã thăm dò cấu hình máy trước khi chạy.", YELLOW, bounded=False),
+        _row("Ý nghĩa", "Chọn 1 trong 3 mức: mạnh nhất / trung bình / yếu nhất.", DIM, bounded=False),
         _line(_rule("-"), CYAN),
         _section("3 LỰA CHỌN", MAGENTA),
     ]
@@ -284,14 +284,14 @@ def prompt_launch_target(
             _line(_rule("="), CYAN),
             _line(_pad("YOLO REALTIME CAMERA :: CHỌN KIỂU KHỞI ĐỘNG"), BOLD + CYAN),
             _line(_rule("="), CYAN),
-_row("Cấu hình", f"{mode_label(selected_mode)} | {selected_model}", GREEN, bounded=False),
-             _row("Đề xuất", launch_target_label(preferred_target), YELLOW, bounded=False),
+            _row("Cấu hình", f"{mode_label(selected_mode)} | {selected_model}", GREEN, bounded=False),
+            _row("Đề xuất", launch_target_label(preferred_target), YELLOW, bounded=False),
             _line(_rule("-"), CYAN),
-_section("2 LỰA CHỌN", MAGENTA),
-             _row("1 | UI DESKTOP", "Mở giao diện desktop / chat.", GREEN),
-             _row("2 | CAMERA", "Chạy detect realtime chỉ với camera.", YELLOW),
-             _line(_rule("."), DIM),
-             _row("0 | THOÁT", "Đóng chương trình ngay tại đây.", RED),
+            _section("2 LỰA CHỌN", MAGENTA),
+            _row("1 | GIAO DIỆN", "Mở giao diện desktop / chat.", GREEN),
+            _row("2 | CAMERA", "Chạy nhận diện thời gian thực chỉ với camera.", YELLOW),
+            _line(_rule("."), DIM),
+            _row("0 | THOÁT", "Đóng chương trình ngay tại đây.", RED),
             _line(_rule("-"), CYAN),
         ]
         for item in lines:
@@ -303,7 +303,7 @@ _section("2 LỰA CHỌN", MAGENTA),
             print_fn("")
             print_fn(_line(f"Đã chọn kiểu chạy: {launch_target_label(target)}", GREEN))
             return target
-        print_fn(_line("Lựa chọn không hợp lệ. Vui lòng nhập 0, 1, 2 hoặc 3.", RED))
+        print_fn(_line("Lựa chọn không hợp lệ. Vui lòng nhập 0, 1 hoặc 2.", RED))
         input_fn(_line("Nhấn Enter để chọn lại...", DIM))
 
 

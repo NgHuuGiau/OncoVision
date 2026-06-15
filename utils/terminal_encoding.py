@@ -8,7 +8,8 @@ def ensure_utf8_console() -> None:
     try:
         if os.name == "nt":
             os.system("chcp 65001 > nul")
-        for stream_name in ("stdout", "stderr"):
+            os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+        for stream_name in ("stdin", "stdout", "stderr"):
             stream = getattr(sys, stream_name, None)
             reconfigure = getattr(stream, "reconfigure", None)
             if callable(reconfigure):

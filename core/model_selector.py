@@ -48,9 +48,6 @@ class RuntimeConfig:
     box_thickness: int
     label_font_scale: float
     show_fps: bool = True
-    show_model: bool = True
-    show_device: bool = True
-    show_imgsz: bool = True
     active_model_name: str = ""
     hardware_tier: str = ""
     fallback_chain: list[dict] = field(default_factory=list)
@@ -80,9 +77,6 @@ class RuntimeConfig:
             "camera_width": self.camera_width,
             "camera_height": self.camera_height,
             "show_fps": self.show_fps,
-            "show_model": self.show_model,
-            "show_device": self.show_device,
-            "show_imgsz": self.show_imgsz,
             "iou": self.iou,
             "display_confidence": self.display_confidence,
             "person_confidence": self.person_confidence,
@@ -319,9 +313,6 @@ def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
         box_thickness=int(camera["box_thickness"]),
         label_font_scale=float(camera["label_font_scale"]),
         show_fps=_camera_flag(camera, settings, "show_fps"),
-        show_model=_camera_flag(camera, settings, "show_model"),
-        show_device=_camera_flag(camera, settings, "show_device"),
-        show_imgsz=_camera_flag(camera, settings, "show_imgsz"),
         hardware_tier=_hardware_tier(hardware),
         fallback_chain=_build_fallback_chain(profile_name, settings),
         iou=_as_float(inference.get("iou"), 0.50),

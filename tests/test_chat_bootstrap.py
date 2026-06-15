@@ -4,13 +4,13 @@ import unittest
 from dataclasses import dataclass
 from unittest.mock import patch
 
-from app.chat_bootstrap import resolve_start_bundle, resolve_start_options
+from app.camera_runtime.bootstrap import resolve_start_bundle, resolve_start_options
 
 
 class ChatBootstrapTests(unittest.TestCase):
-    @patch("app.chat_bootstrap.prompt_runtime_mode")
-    @patch("app.chat_bootstrap.select_runtime_config_optimized")
-    @patch("app.chat_bootstrap.detect_hardware")
+    @patch("app.camera_runtime.bootstrap.prompt_runtime_mode")
+    @patch("app.camera_runtime.bootstrap.select_runtime_config_optimized")
+    @patch("app.camera_runtime.bootstrap.detect_hardware")
     def test_resolve_start_bundle_prompts_for_camera_mode_when_mode_is_missing(
         self,
         detect_hardware_mock,
@@ -57,9 +57,9 @@ class ChatBootstrapTests(unittest.TestCase):
         )
         self.assertEqual(select_runtime_mock.call_count, 4)
 
-    @patch("app.chat_bootstrap.prompt_launch_target")
-    @patch("app.chat_bootstrap.select_runtime_config_optimized")
-    @patch("app.chat_bootstrap.detect_hardware")
+    @patch("app.camera_runtime.bootstrap.prompt_launch_target")
+    @patch("app.camera_runtime.bootstrap.select_runtime_config_optimized")
+    @patch("app.camera_runtime.bootstrap.detect_hardware")
     def test_resolve_start_options_keeps_legacy_tuple_contract(
         self,
         detect_hardware_mock,
@@ -87,8 +87,8 @@ class ChatBootstrapTests(unittest.TestCase):
         self.assertEqual((selected_mode, selected_model), ("medium", "medium.pt"))
         prompt_target_mock.assert_not_called()
 
-    @patch("app.chat_bootstrap.select_runtime_config_optimized")
-    @patch("app.chat_bootstrap.detect_hardware")
+    @patch("app.camera_runtime.bootstrap.select_runtime_config_optimized")
+    @patch("app.camera_runtime.bootstrap.detect_hardware")
     def test_resolve_start_bundle_skips_prompt_model_when_requested_model_is_provided(
         self,
         detect_hardware_mock,
@@ -119,8 +119,8 @@ class ChatBootstrapTests(unittest.TestCase):
 
         self.assertEqual(start_options.selected_model, "custom.pt")
 
-    @patch("app.chat_bootstrap.select_runtime_config_optimized")
-    @patch("app.chat_bootstrap.detect_hardware")
+    @patch("app.camera_runtime.bootstrap.select_runtime_config_optimized")
+    @patch("app.camera_runtime.bootstrap.detect_hardware")
     def test_resolve_start_options_defaults_ui_to_medium_mode(
         self,
         detect_hardware_mock,
@@ -145,9 +145,9 @@ class ChatBootstrapTests(unittest.TestCase):
 
         self.assertEqual((selected_mode, selected_model), ("medium", "medium.pt"))
 
-    @patch("app.chat_bootstrap.prompt_runtime_mode")
-    @patch("app.chat_bootstrap.select_runtime_config_optimized")
-    @patch("app.chat_bootstrap.detect_hardware")
+    @patch("app.camera_runtime.bootstrap.prompt_runtime_mode")
+    @patch("app.camera_runtime.bootstrap.select_runtime_config_optimized")
+    @patch("app.camera_runtime.bootstrap.detect_hardware")
     def test_resolve_start_bundle_keeps_ui_default_without_prompt(
         self,
         detect_hardware_mock,

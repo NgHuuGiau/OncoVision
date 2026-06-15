@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from app.chat_ai_app import build_chat_arg_parser, launch_chat_ai_app
+from app.chat_ui import build_chat_arg_parser, launch_chat_ai_app
 
 
 def main() -> int:

@@ -136,9 +136,6 @@ Ví dụ ép dùng model custom:
 Các khóa quan trọng cho camera:
 
 - `camera.show_fps`: bật/tắt FPS.
-- `camera.show_model`: bật/tắt tên model ở panel trạng thái.
-- `camera.show_device`: bật/tắt device (`cpu`, `cuda:0`).
-- `camera.show_imgsz`: bật/tắt `imgsz`.
 
 Các khóa quan trọng cho inference:
 

@@ -63,7 +63,7 @@ class RuntimePromptTests(unittest.TestCase):
             print_fn=printed.append,
         )
         self.assertEqual(model, "yolo11s.pt")
-        self.assertTrue(any("CHON MODEL" in line for line in printed))
+        self.assertTrue(any("CHỌN MODEL SẼ CHẠY" in line for line in printed))
 
     @patch("tools.runtime_tool._available_models", return_value=(["yolo11s.pt"], ["yolo11x.pt"]))
     @patch(
@@ -128,5 +128,5 @@ class RuntimePromptTests(unittest.TestCase):
         )
 
         self.assertEqual(mode, "medium")
-        self.assertTrue(any("BO TU VAN RUNTIME YOLO" in line for line in printed))
-        self.assertTrue(any("CHON CHE DO SE CHAY" in line for line in printed))
+        self.assertTrue(any("BỘ TƯ VẤN RUNTIME YOLO" in line for line in printed))
+        self.assertTrue(any("CHỌN CHẾ ĐỘ SẼ CHẠY" in line for line in printed))

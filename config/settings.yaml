@@ -77,9 +77,6 @@ camera:
   box_thickness: 2
   label_font_scale: 0.8
   show_fps: true
-  show_model: true
-  show_device: true
-  show_imgsz: true
 
 camera_large:
   width: 1000

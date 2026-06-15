@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from app.chat_ai_app import build_chat_arg_parser
+from app.chat_ui.cli import build_chat_arg_parser
 from utils.console_ui import BootProgress
 
 
@@ -12,7 +12,7 @@ def build_targeted_parser(description: str) -> argparse.ArgumentParser:
         "--target",
         default=None,
         choices=["ui", "camera"],
-        help="Kieu khoi dong: ui desktop hoac camera realtime.",
+        help="Kiểu khởi động: giao diện desktop hoặc camera thời gian thực.",
     )
     return parser
 
@@ -41,12 +41,14 @@ def run_targeted_entrypoint(
             app_mode=start_options.selected_mode,
             selected_model=start_options.selected_model,
         )
+
     progress = BootProgress(dashboard_title)
     progress.advance_to(16, "Đang nhận cấu hình khởi động")
     progress.advance_to(42, "Đang kiểm tra CPU / GPU / CUDA")
     progress.advance_to(68, "Đang chọn model và runtime phù hợp")
     progress.advance_to(88, "Đang chuẩn bị mở camera")
     progress.finish("Sẵn sàng mở camera")
+
     print_runtime_dashboard_fn(
         title=dashboard_title,
         runtime=start_options.runtime,

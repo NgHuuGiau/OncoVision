@@ -23,8 +23,8 @@ run_menu.py
 
 ```text
 run_app.py
-  -> app.runtime_entry
-  -> app.chat_bootstrap
+  -> app.camera_runtime.entrypoint
+  -> app.camera_runtime.bootstrap
   -> core.runtime_advisor
   -> core.model_selector
   -> core.model_loader
