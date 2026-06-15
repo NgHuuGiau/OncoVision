@@ -78,7 +78,7 @@ def build_chat_arg_parser(description: str) -> argparse.ArgumentParser:
     return parser
 
 
-def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: str = "desktop", selected_model: str | None = None) -> int:
+def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: str = "medium", selected_model: str | None = None) -> int:
     try:
         from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, Signal, QThread, QVariantAnimation, QEasingCurve, QTemporaryFile, QRectF, QPropertyAnimation, QPoint, QParallelAnimationGroup
         from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap, QColor, QPen, QShortcut, QKeySequence, QPalette, QTextOption
@@ -148,6 +148,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "greeting_title": "👋 Hello!",
             "greeting_text": "What would you like to ask today?",
             "input_placeholder": "Enter your message...",
+            "attach": "Attach",
             "camera": "Open camera",
             "choose_image": "Choose image",
             "choose_text": "Choose .txt file",
@@ -200,6 +201,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "greeting_title": "👋 Xin chào, Hữu Giàu!",
             "greeting_text": "Hôm nay bạn muốn hỏi điều gì?",
             "input_placeholder": "Nhập tin nhắn của bạn...",
+            "attach": "Đính kèm",
             "camera": "Mở camera",
             "choose_image": "Chọn ảnh",
             "choose_text": "Chọn tệp .txt",
@@ -2280,7 +2282,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             top_row.addWidget(self.dark_mode_button)
             self.desktop_button = QPushButton()
             self.desktop_button.setObjectName("ModeButton")
-            self.desktop_button.setMinimumSize(116, 40)
+            self.desktop_button.setMinimumSize(220, 40)
             top_row.addWidget(self.desktop_button)
             chat_layout.addLayout(top_row)
 
@@ -2371,6 +2373,12 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             input_row_layout = QHBoxLayout(self.message_input_row)
             input_row_layout.setContentsMargins(6, 4, 6, 4)
             input_row_layout.setSpacing(6)
+
+            self.plus_button = QPushButton("")
+            self.plus_button.setObjectName("RoundButton")
+            self.plus_button.setFixedSize(44, 44)
+            self.plus_button.clicked.connect(self.show_plus_menu)
+            input_row_layout.addWidget(self.plus_button, 0, Qt.AlignVCenter)
 
             self.message_input = MessageInput()
             self.message_input.setObjectName("ComposerInput")
@@ -2495,6 +2503,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.search_compact_button.setIcon(themed_icon("search.svg", subtle, 22))
             self.settings_button.setIcon(themed_icon("settings.svg", strong, 22))
             self.search_icon.setPixmap(themed_pixmap("search.svg", subtle, 18))
+            self.plus_button.setIcon(themed_icon("plus.svg", strong, 18))
+            self.plus_button.setIconSize(QSize(18, 18))
             self.micro_button.setIcon(themed_icon("mic.svg", strong, 18))
             self.micro_button.setIconSize(QSize(18, 18))
             self.message_input.apply_visual_style(dark_mode=self.effective_theme == "dark")
@@ -2532,6 +2542,16 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 "border-radius: 14px; font-size: 14px; font-weight: 600; padding: 0 16px;"
             )
 
+        def runtime_badge_text(self) -> str:
+            parts = ["Desktop"]
+            mode_label = str(self.mode_label or "").strip()
+            if mode_label and mode_label.lower() not in {"desktop", "ui"}:
+                parts.append(mode_label)
+            model_label = Path(str(self.model_label)).name if self.model_label else ""
+            if model_label:
+                parts.append(model_label)
+            return "▣  " + " | ".join(parts)
+
         def refresh_empty_state_theme(self) -> None:
             if self.effective_theme == "dark":
                 self.robot_mark.setStyleSheet("font-size: 86px; color: #3b82f6;")
@@ -2550,9 +2570,11 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.db.set_setting("language", self.language)
             self.greeting_text.setText(tr(self.language, "greeting_text"))
             self.message_input.setPlaceholderText(tr(self.language, "input_placeholder"))
+            self.plus_button.setToolTip(tr(self.language, "attach"))
             self.light_mode_button.setText(f"☼  {tr(self.language, 'light')}")
             self.dark_mode_button.setText(f"☾  {tr(self.language, 'dark')}")
-            self.desktop_button.setText("▣  Desktop  ▾")
+            self.desktop_button.setText(self.runtime_badge_text())
+            self.desktop_button.setToolTip(self.runtime_badge_text())
             self.update_sidebar_ui()
             self.refresh_history()
             self.apply_theme()
@@ -2786,7 +2808,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             camera_action.triggered.connect(self.open_camera)
             menu.addAction(camera_action)
 
-            menu.exec(self.plus_button.mapToGlobal(self.plus_button.rect().bottomLeft()))
+            anchor = self.plus_button if hasattr(self, "plus_button") else self.send_button
+            menu.exec(anchor.mapToGlobal(anchor.rect().bottomLeft()))
 
         def add_message(self, message: ChatMessage) -> None:
             conversation = self.active_conversation()
@@ -2882,7 +2905,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             )
 
         def generate_ai_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
-            self.add_message(ChatMessage(sender="ai", text="..."))
+            source = {"text": "text_file"}.get(attach_kind or "", attach_kind or "chat")
+            self.add_message(ChatMessage(sender="ai", text=self.build_ai_reply(text=prompt, source=source)))
             self.scroll_to_bottom()
 
         def start_typewriter(self, full_text: str):
@@ -2991,6 +3015,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 return tr(self.language, "ai_reply_camera")
             if source == "text_file":
                 return tr(self.language, "ai_reply_text")
+            if source == "chat":
+                return tr(self.language, "ai_unavailable")
             return f"{tr(self.language, 'ai_reply_text')} {text[:120]}".strip()
 
         def _format_error(self, err: str) -> str:

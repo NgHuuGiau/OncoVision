@@ -104,5 +104,11 @@ camera_presentation:
 
 inference:
   confidence: 0.25
+  iou: 0.50
+  display_confidence: 0.40
+  person_confidence: 0.50
+  phone_confidence: 0.45
+  enhance_low_light: true
+  low_light_mean_threshold: 96
   max_det: 100
   use_half_for_cuda: true

@@ -10,8 +10,10 @@ from core.camera_runner import (
     CameraDetector,
     DetectionRecord,
     _bbox_iou,
+    _compute_motion_score,
     _dedupe_display_detections,
     _filter_person_detections,
+    run_camera_preview_session,
 )
 from core.hardware_info import HardwareInfo
 from core.model_selector import select_runtime_config
@@ -85,7 +87,7 @@ class CameraDetectorTests(unittest.TestCase):
 
     @patch(
         "core.camera_runner.draw_detection_results",
-        side_effect=lambda image, detections, box_thickness, label_font_scale, motion_trails=None: image,
+        side_effect=lambda image, detections, box_thickness, label_font_scale, motion_trails=None, fps=None, show_fps=False: image,
     )
     @patch("core.camera_runner.cv2.VideoCapture")
     @patch("core.camera_runner.load_yolo_model")
@@ -604,6 +606,75 @@ class CameraDetectorTests(unittest.TestCase):
 
         fake_model.predict.assert_called_once()
         self.assertNotIn("classes", fake_model.predict.call_args.kwargs)
+        self.assertEqual(fake_model.predict.call_args.kwargs["iou"], detector.runtime.iou)
+
+    @patch("core.camera_runner._enhance_low_light_frame")
+    def test_prepare_frame_for_inference_enhances_dark_frame(self, enhance_mock) -> None:
+        detector = CameraDetector(runtime=self._runtime())
+        detector.runtime.enhance_low_light = True
+        detector.runtime.low_light_mean_threshold = 96.0
+        frame = np.zeros((32, 32, 3), dtype=np.uint8)
+        enhance_mock.return_value = np.full_like(frame, 25)
+
+        prepared = detector._prepare_frame_for_inference(frame)
+
+        enhance_mock.assert_called_once()
+        self.assertTrue(np.array_equal(prepared, np.full_like(frame, 25)))
+
+    @patch("core.camera_runner._enhance_low_light_frame")
+    def test_prepare_frame_for_inference_skips_enhancement_when_disabled(self, enhance_mock) -> None:
+        detector = CameraDetector(runtime=self._runtime())
+        detector.runtime.enhance_low_light = False
+        frame = np.zeros((32, 32, 3), dtype=np.uint8)
+
+        prepared = detector._prepare_frame_for_inference(frame)
+
+        enhance_mock.assert_not_called()
+        self.assertIs(prepared, frame)
+
+    def test_compute_motion_score_resizes_previous_gray_frame(self) -> None:
+        current_frame = np.full((80, 80, 3), 255, dtype=np.uint8)
+        previous_gray = np.zeros((20, 20), dtype=np.uint8)
+
+        score, current_gray = _compute_motion_score(current_frame, previous_gray)
+
+        self.assertGreater(score, 0.0)
+        self.assertEqual(current_gray.shape, (40, 40))
+
+    @patch("core.camera_runner.cv2.destroyAllWindows")
+    @patch("core.camera_runner.cv2.resizeWindow")
+    @patch("core.camera_runner.cv2.imshow")
+    @patch("core.camera_runner.cv2.namedWindow")
+    @patch("core.camera_runner._center_window")
+    @patch("core.camera_runner._poll_window_key", return_value=27)
+    @patch(
+        "core.camera_runner.draw_detection_results",
+        side_effect=lambda image, detections, box_thickness, label_font_scale, fps=None, show_fps=False: image,
+    )
+    @patch("core.camera_runner.CameraStream")
+    def test_run_camera_preview_session_releases_stream_after_escape(
+        self,
+        camera_stream_cls_mock,
+        _draw_mock,
+        _poll_key_mock,
+        _center_window_mock,
+        _named_window_mock,
+        _imshow_mock,
+        _resize_window_mock,
+        destroy_windows_mock,
+    ) -> None:
+        runtime = self._runtime()
+        frame = np.zeros((120, 160, 3), dtype=np.uint8)
+        camera_stream = MagicMock()
+        camera_stream.read_latest_frame.return_value = frame
+        camera_stream_cls_mock.return_value = camera_stream
+
+        run_camera_preview_session(runtime=runtime, camera_index=2)
+
+        camera_stream_cls_mock.assert_called_once_with(camera_index=2)
+        camera_stream.open.assert_called_once_with(runtime.camera_width, runtime.camera_height)
+        camera_stream.release.assert_called_once()
+        destroy_windows_mock.assert_called_once()
 
 
 if __name__ == "__main__":

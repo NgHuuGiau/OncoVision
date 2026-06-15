@@ -1,28 +1,48 @@
 import argparse
 
+from app.chat_ai_app import build_chat_arg_parser
 from app.chat_bootstrap import resolve_start_bundle
-from app.chat_ai_app import launch_chat_ai_app
-from app.runtime_entry import build_targeted_parser, run_targeted_entrypoint
 from core.camera_runner import run_camera_session
-from utils.console_ui import print_runtime_dashboard
+from tools.runtime_tool import prompt_runtime_mode
+from utils.console_ui import BootProgress, print_runtime_dashboard
 
 
 def parse_args() -> argparse.Namespace:
-    return build_targeted_parser("Chay YOLO realtime camera o che do desktop.").parse_args()
+    return build_chat_arg_parser("Chay YOLO realtime voi camera desktop.").parse_args()
+
+
+def resolve_run_app_start_bundle(**kwargs):
+    return resolve_start_bundle(
+        **kwargs,
+        prompt_runtime_mode_fn=prompt_runtime_mode,
+    )
 
 
 def main() -> int:
     args = parse_args()
-    return run_targeted_entrypoint(
-        args=args,
+    start_options = resolve_run_app_start_bundle(
+        requested_mode=args.mode,
+        requested_model=args.model,
+        requested_target="camera",
         preferred_target="camera",
-        ui_title="YOLO Camera",
-        dashboard_title="YOLO Camera Realtime",
-        resolve_start_bundle_fn=resolve_start_bundle,
-        launch_chat_ai_app_fn=launch_chat_ai_app,
-        print_runtime_dashboard_fn=print_runtime_dashboard,
-        run_camera_session_fn=run_camera_session,
     )
+
+    progress = BootProgress("YOLO Camera Realtime")
+    progress.advance_to(16, "Dang nhan cau hinh khoi dong")
+    progress.advance_to(42, "Dang kiem tra CPU / GPU / CUDA")
+    progress.advance_to(68, "Dang chon model va runtime phu hop")
+    progress.advance_to(88, "Dang chuan bi mo camera")
+    progress.finish("San sang mo camera")
+
+    print_runtime_dashboard(
+        title="YOLO Camera Realtime",
+        runtime=start_options.runtime,
+        hardware=start_options.hardware,
+        camera_index=args.camera_index,
+        launch_target="camera",
+    )
+    run_camera_session(runtime=start_options.runtime, camera_index=args.camera_index)
+    return 0
 
 
 if __name__ == "__main__":

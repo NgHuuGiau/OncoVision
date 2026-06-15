@@ -176,6 +176,10 @@ class ModelSelectorTests(unittest.TestCase):
         self.assertEqual(runtime.camera_height, 600)
         self.assertEqual(runtime.imgsz, 640)
         self.assertEqual(runtime.max_det, 150)
+        self.assertTrue(runtime.show_fps)
+        self.assertTrue(runtime.show_model)
+        self.assertTrue(runtime.show_device)
+        self.assertTrue(runtime.show_imgsz)
 
     def test_all_modes_keep_same_display_camera_preset(self) -> None:
         hardware = HardwareInfo(

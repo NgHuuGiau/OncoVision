@@ -56,3 +56,25 @@ def run_targeted_entrypoint(
     )
     run_camera_session_fn(runtime=start_options.runtime, camera_index=args.camera_index)
     return 0
+
+
+def run_camera_entrypoint(
+    *,
+    args,
+    ui_title: str,
+    dashboard_title: str,
+    resolve_start_bundle_fn,
+    launch_chat_ai_app_fn,
+    print_runtime_dashboard_fn,
+    run_camera_session_fn,
+) -> int:
+    return run_targeted_entrypoint(
+        args=args,
+        preferred_target="camera",
+        ui_title=ui_title,
+        dashboard_title=dashboard_title,
+        resolve_start_bundle_fn=resolve_start_bundle_fn,
+        launch_chat_ai_app_fn=launch_chat_ai_app_fn,
+        print_runtime_dashboard_fn=print_runtime_dashboard_fn,
+        run_camera_session_fn=run_camera_session_fn,
+    )

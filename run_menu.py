@@ -3,56 +3,94 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, header, line, row, rule, section
+from utils.terminal_encoding import ensure_utf8_console
+
+
+@dataclass(frozen=True)
+class MenuOption:
+    script: str
+    title: str
+    description: str
+    group: str
+    color: str
+
+
+MENU_OPTIONS: dict[str, MenuOption] = {
+    "1": MenuOption(
+        script="run_app.py",
+        title="Camera nhận diện",
+        description="Mở camera realtime, chạy YOLO và hiển thị FPS cạnh box nhận diện.",
+        group="CHẠY CHÍNH",
+        color=GREEN,
+    ),
+    "2": MenuOption(
+        script="run_chat.py",
+        title="Desktop chat",
+        description="Mở giao diện chat, đính kèm ảnh, văn bản hoặc ảnh chụp camera.",
+        group="CHẠY CHÍNH",
+        color=GREEN,
+    ),
+    "3": MenuOption(
+        script="run_tests.py",
+        title="Kiểm thử",
+        description="Chạy toàn bộ unit test và kiểm tra camera thật.",
+        group="KIỂM TRA",
+        color=YELLOW,
+    ),
+    "4": MenuOption(
+        script="run_doctor.py",
+        title="Doctor",
+        description="Rà soát phần cứng, model, camera, dữ liệu và gợi ý runtime.",
+        group="KIỂM TRA",
+        color=YELLOW,
+    ),
+    "5": MenuOption(
+        script="run_train.py",
+        title="Huấn luyện",
+        description="Chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model custom.",
+        group="HUẤN LUYỆN",
+        color=CYAN,
+    ),
+    "0": MenuOption(
+        script="",
+        title="Thoát",
+        description="Đóng menu terminal.",
+        group="HỆ THỐNG",
+        color=RED,
+    ),
+}
+PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
+TESTED_EXIT_TEXT = "Đã thoát menu."
+TESTED_INVALID_TEXT = "Lựa chọn không hợp lệ. Hãy nhập lại."
+TESTED_BACK_TEXT = "Quay lại menu."
+MENU_PROMPT = f"Chọn tác vụ ({'/'.join(('0', *PRIMARY_KEYS))}): "
 
 
 def _configure_terminal_encoding() -> None:
-    if os.name != "nt":
-        return
-    try:
-        os.system("chcp 65001 > nul")
-    except Exception:
-        pass
-    for stream_name in ("stdout", "stderr"):
-        stream = getattr(sys, stream_name, None)
-        reconfigure = getattr(stream, "reconfigure", None)
-        if callable(reconfigure):
-            try:
-                reconfigure(encoding="utf-8")
-            except Exception:
-                pass
+    ensure_utf8_console()
 
 
-MENU_OPTIONS = {
-    "1": ("run_app.py", "Camera realtime theo c\u1ea5u h\u00ecnh ch\u00ednh"),
-    "2": ("run_detect.py", "Camera detect realtime t\u1ed1i gi\u1ea3n"),
-    "3": ("run_chat.py", "UX/UI desktop v\u00e0 chat"),
-    "4": ("run_tests.py", "Ch\u1ea1y to\u00e0n b\u1ed9 test"),
-    "5": ("run_doctor.py", "Ki\u1ec3m tra to\u00e0n h\u1ec7 th\u1ed1ng"),
-    "6": ("run_train.py", "Ch\u1ea1y hu\u1ea5n luy\u1ec7n"),
-    "0": ("", "Tho\u00e1t"),
-}
-PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
-TESTED_EXIT_TEXT = "\u0110\u00e3 tho\u00e1t menu."
-TESTED_INVALID_TEXT = "L\u1ef1a ch\u1ecdn kh\u00f4ng h\u1ee3p l\u1ec7. H\u00e3y nh\u1eadp l\u1ea1i."
-TESTED_BACK_TEXT = "Quay l\u1ea1i menu."
+def _option_label(key: str, option: MenuOption) -> tuple[str, str]:
+    command = f"python {option.script}" if option.script else "exit"
+    return f"{key} | {option.title}", f"{option.description} [{command}]"
 
 
 def _render_menu(print_fn=print) -> None:
-    for item in header("YOLO HUB :: \u0110I\u1ec0U H\u01af\u1edaNG TERMINAL"):
+    for item in header("YOLO HUB :: MENU ĐIỀU KHIỂN"):
         print_fn(item)
-    print_fn(section("M\u1ede CAMERA", GREEN))
-    for key in ("1", "2"):
-        script_name, description = MENU_OPTIONS[key]
-        print_fn(row(f"{key} | {script_name}", description, GREEN, bounded=False))
-    print_fn(line(rule("-"), CYAN))
-    print_fn(section("UX/UI V\u00c0 KI\u1ec2M TRA", YELLOW))
-    for key in ("3", "4", "5", "6"):
-        script_name, description = MENU_OPTIONS[key]
-        print_fn(row(f"{key} | {script_name}", description, YELLOW, bounded=False))
-    print_fn(line(rule("-"), CYAN))
-    print_fn(row("0 | Tho\u00e1t", "\u0110\u00f3ng menu ngay t\u1ea1i \u0111\u00e2y.", RED, bounded=False))
+    current_group = ""
+    for key in (*PRIMARY_KEYS, "0"):
+        option = MENU_OPTIONS[key]
+        if option.group != current_group:
+            if current_group:
+                print_fn(line(rule("-"), CYAN))
+            print_fn(section(option.group, option.color))
+            current_group = option.group
+        label, description = _option_label(key, option)
+        print_fn(row(label, description, option.color, bounded=False))
     print_fn(line(rule("="), CYAN))
 
 
@@ -68,7 +106,7 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
     _configure_terminal_encoding()
     while True:
         _render_menu(print_fn=print_fn)
-        choice = input_fn("Nh\u1eadp l\u1ef1a ch\u1ecdn c\u1ee7a b\u1ea1n (0/1/2/3/4/5/6): ").strip()
+        choice = input_fn(MENU_PROMPT).strip()
         if choice == "0":
             print_fn(line(TESTED_EXIT_TEXT, YELLOW))
             return 0
@@ -76,14 +114,17 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
         if option is None:
             print_fn(line(TESTED_INVALID_TEXT, RED))
             continue
-        script_name, description = option
         clear_terminal_fn()
-        print_fn(line(f"\u0110ang ch\u1ea1y: {script_name} - {description}", CYAN))
-        exit_code = run_script_fn(script_name)
+        print_fn(line(rule("="), CYAN))
+        print_fn(section(f"ĐANG CHẠY: {option.title}", option.color))
+        print_fn(row("Lệnh", f"python {option.script}", option.color, bounded=False))
+        print_fn(row("Ghi chú", option.description, option.color, bounded=False))
+        print_fn(line(rule("-"), CYAN))
+        exit_code = run_script_fn(option.script)
         message = (
-            f"\u0110\u00e3 ch\u1ea1y xong {script_name}. {TESTED_BACK_TEXT}"
+            f"Đã chạy xong {option.script}. {TESTED_BACK_TEXT}"
             if exit_code == 0
-            else f"{script_name} k\u1ebft th\u00fac v\u1edbi m\u00e3 {exit_code}. {TESTED_BACK_TEXT}"
+            else f"{option.script} kết thúc với mã {exit_code}. {TESTED_BACK_TEXT}"
         )
         print_fn(line(message, GREEN if exit_code == 0 else YELLOW))
 

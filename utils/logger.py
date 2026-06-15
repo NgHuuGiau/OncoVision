@@ -3,11 +3,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from utils.terminal_encoding import ensure_utf8_console
+
 
 LOG_FILE = Path("output/logs/app.log")
 
 
 def get_logger(name: str) -> logging.Logger:
+    ensure_utf8_console()
     logger = logging.getLogger(name)
     if logger.handlers:
         return logger

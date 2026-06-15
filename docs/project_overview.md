@@ -1,79 +1,125 @@
-# Project Overview
+# Tổng quan dự án
 
-## Muc tieu
+## 1. Mục tiêu
 
-Repo nay tap trung vao 3 nhom chuc nang:
+Dự án này được xây quanh 3 trục chính:
 
-- chay YOLO realtime tu webcam
-- tu van va chon runtime theo phan cung
-- train, validate, export model tu dataset co san
+- Camera YOLO realtime trên desktop.
+- Bộ công cụ chẩn đoán và tư vấn runtime theo phần cứng.
+- Pipeline training cho model custom.
 
-## Tong quan kien truc
+## 2. Điểm vào chính của hệ thống
 
 ```text
 run_menu.py
-  -> run_app.py / run_detect.py / run_chat.py / run_doctor.py / run_tests.py / run_train.py
-
-run_app.py, run_detect.py
-  -> app.runtime_entry
-  -> core.camera_runner
-  -> core.model_selector
-  -> core.model_loader
-  -> core.runtime_advisor
-
-run_tools.py
-  -> tools.runtime_tool
-
-run_train.py
-  -> training.train_model
+  -> run_app.py
+  -> run_chat.py
+  -> run_doctor.py
+  -> run_tests.py
+  -> run_train.py
 ```
 
-## Sau cleanup
+## 3. Kiến trúc runtime camera
 
-He thong da duoc rut gon de de bao tri hon:
+```text
+run_app.py
+  -> app.runtime_entry
+  -> app.chat_bootstrap
+  -> core.runtime_advisor
+  -> core.model_selector
+  -> core.model_loader
+  -> core.camera_runner
+  -> utils.draw_utils
+```
 
-- bo luong chup sample train trong runtime camera
-- bo `dataset/sample/`
-- bo script `training/promote_samples.py`
-- bo helper va UI phu thuoc vao phim `T/C`
-- giu lai phan detect realtime bang box tren frame
+## 4. Vai trò từng module quan trọng
 
-Dieu nay co nghia runtime camera hien chi con:
+### `app/runtime_entry.py`
 
-- mo camera
-- chay detect
-- ve box
-- hien thong tin runtime/FPS
-- thoat bang `Esc`
+- Xây parser CLI.
+- Điều phối luồng camera hoặc UI.
+- In dashboard trước khi mở camera.
 
-## Cach he thong chon runtime
+### `app/chat_bootstrap.py`
 
-Khi vao `run_app.py` hoac `run_detect.py`:
+- Dò phần cứng hiện tại.
+- Xây `StartOptions`.
+- Chọn mode mặc định theo target và phần cứng.
 
-- he thong doc phan cung hien tai
-- tinh de xuat cho `high`, `medium`, `low`
-- neu chua truyen `--mode`, nguoi dung se duoc chon 1 trong 3 muc
-- sau do runtime duoc resolve ra `model`, `device`, `imgsz`, `max_det`
+### `core/runtime_advisor.py`
 
-`high`, `medium`, `low` la muc tai theo may, khong phai 3 script khac nhau.
+- Tạo runtime tối ưu cho `high`, `medium`, `low`.
+- Phù hợp hơn với máy thực tế so với cấu hình tối thiểu.
+- Là nguồn recommendation chính cho `run_app.py` và `run_doctor.py`.
 
-## Chien luoc model hien tai
+### `core/model_selector.py`
 
-Runtime camera dang uu tien model pretrained de detect tong quat:
+- Đọc `config/settings.yaml`.
+- Tạo `RuntimeConfig`.
+- Giữ các tham số inference như `confidence`, `iou`, `imgsz`, `show_fps`, tăng sáng khung hình tối.
 
-- `models/pretrained/yolo11s.pt`
-- `yolo11s.pt`
-- `models/pretrained/yolo11n.pt`
-- `yolo11n.pt`
-- `models/trained/best.pt`
+### `core/model_loader.py`
 
-Ly do:
+- Load model local từ `models/pretrained/`, file local root hoặc `models/trained/best.pt`.
+- Tuân theo thứ tự ưu tiên trong `config/model_config.yaml`.
 
-- camera can detect nhieu doi tuong pho thong
-- pretrained COCO hop hon cho nhu cau su dung ngay
-- model custom train rieng van duoc bao luu cho luong training
+### `core/camera_runner.py`
 
-## Thu muc chinh
+- Mở camera và đọc frame theo luồng riêng.
+- Chạy YOLO predict.
+- Lọc detection, làm mượt box, gán track id, vẽ motion trail.
+- Tăng sáng frame tối trước inference khi cần.
+- Trả FPS và trạng thái runtime.
+
+### `utils/draw_utils.py`
+
+- Vẽ box và label.
+- Neo FPS badge vào box nhận diện chính.
+- Tự né mép khung hình nếu box nằm sát rìa.
+
+## 5. Cách hệ thống chọn runtime
+
+Khi chạy `run_app.py`:
+
+1. Dò phần cứng bằng `detect_hardware()`.
+2. Tạo recommendation bằng `core.runtime_advisor`.
+3. Resolve `RuntimeConfig` tương ứng với `high`, `medium`, `low` hoặc `auto`.
+4. Dùng runtime đó để load model và mở camera.
+
+### Ý nghĩa của các mode
+
+- `high`: mức chất lượng cao nhất máy còn gánh được.
+- `medium`: mức cân bằng để dùng thường xuyên.
+- `low`: mức an toàn nhất khi cần mượt và ổn định.
+
+## 6. Vì sao `run_doctor.py` và `run_app.py` phải đồng bộ
+
+Nếu `run_doctor.py` dùng logic chọn runtime cũ còn `run_app.py` dùng logic mới, người dùng sẽ thấy:
+
+- Doctor gợi ý một model.
+- Camera thực tế lại chạy model khác.
+
+Hiện tại hai luồng này đã được đồng bộ để cùng phản ánh cấu hình tối ưu thực tế.
+
+## 7. Tinh chỉnh nhận diện
+
+Các tham số hiện có trong `config/settings.yaml`:
+
+- `inference.confidence`
+- `inference.iou`
+- `inference.display_confidence`
+- `inference.person_confidence`
+- `inference.phone_confidence`
+- `inference.enhance_low_light`
+- `inference.low_light_mean_threshold`
+
+Mục tiêu của việc tách các tham số này là:
+
+- Dễ phân tích nguyên nhân nhận diện yếu.
+- Dễ tăng recall hoặc giảm false positive theo từng loại object.
+- Dễ document và debug hơn.
+
+## 8. Cấu trúc thư mục chính
 
 ```text
 app/
@@ -84,9 +130,9 @@ tests/
 tools/
 training/
 utils/
+config/
 run_app.py
 run_chat.py
-run_detect.py
 run_doctor.py
 run_menu.py
 run_tests.py
@@ -94,34 +140,53 @@ run_tools.py
 run_train.py
 ```
 
-## Core modules quan trong
-
-- `core/camera_runner.py`: dieu phoi camera, inference, render frame, filter detection
-- `core/model_loader.py`: load model local theo thu tu uu tien va fallback
-- `core/model_selector.py`: resolve runtime config co ban theo mode va phan cung
-- `core/runtime_advisor.py`: xay de xuat toi uu cho `high`, `medium`, `low`
-- `core/hardware_info.py`: doc CPU, RAM, GPU, VRAM, CUDA, PyTorch
-- `tools/runtime_tool.py`: hien thi bo tu van runtime de tham khao
-
-## Training flow
+## 9. Training flow
 
 ```text
-dataset/raw -> validate -> split -> train -> validate_model -> export
+dataset/raw
+  -> training/validate_dataset.py
+  -> training/split_dataset.py
+  -> run_train.py
+  -> training/validate_model.py
+  -> training/export_model.py
 ```
 
-Khong con flow cu:
+## 10. Model flow
+
+### Runtime camera tổng quát
 
 ```text
-camera -> dataset/sample -> promote_samples -> raw
+models/pretrained/*.pt
+  -> model_loader
+  -> run_app.py
+  -> camera realtime
 ```
 
-## Trang thai dataset hien tai
+### Runtime camera với model custom
 
-`training/data.yaml` dang kha bao toi thieu:
+```text
+models/trained/best.pt
+  -> run_app.py --model models/trained/best.pt
+  -> camera realtime cho class riêng
+```
+
+## 11. Trạng thái hiện tại của dataset
+
+`training/data.yaml` hiện khai báo:
 
 ```yaml
 names:
   0: person
 ```
 
-Neu ban muon repo train them nhieu class hon, can cap nhat dataset va file cau hinh nay dong bo.
+Điều này rất quan trọng khi phân tích lỗi nhận diện:
+
+- Nếu bạn mong đợi class khác ngoài `person`, cần xem lại dataset và model custom.
+- Nếu bạn đang dùng model pretrained, camera sẽ nhận diện object tổng quát theo COCO.
+
+## 12. Các điểm cần nhớ khi bảo trì
+
+- Không đổi logic recommendation ở `run_app.py` mà quên cập nhật `run_doctor.py`.
+- Không đổi vị trí hiển thị FPS mà quên sửa test visualization.
+- Không đổi threshold trong `config/settings.yaml` mà quên document lại README/docs.
+- Nếu terminal bị lỗi dấu tiếng Việt, kiểm tra helper UTF-8 trong `utils/terminal_encoding.py`.

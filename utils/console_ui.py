@@ -6,6 +6,8 @@ import time
 import unicodedata
 from typing import Any
 
+from utils.terminal_encoding import ensure_utf8_console
+
 
 MODE_CHOICES = {"0": "exit", "1": "high", "2": "medium", "3": "low"}
 START_TARGET_CHOICES = {"0": "exit", "1": "ui", "2": "camera"}
@@ -51,17 +53,7 @@ CARD_WIDTH = 96
 BOOT_BAR_WIDTH = 32
 
 
-def _ensure_utf8_console() -> None:
-    try:
-        if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8")
-        if hasattr(sys.stderr, "reconfigure"):
-            sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        return
-
-
-_ensure_utf8_console()
+ensure_utf8_console()
 
 
 def _clear_terminal() -> None:
@@ -419,7 +411,6 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
             ],
             [
                 r".\.venv\Scripts\python run_app.py --camera-index 1",
-                r".\.venv\Scripts\python run_detect.py --camera-index 1",
             ],
         )
     if "khong khoi tao duoc ultralytics" in lower_message or "khong khoi tao duoc detector" in lower_message:
@@ -432,7 +423,6 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
             ],
             [
                 r".\.venv\Scripts\python run_app.py --mode low",
-                r".\.venv\Scripts\python run_detect.py --mode low",
             ],
         )
     if "cuda" in lower_message or "pytorch" in lower_message or "torch" in lower_message:
@@ -456,7 +446,6 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
         ],
         [
             r".\.venv\Scripts\python run_app.py --mode low",
-            r".\.venv\Scripts\python run_detect.py --mode low",
         ],
     )
 

@@ -308,6 +308,10 @@ def _normalize_detection_label_and_bbox(
 def _filter_person_detections(
     detections: list[DetectionRecord],
     frame_shape: tuple[int, ...],
+    *,
+    person_confidence: float = PERSON_MIN_CONFIDENCE,
+    phone_confidence: float = PHONE_MIN_CONFIDENCE,
+    display_confidence: float = DISPLAY_MIN_CONFIDENCE,
 ) -> list[DetectionRecord]:
     filtered: list[DetectionRecord] = []
 
@@ -316,7 +320,7 @@ def _filter_person_detections(
 
         if label == PERSON_LABEL:
             if (
-                item.confidence >= PERSON_MIN_CONFIDENCE
+                item.confidence >= person_confidence
                 and _person_shape_is_plausible(item.bbox)
                 and not (_touches_frame_edge(item.bbox, frame_shape) and _box_area_ratio(item.bbox, frame_shape) > PERSON_MAX_AREA_RATIO)
             ):
@@ -324,18 +328,18 @@ def _filter_person_detections(
 
         elif label == FACE_LABEL:
             if (
-                item.confidence >= PERSON_MIN_CONFIDENCE
+                item.confidence >= person_confidence
                 and _person_shape_is_plausible(item.bbox)
                 and not (_touches_frame_edge(item.bbox, frame_shape) and _box_area_ratio(item.bbox, frame_shape) > PERSON_MAX_AREA_RATIO)
             ):
                 filtered.append(item)
 
         elif label == PHONE_LABEL:
-            if item.confidence >= PHONE_MIN_CONFIDENCE:
+            if item.confidence >= phone_confidence:
                 filtered.append(item)
 
         else:
-            if item.confidence >= DISPLAY_MIN_CONFIDENCE:
+            if item.confidence >= display_confidence:
                 filtered.append(item)
 
     return filtered
@@ -568,23 +572,27 @@ class CameraDetector:
                 self.last_status_message = f"Đang nhận diện ổn định với {len(detections)} đối tượng."
             else:
                 self.last_status_message = "Chưa có vật thể nào được nhận diện."
+        fps = self._update_fps()
         processed_frame = draw_detection_results(
             image=frame,
             detections=detections,
             box_thickness=self._effective_box_thickness(),
             label_font_scale=self._effective_label_font_scale(),
             motion_trails=self.display_trails,
+            fps=fps,
+            show_fps=bool(getattr(self.runtime, "show_fps", True)),
         )
-        fps = self._update_fps()
         return True, processed_frame, detections, fps
 
     def _predict_frame(self, frame: np.ndarray) -> list[DetectionRecord]:
         if self.loaded_model is None:
             return []
+        inference_frame = self._prepare_frame_for_inference(frame)
         results = self.loaded_model.model.predict(
-            source=frame,
+            source=inference_frame,
             imgsz=self._effective_inference_imgsz(),
             conf=self._effective_confidence(),
+            iou=float(getattr(self.runtime, "iou", 0.50)),
             device=self.runtime.resolved_device,
             half=self.runtime.use_half,
             max_det=self._effective_max_det(),
@@ -592,7 +600,21 @@ class CameraDetector:
             stream=False,
         )
         parsed = self._parse_results(results)
-        return _filter_person_detections(parsed, frame.shape)
+        return _filter_person_detections(
+            parsed,
+            frame.shape,
+            person_confidence=float(getattr(self.runtime, "person_confidence", PERSON_MIN_CONFIDENCE)),
+            phone_confidence=float(getattr(self.runtime, "phone_confidence", PHONE_MIN_CONFIDENCE)),
+            display_confidence=float(getattr(self.runtime, "display_confidence", DISPLAY_MIN_CONFIDENCE)),
+        )
+
+    def _prepare_frame_for_inference(self, frame: np.ndarray) -> np.ndarray:
+        if not bool(getattr(self.runtime, "enhance_low_light", True)):
+            return frame
+        brightness = _mean_luminance(frame)
+        if brightness >= float(getattr(self.runtime, "low_light_mean_threshold", 96.0)):
+            return frame
+        return _enhance_low_light_frame(frame)
 
     def _effective_inference_imgsz(self) -> int:
         if self.runtime.profile_name == "low":
@@ -691,13 +713,7 @@ class CameraDetector:
         return self.runtime.label_font_scale
 
     def _update_fps(self) -> float:
-        now = time.perf_counter()
-        current_fps = 1.0 / max(now - self.last_frame_ts, 1e-6)
-        self.last_frame_ts = now
-        if self.smoothed_fps == 0.0:
-            self.smoothed_fps = current_fps
-        else:
-            self.smoothed_fps = (self.smoothed_fps * 0.85) + (current_fps * 0.15)
+        self.smoothed_fps, self.last_frame_ts = _next_smoothed_fps(self.smoothed_fps, self.last_frame_ts)
         return self.smoothed_fps
 
     def _parse_results(self, results: list) -> list[DetectionRecord]:
@@ -742,6 +758,22 @@ def _compute_motion_score(current_frame: np.ndarray, previous_gray: np.ndarray |
     return float(cv2.absdiff(current_gray, previous_gray).mean()), current_gray
 
 
+def _mean_luminance(frame: np.ndarray) -> float:
+    if frame.size == 0:
+        return 255.0
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    return float(gray.mean())
+
+
+def _enhance_low_light_frame(frame: np.ndarray) -> np.ndarray:
+    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+    l_channel, a_channel, b_channel = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced_l = clahe.apply(l_channel)
+    merged = cv2.merge((enhanced_l, a_channel, b_channel))
+    return cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+
+
 def _compose_camera_only_layout(frame: np.ndarray, profile_name: str | None = None) -> np.ndarray:
     if profile_name == "high":
         return frame
@@ -782,13 +814,12 @@ def _center_window(window_name: str, width: int, height: int) -> None:
     except Exception:
         return
 
-
-
-
-def _fps_panel_line(fps: float) -> str:
-    if fps <= 0:
-        return "unknown"
-    return f"{fps:.1f}"
+def _next_smoothed_fps(previous_fps: float, last_frame_ts: float) -> tuple[float, float]:
+    now = time.perf_counter()
+    current_fps = 1.0 / max(now - last_frame_ts, 1e-6)
+    if previous_fps == 0.0:
+        return current_fps, now
+    return (previous_fps * 0.85) + (current_fps * 0.15), now
 
 
 def _poll_window_key(wait_ms: int, poll_slice_ms: int = 8) -> int:
@@ -806,7 +837,6 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
     detector = CameraDetector(runtime=runtime, camera_index=camera_index)
     detector.initialize()
     window_positioned = False
-    fps_text = _fps_panel_line(0.0)
 
     def _handle_runtime_key(key: int) -> bool:
         if key == 255:
@@ -828,10 +858,8 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
 
             display_frame = frame
 
-            fps_text = _fps_panel_line(_fps)
-            composed = _compose_camera_only_layout(display_frame, runtime.profile_name)
-            if fps_text:
-                cv2.putText(composed, fps_text, (composed.shape[1] - 80, composed.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (245, 245, 245), 2, cv2.LINE_AA)
+            active_runtime = detector.runtime
+            composed = _compose_camera_only_layout(display_frame, active_runtime.profile_name)
 
             cv2.imshow(WINDOW_NAME, composed)
             if not window_positioned:
@@ -843,4 +871,53 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                 break
     finally:
         detector.release()
+        cv2.destroyAllWindows()
+
+
+def run_camera_preview_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
+    camera_stream = CameraStream(camera_index=camera_index)
+    camera_stream.open(runtime.camera_width, runtime.camera_height)
+    window_positioned = False
+    smoothed_fps = 0.0
+    last_frame_ts = time.perf_counter()
+
+    def _handle_runtime_key(key: int) -> bool:
+        if key == 255:
+            return False
+        if key == 27:
+            return True
+        return False
+
+    try:
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+
+        while True:
+            frame = camera_stream.read_latest_frame(wait_seconds=0.05)
+            if frame is None:
+                key = _poll_window_key(1)
+                if _handle_runtime_key(key):
+                    break
+                continue
+
+            smoothed_fps, last_frame_ts = _next_smoothed_fps(smoothed_fps, last_frame_ts)
+            preview_frame = draw_detection_results(
+                image=frame,
+                detections=[],
+                box_thickness=max(2, runtime.box_thickness),
+                label_font_scale=max(0.62, runtime.label_font_scale),
+                fps=smoothed_fps,
+                show_fps=bool(getattr(runtime, "show_fps", True)),
+            )
+            composed = _compose_camera_only_layout(preview_frame, runtime.profile_name)
+
+            cv2.imshow(WINDOW_NAME, composed)
+            if not window_positioned:
+                cv2.resizeWindow(WINDOW_NAME, composed.shape[1], composed.shape[0])
+                _center_window(WINDOW_NAME, composed.shape[1], composed.shape[0])
+                window_positioned = True
+            key = _poll_window_key(1)
+            if _handle_runtime_key(key):
+                break
+    finally:
+        camera_stream.release()
         cv2.destroyAllWindows()

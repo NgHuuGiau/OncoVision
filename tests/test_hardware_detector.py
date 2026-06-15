@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from core.hardware_info import HardwareInfo, detect_hardware
+from core.hardware_info import HardwareInfo, detect_hardware, get_live_usage_snapshot
 
 
 class HardwareDetectorTests(unittest.TestCase):
@@ -62,3 +62,45 @@ class HardwareDetectorTests(unittest.TestCase):
         self.assertEqual(info.ram_usage_percent, 42.0)
         self.assertEqual(info.gpu_usage_percent, 25.0)
         self.assertEqual(info.vram_usage_percent, 50.0)
+
+    @patch("core.hardware_info.psutil.cpu_percent", return_value=12.5)
+    @patch("core.hardware_info.psutil.virtual_memory", return_value=SimpleNamespace(percent=37.0))
+    @patch("core.hardware_info._detect_gpu_from_gputil", return_value=("GPU", 8.0, 1, 44.0, 66.0))
+    def test_get_live_usage_snapshot_collects_current_utilization(
+        self,
+        _gpu_detect_mock,
+        _virtual_memory_mock,
+        _cpu_percent_mock,
+    ) -> None:
+        snapshot = get_live_usage_snapshot()
+
+        self.assertEqual(
+            snapshot,
+            {
+                "cpu_usage_percent": 12.5,
+                "ram_usage_percent": 37.0,
+                "gpu_usage_percent": 44.0,
+                "vram_usage_percent": 66.0,
+            },
+        )
+
+    @patch("core.hardware_info.psutil.cpu_percent", side_effect=RuntimeError("cpu unavailable"))
+    @patch("core.hardware_info.psutil.virtual_memory", side_effect=RuntimeError("ram unavailable"))
+    @patch("core.hardware_info._detect_gpu_from_gputil", return_value=("GPU", 8.0, 1, None, None))
+    def test_get_live_usage_snapshot_falls_back_to_none_on_probe_errors(
+        self,
+        _gpu_detect_mock,
+        _virtual_memory_mock,
+        _cpu_percent_mock,
+    ) -> None:
+        snapshot = get_live_usage_snapshot()
+
+        self.assertEqual(
+            snapshot,
+            {
+                "cpu_usage_percent": None,
+                "ram_usage_percent": None,
+                "gpu_usage_percent": None,
+                "vram_usage_percent": None,
+            },
+        )

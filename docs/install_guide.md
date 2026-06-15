@@ -1,13 +1,15 @@
-# Install Guide
+# Hướng dẫn cài đặt
 
-## Yeu cau
+Tài liệu này mô tả quy trình cài đặt dự án YOLO trên Windows, kiểm tra môi trường và xử lý các lỗi thường gặp trước khi chạy camera realtime hoặc training.
 
-- Windows
-- Python 3.10 tro len
-- webcam neu muon chay camera realtime
-- GPU NVIDIA la tuy chon, nhung neu co thi nen cai PyTorch CUDA dung ban
+## 1. Yêu cầu hệ thống
 
-## Buoc 1: tao moi truong
+- Windows 10 hoặc Windows 11.
+- Python 3.10 trở lên.
+- Webcam nếu muốn chạy `run_app.py`.
+- GPU NVIDIA là tùy chọn, nhưng nếu có thì nên cài đúng bản PyTorch CUDA để tăng tốc inference và training.
+
+## 2. Tạo môi trường ảo
 
 ```powershell
 cd D:\YOLO
@@ -16,62 +18,154 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Neu PowerShell chan script:
+Nếu PowerShell chặn script:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-## Buoc 2: chuan bi thu muc du an
+## 3. Chuẩn bị thư mục dự án
 
 ```powershell
 .\.venv\Scripts\python training\prepare_dataset.py
 .\.venv\Scripts\python training\download_models.py
 ```
 
-Hai lenh nay se:
+Hai lệnh trên sẽ:
 
-- tao cac thu muc dataset/models neu chua co
-- tai model pretrained co ban de runtime camera co the chay ngay
+- Tạo khung thư mục `dataset/`, `models/`, `output/` nếu chưa có.
+- Tải các model YOLO pretrained cần thiết vào `models/pretrained/`.
 
-## Buoc 3: kiem tra cai dat
+## 4. Kiểm tra cài đặt sau khi setup
 
 ```powershell
 .\.venv\Scripts\python run_doctor.py
-.\.venv\Scripts\python run_tests.py
 ```
 
-Ban nen uu tien `run_doctor.py` truoc de xem:
+`run_doctor.py` sẽ kiểm tra:
 
-- camera co mo duoc khong
-- PyTorch co nhan CUDA khong
-- model local co san khong
-- cac file cau hinh co day du khong
+- CPU, RAM, GPU, VRAM.
+- PyTorch và CUDA.
+- Camera thật.
+- Model local.
+- Dataset raw và train/val split.
 
-## Buoc 4: chay thu
+Nếu muốn bỏ qua bước check camera:
 
-Menu tong:
+```powershell
+.\.venv\Scripts\python run_doctor.py --skip-camera-check
+```
+
+## 5. Kiểm tra toàn bộ test
+
+```powershell
+.\.venv\Scripts\python run_tests.py --skip-camera-check
+```
+
+Nếu muốn coi camera thật là điều kiện bắt buộc:
+
+```powershell
+.\.venv\Scripts\python run_tests.py --strict-camera
+```
+
+## 6. Chạy thử từng công cụ
+
+### Menu tổng
 
 ```powershell
 .\.venv\Scripts\python run_menu.py
 ```
 
-Hoac chay tung script:
+### Camera realtime
 
 ```powershell
 .\.venv\Scripts\python run_app.py
-.\.venv\Scripts\python run_detect.py
-.\.venv\Scripts\python run_train.py
+```
+
+Ví dụ chọn mode và camera index:
+
+```powershell
+.\.venv\Scripts\python run_app.py --mode medium --camera-index 0
+```
+
+Ví dụ dùng model custom:
+
+```powershell
+.\.venv\Scripts\python run_app.py --model models/trained/best.pt
+```
+
+### Công cụ tư vấn runtime
+
+```powershell
 .\.venv\Scripts\python run_tools.py
 ```
 
-## Ghi chu ve PyTorch CUDA
+### Training
 
-Neu may co GPU NVIDIA nhung `run_doctor.py` bao dang chay CPU:
+```powershell
+.\.venv\Scripts\python run_train.py
+```
 
-- kiem tra ban PyTorch hien tai co ho tro CUDA khong
-- kiem tra driver NVIDIA
-- cai lai PyTorch theo dung CUDA version cua may
+## 7. Cấu hình UTF-8 và tiếng Việt trên Windows
 
-Neu chua dung duoc CUDA, he thong van co the chay CPU, nhung se cham hon.
+Project hiện đã chủ động:
+
+- Chuyển code page terminal sang `65001`.
+- Reconfigure `stdout` và `stderr` sang UTF-8.
+- Ghi file log bằng UTF-8.
+
+Nếu bạn vẫn thấy lỗi font trong terminal cũ, hãy ưu tiên dùng:
+
+- Windows Terminal
+- PowerShell 7
+- VS Code Terminal
+
+## 8. Kiểm tra GPU / CUDA
+
+Nếu `run_doctor.py` báo đang chạy CPU dù máy có GPU NVIDIA:
+
+1. Kiểm tra driver NVIDIA.
+2. Kiểm tra `torch.cuda.is_available()`.
+3. Cài lại PyTorch đúng bản CUDA của máy.
+
+Ví dụ:
+
+```powershell
+.\.venv\Scripts\python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+```
+
+## 9. Xử lý lỗi camera
+
+Nếu camera không mở được hoặc không trả frame:
+
+- Đóng app camera khác đang chiếm webcam.
+- Thử đổi `--camera-index 1` hoặc `--camera-index 2`.
+- Kiểm tra quyền truy cập camera trong Windows Settings.
+
+Ví dụ:
+
+```powershell
+.\.venv\Scripts\python run_app.py --camera-index 1
+```
+
+## 10. Xử lý lỗi model
+
+Nếu camera mở được nhưng không nhận diện:
+
+- Kiểm tra `models/pretrained/` đã có file YOLO chưa.
+- Kiểm tra `run_app.py` có đang dùng model đúng mục đích hay không.
+- Nếu muốn detect class custom, hãy truyền `--model models/trained/best.pt`.
+- Kiểm tra lại ngưỡng trong `config/settings.yaml`.
+
+## 11. Kiểm tra cuối sau cài đặt
+
+Sau khi hoàn tất, nên chạy theo thứ tự:
+
+```powershell
+.\.venv\Scripts\python run_doctor.py --skip-camera-check
+.\.venv\Scripts\python run_tests.py --skip-camera-check
+.\.venv\Scripts\python run_app.py
+```
+
+Nếu cả 3 bước trên đều ổn, môi trường đã sẵn sàng cho runtime camera và training.

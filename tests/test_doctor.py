@@ -46,7 +46,7 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("1280x720", result.detail)
 
     @patch("builtins.print")
-    @patch("run_doctor.select_runtime_config")
+    @patch("run_doctor.select_runtime_config_optimized")
     @patch("run_doctor.detect_hardware")
     @patch("run_doctor.ensure_project_directories")
     @patch("run_doctor.parse_args")
@@ -55,7 +55,7 @@ class DoctorTests(unittest.TestCase):
         parse_args_mock,
         _ensure_dirs_mock,
         detect_hardware_mock,
-        select_runtime_config_mock,
+        select_runtime_config_optimized_mock,
         print_mock,
     ) -> None:
         parse_args_mock.return_value = Mock(camera_index=0, skip_camera_check=True, fix=False)
@@ -71,7 +71,7 @@ class DoctorTests(unittest.TestCase):
             cuda_available=False,
             gpu_hardware_available=False,
         )
-        select_runtime_config_mock.side_effect = [
+        select_runtime_config_optimized_mock.side_effect = [
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),

@@ -17,6 +17,8 @@ _COLOR_PALETTE: tuple[tuple[int, int, int], ...] = (
     (38, 198, 218),
     (230, 126, 34),
 )
+_TAG_PADDING = 6
+_TAG_MARGIN = 4
 
 
 def _color_for_label(label: str) -> tuple[int, int, int]:
@@ -25,22 +27,72 @@ def _color_for_label(label: str) -> tuple[int, int, int]:
     return _COLOR_PALETTE[index]
 
 
-def _draw_text_with_background(
+def _text_box_metrics(text: str, font_scale: float, thickness: int, padding: int = _TAG_PADDING) -> tuple[int, int, int, int, int]:
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+    box_width = text_width + (padding * 2)
+    box_height = text_height + baseline + (padding * 2)
+    return text_width, text_height, baseline, box_width, box_height
+
+
+def _fits_rect(
+    image_shape: tuple[int, ...],
+    top_left: tuple[int, int],
+    box_width: int,
+    box_height: int,
+    margin: int = _TAG_MARGIN,
+) -> bool:
+    image_height, image_width = image_shape[:2]
+    x, y = top_left
+    return (
+        x >= margin
+        and y >= margin
+        and (x + box_width) <= max(margin, image_width - margin)
+        and (y + box_height) <= max(margin, image_height - margin)
+    )
+
+
+def _clamp_top_left(
+    image_shape: tuple[int, ...],
+    top_left: tuple[int, int],
+    box_width: int,
+    box_height: int,
+    margin: int = _TAG_MARGIN,
+) -> tuple[int, int]:
+    image_height, image_width = image_shape[:2]
+    max_x = max(margin, image_width - box_width - margin)
+    max_y = max(margin, image_height - box_height - margin)
+    x = max(margin, min(int(top_left[0]), max_x))
+    y = max(margin, min(int(top_left[1]), max_y))
+    return x, y
+
+
+def _draw_text_tag(
     image: np.ndarray,
     text: str,
-    origin: tuple[int, int],
+    top_left: tuple[int, int],
     font_scale: float,
     text_color: tuple[int, int, int],
     background_color: tuple[int, int, int],
     thickness: int = 1,
-) -> None:
+    padding: int = _TAG_PADDING,
+    border_color: tuple[int, int, int] | None = None,
+    border_thickness: int = 1,
+) -> tuple[int, int, int, int]:
     font = cv2.FONT_HERSHEY_SIMPLEX
-    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
-    x, y = origin
-    top_left = (x, max(0, y - text_height - baseline - 8))
-    bottom_right = (x + text_width + 14, min(image.shape[0] - 1, y + 8))
-    cv2.rectangle(image, top_left, bottom_right, background_color, -1)
-    cv2.putText(image, text, (x + 7, y), font, font_scale, text_color, thickness, cv2.LINE_AA)
+    text_width, text_height, baseline, box_width, box_height = _text_box_metrics(
+        text=text,
+        font_scale=font_scale,
+        thickness=thickness,
+        padding=padding,
+    )
+    x, y = _clamp_top_left(image.shape, top_left, box_width, box_height)
+    cv2.rectangle(image, (x, y), (x + box_width, y + box_height), background_color, -1)
+    if border_color is not None and border_thickness > 0:
+        cv2.rectangle(image, (x, y), (x + box_width, y + box_height), border_color, border_thickness)
+    text_origin = (x + padding, y + padding + text_height)
+    cv2.putText(image, text, text_origin, font, font_scale, text_color, thickness, cv2.LINE_AA)
+    return (x, y, box_width, box_height)
 
 
 def _clamp_bbox_to_image(
@@ -60,12 +112,29 @@ def _clamp_bbox_to_image(
     return (left, top, right, bottom)
 
 
+def _draw_fps_text(
+    image: np.ndarray,
+    fps: float,
+    font_scale: float,
+    thickness: int,
+    margin: int = 12,
+) -> None:
+    text = f"{fps:.1f}" if fps > 0 else "--"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+    x = max(margin, image.shape[1] - text_width - margin)
+    y = max(text_height + margin, image.shape[0] - baseline - margin)
+    cv2.putText(image, text, (x, y), font, font_scale, (245, 245, 245), thickness, cv2.LINE_AA)
+
+
 def draw_detection_results(
     image: np.ndarray,
     detections: Iterable,
     box_thickness: int = 2,
     label_font_scale: float = 0.8,
     motion_trails: dict[int, list[tuple[int, int]]] | None = None,
+    fps: float | None = None,
+    show_fps: bool = False,
 ) -> np.ndarray:
     trail_overlay = image.copy()
     drew_trail = False
@@ -95,14 +164,27 @@ def draw_detection_results(
         box_color = _color_for_label(detection.label)
         cv2.rectangle(image, (x1, y1), (x2, y2), box_color, max(2, box_thickness))
         label_text = f"{detection.label} {detection.confidence:.2f}"
-        label_y = max(24, y1 - 10)
-        _draw_text_with_background(
+        label_scale = max(0.62, label_font_scale * 0.92)
+        label_thickness = max(1, box_thickness - 1)
+        _text_width, _text_height, _baseline, _box_width, box_height = _text_box_metrics(
+            label_text,
+            label_scale,
+            label_thickness,
+        )
+        _draw_text_tag(
             image=image,
             text=label_text,
-            origin=(max(0, x1), label_y),
-            font_scale=max(0.62, label_font_scale * 0.92),
+            top_left=(max(0, x1), y1 - box_height - 6),
+            font_scale=label_scale,
             text_color=(255, 255, 255),
             background_color=box_color,
+            thickness=label_thickness,
+        )
+    if show_fps and fps is not None:
+        _draw_fps_text(
+            image=image,
+            fps=fps,
+            font_scale=max(0.72, label_font_scale * 0.95),
             thickness=max(1, box_thickness - 1),
         )
     return image

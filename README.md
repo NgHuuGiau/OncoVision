@@ -1,89 +1,88 @@
-# YOLO Realtime Camera Project
+# Dự án YOLO Realtime Camera
 
-Bo project nay tap trung vao YOLO realtime tren webcam, menu terminal de mo cac cong cu chinh, va pipeline training tach rieng cho dataset cua ban.
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)
+![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO11-111827)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?logo=opencv&logoColor=white)
+![PySide6](https://img.shields.io/badge/PySide6-Qt_for_Python-41CD52?logo=qt&logoColor=white)
+![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
+![UTF-8](https://img.shields.io/badge/Terminal-UTF--8-0F766E)
 
-## He thong hien tai
+Repo này tập trung vào 3 nhóm chức năng chính:
 
-- Runtime camera chi con luong detect realtime, khong con luong chup sample bang phim `T` hoac `C`.
-- Thu muc `dataset/sample/` va script `training/promote_samples.py` da duoc bo.
-- Ket qua detect van hien thi bang box tren frame camera.
-- Khi chay camera, he thong uu tien model pretrained YOLO COCO de nhan dien nhieu vat pho thong.
-- Pipeline training van giu rieng model custom trong `models/trained/best.pt`.
+- Chạy YOLO realtime trên webcam với cấu hình tự thích nghi theo phần cứng.
+- Kiểm tra, tư vấn và chẩn đoán runtime bằng terminal.
+- Huấn luyện, đánh giá và xuất model custom từ dataset riêng.
 
-## Cac script chinh
+## Ngăn xếp công nghệ
 
-- `run_menu.py`: menu tong de mo nhanh cac script chinh.
-- `run_app.py`: camera runtime chinh, co dashboard va luong chon mode.
-- `run_detect.py`: camera detect toi gian theo CLI.
-- `run_chat.py`: giao dien desktop/chat.
-- `run_doctor.py`: kiem tra camera, model, CUDA, PyTorch va cac thanh phan runtime.
-- `run_tests.py`: chay test toan repo.
-- `run_train.py`: chay huan luyen.
-- `run_tools.py`: bo tu van runtime, chi de xem de xuat theo may.
+- Ngôn ngữ chính: Python.
+- Inference: Ultralytics YOLO, PyTorch, CUDA tùy chọn.
+- Xử lý ảnh và camera: OpenCV, NumPy.
+- Giao diện desktop: PySide6 (Qt for Python).
+- Terminal và log: UTF-8 trên Windows, hiển thị tiếng Việt đầy đủ.
 
-## Menu dang co
+## Điểm nổi bật hiện tại
 
-Khi mo `run_menu.py`, menu hien tai gom:
+- `run_app.py` mở camera realtime và chạy nhận diện thật, không còn rơi vào chế độ chỉ preview FPS.
+- FPS được hiển thị thành badge rõ ràng, bám theo box nhận diện chính; khi không có box, FPS sẽ tự rơi về góc an toàn trên khung hình.
+- Runtime camera hỗ trợ tinh chỉnh `confidence`, `IoU`, `imgsz`, ngưỡng hiển thị và tăng sáng khung hình tối từ `config/settings.yaml`.
+- `run_doctor.py` và `run_tools.py` đã đồng bộ với logic chọn runtime thực tế của `run_app.py`.
+- Terminal/log dùng UTF-8 trên Windows để hiển thị tiếng Việt đầy đủ.
 
-- `1`: `run_app.py`
-- `2`: `run_detect.py`
-- `3`: `run_chat.py`
-- `4`: `run_tests.py`
-- `5`: `run_doctor.py`
-- `6`: `run_train.py`
-- `0`: thoat
+## Các script chính
 
-## Runtime camera
+- `run_menu.py`: menu tổng để mở nhanh các công cụ chính.
+- `run_app.py`: camera realtime YOLO, có dashboard phần cứng và nhận diện.
+- `run_chat.py`: giao diện desktop/chat.
+- `run_doctor.py`: kiểm tra phần cứng, camera, model, dữ liệu và gợi ý runtime.
+- `run_tools.py`: bộ tư vấn runtime, giải thích vì sao máy nên chạy mức nào.
+- `run_tests.py`: chạy toàn bộ test của repo.
+- `run_train.py`: huấn luyện model custom.
 
-Khi chay `run_app.py` hoac `run_detect.py`:
+## Luồng camera realtime
 
-- he thong doc CPU, RAM, GPU, VRAM va kha nang CUDA
-- neu ban chua truyen `--mode`, chuong trinh se cho chon `high`, `medium`, `low`
-- moi mode la muc tai toi uu theo phan cung, khong phai 3 model co dinh cho moi may
-- model local duoc load theo thu tu uu tien trong `config/model_config.yaml`
-- runtime camera hien uu tien `models/pretrained/yolo11s.pt`, `yolo11s.pt`, `models/pretrained/yolo11n.pt`, `yolo11n.pt`, sau do moi fallback sang `models/trained/best.pt`
-- muc dich cua thu tu nay la de webcam nhan dien duoc nhieu doi tuong pho thong nhu `person`, `car`, `bottle`, `chair`, `cell phone`
-- nhan `Esc` de thoat camera
+Khi chạy `run_app.py`:
 
-Dieu quan trong:
+1. Hệ thống dò CPU, RAM, GPU, VRAM, PyTorch và CUDA.
+2. Runtime được chọn theo phần cứng bằng bộ tối ưu trong `core/runtime_advisor.py`.
+3. YOLO load model local theo `candidate_models` của runtime và thứ tự ưu tiên trong `config/model_config.yaml`.
+4. Camera mở bằng luồng đọc frame riêng để giảm trễ.
+5. Nếu khung hình tối, pipeline có thể tăng sáng nhẹ trước khi inference.
+6. Kết quả nhận diện được lọc, làm mượt box, vẽ trail chuyển động và hiển thị FPS.
 
-- `run_app.py` va `run_detect.py` deu co co che tu chon mode runtime
-- chung khong tu dong bat camera theo mot mode bi an nua neu ban chua chon `--mode`
-- model custom train rieng van duoc su dung cho cac luong train, validate, export
+### FPS hiển thị như thế nào
 
-## Dataset va training
+- Nếu có detection: badge `FPS` bám theo box có độ tin cậy cao nhất, ưu tiên góc phải phía dưới.
+- Nếu box ở sát mép ảnh: badge tự đổi vị trí để không bị cắt.
+- Nếu chưa có detection: badge `FPS` rơi về góc an toàn trên khung hình.
+- Bật/tắt bằng `camera.show_fps` trong `config/settings.yaml`.
 
-Du lieu train duoc dat truc tiep vao:
+### Vì sao trước đó camera chỉ hiện FPS mà không nhận diện
 
-- `dataset/raw/images`
-- `dataset/raw/labels`
+Nguyên nhân chính ở nhánh hiện tại là `run_app.py` đã từng bị đổi sang `run_camera_preview_session(...)`, nghĩa là chỉ mở camera để đo FPS chứ không gọi YOLO detect. Luồng này đã được khôi phục về `run_camera_session(...)`.
 
-Cau truc train sau khi tach tap:
+## Tối ưu nhận diện hiện tại
 
-```text
-dataset/
-  raw/
-    images/
-    labels/
-  processed/
-    images/train
-    images/val
-    images/test
-    labels/train
-    labels/val
-    labels/test
+Các điểm đã được rà soát và tối ưu:
+
+- Mô hình: `run_app.py` dùng runtime tối ưu theo máy, thay vì cấu hình camera quá bảo thủ.
+- Confidence: vẫn giữ ngưỡng model base ở mức vừa phải, nhưng thêm ngưỡng hiển thị riêng cho `person`, `phone` và object chung.
+- IoU: đưa về cấu hình rõ ràng trong `config/settings.yaml` và truyền thẳng vào YOLO predict.
+- `imgsz`: chọn theo profile `high/medium/low`, phản ánh đúng năng lực GPU/CPU.
+- Tiền xử lý: thêm tăng sáng có điều kiện cho khung hình tối để cải thiện nhận diện webcam.
+- FPS: tách FPS ra khỏi panel tĩnh để tránh che góc ảnh và giúp đọc frame dễ hơn.
+
+Nếu bạn cần nhận diện class custom thay vì object tổng quát từ model pretrained, có thể chạy:
+
+```powershell
+.\.venv\Scripts\python run_app.py --model models/trained/best.pt
 ```
 
-File class hien tai duoc khai bao trong `training/data.yaml`. O trang thai hien tai repo dang co:
+Điều này đặc biệt quan trọng nếu `best.pt` của bạn được train cho class riêng như `face`, `helmet`, `phone`, v.v.
 
-```yaml
-names:
-  0: person
-```
-
-Neu ban muon train them `phone` hoac class khac, can cap nhat dataset va `training/data.yaml` dong bo.
-
-## Cai dat nhanh
+## Cài đặt nhanh
 
 ```powershell
 cd D:\YOLO
@@ -94,38 +93,74 @@ pip install -r requirements.txt
 .\.venv\Scripts\python training\download_models.py
 ```
 
-Neu dung NVIDIA GPU, hay cai dung ban PyTorch CUDA phu hop truoc.
+Nếu PowerShell chặn script:
 
-## Cach chay
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\.venv\Scripts\Activate.ps1
+```
 
-Menu tong:
+## Cách chạy
+
+Menu tổng:
 
 ```powershell
 .\.venv\Scripts\python run_menu.py
 ```
 
-Chay truc tiep:
+Chạy trực tiếp từng công cụ:
 
 ```powershell
 .\.venv\Scripts\python run_app.py
-.\.venv\Scripts\python run_detect.py
 .\.venv\Scripts\python run_chat.py
 .\.venv\Scripts\python run_doctor.py
+.\.venv\Scripts\python run_tools.py
 .\.venv\Scripts\python run_tests.py
 .\.venv\Scripts\python run_train.py
-.\.venv\Scripts\python run_tools.py
 ```
 
-Chon mode bang CLI:
+Ví dụ chọn mode và camera:
 
 ```powershell
-.\.venv\Scripts\python run_app.py --mode high
-.\.venv\Scripts\python run_detect.py --mode medium
+.\.venv\Scripts\python run_app.py --mode medium --camera-index 0
 ```
 
-## Quy trinh training de xuat
+Ví dụ ép dùng model custom:
 
 ```powershell
+.\.venv\Scripts\python run_app.py --model models/trained/best.pt
+```
+
+## Tinh chỉnh trong `config/settings.yaml`
+
+Các khóa quan trọng cho camera:
+
+- `camera.show_fps`: bật/tắt FPS.
+- `camera.show_model`: bật/tắt tên model ở panel trạng thái.
+- `camera.show_device`: bật/tắt device (`cpu`, `cuda:0`).
+- `camera.show_imgsz`: bật/tắt `imgsz`.
+
+Các khóa quan trọng cho inference:
+
+- `inference.confidence`: ngưỡng confidence gốc truyền vào YOLO.
+- `inference.iou`: IoU threshold cho NMS.
+- `inference.display_confidence`: ngưỡng hiển thị object chung sau inference.
+- `inference.person_confidence`: ngưỡng hiển thị `person`/`face`.
+- `inference.phone_confidence`: ngưỡng hiển thị `phone`.
+- `inference.enhance_low_light`: bật tăng sáng khung hình tối trước inference.
+- `inference.low_light_mean_threshold`: ngưỡng sáng trung bình để quyết định có tăng sáng hay không.
+
+## Training
+
+Dataset đầu vào đặt ở:
+
+- `dataset/raw/images`
+- `dataset/raw/labels`
+
+Luồng chuẩn:
+
+```powershell
+.\.venv\Scripts\python training\prepare_dataset.py
 .\.venv\Scripts\python training\validate_dataset.py
 .\.venv\Scripts\python training\split_dataset.py
 .\.venv\Scripts\python run_train.py
@@ -133,16 +168,35 @@ Chon mode bang CLI:
 .\.venv\Scripts\python training\export_model.py
 ```
 
-## Kiem tra he thong
+Hiện tại `training/data.yaml` đang khai báo tối thiểu:
+
+```yaml
+names:
+  0: person
+```
+
+Nếu bạn muốn nhận diện class khác trong camera bằng model custom, cần cập nhật dataset và `training/data.yaml` đồng bộ trước khi train lại.
+
+## Chẩn đoán nhanh
 
 ```powershell
 .\.venv\Scripts\python run_doctor.py
-.\.venv\Scripts\python run_tests.py
+.\.venv\Scripts\python run_tools.py
 ```
 
-## Khong con trong repo
+`run_doctor.py` dùng để kiểm tra hệ thống có đủ điều kiện chạy hay không.
 
-- chup sample train truc tiep tu camera runtime
-- doi ten sample trong luc dang mo webcam
-- dem nguoc giu yen de chup sample
-- flow `camera -> dataset/sample -> promote_samples -> raw`
+`run_tools.py` dùng để giải thích vì sao máy nên chạy `high`, `medium` hay `low`.
+
+## Tài liệu chi tiết
+
+- `docs/install_guide.md`
+- `docs/training_guide.md`
+- `docs/project_overview.md`
+- `docs/runtime_tool_guide.md`
+
+## Ghi chú vận hành
+
+- Nhấn `Esc` để thoát camera realtime.
+- Nếu webcam tối, hãy bật thêm đèn hoặc xoay mặt/camera về phía có nguồn sáng, vì tăng sáng bằng phần mềm chỉ giúp một phần.
+- FPS cao không tự động đồng nghĩa với nhận diện tốt hơn; nếu phải hạ `imgsz` quá thấp để tăng FPS thì độ chính xác có thể giảm.

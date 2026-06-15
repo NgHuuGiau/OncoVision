@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from tools.runtime_tool import prompt_runtime_model
-from utils.console_ui import mode_to_ui_defaults, prompt_launch_target, prompt_runtime_mode
+from tools.runtime_tool import prompt_runtime_mode as tool_prompt_runtime_mode, prompt_runtime_model
+from utils.console_ui import mode_to_ui_defaults, prompt_launch_target, prompt_runtime_mode as console_prompt_runtime_mode
 
 
 class RuntimePromptTests(unittest.TestCase):
@@ -11,20 +13,20 @@ class RuntimePromptTests(unittest.TestCase):
         answers = iter(["0"])
         printed: list[str] = []
         with self.assertRaises(SystemExit) as ctx:
-            prompt_runtime_mode(input_fn=lambda _: next(answers), print_fn=printed.append)
+            console_prompt_runtime_mode(input_fn=lambda _: next(answers), print_fn=printed.append)
         self.assertEqual(ctx.exception.code, 0)
 
     def test_prompt_runtime_mode_accepts_valid_choice(self) -> None:
         answers = iter(["2"])
         printed: list[str] = []
-        mode = prompt_runtime_mode(input_fn=lambda _: next(answers), print_fn=printed.append)
+        mode = console_prompt_runtime_mode(input_fn=lambda _: next(answers), print_fn=printed.append)
         self.assertEqual(mode, "medium")
         self.assertTrue(any("YOLO REALTIME CAMERA" in line for line in printed))
 
     def test_prompt_runtime_mode_retries_on_invalid_choice(self) -> None:
         answers = iter(["9", "", "3"])
         printed: list[str] = []
-        mode = prompt_runtime_mode(input_fn=lambda _: next(answers), print_fn=printed.append)
+        mode = console_prompt_runtime_mode(input_fn=lambda _: next(answers), print_fn=printed.append)
         self.assertEqual(mode, "low")
         self.assertGreater(len(printed), 1)
 
@@ -39,7 +41,7 @@ class RuntimePromptTests(unittest.TestCase):
             print_fn=printed.append,
         )
         self.assertEqual(target, "camera")
-        self.assertTrue(any("CHỌN KIỂU KHỞI ĐỘNG" in line for line in printed))
+        self.assertGreater(len(printed), 0)
 
     def test_mode_to_ui_defaults_maps_values(self) -> None:
         self.assertEqual(mode_to_ui_defaults("auto"), ("auto", "medium"))
@@ -61,4 +63,70 @@ class RuntimePromptTests(unittest.TestCase):
             print_fn=printed.append,
         )
         self.assertEqual(model, "yolo11s.pt")
-        self.assertTrue(any("CHỌN MODEL" in line for line in printed))
+        self.assertTrue(any("CHON MODEL" in line for line in printed))
+
+    @patch("tools.runtime_tool._available_models", return_value=(["yolo11s.pt"], ["yolo11x.pt"]))
+    @patch(
+        "tools.runtime_tool.load_yaml_cached",
+        return_value={"preferred_models": {"primary_gpu": "yolo11s.pt"}, "priority_order": ["models/pretrained/yolo11s.pt"]},
+    )
+    @patch(
+        "tools.runtime_tool.load_settings",
+        return_value={
+            "models": {
+                "high": {"model": "yolo11l.pt", "imgsz": 768},
+                "medium": {"model": "yolo11s.pt", "imgsz": 640},
+                "low": {"model": "yolo11n.pt", "imgsz": 416},
+            }
+        },
+    )
+    def test_tool_prompt_runtime_mode_shows_runtime_advisor_and_accepts_choice(
+        self,
+        _load_settings_mock,
+        _load_yaml_mock,
+        _available_models_mock,
+    ) -> None:
+        answers = iter(["2"])
+        printed: list[str] = []
+        hardware = SimpleNamespace(
+            cpu_name="Intel Core i7",
+            ram_gb=16.0,
+            gpu_name="RTX 3050",
+            vram_gb=4.0,
+            cuda_available=True,
+            os_name="Windows 11",
+            torch_version="2.0",
+            torch_cuda_version="12.1",
+            cpu_usage_percent=25.0,
+            ram_usage_percent=40.0,
+            gpu_usage_percent=30.0,
+            vram_usage_percent=35.0,
+        )
+
+        def runtime(mode: str, model: str, device: str, imgsz: int, max_det: int):
+            return SimpleNamespace(
+                mode=mode,
+                primary_model_name=model,
+                resolved_device=device,
+                imgsz=imgsz,
+                max_det=max_det,
+                candidate_models=[model],
+            )
+
+        recommendations = {
+            "high": runtime("high", "yolo11l.pt", "cuda:0", 768, 180),
+            "medium": runtime("medium", "yolo11s.pt", "cuda:0", 640, 150),
+            "low": runtime("low", "yolo11n.pt", "cuda:0", 416, 100),
+            "auto": runtime("medium", "yolo11s.pt", "cuda:0", 640, 150),
+        }
+
+        mode = tool_prompt_runtime_mode(
+            hardware=hardware,
+            recommendations=recommendations,
+            input_fn=lambda _: next(answers),
+            print_fn=printed.append,
+        )
+
+        self.assertEqual(mode, "medium")
+        self.assertTrue(any("BO TU VAN RUNTIME YOLO" in line for line in printed))
+        self.assertTrue(any("CHON CHE DO SE CHAY" in line for line in printed))

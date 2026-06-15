@@ -47,9 +47,19 @@ class RuntimeConfig:
     font_size: int
     box_thickness: int
     label_font_scale: float
+    show_fps: bool = True
+    show_model: bool = True
+    show_device: bool = True
+    show_imgsz: bool = True
     active_model_name: str = ""
     hardware_tier: str = ""
     fallback_chain: list[dict] = field(default_factory=list)
+    iou: float = 0.50
+    display_confidence: float = 0.40
+    person_confidence: float = 0.50
+    phone_confidence: float = 0.45
+    enhance_low_light: bool = True
+    low_light_mean_threshold: float = 96.0
 
     def summary(self) -> dict:
         return {
@@ -69,6 +79,16 @@ class RuntimeConfig:
             "hardware_tier": self.hardware_tier,
             "camera_width": self.camera_width,
             "camera_height": self.camera_height,
+            "show_fps": self.show_fps,
+            "show_model": self.show_model,
+            "show_device": self.show_device,
+            "show_imgsz": self.show_imgsz,
+            "iou": self.iou,
+            "display_confidence": self.display_confidence,
+            "person_confidence": self.person_confidence,
+            "phone_confidence": self.phone_confidence,
+            "enhance_low_light": self.enhance_low_light,
+            "low_light_mean_threshold": self.low_light_mean_threshold,
         }
 
     def pretty_report(self) -> str:
@@ -87,6 +107,28 @@ class RuntimeConfig:
 
 def _camera_preset(profile_name: str, settings: dict) -> dict:
     return settings.get("display_camera", settings["camera_large"])
+
+
+def _as_bool(value, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _as_float(value, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _camera_flag(camera: dict, settings: dict, key: str, default: bool = True) -> bool:
+    base_camera = settings.get("camera", {})
+    return _as_bool(camera.get(key, base_camera.get(key, default)), default)
 
 
 def build_candidates(model_name: str, settings: dict) -> list[str]:
@@ -251,6 +293,7 @@ def load_settings() -> dict:
 
 def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
     settings = load_settings()
+    inference = settings.get("inference", {})
     requested_profile_name = _requested_profile_name(mode)
     requested_device, model_name, imgsz, max_det, profile_name = _mode_profile(mode, hardware, settings)
     requested_profile = settings["models"].get(requested_profile_name, settings["models"]["low"]) if requested_profile_name != "auto" else None
@@ -267,14 +310,24 @@ def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
         candidate_models=build_candidates(model_name, settings),
         requested_imgsz=int(requested_profile["imgsz"]) if requested_profile else 0,
         imgsz=imgsz,
-        conf=float(settings["inference"]["confidence"]),
+        conf=float(inference["confidence"]),
         max_det=int(max_det),
-        use_half=bool(settings["inference"].get("use_half_for_cuda", False)) and resolved_device.startswith("cuda"),
+        use_half=bool(inference.get("use_half_for_cuda", False)) and resolved_device.startswith("cuda"),
         camera_width=int(camera["width"]),
         camera_height=int(camera["height"]),
         font_size=int(camera["font_size"]),
         box_thickness=int(camera["box_thickness"]),
         label_font_scale=float(camera["label_font_scale"]),
+        show_fps=_camera_flag(camera, settings, "show_fps"),
+        show_model=_camera_flag(camera, settings, "show_model"),
+        show_device=_camera_flag(camera, settings, "show_device"),
+        show_imgsz=_camera_flag(camera, settings, "show_imgsz"),
         hardware_tier=_hardware_tier(hardware),
         fallback_chain=_build_fallback_chain(profile_name, settings),
+        iou=_as_float(inference.get("iou"), 0.50),
+        display_confidence=_as_float(inference.get("display_confidence"), 0.40),
+        person_confidence=_as_float(inference.get("person_confidence"), 0.50),
+        phone_confidence=_as_float(inference.get("phone_confidence"), 0.45),
+        enhance_low_light=_as_bool(inference.get("enhance_low_light"), True),
+        low_light_mean_threshold=_as_float(inference.get("low_light_mean_threshold"), 96.0),
     )

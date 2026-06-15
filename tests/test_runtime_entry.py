@@ -30,7 +30,7 @@ class RuntimeEntryTests(unittest.TestCase):
             args=SimpleNamespace(mode="medium", model=None, target="camera", camera_index=1),
             preferred_target="camera",
             ui_title="ignored",
-            dashboard_title="YOLO Detect Camera",
+            dashboard_title="YOLO Camera Realtime",
             resolve_start_bundle_fn=resolve_start_bundle,
             launch_chat_ai_app_fn=MagicMock(),
             print_runtime_dashboard_fn=print_runtime_dashboard,
@@ -38,14 +38,14 @@ class RuntimeEntryTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        boot_progress_mock.assert_called_once_with("YOLO Detect Camera")
+        boot_progress_mock.assert_called_once_with("YOLO Camera Realtime")
         progress.advance_to.assert_any_call(16, "Đang nhận cấu hình khởi động")
         progress.advance_to.assert_any_call(42, "Đang kiểm tra CPU / GPU / CUDA")
         progress.advance_to.assert_any_call(68, "Đang chọn model và runtime phù hợp")
         progress.advance_to.assert_any_call(88, "Đang chuẩn bị mở camera")
         progress.finish.assert_called_once_with("Sẵn sàng mở camera")
         print_runtime_dashboard.assert_called_once_with(
-            title="YOLO Detect Camera",
+            title="YOLO Camera Realtime",
             runtime=runtime,
             hardware=hardware,
             camera_index=1,

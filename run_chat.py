@@ -11,6 +11,7 @@ def main() -> int:
     return launch_chat_ai_app(
         window_title="YOLO Chat AI",
         camera_index=args.camera_index,
+        app_mode="medium",
     )
 
 

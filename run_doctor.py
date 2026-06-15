@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.hardware_info import detect_hardware
-from core.model_selector import select_runtime_config
+from core.runtime_advisor import select_runtime_config_optimized
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 from utils.file_utils import ensure_project_directories
 
@@ -134,9 +134,9 @@ def main() -> None:
     icon_count = _count_files(ICONS_DIR)
 
     recommendations = {
-        "Cao nhất": select_runtime_config("high", hardware),
-        "Trung bình": select_runtime_config("medium", hardware),
-        "Yếu": select_runtime_config("low", hardware),
+        "Cao nhất": select_runtime_config_optimized("high", hardware),
+        "Trung bình": select_runtime_config_optimized("medium", hardware),
+        "Yếu": select_runtime_config_optimized("low", hardware),
     }
 
     for item in header("YOLO DOCTOR :: KIỂM TRA TOÀN HỆ THỐNG"):

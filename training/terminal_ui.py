@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import os
-import sys
+from utils.terminal_encoding import ensure_utf8_console
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -14,19 +13,7 @@ DIM = "\033[2m"
 CARD_WIDTH = 88
 
 
-def _ensure_utf8_console() -> None:
-    try:
-        if os.name == "nt":
-            os.system("chcp 65001 > nul")
-        if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8")
-        if hasattr(sys.stderr, "reconfigure"):
-            sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        return
-
-
-_ensure_utf8_console()
+ensure_utf8_console()
 
 
 def line(text: str = "", color: str = "") -> str:
