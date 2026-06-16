@@ -49,14 +49,6 @@ MENU_OPTIONS: dict[str, MenuOption] = {
         color=YELLOW,
     ),
     "5": MenuOption(
-        script="run_app.py",
-        title="Tu van runtime",
-        description="Phan tich runtime phu hop ma khong mo camera.",
-        group="KIEM TRA",
-        color=YELLOW,
-        args=("--advisor-only",),
-    ),
-    "6": MenuOption(
         script="run_train.py",
         title="Huan luyen",
         description="Chuan bi du lieu, huan luyen, danh gia va xuat model custom.",

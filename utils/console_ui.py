@@ -30,9 +30,9 @@ PROFILE_LABELS = {
     "fallback_cpu_weak": "CPU tối thiểu",
 }
 PROMPT_OPTIONS = (
-    ("1 | MẠNH NHẤT", "Mức cao nhất máy còn gánh được.", "\033[92m"),
-    ("2 | TRUNG BÌNH", "Mức cân bằng để dùng thường xuyên.", "\033[93m"),
-    ("3 | YẾU NHẤT", "Mức nhẹ nhất để ưu tiên độ mượt.", "\033[93m"),
+    ("1 | MẠNH NHẤT", "Model nặng nhất trong 3 mức, ưu tiên chất lượng phát hiện.", "\033[92m"),
+    ("2 | TRUNG BÌNH", "Model cân bằng để dùng thường xuyên.", "\033[93m"),
+    ("3 | YẾU NHẤT", "Model nhẹ nhất, ưu tiên độ mượt.", "\033[93m"),
 )
 PERFORMANCE_HINTS = (
     (85, "Runtime rất khỏe, ưu tiên chất lượng và tốc độ tối đa."),

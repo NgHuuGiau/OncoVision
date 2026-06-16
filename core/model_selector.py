@@ -17,6 +17,7 @@ MODEL_BACKUPS = {
     "yolo11s.pt": (None, "yolo11n.pt"),
     "yolo11n.pt": (None,),
 }
+MODEL_DEGRADE_ORDER = ("yolo11x.pt", "yolo11l.pt", "yolo11m.pt", "yolo11s.pt", "yolo11n.pt")
 MODE_DEVICE_HINTS = {"high": "gpu", "medium": "gpu"}
 FALLBACK_CHAINS = {
     "high": ("high", "fallback_gpu_1", "fallback_gpu_2", "fallback_cpu", "fallback_cpu_weak"),
@@ -157,11 +158,15 @@ def _gpu_profile_tuple(profile_name: str, hardware: HardwareInfo) -> tuple[str, 
         if tier == "high":
             return "yolo11x.pt", 960, 200
         if tier == "good":
-            return "yolo11s.pt", 640, 150
+            return "yolo11l.pt", 768, 180
+        if tier == "entry":
+            return "yolo11m.pt", 640, 150
         return "yolo11n.pt", 512, 80
     if profile_name == "medium":
         if tier in {"high", "good"}:
             return "yolo11s.pt", 640, 150
+        if tier == "entry":
+            return "yolo11s.pt", 512, 120
         return "yolo11n.pt", 512, 100
     return "yolo11n.pt", 320, 60
 
@@ -169,11 +174,13 @@ def _gpu_profile_tuple(profile_name: str, hardware: HardwareInfo) -> tuple[str, 
 def _cpu_profile_tuple(profile_name: str, hardware: HardwareInfo) -> tuple[str, int, int]:
     if profile_name == "high":
         if hardware.ram_gb >= 16:
-            return "yolo11s.pt", 640, 150
+            return "yolo11m.pt", 512, 100
+        if hardware.ram_gb >= 12:
+            return "yolo11s.pt", 416, 80
         return "yolo11n.pt", 320, 60
     if profile_name == "medium":
         if hardware.ram_gb >= 12:
-            return "yolo11s.pt", 640, 120
+            return "yolo11s.pt", 416, 80
         return "yolo11n.pt", 320, 60
     return "yolo11n.pt", 320, 50
 
@@ -181,9 +188,9 @@ def _cpu_profile_tuple(profile_name: str, hardware: HardwareInfo) -> tuple[str, 
 def _gpu_profile_too_small(profile_name: str, hardware: HardwareInfo) -> bool:
     tier = _gpu_power_tier(hardware)
     if profile_name == "high":
-        return tier in {"entry", "mobile"}
-    if profile_name == "medium":
         return tier == "mobile"
+    if profile_name == "medium":
+        return tier == "mobile" and float(hardware.vram_gb) + VRAM_EPSILON_GB < 3.0
     return float(hardware.vram_gb) + VRAM_EPSILON_GB < LOW_PROFILE_MIN_GPU_VRAM_GB
 
 
@@ -277,8 +284,14 @@ def _resolved_device(requested_device: str, hardware: HardwareInfo) -> str:
     return "cuda:0" if requested_device == "gpu" and hardware.cuda_available else "cpu"
 
 
-def _build_fallback_chain(profile_name: str, settings: dict) -> list[dict]:
-    return [settings["models"][name] for name in FALLBACK_CHAINS.get(profile_name, FALLBACK_CHAINS["low"])]
+def _build_fallback_chain(profile_name: str, settings: dict, primary_model_name: str) -> list[dict]:
+    fallback_keys = FALLBACK_CHAINS.get(profile_name, FALLBACK_CHAINS["low"])
+    try:
+        primary_index = MODEL_DEGRADE_ORDER.index(primary_model_name)
+    except ValueError:
+        primary_index = 0
+    fallbacks = [settings["models"][name] for name in fallback_keys]
+    return [item for item in fallbacks if MODEL_DEGRADE_ORDER.index(item["model"]) >= primary_index]
 
 
 def load_settings() -> dict:
@@ -314,7 +327,7 @@ def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
         label_font_scale=float(camera["label_font_scale"]),
         show_fps=_camera_flag(camera, settings, "show_fps"),
         hardware_tier=_hardware_tier(hardware),
-        fallback_chain=_build_fallback_chain(profile_name, settings),
+        fallback_chain=_build_fallback_chain(profile_name, settings, model_name),
         iou=_as_float(inference.get("iou"), 0.50),
         display_confidence=_as_float(inference.get("display_confidence"), 0.40),
         person_confidence=_as_float(inference.get("person_confidence"), 0.50),

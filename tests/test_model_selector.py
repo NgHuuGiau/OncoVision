@@ -145,6 +145,40 @@ class ModelSelectorTests(unittest.TestCase):
         self.assertEqual(runtime.resolved_device, "cuda:0")
         self.assertTrue(runtime.use_half)
 
+    def test_manual_high_uses_heavier_model_on_entry_gpu(self) -> None:
+        hardware = HardwareInfo(
+            cpu_name="Intel Core i7-11800H",
+            ram_gb=16.0,
+            gpu_name="NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+            vram_gb=4.0,
+            cuda_available=True,
+            os_name="Windows 11",
+            gpu_count=1,
+        )
+        runtime = select_runtime_config("high", hardware)
+        self.assertEqual(runtime.profile_name, "high")
+        self.assertEqual(runtime.primary_model_name, "yolo11m.pt")
+        self.assertEqual(runtime.imgsz, 640)
+        self.assertEqual(runtime.max_det, 150)
+        self.assertEqual(runtime.resolved_device, "cuda:0")
+
+    def test_manual_medium_uses_balanced_model_on_entry_gpu(self) -> None:
+        hardware = HardwareInfo(
+            cpu_name="Intel Core i7-11800H",
+            ram_gb=16.0,
+            gpu_name="NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+            vram_gb=4.0,
+            cuda_available=True,
+            os_name="Windows 11",
+            gpu_count=1,
+        )
+        runtime = select_runtime_config("medium", hardware)
+        self.assertEqual(runtime.profile_name, "medium")
+        self.assertEqual(runtime.primary_model_name, "yolo11s.pt")
+        self.assertEqual(runtime.imgsz, 512)
+        self.assertEqual(runtime.max_det, 120)
+        self.assertEqual(runtime.resolved_device, "cuda:0")
+
     def test_manual_low_uses_lightest_gpu_model(self) -> None:
         hardware = HardwareInfo(
             cpu_name="Intel Core i7-11800H",
@@ -222,11 +256,11 @@ class ModelSelectorTests(unittest.TestCase):
         )
         runtime = select_runtime_config("high", hardware)
         fallbacks = list(iter_fallback_configs(runtime))
-        self.assertGreaterEqual(len(fallbacks), 4)
+        self.assertGreaterEqual(len(fallbacks), 3)
         self.assertEqual(fallbacks[-1].resolved_device, "cpu")
         self.assertEqual(fallbacks[-1].primary_model_name, "yolo11n.pt")
 
-    def test_low_auto_fallback_keeps_gpu_when_cuda_is_available(self) -> None:
+    def test_low_auto_fallback_drops_to_cpu_when_cuda_primary_is_active(self) -> None:
         hardware = HardwareInfo(
             cpu_name="Intel Core i7-11800H",
             ram_gb=16.0,
@@ -242,8 +276,8 @@ class ModelSelectorTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(fallbacks), 1)
         self.assertEqual(runtime.resolved_device, "cuda:0")
-        self.assertEqual(fallbacks[0].resolved_device, "cuda:0")
-        self.assertTrue(fallbacks[0].use_half)
+        self.assertEqual(fallbacks[0].primary_model_name, "yolo11n.pt")
+        self.assertEqual(fallbacks[0].resolved_device, "cpu")
 
     def test_gpu_failure_falls_back_to_cpu_with_half_disabled(self) -> None:
         hardware = HardwareInfo(

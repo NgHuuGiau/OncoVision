@@ -22,7 +22,7 @@ models:
   low:
     model: yolo11n.pt
     device: auto
-    imgsz: 512
+    imgsz: 320
   fallback_gpu_1:
     model: yolo11m.pt
     device: gpu

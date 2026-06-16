@@ -39,7 +39,7 @@ class RunMenuTests(unittest.TestCase):
         self.assertTrue(any("Quay lai menu" in line for line in outputs))
         clear_terminal.assert_called_once()
 
-    def test_main_runs_runtime_advisor_via_run_app(self) -> None:
+    def test_main_runs_training_via_run_train(self) -> None:
         outputs: list[str] = []
         run_script = MagicMock(return_value=0)
         clear_terminal = MagicMock()
@@ -53,8 +53,8 @@ class RunMenuTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_app.py", "--advisor-only")
-        self.assertTrue(any("--advisor-only" in line for line in outputs))
+        run_script.assert_called_once_with("run_train.py")
+        self.assertTrue(any("run_train.py" in line for line in outputs))
         clear_terminal.assert_called_once()
 
     def test_main_retries_on_invalid_choice(self) -> None:

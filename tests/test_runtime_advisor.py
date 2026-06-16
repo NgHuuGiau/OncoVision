@@ -74,10 +74,12 @@ class RuntimeAdvisorTests(unittest.TestCase):
 
     def test_gpu_tier_and_profile_specs_follow_hardware_strength(self) -> None:
         enthusiast = _hardware(gpu_name="RTX 4090", vram_gb=24.0)
+        good_gpu = _hardware(gpu_name="RTX 3080", vram_gb=10.0)
         cpu_only = _hardware(cuda_available=False, gpu_name="None", vram_gb=0.0, ram_gb=8.0)
 
         self.assertEqual(gpu_tier(enthusiast), "enthusiast")
         self.assertEqual(profile_specs_for_hardware(enthusiast)["high"]["model"], "yolo11x.pt")
+        self.assertEqual(profile_specs_for_hardware(good_gpu)["high"]["model"], "yolo11l.pt")
         self.assertEqual(gpu_tier(cpu_only), "cpu_only")
         self.assertEqual(profile_specs_for_hardware(cpu_only)["low"]["device"], "cpu")
 
@@ -120,7 +122,7 @@ class RuntimeAdvisorTests(unittest.TestCase):
 
     @patch("core.runtime_advisor.select_runtime_config")
     def test_select_runtime_config_optimized_auto_uses_default_mode(self, select_runtime_config_mock) -> None:
-        expected = _runtime(mode="medium", profile_name="medium")
+        expected = _runtime(mode="medium", profile_name="medium", primary_model_name="yolo11s.pt", imgsz=512, max_det=120)
         select_runtime_config_mock.return_value = expected
         hardware = _hardware(gpu_name="RTX 3050", vram_gb=4.0, cpu_usage_percent=75.0)
 
