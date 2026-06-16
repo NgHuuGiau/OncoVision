@@ -1,10 +1,10 @@
 # Hướng dẫn dùng Runtime Tool
 
-`run_tools.py` là công cụ phân tích và giải thích runtime phù hợp với máy hiện tại. Công cụ này không mở camera, không train và không chạy detect trực tiếp.
+`run_app.py --advisor-only` là công cụ phân tích và giải thích runtime phù hợp với máy hiện tại. Chế độ này không mở camera, không train và không chạy detect trực tiếp.
 
 ## 1. Khi nào nên dùng
 
-Bạn nên chạy `run_tools.py` khi muốn:
+Bạn nên chạy `run_app.py --advisor-only` khi muốn:
 
 - Biết vì sao máy được khuyến nghị chạy `high`, `medium` hay `low`.
 - So sánh chất lượng và độ ổn định giữa các mode.
@@ -14,7 +14,7 @@ Bạn nên chạy `run_tools.py` khi muốn:
 ## 2. Lệnh chạy
 
 ```powershell
-.\.venv\Scripts\python run_tools.py
+.\.venv\Scripts\python run_app.py --advisor-only
 ```
 
 ## 3. Công cụ này hiển thị những gì
@@ -47,7 +47,7 @@ Bạn nên chạy `run_tools.py` khi muốn:
 
 ## 5. Phân biệt với `run_doctor.py`
 
-`run_tools.py`:
+`run_app.py --advisor-only`:
 
 - Tập trung vào giải thích logic chọn runtime.
 - Phù hợp để ra quyết định trước khi chạy camera.
@@ -65,7 +65,7 @@ Bạn nên chạy `run_tools.py` khi muốn:
 - Chạy YOLO inference.
 - Hiển thị box nhận diện, FPS và panel trạng thái.
 
-`run_tools.py`:
+`run_app.py --advisor-only`:
 
 - Chỉ phân tích.
 - Không mở webcam.
@@ -136,7 +136,7 @@ Sau khi xem gợi ý từ Runtime Tool, bạn có thể tinh chỉnh thêm:
 Để tối ưu camera theo cách có kiểm soát:
 
 ```powershell
-.\.venv\Scripts\python run_tools.py
+.\.venv\Scripts\python run_app.py --advisor-only
 .\.venv\Scripts\python run_doctor.py --skip-camera-check
 .\.venv\Scripts\python run_app.py --mode medium
 ```

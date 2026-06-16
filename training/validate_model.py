@@ -38,23 +38,23 @@ def resolve_validation_model_path():
 def _ensure_validation_dataset_ready() -> None:
     if not PROCESSED_VAL_DIR.exists() or not any(PROCESSED_VAL_DIR.iterdir()):
         raise FileNotFoundError(
-            "Chua co anh trong dataset/processed/images/val. Hay bo du lieu vao dataset/raw va chay training/split_dataset.py truoc."
+            "Chưa có ảnh trong dataset/processed/images/val. Hãy bỏ dữ liệu vào dataset/raw và chạy training/split_dataset.py trước."
         )
 
 
 def _print_validation_ready_help(error: FileNotFoundError) -> None:
     val_count = count_files(PROCESSED_VAL_DIR)
     print_help_screen(
-        title="YOLO VALIDATION :: DU LIEU CHUA SAN SANG",
+        title="YOLO VALIDATION :: DỮ LIỆU CHƯA SẴN SÀNG",
         reason=str(error),
         checks=[("Val images", f"{PROCESSED_VAL_DIR} ({val_count} file)", GREEN if val_count > 0 else RED)],
         steps=[
-            ("Buoc 1", "Bo anh va label vao dataset/raw", YELLOW),
-            ("Buoc 2", "Chay training/validate_dataset.py", YELLOW),
-            ("Buoc 3", "Chay training/split_dataset.py", YELLOW),
-            ("Buoc 4", "Chay lai training/validate_model.py", GREEN),
+            ("Bước 1", "Bỏ ảnh và label vào dataset/raw", YELLOW),
+            ("Bước 2", "Chạy training/validate_dataset.py", YELLOW),
+            ("Bước 3", "Chạy training/split_dataset.py", YELLOW),
+            ("Bước 4", "Chạy lại training/validate_model.py", GREEN),
         ],
-        meaning="Dung tap val trong dataset/processed de do ket qua model.",
+        meaning="Dùng tập val trong dataset/processed để đo kết quả model.",
         commands=[
             r".\.venv\Scripts\python training\validate_dataset.py",
             r".\.venv\Scripts\python training\split_dataset.py",

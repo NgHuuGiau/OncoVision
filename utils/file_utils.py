@@ -43,8 +43,15 @@ def load_yaml(path: str | Path) -> Any:
 
 
 @lru_cache(maxsize=16)
-def load_yaml_cached(path: str) -> Any:
-    return load_yaml(path)
+def _load_yaml_cached(resolved_path: str) -> Any:
+    return load_yaml(resolved_path)
+
+
+def load_yaml_cached(path: str | Path) -> Any:
+    return _load_yaml_cached(str(Path(path)))
+
+
+load_yaml_cached.cache_clear = _load_yaml_cached.cache_clear
 
 
 def save_yaml(path: str | Path, data: Any) -> None:
@@ -52,4 +59,4 @@ def save_yaml(path: str | Path, data: Any) -> None:
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
     with resolved_path.open("w", encoding="utf-8") as file:
         yaml.safe_dump(data, file, allow_unicode=True, sort_keys=False)
-    load_yaml_cached.cache_clear()
+    _load_yaml_cached.cache_clear()

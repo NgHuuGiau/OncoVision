@@ -136,7 +136,7 @@ run_chat.py
 run_doctor.py
 run_menu.py
 run_tests.py
-run_tools.py
+run_app.py --advisor-only
 run_train.py
 ```
 

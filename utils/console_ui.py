@@ -52,6 +52,8 @@ BLUE = "\033[38;5;81m"
 DIM = "\033[2m"
 CARD_WIDTH = 96
 BOOT_BAR_WIDTH = 32
+RULE_GLYPHS = {"=": "═", "-": "─", ".": "·"}
+PARTIAL_BLOCKS = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉")
 
 
 ensure_utf8_console()
@@ -78,8 +80,7 @@ def _pad(text: str, width: int = CARD_WIDTH) -> str:
 
 
 def _rule(char: str = "=") -> str:
-    glyph = {"=": "═", "-": "─", ".": "·"}.get(char, char)
-    return glyph * CARD_WIDTH
+    return RULE_GLYPHS.get(char, char) * CARD_WIDTH
 
 
 def _section(title: str, color: str = CYAN) -> str:
@@ -114,9 +115,8 @@ def meter(current: int, total: int, width: int = 18, filled_char: str = "█", e
 
 
 def status_meter(current: int, total: int, ok_style: str, hot_style: str | None = None) -> tuple[str, str]:
-    hot_style = hot_style or ok_style
     text = meter(current, total)
-    style = hot_style if current else ok_style
+    style = hot_style or ok_style if current else ok_style
     return text, style
 
 
@@ -186,14 +186,13 @@ def progress_bar_colored(score: int, width: int | None = None) -> str:
     filled_units = round((normalized / 100) * total_units)
     full_blocks = filled_units // 8
     partial_block = filled_units % 8
-    partial_chars = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉")
     parts: list[str] = []
     for index in range(width):
-        color = YELLOW if index < width // 3 else ORANGE if index < (width * 2) // 3 else RED
+        band_color = YELLOW if index < width // 3 else ORANGE if index < (width * 2) // 3 else RED
         if index < full_blocks:
-            parts.append(f"{color}\u2588{RESET}")
+            parts.append(f"{band_color}█{RESET}")
         elif index == full_blocks and partial_block:
-            parts.append(f"{color}{partial_chars[partial_block]}{RESET}")
+            parts.append(f"{band_color}{PARTIAL_BLOCKS[partial_block]}{RESET}")
         else:
             parts.append(" ")
     return f"0 [{''.join(parts)}] 100"
@@ -250,8 +249,8 @@ def _render_prompt(hardware: Any | None = None, recommendations: dict[str, Any] 
         _line(_rule("-"), CYAN),
         _section("3 LỰA CHỌN", MAGENTA),
     ]
-    for label, value, color in PROMPT_OPTIONS:
-        lines.append(_row(label, value, color))
+    for label, value, option_color in PROMPT_OPTIONS:
+        lines.append(_row(label, value, option_color))
         if recommendations:
             option_mode = MODE_CHOICES[label.split("|", 1)[0].strip()]
             runtime = recommendations.get(option_mode)
@@ -429,9 +428,7 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
                 "Thử đổi camera index sang 1 hoặc 2.",
                 "Nếu đang mở app camera khác, hãy tắt trước khi chạy lại.",
             ],
-            [
-                r".\.venv\Scripts\python run_app.py --camera-index 1",
-            ],
+            [r".\.venv\Scripts\python run_app.py --camera-index 1"],
         )
     if "khong khoi tao duoc ultralytics" in lower_message or "khong khoi tao duoc detector" in lower_message:
         return (
@@ -441,9 +438,7 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
                 "Kiểm tra model local trong models/pretrained hoặc models/trained.",
                 "Nếu máy yếu hoặc lỗi CUDA, thử mode low.",
             ],
-            [
-                r".\.venv\Scripts\python run_app.py --mode low",
-            ],
+            [r".\.venv\Scripts\python run_app.py --mode low"],
         )
     if "cuda" in lower_message or "pytorch" in lower_message or "torch" in lower_message:
         return (
@@ -464,9 +459,7 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
             "Kiểm tra webcam, model local, PyTorch / CUDA và quyền truy cập camera.",
             "Thử chạy lại bằng mode low để giảm tải runtime.",
         ],
-        [
-            r".\.venv\Scripts\python run_app.py --mode low",
-        ],
+        [r".\.venv\Scripts\python run_app.py --mode low"],
     )
 
 
@@ -526,8 +519,7 @@ class BootProgress:
 
     def _render_line(self) -> None:
         self._clear_line()
-        content = f"Mức sẵn sàng     {progress_bar_colored(self.current)}"
-        print(_line(content, _score_color(self.current)), end="", flush=True)
+        print(_line(f"Mức sẵn sàng     {progress_bar_colored(self.current)}", _score_color(self.current)), end="", flush=True)
 
     def advance_to(self, target: int, label: str) -> None:
         self.current_label = label
@@ -539,8 +531,7 @@ class BootProgress:
         target = max(self.current, min(100, target))
         while self.current < target:
             remaining = target - self.current
-            step = 1 if remaining <= 8 else 2
-            self.current = min(target, self.current + step)
+            self.current = min(target, self.current + (1 if remaining <= 8 else 2))
             self._render_line()
             time.sleep(0.008 if self.current < 90 else 0.012)
 

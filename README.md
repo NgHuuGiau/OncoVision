@@ -28,7 +28,7 @@ Repo này tập trung vào 3 nhóm chức năng chính:
 - `run_app.py` mở camera realtime và chạy nhận diện thật, không còn rơi vào chế độ chỉ preview FPS.
 - FPS được hiển thị thành badge rõ ràng, bám theo box nhận diện chính; khi không có box, FPS sẽ tự rơi về góc an toàn trên khung hình.
 - Runtime camera hỗ trợ tinh chỉnh `confidence`, `IoU`, `imgsz`, ngưỡng hiển thị và tăng sáng khung hình tối từ `config/settings.yaml`.
-- `run_doctor.py` và `run_tools.py` đã đồng bộ với logic chọn runtime thực tế của `run_app.py`.
+- `run_doctor.py` và chế độ tư vấn trong `run_app.py --advisor-only` đã đồng bộ với logic chọn runtime thực tế của `run_app.py`.
 - Terminal/log dùng UTF-8 trên Windows để hiển thị tiếng Việt đầy đủ.
 
 ## Các script chính
@@ -37,7 +37,7 @@ Repo này tập trung vào 3 nhóm chức năng chính:
 - `run_app.py`: camera realtime YOLO, có dashboard phần cứng và nhận diện.
 - `run_chat.py`: giao diện desktop/chat.
 - `run_doctor.py`: kiểm tra phần cứng, camera, model, dữ liệu và gợi ý runtime.
-- `run_tools.py`: bộ tư vấn runtime, giải thích vì sao máy nên chạy mức nào.
+- `run_app.py --advisor-only`: bộ tư vấn runtime, giải thích vì sao máy nên chạy mức nào mà không mở camera.
 - `run_tests.py`: chạy toàn bộ test của repo.
 - `run_train.py`: huấn luyện model custom.
 
@@ -114,7 +114,7 @@ Chạy trực tiếp từng công cụ:
 .\.venv\Scripts\python run_app.py
 .\.venv\Scripts\python run_chat.py
 .\.venv\Scripts\python run_doctor.py
-.\.venv\Scripts\python run_tools.py
+.\.venv\Scripts\python run_app.py --advisor-only
 .\.venv\Scripts\python run_tests.py
 .\.venv\Scripts\python run_train.py
 ```
@@ -178,12 +178,12 @@ Nếu bạn muốn nhận diện class khác trong camera bằng model custom, c
 
 ```powershell
 .\.venv\Scripts\python run_doctor.py
-.\.venv\Scripts\python run_tools.py
+.\.venv\Scripts\python run_app.py --advisor-only
 ```
 
 `run_doctor.py` dùng để kiểm tra hệ thống có đủ điều kiện chạy hay không.
 
-`run_tools.py` dùng để giải thích vì sao máy nên chạy `high`, `medium` hay `low`.
+`run_app.py --advisor-only` dùng để giải thích vì sao máy nên chạy `high`, `medium` hay `low`.
 
 ## Tài liệu chi tiết
 

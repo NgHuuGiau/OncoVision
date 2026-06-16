@@ -18,6 +18,13 @@ RAW_LABELS_DIR = Path("dataset/raw/labels")
 PROCESSED_TRAIN_DIR = Path("dataset/processed/images/train")
 PROCESSED_VAL_DIR = Path("dataset/processed/images/val")
 ICONS_DIR = Path("assets/icons")
+ICON_WARNING_THRESHOLD = 10
+ICON_AUTOFIX_THRESHOLD = 5
+RUNTIME_RECOMMENDATION_MODES = (
+    ("Cao nhất", "high"),
+    ("Trung bình", "medium"),
+    ("Yếu", "low"),
+)
 
 
 @dataclass
@@ -37,10 +44,21 @@ def _count_files(path: Path) -> int:
     return sum(1 for item in path.iterdir() if item.is_file())
 
 
+def _count_project_files(*paths: Path) -> tuple[int, ...]:
+    return tuple(_count_files(path) for path in paths)
+
+
 def _present_and_missing_models(model_dir: Path = PRETRAINED_DIR) -> tuple[list[str], list[str]]:
     present = [name for name in YOLO11_MODELS if (model_dir / name).exists()]
     missing = [name for name in YOLO11_MODELS if name not in present]
     return present, missing
+
+
+def _runtime_recommendations(hardware) -> dict[str, object]:
+    return {
+        label: select_runtime_config_optimized(mode, hardware)
+        for label, mode in RUNTIME_RECOMMENDATION_MODES
+    }
 
 
 _open_camera_capture = open_camera_capture
@@ -108,34 +126,88 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _run_autofix() -> None:
+    print(line(rule("-"), CYAN))
+    print(section("AUTO-FIX", YELLOW))
+    if not ICONS_DIR.exists() or sum(1 for _ in ICONS_DIR.iterdir()) < ICON_AUTOFIX_THRESHOLD:
+        print(row("Icons", "Đang tạo bộ icon mặc định...", YELLOW))
+        from tools.download_icons import create_default_icons
+
+        create_default_icons()
+    print(row("Trạng thái", "Đã chạy xong Auto-fix!", GREEN))
+
+
+def _print_camera_probe(camera_probe: CameraProbeResult) -> None:
+    print(line(rule("-"), CYAN))
+    print(section("CAMERA THẬT", camera_probe.color))
+    print(row("Trạng thái", camera_probe.summary.split("|", 1)[-1].strip(), camera_probe.color, bounded=False))
+    print(
+        row(
+            "Chi tiết",
+            camera_probe.detail.replace("Chi tiết          ", "").replace("Lý do không chạy   ", ""),
+            camera_probe.color,
+            bounded=False,
+        )
+    )
+
+
+def _print_recommendations(recommendations: dict[str, object]) -> None:
+    print(line(rule("-"), CYAN))
+    print(section("GỢI Ý CHẠY THEO MÁY", GREEN))
+    for label, runtime in recommendations.items():
+        value = f"{runtime.primary_model_name} / {runtime.resolved_device} / imgsz {runtime.imgsz}"
+        color = GREEN if runtime.primary_model_name != "yolo11n.pt" else YELLOW
+        print(row(label, value, color, bounded=False))
+
+
+def _print_recommended_commands(
+    *,
+    missing_models: list[str],
+    icon_count: int,
+    dataset_ok: bool,
+    split_ok: bool,
+) -> None:
+    print(line(rule("-"), CYAN))
+    print(section("LỆNH NÊN CHẠY", CYAN))
+    command_index = 1
+    if missing_models:
+        print(command_row(command_index, "python training\\download_models.py"))
+        command_index += 1
+    if icon_count < ICON_WARNING_THRESHOLD:
+        print(command_row(command_index, "python tools\\download_icons.py"))
+        command_index += 1
+    if not dataset_ok:
+        print(command_row(command_index, "python training\\prepare_dataset.py"))
+        command_index += 1
+    elif not split_ok:
+        print(command_row(command_index, "python training\\validate_dataset.py"))
+        command_index += 1
+        print(command_row(command_index, "python training\\split_dataset.py"))
+        command_index += 1
+    else:
+        print(command_row(command_index, "python run_chat.py"))
+        command_index += 1
+        print(command_row(command_index, "python run_train.py"))
+
+
 def main() -> None:
     args = parse_args()
     ensure_project_directories()
-    
+
     if args.fix:
-        print(line(rule("-"), CYAN))
-        print(section("AUTO-FIX", YELLOW))
-        if not ICONS_DIR.exists() or sum(1 for _ in ICONS_DIR.iterdir()) < 5:
-            print(row("Icons", "Đang tạo bộ icon mặc định...", YELLOW))
-            from tools.download_icons import create_default_icons
-            create_default_icons()
-        print(row("Trạng thái", "Đã chạy xong Auto-fix!", GREEN))
+        _run_autofix()
 
     hardware = detect_hardware()
     present_models, missing_models = _present_and_missing_models()
-    raw_images = _count_files(RAW_IMAGES_DIR)
-    raw_labels = _count_files(RAW_LABELS_DIR)
-    train_images = _count_files(PROCESSED_TRAIN_DIR)
-    val_images = _count_files(PROCESSED_VAL_DIR)
+    raw_images, raw_labels, train_images, val_images, icon_count = _count_project_files(
+        RAW_IMAGES_DIR,
+        RAW_LABELS_DIR,
+        PROCESSED_TRAIN_DIR,
+        PROCESSED_VAL_DIR,
+        ICONS_DIR,
+    )
     camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
-    
-    icon_count = _count_files(ICONS_DIR)
-
-    recommendations = {
-        "Cao nhất": select_runtime_config_optimized("high", hardware),
-        "Trung bình": select_runtime_config_optimized("medium", hardware),
-        "Yếu": select_runtime_config_optimized("low", hardware),
-    }
+    recommendations = _runtime_recommendations(hardware)
 
     for item in header("YOLO DOCTOR :: KIỂM TRA TOÀN HỆ THỐNG"):
         print(item)
@@ -149,16 +221,13 @@ def main() -> None:
     print(row("CUDA", hardware.cuda_runtime_reason, GREEN if hardware.cuda_available else YELLOW, bounded=False))
 
     if camera_probe is not None:
-        print(line(rule("-"), CYAN))
-        print(section("CAMERA THẬT", camera_probe.color))
-        print(row("Trạng thái", camera_probe.summary.split("|", 1)[-1].strip(), camera_probe.color, bounded=False))
-        print(row("Chi tiết", camera_probe.detail.replace("Chi tiết          ", "").replace("Lý do không chạy   ", ""), camera_probe.color, bounded=False))
+        _print_camera_probe(camera_probe)
 
     print(line(rule("-"), CYAN))
-    icons_ok = icon_count >= 10
+    icons_ok = icon_count >= ICON_WARNING_THRESHOLD
     print(section("GIAO DIỆN & ICONS", GREEN if icons_ok else YELLOW))
-    print(row("Icons (.svg)", f"{icon_count} file trong assets/icons", GREEN if icon_count >= 10 else RED, bounded=False))
-    if icon_count < 10:
+    print(row("Icons (.svg)", f"{icon_count} file trong assets/icons", GREEN if icons_ok else RED, bounded=False))
+    if not icons_ok:
         print(row("Cảnh báo", "Thiếu icon sẽ làm giao diện bị đen trắng.", RED, bounded=False))
 
     print(line(rule("-"), CYAN))
@@ -169,12 +238,7 @@ def main() -> None:
     else:
         print(row("Trạng thái", "Đã có đủ 5 model YOLO11.", GREEN, bounded=False))
 
-    print(line(rule("-"), CYAN))
-    print(section("GỢI Ý CHẠY THEO MÁY", GREEN))
-    for label, runtime in recommendations.items():
-        value = f"{runtime.primary_model_name} / {runtime.resolved_device} / imgsz {runtime.imgsz}"
-        color = GREEN if runtime.primary_model_name not in {"yolo11n.pt"} else YELLOW
-        print(row(label, value, color, bounded=False))
+    _print_recommendations(recommendations)
 
     print(line(rule("-"), CYAN))
     dataset_ok = raw_images > 0 and raw_labels > 0
@@ -205,27 +269,12 @@ def main() -> None:
     else:
         print(row("Dataset", "Dữ liệu train/val đã sẵn sàng.", GREEN, bounded=False))
 
-    print(line(rule("-"), CYAN))
-    print(section("LỆNH NÊN CHẠY", CYAN))
-    command_index = 1
-    if missing_models:
-        print(command_row(command_index, "python training\\download_models.py"))
-        command_index += 1
-    if icon_count < 10:
-        print(command_row(command_index, "python tools\\download_icons.py"))
-        command_index += 1
-    if not dataset_ok:
-        print(command_row(command_index, "python training\\prepare_dataset.py"))
-        command_index += 1
-    elif not split_ok:
-        print(command_row(command_index, "python training\\validate_dataset.py"))
-        command_index += 1
-        print(command_row(command_index, "python training\\split_dataset.py"))
-        command_index += 1
-    else:
-        print(command_row(command_index, "python run_chat.py"))
-        command_index += 1
-        print(command_row(command_index, "python run_train.py"))
+    _print_recommended_commands(
+        missing_models=missing_models,
+        icon_count=icon_count,
+        dataset_ok=dataset_ok,
+        split_ok=split_ok,
+    )
     print(line(rule("="), CYAN))
 
 

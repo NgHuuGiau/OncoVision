@@ -3,14 +3,21 @@ from __future__ import annotations
 from contextlib import contextmanager
 import os
 import sqlite3
+from collections import defaultdict
 
 from app.chat_ui.models import ChatMessage, Conversation
+from utils.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 
 class ChatDatabase:
     def __init__(self, db_path: str):
         self.db_path = db_path
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        directory = os.path.dirname(self.db_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         self._init_db()
 
     @contextmanager
@@ -57,6 +64,18 @@ class ChatDatabase:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id
+                ON messages (conversation_id, id)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_messages_text
+                ON messages (text)
+                """
+            )
 
     def get_setting(self, key: str, default: str) -> str:
         try:
@@ -72,32 +91,43 @@ class ChatDatabase:
             conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
 
     def get_all_conversations(self) -> list[Conversation]:
-        convs = []
         try:
             with self._connect() as conn:
-                cursor = conn.execute("SELECT id, title, subtitle FROM conversations ORDER BY id DESC")
-                for row in cursor:
-                    c_id, title, subtitle = row
-                    messages = []
-                    m_cursor = conn.execute(
-                        "SELECT sender, text, attachment_path, attachment_kind, id FROM messages WHERE conversation_id = ? ORDER BY id ASC",
-                        (c_id,),
-                    )
-                    for m_row in m_cursor:
-                        sender, text, path, kind, m_id = m_row
-                        messages.append(
-                            ChatMessage(
-                                sender=sender,
-                                text=text,
-                                attachment_path=path,
-                                attachment_kind=kind,
-                                id=m_id,
-                            )
-                        )
-                    convs.append(Conversation(title=title, subtitle=subtitle, messages=messages, id=c_id))
-        except Exception as e:
-            print(f"Database error: {e}")
-        return convs
+                conversation_rows = conn.execute(
+                    "SELECT id, title, subtitle FROM conversations ORDER BY id DESC"
+                ).fetchall()
+                message_rows = conn.execute(
+                    """
+                    SELECT conversation_id, sender, text, attachment_path, attachment_kind, id
+                    FROM messages
+                    ORDER BY conversation_id ASC, id ASC
+                    """
+                ).fetchall()
+        except Exception:
+            logger.exception("Failed to load conversations from chat history database")
+            return []
+
+        messages_by_conversation: dict[int, list[ChatMessage]] = defaultdict(list)
+        for conversation_id, sender, text, path, kind, message_id in message_rows:
+            messages_by_conversation[conversation_id].append(
+                ChatMessage(
+                    sender=sender,
+                    text=text,
+                    attachment_path=path,
+                    attachment_kind=kind,
+                    id=message_id,
+                )
+            )
+
+        return [
+            Conversation(
+                title=title,
+                subtitle=subtitle,
+                messages=messages_by_conversation.get(conversation_id, []),
+                id=conversation_id,
+            )
+            for conversation_id, title, subtitle in conversation_rows
+        ]
 
     def create_conversation(self, title: str, subtitle: str) -> int:
         with self._connect() as conn:

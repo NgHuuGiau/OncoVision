@@ -98,7 +98,7 @@ Ví dụ dùng model custom:
 ### Công cụ tư vấn runtime
 
 ```powershell
-.\.venv\Scripts\python run_tools.py
+.\.venv\Scripts\python run_app.py --advisor-only
 ```
 
 ### Training

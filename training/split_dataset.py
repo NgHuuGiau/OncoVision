@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 ensure_project_root_on_path()
 
-from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, pad, row, rule, section
+from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 from utils.file_utils import ensure_project_directories
 
 
@@ -23,6 +23,7 @@ PROCESSED_LABELS_DIR = Path("dataset/processed/labels")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 SPLITS = (("train", 0.70), ("val", 0.15), ("test", 0.15))
 SEED = 42
+INVALID_YOLO_LABEL_REASON = "Định dạng YOLO không hợp lệ"
 
 
 @dataclass
@@ -48,16 +49,13 @@ class RawDatasetAudit:
         return [image_path for image_path, _ in self.eligible_pairs]
 
     def __getitem__(self, key: str):
-        mapping = {
-            "images": self.images,
-            "labels": self.labels,
-            "eligible": self.eligible_pairs,
-            "missing_labels": self.missing_labels,
-            "empty_labels": self.empty_labels,
-            "invalid_labels": self.invalid_labels,
-            "orphan_labels": self.orphan_labels,
-        }
-        return mapping[key]
+        return getattr(self, "eligible_pairs" if key == "eligible" else key)
+
+
+def _iter_matching_files(root: Path, *, suffixes: set[str]) -> list[Path]:
+    if not root.exists():
+        return []
+    return sorted(path for path in root.iterdir() if path.is_file() and path.suffix.lower() in suffixes)
 
 
 def _is_valid_yolo_label_line(line: str) -> bool:
@@ -86,8 +84,8 @@ def _label_is_valid(path: Path) -> tuple[bool, bool]:
 
 def audit_raw_dataset() -> RawDatasetAudit:
     ensure_project_directories()
-    images = sorted(path for path in RAW_IMAGES_DIR.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS) if RAW_IMAGES_DIR.exists() else []
-    labels = sorted(path for path in RAW_LABELS_DIR.iterdir() if path.is_file() and path.suffix.lower() == ".txt") if RAW_LABELS_DIR.exists() else []
+    images = _iter_matching_files(RAW_IMAGES_DIR, suffixes=IMAGE_EXTENSIONS)
+    labels = _iter_matching_files(RAW_LABELS_DIR, suffixes={".txt"})
     label_by_stem = {path.stem: path for path in labels}
     image_stems = {path.stem for path in images}
 
@@ -103,7 +101,7 @@ def audit_raw_dataset() -> RawDatasetAudit:
             continue
         is_valid, is_empty = _label_is_valid(label_path)
         if not is_valid:
-            invalid_labels.append((label_path, "Định dạng YOLO không hợp lệ"))
+            invalid_labels.append((label_path, INVALID_YOLO_LABEL_REASON))
             continue
         if is_empty:
             empty_labels.append(label_path)
@@ -134,8 +132,9 @@ def _split_items(items: list[tuple[Path, Path]]) -> dict[str, list[tuple[Path, P
     shuffled = list(items)
     random.Random(SEED).shuffle(shuffled)
     total = len(shuffled)
-    train_end = int(total * 0.70)
-    val_end = train_end + int(total * 0.15)
+    split_ratios = dict(SPLITS)
+    train_end = int(total * split_ratios["train"])
+    val_end = train_end + int(total * split_ratios["val"])
     return {
         "train": shuffled[:train_end],
         "val": shuffled[train_end:val_end],

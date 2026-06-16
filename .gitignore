@@ -36,6 +36,8 @@ Thumbs.db
 # Runtime output
 output/
 runs/
+images/
+HieraChain/
 
 # Dataset generated locally
 dataset/raw/

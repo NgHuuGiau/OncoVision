@@ -12,6 +12,10 @@ from pathlib import Path
 from app.chat_ui.models import ChatMessage, Conversation
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, build_chat_capture_path, get_chat_capture_dir
 from app.chat_ui.storage import ChatDatabase
+from utils.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 try:
     from pygments import highlight
@@ -1975,8 +1979,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             try:
                 dialog = ImagePreviewDialog(path, self.window(), effective_theme=self.window().effective_theme)
                 dialog.exec()
-            except Exception as e:
-                print(f"Error previewing image: {e}")
+            except Exception:
+                logger.exception("Failed to open image preview dialog for %s", path)
 
         def update_display_text(self, text: str):
             if text == "[TYPING]":

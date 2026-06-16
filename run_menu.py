@@ -16,70 +16,84 @@ class MenuOption:
     description: str
     group: str
     color: str
+    args: tuple[str, ...] = ()
 
 
 MENU_OPTIONS: dict[str, MenuOption] = {
     "1": MenuOption(
         script="run_app.py",
-        title="Camera nhận diện",
-        description="Mở camera realtime, chạy YOLO và hiển thị FPS cạnh box nhận diện.",
-        group="CHẠY CHÍNH",
+        title="Camera nhan dien",
+        description="Mo camera realtime, chay YOLO va hien thi FPS canh box nhan dien.",
+        group="CHAY CHINH",
         color=GREEN,
     ),
     "2": MenuOption(
         script="run_chat.py",
         title="Desktop chat",
-        description="Mở giao diện chat, đính kèm ảnh, văn bản hoặc ảnh chụp camera.",
-        group="CHẠY CHÍNH",
+        description="Mo giao dien chat, dinh kem anh, van ban hoac anh chup camera.",
+        group="CHAY CHINH",
         color=GREEN,
     ),
     "3": MenuOption(
         script="run_tests.py",
-        title="Kiểm thử",
-        description="Chạy toàn bộ unit test và kiểm tra camera thật.",
-        group="KIỂM TRA",
+        title="Kiem thu",
+        description="Chay toan bo unit test va kiem tra camera that.",
+        group="KIEM TRA",
         color=YELLOW,
     ),
     "4": MenuOption(
         script="run_doctor.py",
         title="Doctor",
-        description="Rà soát phần cứng, model, camera, dữ liệu và gợi ý runtime.",
-        group="KIỂM TRA",
+        description="Ra soat phan cung, model, camera, du lieu va goi y runtime.",
+        group="KIEM TRA",
         color=YELLOW,
     ),
     "5": MenuOption(
+        script="run_app.py",
+        title="Tu van runtime",
+        description="Phan tich runtime phu hop ma khong mo camera.",
+        group="KIEM TRA",
+        color=YELLOW,
+        args=("--advisor-only",),
+    ),
+    "6": MenuOption(
         script="run_train.py",
-        title="Huấn luyện",
-        description="Chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model custom.",
-        group="HUẤN LUYỆN",
+        title="Huan luyen",
+        description="Chuan bi du lieu, huan luyen, danh gia va xuat model custom.",
+        group="HUAN LUYEN",
         color=CYAN,
     ),
     "0": MenuOption(
         script="",
-        title="Thoát",
-        description="Đóng menu terminal.",
-        group="HỆ THỐNG",
+        title="Thoat",
+        description="Dong menu terminal.",
+        group="HE THONG",
         color=RED,
     ),
 }
 PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
-TESTED_EXIT_TEXT = "Đã thoát menu."
-TESTED_INVALID_TEXT = "Lựa chọn không hợp lệ. Hãy nhập lại."
-TESTED_BACK_TEXT = "Quay lại menu."
-MENU_PROMPT = f"Chọn tác vụ ({'/'.join(('0', *PRIMARY_KEYS))}): "
+TESTED_EXIT_TEXT = "Da thoat menu."
+TESTED_INVALID_TEXT = "Lua chon khong hop le. Hay nhap lai."
+TESTED_BACK_TEXT = "Quay lai menu."
+MENU_PROMPT = f"Chon tac vu ({'/'.join(('0', *PRIMARY_KEYS))}): "
 
 
 def _configure_terminal_encoding() -> None:
     ensure_utf8_console()
 
 
+def _command_text(option: MenuOption) -> str:
+    if not option.script:
+        return "exit"
+    return f"python {option.script}{(' ' + ' '.join(option.args)) if option.args else ''}"
+
+
 def _option_label(key: str, option: MenuOption) -> tuple[str, str]:
-    command = f"python {option.script}" if option.script else "exit"
-    return f"{key} | {option.title}", f"{option.description} [{command}]"
+    return f"{key} | {option.title}", f"{option.description} [{_command_text(option)}]"
 
 
 def _render_menu(print_fn=print) -> None:
-    for item in header("YOLO HUB :: MENU ĐIỀU KHIỂN"):
+    for item in header("YOLO HUB :: MENU DIEU KHIEN"):
         print_fn(item)
     current_group = ""
     for key in (*PRIMARY_KEYS, "0"):
@@ -98,8 +112,8 @@ def _clear_terminal() -> None:
     os.system("cls" if os.name == "nt" else "clear")
 
 
-def _run_script(script_name: str) -> int:
-    return subprocess.call([sys.executable, script_name])
+def _run_script(script_name: str, *script_args: str) -> int:
+    return subprocess.call([sys.executable, script_name, *script_args])
 
 
 def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> int:
@@ -116,15 +130,15 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
             continue
         clear_terminal_fn()
         print_fn(line(rule("="), CYAN))
-        print_fn(section(f"ĐANG CHẠY: {option.title}", option.color))
-        print_fn(row("Lệnh", f"python {option.script}", option.color, bounded=False))
-        print_fn(row("Ghi chú", option.description, option.color, bounded=False))
+        print_fn(section(f"DANG CHAY: {option.title}", option.color))
+        print_fn(row("Lenh", _command_text(option), option.color, bounded=False))
+        print_fn(row("Ghi chu", option.description, option.color, bounded=False))
         print_fn(line(rule("-"), CYAN))
-        exit_code = run_script_fn(option.script)
+        exit_code = run_script_fn(option.script, *option.args)
         message = (
-            f"Đã chạy xong {option.script}. {TESTED_BACK_TEXT}"
+            f"Da chay xong {option.script}. {TESTED_BACK_TEXT}"
             if exit_code == 0
-            else f"{option.script} kết thúc với mã {exit_code}. {TESTED_BACK_TEXT}"
+            else f"{option.script} ket thuc voi ma {exit_code}. {TESTED_BACK_TEXT}"
         )
         print_fn(line(message, GREEN if exit_code == 0 else YELLOW))
 

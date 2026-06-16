@@ -49,6 +49,16 @@ def _training_kwargs(config: dict) -> dict:
     return kwargs
 
 
+def _apply_fallback_training_config(config: dict) -> dict:
+    fallback_config = dict(config)
+    fallback_config.update(
+        model=fallback_config.get("fallback_model", "yolo11n.pt"),
+        imgsz=min(int(fallback_config["imgsz"]), 416),
+        batch=min(int(fallback_config["batch"]), 4),
+    )
+    return fallback_config
+
+
 def _ensure_training_dataset_ready() -> None:
     required_dirs = (
         (PROCESSED_TRAIN_DIR, "dataset/processed/images/train"),
@@ -57,7 +67,7 @@ def _ensure_training_dataset_ready() -> None:
     for directory, label in required_dirs:
         if not directory.exists() or not any(directory.iterdir()):
             raise FileNotFoundError(
-                f"Chua co anh trong {label}. Hay bo du lieu vao dataset/raw va chay training/split_dataset.py truoc."
+                f"Chưa có ảnh trong {label}. Hãy bỏ dữ liệu vào dataset/raw và chạy training/split_dataset.py trước."
             )
 
 
@@ -97,20 +107,20 @@ def _print_dataset_ready_help(error: FileNotFoundError) -> None:
     raw_images_color = GREEN if raw_images_count > 0 else RED
     raw_labels_color = GREEN if raw_labels_count > 0 else RED
     print_help_screen(
-        title="YOLO TRAINING :: DU LIEU CHUA SAN SANG",
+        title="YOLO TRAINING :: DỮ LIỆU CHƯA SẴN SÀNG",
         reason=str(error),
         checks=[
             ("Raw images", f"{RAW_IMAGES_DIR} ({raw_images_count} file)", raw_images_color),
             ("Raw labels", f"{RAW_LABELS_DIR} ({raw_labels_count} file)", raw_labels_color),
         ],
         steps=[
-            ("Buoc 1", f"Bo anh vao {RAW_IMAGES_DIR}" if raw_images_count == 0 else f"Da co {raw_images_count} anh trong {RAW_IMAGES_DIR}", raw_images_color),
-            ("Buoc 2", f"Bo label vao {RAW_LABELS_DIR}" if raw_labels_count == 0 else f"Da co {raw_labels_count} label trong {RAW_LABELS_DIR}", raw_labels_color),
-            ("Buoc 3", "Chay training/validate_dataset.py", YELLOW),
-            ("Buoc 4", "Chay training/split_dataset.py", YELLOW),
-            ("Buoc 5", "Chay lai run_train.py", GREEN),
+            ("Bước 1", f"Bỏ ảnh vào {RAW_IMAGES_DIR}" if raw_images_count == 0 else f"Đã có {raw_images_count} ảnh trong {RAW_IMAGES_DIR}", raw_images_color),
+            ("Bước 2", f"Bỏ label vào {RAW_LABELS_DIR}" if raw_labels_count == 0 else f"Đã có {raw_labels_count} label trong {RAW_LABELS_DIR}", raw_labels_color),
+            ("Bước 3", "Chạy training/validate_dataset.py", YELLOW),
+            ("Bước 4", "Chạy training/split_dataset.py", YELLOW),
+            ("Bước 5", "Chạy lại run_train.py", GREEN),
         ],
-        meaning="Doc dataset da split trong dataset/processed va bat dau huan luyen.",
+        meaning="Đọc dataset đã split trong dataset/processed và bắt đầu huấn luyện.",
         commands=[
             r".\.venv\Scripts\python training\validate_dataset.py",
             r".\.venv\Scripts\python training\split_dataset.py",
@@ -129,15 +139,15 @@ def main() -> None:
         raise SystemExit(1)
     config = load_yaml("training/train_config.yaml")
     yolo_cls = _require_yolo()
+    training_kwargs = _training_kwargs(config)
     model_name = config["model"]
     try:
-        results = yolo_cls(str(resolve_model_source(model_name))).train(**_training_kwargs(config))
+        results = yolo_cls(str(resolve_model_source(model_name))).train(**training_kwargs)
     except Exception as exc:
         logger.warning("Primary training config failed: %s", exc)
-        fallback_model = config.get("fallback_model", "yolo11n.pt")
-        config.update(model=fallback_model, imgsz=min(int(config["imgsz"]), 416), batch=min(int(config["batch"]), 4))
-        results = yolo_cls(str(resolve_model_source(fallback_model))).train(**_training_kwargs(config))
-    save_dir = Path(getattr(results, "save_dir", config["project"]))
+        fallback_config = _apply_fallback_training_config(config)
+        results = yolo_cls(str(resolve_model_source(fallback_config["model"]))).train(**_training_kwargs(fallback_config))
+    save_dir = Path(getattr(results, "save_dir", training_kwargs["project"]))
     _copy_best_weight(save_dir)
     logger.info("Training completed. Output: %s", save_dir)
 

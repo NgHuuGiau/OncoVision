@@ -25,6 +25,13 @@ def _resolve_runtime(selected_mode: str, hardware: Any) -> Any:
     return select_runtime_config_optimized(mode=selected_mode, hardware=hardware)
 
 
+def _build_recommendations(hardware: Any) -> dict[str, Any]:
+    return {
+        mode: _resolve_runtime(mode, hardware)
+        for mode in ("auto", "high", "medium", "low")
+    }
+
+
 def _default_mode_for_target(requested_target: str | None, preferred_target: str) -> str:
     target = requested_target or preferred_target
     if target == "camera":
@@ -56,19 +63,17 @@ def resolve_start_bundle(
     hardware = detect_hardware()
     selected_mode = requested_mode
     runtime = None
-    recommendations = {
-        mode: _resolve_runtime(mode, hardware)
-        for mode in ("auto", "high", "medium", "low")
-    }
     if selected_mode is None:
         effective_target = requested_target or preferred_target
         if effective_target == "camera":
+            recommendations = _build_recommendations(hardware)
             selected_mode = prompt_runtime_mode_fn(hardware=hardware, recommendations=recommendations)
+            runtime = recommendations[selected_mode]
         else:
             selected_mode = _default_mode_for_target(requested_target, preferred_target)
-        runtime = recommendations[selected_mode]
+            runtime = _resolve_runtime(selected_mode, hardware)
     else:
-        runtime = recommendations.get(selected_mode) or _resolve_runtime(selected_mode, hardware)
+        runtime = _resolve_runtime(selected_mode, hardware)
 
     selected_model = requested_model or runtime.primary_model_name
     runtime = _apply_selected_model(runtime, selected_model)

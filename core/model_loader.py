@@ -41,23 +41,22 @@ def _candidate_paths(model_name: str) -> list[str]:
     pretrained_path = Path("models/pretrained") / model_name
     local_root_path = Path(model_name)
     configured_priority = load_yaml_cached(str(MODEL_CONFIG_PATH)).get("priority_order", [])
+    path_map = {
+        "models/trained/best.pt": trained_path,
+        f"models/pretrained/{model_name}": pretrained_path,
+        model_name: local_root_path,
+    }
     candidates: list[str] = []
 
     for configured_item in configured_priority:
         configured_str = str(configured_item)
-        if configured_str == "models/trained/best.pt" and trained_path.exists():
-            candidates.append(str(trained_path))
-        elif configured_str == f"models/pretrained/{model_name}" and pretrained_path.exists():
-            candidates.append(str(pretrained_path))
-        elif configured_str == model_name and local_root_path.exists():
-            candidates.append(str(local_root_path))
+        candidate_path = path_map.get(configured_str)
+        if candidate_path is not None and candidate_path.exists():
+            candidates.append(str(candidate_path))
 
-    if trained_path.exists():
-        candidates.append(str(trained_path))
-    if pretrained_path.exists():
-        candidates.append(str(pretrained_path))
-    if local_root_path.exists():
-        candidates.append(str(local_root_path))
+    for candidate_path in path_map.values():
+        if candidate_path.exists():
+            candidates.append(str(candidate_path))
     return list(dict.fromkeys(candidates))
 
 

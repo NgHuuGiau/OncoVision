@@ -62,6 +62,7 @@ def gpu_tier(hardware) -> str:
 
 
 def profile_specs_for_hardware(hardware) -> dict[str, dict]:
+    runtimes = {mode: select_runtime_config(mode, hardware) for mode in MODE_ORDER}
     return {
         mode: {
             "model": runtime.primary_model_name,
@@ -69,11 +70,7 @@ def profile_specs_for_hardware(hardware) -> dict[str, dict]:
             "imgsz": runtime.imgsz,
             "max_det": runtime.max_det,
         }
-        for mode, runtime in {
-            "high": select_runtime_config("high", hardware),
-            "medium": select_runtime_config("medium", hardware),
-            "low": select_runtime_config("low", hardware),
-        }.items()
+        for mode, runtime in runtimes.items()
     }
 
 
@@ -114,14 +111,11 @@ def stability_score(mode: str, hardware) -> int:
 
 
 def optimized_runtime(mode: str, hardware) -> RuntimeConfig:
-    if mode == "auto":
-        return select_runtime_config(default_mode_for_hardware(hardware), hardware)
-    return select_runtime_config(mode, hardware)
+    resolved_mode = default_mode_for_hardware(hardware) if mode == "auto" else mode
+    return select_runtime_config(resolved_mode, hardware)
 
 
 def select_runtime_config_optimized(mode: str, hardware):
-    if mode == "auto":
-        return select_runtime_config_optimized(default_mode_for_hardware(hardware), hardware)
     return optimized_runtime(mode, hardware)
 
 

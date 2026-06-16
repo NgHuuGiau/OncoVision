@@ -4,16 +4,10 @@ numpy
 pillow
 psutil
 GPUtil
-pandas
-matplotlib
-scikit-learn
 tqdm
 PyYAML
 torch
 torchvision
-torchaudio
-sounddevice
-speechrecognition
 PySide6
 pygments
 faster-whisper

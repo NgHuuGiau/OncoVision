@@ -35,15 +35,15 @@ def resolve_export_model_path():
 def _print_export_ready_help(error: FileNotFoundError) -> None:
     exists = TRAINED_BEST_MODEL_PATH.exists()
     print_help_screen(
-        title="YOLO EXPORT :: MODEL CHUA SAN SANG",
+        title="YOLO EXPORT :: MODEL CHƯA SẴN SÀNG",
         reason=str(error),
-        checks=[("Best model", f"{TRAINED_BEST_MODEL_PATH} ({'co' if exists else 'chua co'})", GREEN if exists else RED)],
+        checks=[("Best model", f"{TRAINED_BEST_MODEL_PATH} ({'có' if exists else 'chưa có'})", GREEN if exists else RED)],
         steps=[
-            ("Buoc 1", "Chuan bi dataset va chay train truoc", GREEN if exists else RED),
-            ("Buoc 2", "Dam bao co models/trained/best.pt", GREEN if exists else RED),
-            ("Buoc 3", "Chay lai training/export_model.py", GREEN),
+            ("Bước 1", "Chuẩn bị dataset và chạy train trước", GREEN if exists else RED),
+            ("Bước 2", "Đảm bảo có models/trained/best.pt", GREEN if exists else RED),
+            ("Bước 3", "Chạy lại training/export_model.py", GREEN),
         ],
-        meaning="Xuat models/trained/best.pt sang dinh dang ONNX de deploy.",
+        meaning="Xuất models/trained/best.pt sang định dạng ONNX để deploy.",
         commands=[
             r".\.venv\Scripts\python run_train.py",
             r".\.venv\Scripts\python training\export_model.py",
