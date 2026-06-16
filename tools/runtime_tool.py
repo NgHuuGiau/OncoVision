@@ -65,75 +65,58 @@ def _available_models() -> tuple[list[str], list[str]]:
     return available, missing
 
 
-def _summary_line(mode: str, runtime) -> str:
-    return (
-        f"{mode_title(mode)} ({mode}) -> "
-        f"model={runtime.primary_model_name}, "
-        f"thiết bị={runtime.resolved_device}, "
-        f"imgsz={runtime.imgsz}, "
-        f"max_det={runtime.max_det}, "
-        f"fallback={', '.join(runtime.candidate_models)}"
-    )
+def _load_level_label(hardware) -> str:
+    return {
+        "cool": "nhẹ",
+        "warm": "trung bình",
+        "busy": "cao",
+        "very_busy": "rất cao",
+    }[load_level(hardware)]
 
 
-def _mode_reason(mode: str, runtime, hardware) -> str:
-    quality = quality_score(runtime)
-    stability = stability_score(mode, hardware)
+def _mode_color(mode: str) -> str:
+    return {"high": GREEN, "medium": YELLOW, "low": MAGENTA}.get(mode, CYAN)
+
+
+def _runtime_brief(runtime) -> str:
+    return f"{runtime.primary_model_name} | {runtime.resolved_device} | imgsz {runtime.imgsz} | max_det {runtime.max_det}"
+
+
+def _cuda_status_text(hardware, runtime) -> str:
+    if getattr(hardware, "cuda_available", False):
+        return f"Có, sẽ chạy bằng {runtime.resolved_device}"
+    return f"Không, sẽ chạy bằng {runtime.resolved_device}"
+
+
+def _mode_when_to_choose(mode: str, hardware) -> str:
+    load_label = _load_level_label(hardware)
     if mode == "high":
-        return f"Trần cao nhất máy còn gánh được. chất lượng={quality}/100, ổn định={stability}/100."
+        return f"Chọn khi ưu tiên chất lượng nhận diện cao nhất và máy đang đủ tải. Tải hiện tại: {load_label}."
     if mode == "medium":
-        return f"Mức cân bằng đẹp nhất để dùng thường xuyên. chất lượng={quality}/100, ổn định={stability}/100."
-    return f"Mức an toàn nhất khi ưu tiên độ mượt. chất lượng={quality}/100, ổn định={stability}/100."
+        return f"Chọn khi cần cân bằng giữa độ mượt và độ chính xác. Tải hiện tại: {load_label}."
+    return f"Chọn khi cần mở nhanh, mượt, ít rủi ro khựng hình. Tải hiện tại: {load_label}."
+
+
+def _mode_risk_text(mode: str, hardware) -> str:
+    load = load_level(hardware)
+    if mode == "high":
+        if load in {"busy", "very_busy"}:
+            return "Không nên chọn nếu đang mở nhiều app hoặc muốn FPS ổn định."
+        return "Phù hợp khi bạn chấp nhận nặng hơn để đổi lấy chất lượng cao hơn."
+    if mode == "medium":
+        if load == "very_busy":
+            return "Nếu máy đang quá tải thì vẫn có thể giật, lúc đó nên xuống low."
+        return "Đây thường là mức dễ chọn đúng nhất cho chạy camera hằng ngày."
+    if load in {"cool", "warm"}:
+        return "Nếu thấy nhận diện còn thiếu chi tiết, có thể tăng lên medium."
+    return "Đây là mức an toàn nhất khi máy đang bận hoặc bạn cần ưu tiên độ mượt."
 
 
 def _best_solution_text(auto_runtime, hardware) -> str:
-    load_text = {
-        "cool": "tải hiện tại nhẹ",
-        "warm": "tải hiện tại trung bình",
-        "busy": "tải hiện tại khá cao",
-        "very_busy": "tải hiện tại rất cao",
-    }[load_level(hardware)]
     return (
-        f"Đề xuất nên chạy ngay là {mode_label(auto_runtime.mode)} vì {load_text}, "
-        f"với {auto_runtime.primary_model_name} / {auto_runtime.resolved_device} / "
-        f"imgsz {auto_runtime.imgsz} / max_det {auto_runtime.max_det}."
+        f"Chọn {mode_label(auto_runtime.mode)} ngay lúc này vì tải máy đang {_load_level_label(hardware)}. "
+        f"Thực tế sẽ chạy: {_runtime_brief(auto_runtime)}."
     )
-
-
-def _wow_conclusion(hardware, recommendations, auto_runtime) -> list[str]:
-    ceiling_mode = ceiling_mode_for_hardware(hardware)
-    ceiling_runtime = recommendations[ceiling_mode]
-    return [
-        (
-            f"trần tối đa máy đang gánh được: {mode_label(ceiling_mode)} ({ceiling_mode}) / "
-            f"{ceiling_runtime.primary_model_name} / {ceiling_runtime.resolved_device} / "
-            f"imgsz {ceiling_runtime.imgsz} / max_det {ceiling_runtime.max_det}"
-        ),
-        (
-            f"mức đẹp nhất để chạy thường xuyên: trung bình / "
-            f"{recommendations['medium'].primary_model_name} / {recommendations['medium'].resolved_device} / "
-            f"imgsz {recommendations['medium'].imgsz} / max_det {recommendations['medium'].max_det}"
-        ),
-        (
-            f"mức an toàn nhất khi muốn mượt: yếu nhất / "
-            f"{recommendations['low'].primary_model_name} / {recommendations['low'].resolved_device} / "
-            f"imgsz {recommendations['low'].imgsz} / max_det {recommendations['low'].max_det}"
-        ),
-        (
-            f"đề xuất chạy ngay lúc này: {mode_label(auto_runtime.mode)} ({auto_runtime.mode}) / "
-            f"{auto_runtime.primary_model_name} / {auto_runtime.resolved_device} / "
-            f"imgsz {auto_runtime.imgsz} / max_det {auto_runtime.max_det}"
-        ),
-    ]
-
-
-def _print_lines(lines: list[str], *, print_fn=print) -> None:
-    for item in lines:
-        print_fn(item)
-
-
-def _model_local_text(models: list[str]) -> str:
-    return ", ".join(models) if models else "không có model local nào"
 
 
 def _recommended_models_for_mode(mode: str, recommendations: dict[str, object] | None) -> list[str]:
@@ -147,14 +130,34 @@ def _recommended_models_for_mode(mode: str, recommendations: dict[str, object] |
     return [item for item in dict.fromkeys([primary, *candidates]) if item]
 
 
-def _mode_color(mode: str) -> str:
-    return {"high": GREEN, "medium": YELLOW, "low": MAGENTA}.get(mode, CYAN)
+def _model_local_text(models: list[str]) -> str:
+    return ", ".join(models) if models else "không có model local nào"
 
 
 def _project_model_text(settings: dict, mode: str) -> str:
     profile = settings["models"][mode]
     device = "gpu" if mode in {"high", "medium"} else "auto"
     return f"{profile['model']} / {device} / imgsz {profile['imgsz']}"
+
+
+def _mode_decision_lines(mode: str, runtime, hardware) -> list[tuple[str, str, str]]:
+    return [
+        ("  Nên chọn khi", _mode_when_to_choose(mode, hardware), DIM),
+        ("  Model / Imgsz", f"{runtime.primary_model_name} / {runtime.imgsz}", CYAN),
+        ("  Thiết bị chạy", _cuda_status_text(hardware, runtime), CYAN),
+        ("  Max det", str(runtime.max_det), CYAN),
+        (
+            "  Điểm số",
+            f"chất lượng {quality_score(runtime)}/100 | ổn định {stability_score(mode, hardware)}/100",
+            DIM,
+        ),
+        ("  Lưu ý", _mode_risk_text(mode, hardware), DIM),
+    ]
+
+
+def _print_lines(lines: list[str], *, print_fn=print) -> None:
+    for item in lines:
+        print_fn(item)
 
 
 def _runtime_overview_lines(
@@ -168,9 +171,11 @@ def _runtime_overview_lines(
     available_models, missing_models = _available_models()
     preferred = model_config.get("preferred_models", {})
     priority_order = model_config.get("priority_order", [])
+    ceiling_mode = ceiling_mode_for_hardware(hardware)
+    ceiling_runtime = recommendations[ceiling_mode]
 
     lines: list[str] = []
-    lines.extend(header("BỘ TƯ VẤN RUNTIME YOLO :: THĂM DÒ MÁY VÀ ĐỀ XUẤT 3 MỨC TỐI ƯU"))
+    lines.extend(header("BỘ TƯ VẤN RUNTIME YOLO :: THĂM DÒ MÁY VÀ CHỌN ĐÚNG MỨC CHẠY"))
     lines.extend(
         [
             section("TỔNG QUAN MÁY", GREEN),
@@ -185,7 +190,7 @@ def _runtime_overview_lines(
             row("Tải CPU", _usage_text(hardware.cpu_usage_percent), _usage_color(hardware.cpu_usage_percent), bounded=False),
             row("Tải GPU", _usage_text(hardware.gpu_usage_percent), _usage_color(hardware.gpu_usage_percent), bounded=False),
             row("Tải VRAM", _usage_text(hardware.vram_usage_percent), _usage_color(hardware.vram_usage_percent), bounded=False),
-            row("Trạng thái tải", load_level(hardware), MAGENTA, bounded=False),
+            row("Tải tổng thể", _load_level_label(hardware), MAGENTA, bounded=False),
             line(rule("-"), CYAN),
             section("YOLO11 VÀ MODEL LOCAL", MAGENTA),
             row("5 phiên bản", ", ".join(YOLO11_VARIANTS), CYAN, bounded=False),
@@ -197,31 +202,21 @@ def _runtime_overview_lines(
                 bounded=False,
             ),
             line(rule("-"), CYAN),
-            section("ĐỊNH NGHĨA 3 MỨC", YELLOW),
-            row("Mạnh nhất", "mức cao nhất máy còn gánh được", GREEN, bounded=False),
-            row("Trung bình", "mức cân bằng đẹp nhất để chạy thường xuyên", YELLOW, bounded=False),
-            row("Yếu nhất", "mức nhẹ nhất để ưu tiên độ mượt và an toàn", MAGENTA, bounded=False),
+            section("HIỂU NHANH 3 MỨC", YELLOW),
+            row("Mạnh nhất", "ưu tiên chất lượng cao nhất, nặng nhất", GREEN, bounded=False),
+            row("Trung bình", "cân bằng tốt nhất để chạy thường xuyên", YELLOW, bounded=False),
+            row("Yếu nhất", "ưu tiên mượt và an toàn, nhẹ nhất", MAGENTA, bounded=False),
             line(rule("-"), CYAN),
-            section("3 MỨC TỐI ƯU TRÊN MÁY NÀY", CYAN),
+            section("3 MỨC THỰC TẾ TRÊN MÁY NÀY", CYAN),
         ]
     )
 
     for mode in MODE_ORDER:
         runtime = recommendations[mode]
-        color = _mode_color(mode)
-        lines.extend(
-            [
-                row(mode_title(mode), _summary_line(mode, runtime), color, bounded=False),
-                row(
-                    "  Đánh giá",
-                    f"chất lượng {quality_score(runtime)}/100 | ổn định {stability_score(mode, hardware)}/100",
-                    DIM,
-                    bounded=False,
-                ),
-                row("  Giải thích", _mode_reason(mode, runtime, hardware), DIM, bounded=False),
-                line(rule("."), DIM),
-            ]
-        )
+        lines.append(row(mode_title(mode), "", _mode_color(mode), bounded=False))
+        for label, value, style in _mode_decision_lines(mode, runtime, hardware):
+            lines.append(row(label, value, style, bounded=False))
+        lines.append(line(rule("."), DIM))
 
     lines.extend(
         [
@@ -248,12 +243,12 @@ def _runtime_overview_lines(
     lines.extend(
         [
             line(rule("-"), CYAN),
-            section("KẾT LUẬN NHANH", MAGENTA),
+            section("CHỐT CÁCH CHỌN", MAGENTA),
+            row("Trần tối đa", _runtime_brief(ceiling_runtime), GREEN, bounded=False),
+            row("Nên chọn hằng ngày", _runtime_brief(recommendations["medium"]), YELLOW, bounded=False),
+            row("Nên chọn ngay", _best_solution_text(auto_runtime, hardware), GREEN, bounded=False),
         ]
     )
-    for item in _wow_conclusion(hardware, recommendations, auto_runtime):
-        lines.append(row("Giải pháp", item, GREEN, bounded=False))
-    lines.append(row("Đề xuất tốt nhất", _best_solution_text(auto_runtime, hardware), YELLOW, bounded=False))
     return lines
 
 
@@ -261,10 +256,10 @@ def _runtime_mode_choice_lines(hardware, recommendations: dict[str, object]) -> 
     return [
         line(rule("-"), CYAN),
         section("CHỌN CHẾ ĐỘ SẼ CHẠY", CYAN),
-        row("Đề xuất", _best_solution_text(recommendations["auto"], hardware), YELLOW, bounded=False),
-        row("1 | MẠNH NHẤT", _summary_line("high", recommendations["high"]), GREEN, bounded=False),
-        row("2 | TRUNG BÌNH", _summary_line("medium", recommendations["medium"]), YELLOW, bounded=False),
-        row("3 | YẾU NHẤT", _summary_line("low", recommendations["low"]), MAGENTA, bounded=False),
+        row("Nên chọn ngay", _best_solution_text(recommendations["auto"], hardware), YELLOW, bounded=False),
+        row("1 | MẠNH NHẤT", _runtime_brief(recommendations["high"]), GREEN, bounded=False),
+        row("2 | TRUNG BÌNH", _runtime_brief(recommendations["medium"]), YELLOW, bounded=False),
+        row("3 | YẾU NHẤT", _runtime_brief(recommendations["low"]), MAGENTA, bounded=False),
         line(rule("."), DIM),
         row("0 | THOÁT", "Đóng chương trình ngay tại đây.", RED, bounded=False),
         line(rule("="), CYAN),

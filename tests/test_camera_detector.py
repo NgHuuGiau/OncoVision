@@ -231,8 +231,8 @@ class CameraDetectorTests(unittest.TestCase):
         detector = CameraDetector(runtime=select_runtime_config("low", hardware))
 
         self.assertEqual(detector._effective_inference_imgsz(), 320)
-        self.assertEqual(detector._effective_max_det(), 10)
-        self.assertEqual(detector._effective_confidence(), 0.35)
+        self.assertEqual(detector._effective_max_det(), 6)
+        self.assertEqual(detector._effective_confidence(), 0.42)
         self.assertEqual(detector._effective_box_thickness(), 2)
         self.assertGreaterEqual(detector._effective_label_font_scale(), 0.62)
 
@@ -370,8 +370,8 @@ class CameraDetectorTests(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].label, "person")
-        self.assertEqual(result[0].bbox, (21, 21, 81, 121))
-        self.assertEqual(detector.previous_display_detections[0].bbox, (21, 21, 81, 121))
+        self.assertEqual(result[0].bbox, (23, 23, 83, 123))
+        self.assertEqual(detector.previous_display_detections[0].bbox, (23, 23, 83, 123))
         self.assertEqual(detector.previous_observed_detections[0].bbox, (30, 30, 90, 130))
 
     def test_smooth_display_detections_clears_previous_boxes_when_current_frame_is_empty(self) -> None:

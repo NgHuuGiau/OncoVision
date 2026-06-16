@@ -50,7 +50,7 @@ class YoloLoaderTests(unittest.TestCase):
 
     @patch("core.model_loader.load_yaml_cached")
     @patch("pathlib.Path.exists", autospec=True)
-    def test_candidate_paths_prioritize_pretrained_then_trained_then_name(
+    def test_candidate_paths_prioritize_requested_pretrained_only_for_generic_model(
         self,
         exists_mock,
         load_yaml_mock,
@@ -75,7 +75,32 @@ class YoloLoaderTests(unittest.TestCase):
 
         self.assertEqual(
             [candidate.replace("\\", "/") for candidate in candidates],
-            ["models/pretrained/yolo11s.pt", "models/trained/best.pt"],
+            ["models/pretrained/yolo11s.pt"],
+        )
+
+    @patch("core.model_loader.load_yaml_cached")
+    @patch("pathlib.Path.exists", autospec=True)
+    def test_candidate_paths_include_trained_best_only_when_explicitly_requested(
+        self,
+        exists_mock,
+        load_yaml_mock,
+    ) -> None:
+        load_yaml_mock.return_value = {
+            "priority_order": [
+                "models/trained/best.pt",
+            ]
+        }
+
+        def fake_exists(path_obj):
+            return str(path_obj).replace("\\", "/") == "models/trained/best.pt"
+
+        exists_mock.side_effect = fake_exists
+
+        candidates = _candidate_paths("models/trained/best.pt")
+
+        self.assertEqual(
+            [candidate.replace("\\", "/") for candidate in candidates],
+            ["models/trained/best.pt"],
         )
 
     @patch("core.model_loader._candidate_paths", return_value=[])

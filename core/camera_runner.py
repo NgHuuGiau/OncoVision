@@ -34,17 +34,17 @@ FACE_LABEL = "face"
 PERSON_LABEL = "person"
 PHONE_LABEL = "phone"
 PHONE_LABEL_ALIASES = {PHONE_LABEL, "cell phone", "mobile phone", "smartphone"}
-FACE_TRACKING_STICKY_ALPHA = 0.96
-FACE_TRACKING_STABLE_MOTION_RATIO = 0.16
-FACE_JITTER_FREEZE_RATIO = 0.05
-FACE_JITTER_MAX_SIZE_CHANGE_RATIO = 0.10
-TRACKING_MATCH_IOU = 0.30
-TRACKING_SMOOTHING_ALPHA = 0.75
-TRACKING_FAST_SMOOTHING_ALPHA = 0.50
-TRACKING_STABLE_SMOOTHING_ALPHA = 0.92
-TRACKING_MATCH_CENTER_RATIO = 0.50
-TRACKING_PREDICTION_MOTION_RATIO = 0.30
-TRACKING_STABLE_MOTION_RATIO = 0.10
+FACE_TRACKING_STICKY_ALPHA = 0.90
+FACE_TRACKING_STABLE_MOTION_RATIO = 0.14
+FACE_JITTER_FREEZE_RATIO = 0.035
+FACE_JITTER_MAX_SIZE_CHANGE_RATIO = 0.08
+TRACKING_MATCH_IOU = 0.35
+TRACKING_SMOOTHING_ALPHA = 0.65
+TRACKING_FAST_SMOOTHING_ALPHA = 0.30
+TRACKING_STABLE_SMOOTHING_ALPHA = 0.80
+TRACKING_MATCH_CENTER_RATIO = 0.42
+TRACKING_PREDICTION_MOTION_RATIO = 0.22
+TRACKING_STABLE_MOTION_RATIO = 0.06
 TRACK_TRAIL_MAX_POINTS = 10
 TRACK_TRAIL_MIN_MOVEMENT_PX = 4.0
 FRAME_READY_MAX_AGE_SECONDS = 0.25
@@ -616,6 +616,8 @@ class CameraDetector:
         brightness = _mean_luminance(frame)
         if brightness >= float(getattr(self.runtime, "low_light_mean_threshold", 96.0)):
             return frame
+        if brightness >= max(24.0, float(getattr(self.runtime, "low_light_mean_threshold", 96.0)) * 0.72):
+            return frame
         return _enhance_low_light_frame(frame)
 
     def _effective_inference_imgsz(self) -> int:
@@ -627,16 +629,20 @@ class CameraDetector:
 
     def _effective_max_det(self) -> int:
         if self.runtime.profile_name == "low":
-            return min(self.runtime.max_det, 10)
+            return min(self.runtime.max_det, 6)
         if self.runtime.profile_name == "medium":
-            return min(self.runtime.max_det, 30)
+            return min(self.runtime.max_det, 16)
+        if self.runtime.profile_name == "high":
+            return min(self.runtime.max_det, 24)
         return self.runtime.max_det
 
     def _effective_confidence(self) -> float:
         if self.runtime.profile_name == "low":
-            return max(self.runtime.conf, 0.35)
+            return max(self.runtime.conf, 0.42)
         if self.runtime.profile_name == "medium":
-            return max(self.runtime.conf, 0.30)
+            return max(self.runtime.conf, 0.38)
+        if self.runtime.profile_name == "high":
+            return max(self.runtime.conf, 0.32)
         return self.runtime.conf
 
     def _effective_display_detections(

@@ -18,7 +18,7 @@ class RunMenuTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        self.assertTrue(any("Da thoat menu" in line for line in outputs))
+        self.assertTrue(any("Đã thoát menu" in line for line in outputs))
         clear_terminal.assert_not_called()
 
     def test_main_runs_selected_script(self) -> None:
@@ -36,7 +36,7 @@ class RunMenuTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_doctor.py")
-        self.assertTrue(any("Quay lai menu" in line for line in outputs))
+        self.assertTrue(any("Quay lại menu" in line for line in outputs))
         clear_terminal.assert_called_once()
 
     def test_main_runs_training_via_run_train(self) -> None:
@@ -72,7 +72,7 @@ class RunMenuTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_tests.py")
-        self.assertTrue(any("Lua chon khong hop le" in line for line in outputs))
+        self.assertTrue(any("Lựa chọn không hợp lệ" in line for line in outputs))
         clear_terminal.assert_called_once()
 
     def test_main_returns_to_menu_after_nonzero_exit(self) -> None:
@@ -90,7 +90,7 @@ class RunMenuTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_chat.py")
-        self.assertTrue(any("ket thuc voi ma" in line for line in outputs))
+        self.assertTrue(any("kết thúc với mã" in line for line in outputs))
         clear_terminal.assert_called_once()
 
     def test_menu_restores_run_app_entrypoint(self) -> None:

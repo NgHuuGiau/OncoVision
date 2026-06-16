@@ -61,6 +61,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             QWidgetAction,
             QGraphicsDropShadowEffect,
             QGraphicsBlurEffect,
+            QGraphicsOpacityEffect,
             QVBoxLayout,
             QWidget,
         )
@@ -2017,6 +2018,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.language = "vi"
             self.theme_mode = "system"
             self.effective_theme = "system"
+            self.theme_overlay: QLabel | None = None
+            self.theme_overlay_effect = None
+            self.theme_transition_anim = None
             self.sidebar_expanded = True
             self.is_refreshing_history = False
             self.is_recording = False
@@ -2402,40 +2406,76 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                     pass
             return "dark"
 
-        def apply_theme(self) -> None:
+        def _resolved_theme_target(self) -> str:
             target = self.theme_mode
             if target == "system":
                 target = self.detect_system_theme()
+            return "light" if target == "light" else "dark"
 
-            self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
-            self.fade_anim.setDuration(150)
-            self.fade_anim.setStartValue(1.0)
-            self.fade_anim.setEndValue(0.7)
+        def _clear_theme_overlay(self) -> None:
+            if self.theme_transition_anim is not None:
+                try:
+                    self.theme_transition_anim.stop()
+                except Exception:
+                    pass
+            self.theme_transition_anim = None
+            self.theme_overlay_effect = None
+            if self.theme_overlay is not None:
+                try:
+                    self.theme_overlay.deleteLater()
+                except Exception:
+                    pass
+            self.theme_overlay = None
 
-            def on_fade_done():
-                if target == "light":
-                    self.effective_theme = "light"
-                    app = QApplication.instance()
-                    if app:
-                        app.setStyleSheet(LIGHT_STYLESHEET)
-                else:
-                    self.effective_theme = "dark"
-                    app = QApplication.instance()
-                    if app:
-                        app.setStyleSheet(DARK_STYLESHEET)
+        def _apply_theme_target(self, target: str) -> None:
+            self.effective_theme = target
+            app = QApplication.instance()
+            if app:
+                app.setStyleSheet(LIGHT_STYLESHEET if target == "light" else DARK_STYLESHEET)
+            self.db.set_setting("theme", self.theme_mode)
+            self.apply_theme_assets()
+            self.refresh_history()
 
-                self.db.set_setting("theme", self.theme_mode)
-                self.apply_theme_assets()
-                self.refresh_history()
+        def _animate_theme_overlay(self, snapshot: QPixmap) -> None:
+            if snapshot.isNull():
+                return
+            self._clear_theme_overlay()
+            overlay = QLabel(self)
+            overlay.setObjectName("ThemeTransitionOverlay")
+            overlay.setPixmap(snapshot)
+            overlay.setScaledContents(True)
+            overlay.setGeometry(self.rect())
+            overlay.show()
+            overlay.raise_()
+            effect = QGraphicsOpacityEffect(overlay)
+            effect.setOpacity(1.0)
+            overlay.setGraphicsEffect(effect)
 
-                self.fade_in = QPropertyAnimation(self, b"windowOpacity")
-                self.fade_in.setDuration(200)
-                self.fade_in.setStartValue(0.7)
-                self.fade_in.setEndValue(1.0)
-                self.fade_in.start()
+            animation = QPropertyAnimation(effect, b"opacity", self)
+            animation.setDuration(280)
+            animation.setStartValue(1.0)
+            animation.setEndValue(0.0)
+            animation.setEasingCurve(QEasingCurve.InOutCubic)
 
-            self.fade_anim.finished.connect(on_fade_done)
-            self.fade_anim.start()
+            def _finish_overlay() -> None:
+                self._clear_theme_overlay()
+
+            animation.finished.connect(_finish_overlay)
+            self.theme_overlay = overlay
+            self.theme_overlay_effect = effect
+            self.theme_transition_anim = animation
+            animation.start()
+
+        def apply_theme(self) -> None:
+            target = self._resolved_theme_target()
+            if target == self.effective_theme:
+                self._apply_theme_target(target)
+                return
+            snapshot = self.grab()
+            self._apply_theme_target(target)
+            self.repaint()
+            QApplication.processEvents()
+            self._animate_theme_overlay(snapshot)
 
         def cycle_theme_mode(self) -> None:
             order = ["system", "dark", "light"]

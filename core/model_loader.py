@@ -41,11 +41,14 @@ def _candidate_paths(model_name: str) -> list[str]:
     pretrained_path = Path("models/pretrained") / model_name
     local_root_path = Path(model_name)
     configured_priority = load_yaml_cached(str(MODEL_CONFIG_PATH)).get("priority_order", [])
+    normalized_model_name = str(model_name).replace("\\", "/")
+    explicit_trained_best = normalized_model_name == "models/trained/best.pt"
     path_map = {
-        "models/trained/best.pt": trained_path,
         f"models/pretrained/{model_name}": pretrained_path,
         model_name: local_root_path,
     }
+    if explicit_trained_best:
+        path_map["models/trained/best.pt"] = trained_path
     candidates: list[str] = []
 
     for configured_item in configured_priority:

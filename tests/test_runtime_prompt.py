@@ -130,3 +130,9 @@ class RuntimePromptTests(unittest.TestCase):
         self.assertEqual(mode, "medium")
         self.assertTrue(any("BỘ TƯ VẤN RUNTIME YOLO" in line for line in printed))
         self.assertTrue(any("CHỌN CHẾ ĐỘ SẼ CHẠY" in line for line in printed))
+        self.assertTrue(any("Model / Imgsz" in line for line in printed))
+        self.assertTrue(any("Nên chọn ngay" in line for line in printed))
+
+
+if __name__ == "__main__":
+    unittest.main()
