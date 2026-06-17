@@ -19,11 +19,10 @@ run_menu.py
   -> run_train.py
 ```
 
-## 3. Kiến trúc runtime camera
+## 3. Kiến trúc runtime camera hiện tại
 
 ```text
 run_app.py
-  -> app.camera_runtime.entrypoint
   -> app.camera_runtime.bootstrap
   -> core.runtime_advisor
   -> core.model_selector
@@ -32,24 +31,31 @@ run_app.py
   -> utils.draw_utils
 ```
 
+Lưu ý:
+
+- `run_app.py` hiện đi thẳng vào `resolve_start_bundle(...)` rồi `run_camera_session(...)`.
+- `app/camera_runtime/entrypoint.py` vẫn còn trong repo để giữ tương thích và phục vụ test, nhưng không còn là đường chạy chính.
+- `run_camera_preview_session(...)` là nhánh preview cũ, không còn được ứng dụng chính sử dụng mặc định.
+
 ## 4. Vai trò từng module quan trọng
 
-### `app/runtime_entry.py`
+### `run_app.py`
 
-- Xây parser CLI.
-- Điều phối luồng camera hoặc UI.
-- In dashboard trước khi mở camera.
+- Nhận tham số CLI.
+- Gọi `resolve_start_bundle(...)` để lấy runtime phù hợp.
+- In dashboard khởi động.
+- Gọi `run_camera_session(...)` để mở camera và inference.
 
-### `app/chat_bootstrap.py`
+### `app/camera_runtime/bootstrap.py`
 
 - Dò phần cứng hiện tại.
 - Xây `StartOptions`.
 - Chọn mode mặc định theo target và phần cứng.
+- Áp model người dùng yêu cầu vào runtime cuối cùng.
 
 ### `core/runtime_advisor.py`
 
-- Tạo runtime tối ưu cho `high`, `medium`, `low`.
-- Phù hợp hơn với máy thực tế so với cấu hình tối thiểu.
+- Tạo runtime tối ưu cho `high`, `medium`, `low` và `auto`.
 - Là nguồn recommendation chính cho `run_app.py` và `run_doctor.py`.
 
 ### `core/model_selector.py`
@@ -68,14 +74,26 @@ run_app.py
 - Mở camera và đọc frame theo luồng riêng.
 - Chạy YOLO predict.
 - Lọc detection, làm mượt box, gán track id, vẽ motion trail.
-- Tăng sáng frame tối trước inference khi cần.
+- Tăng sáng frame tối trước khi inference khi cần.
 - Trả FPS và trạng thái runtime.
 
 ### `utils/draw_utils.py`
 
 - Vẽ box và label.
-- Neo FPS badge vào box nhận diện chính.
-- Tự né mép khung hình nếu box nằm sát rìa.
+- Neo badge FPS vào box nhận diện chính.
+- Tự tránh mép khung hình nếu box nằm sát rìa.
+
+### `run_doctor.py`
+
+- Kiểm tra sức khỏe hệ thống.
+- Kiểm tra camera thật, model local, icon và dataset.
+- In các lệnh nên chạy tiếp theo.
+
+### `run_tests.py`
+
+- Chạy toàn bộ unit test.
+- Có phần kiểm tra camera thật trước test nếu người dùng không bỏ qua.
+- In dashboard test để theo dõi tiến độ.
 
 ## 5. Cách hệ thống chọn runtime
 
@@ -86,11 +104,12 @@ Khi chạy `run_app.py`:
 3. Resolve `RuntimeConfig` tương ứng với `high`, `medium`, `low` hoặc `auto`.
 4. Dùng runtime đó để load model và mở camera.
 
-### Ý nghĩa của các mode
+### Ý nghĩa các mode
 
 - `high`: mức chất lượng cao nhất máy còn gánh được.
 - `medium`: mức cân bằng để dùng thường xuyên.
 - `low`: mức an toàn nhất khi cần mượt và ổn định.
+- `auto`: để hệ thống tự chọn cấu hình hợp lý từ thông tin phần cứng.
 
 ## 6. Vì sao `run_doctor.py` và `run_app.py` phải đồng bộ
 
@@ -99,7 +118,7 @@ Nếu `run_doctor.py` dùng logic chọn runtime cũ còn `run_app.py` dùng log
 - Doctor gợi ý một model.
 - Camera thực tế lại chạy model khác.
 
-Hiện tại hai luồng này đã được đồng bộ để cùng phản ánh cấu hình tối ưu thực tế.
+Hiện tại hai luồng này đã được đồng bộ ở mức chọn runtime, nhưng vẫn còn lặp một phần logic kiểm tra camera giữa `run_doctor.py` và `run_tests.py`. Đây là vùng có thể tiếp tục refactor sau.
 
 ## 7. Tinh chỉnh nhận diện
 
@@ -136,7 +155,6 @@ run_chat.py
 run_doctor.py
 run_menu.py
 run_tests.py
-run_app.py --advisor-only
 run_train.py
 ```
 
@@ -188,5 +206,5 @@ names:
 
 - Không đổi logic recommendation ở `run_app.py` mà quên cập nhật `run_doctor.py`.
 - Không đổi vị trí hiển thị FPS mà quên sửa test visualization.
-- Không đổi threshold trong `config/settings.yaml` mà quên document lại README/docs.
+- Không đổi threshold trong `config/settings.yaml` mà quên cập nhật README/docs.
 - Nếu terminal bị lỗi dấu tiếng Việt, kiểm tra helper UTF-8 trong `utils/terminal_encoding.py`.

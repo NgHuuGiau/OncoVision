@@ -22,7 +22,7 @@ Bạn nên chạy `run_app.py --advisor-only` khi muốn:
 - CPU, RAM, GPU, VRAM.
 - Trạng thái CUDA và PyTorch.
 - Các model YOLO local đang có.
-- 3 mức runtime `high`, `medium`, `low`.
+- Các mức runtime `high`, `medium`, `low`.
 - `model`, `device`, `imgsz`, `max_det` của từng mức.
 - Mức đề xuất nên dùng ngay tại thời điểm chạy.
 

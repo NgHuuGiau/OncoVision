@@ -85,7 +85,7 @@ def _option_label(key: str, option: MenuOption) -> tuple[str, str]:
 
 
 def _render_menu(print_fn=print) -> None:
-    for item in header("YOLO HUB :: MENU ĐIỀU KHIỂN"):
+    for item in header("YOLO HUB : MENU ĐIỀU KHIỂN"):
         print_fn(item)
     current_group = ""
     for key in (*PRIMARY_KEYS, "0"):

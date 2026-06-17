@@ -36,9 +36,7 @@ names:
 Điều này có nghĩa:
 
 - Dataset hiện được cấu hình tối thiểu cho class `person`.
-- Nếu bạn muốn train thêm `phone`, `face`, `helmet` hoặc class khác, bạn phải cập nhật đồng thời:
-  - ảnh và label trong `dataset/raw/`
-  - mapping class trong `training/data.yaml`
+- Nếu bạn muốn train thêm `phone`, `face`, `helmet` hoặc class khác, bạn phải cập nhật đồng thời ảnh và label trong `dataset/raw/`, cùng mapping class trong `training/data.yaml`.
 
 ## 4. Luồng training khuyến nghị
 

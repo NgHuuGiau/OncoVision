@@ -5,13 +5,13 @@
 ![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO11-111827)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?logo=opencv&logoColor=white)
 ![PySide6](https://img.shields.io/badge/PySide6-Qt_for_Python-41CD52?logo=qt&logoColor=white)
-![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia&logoColor=white)
+![CUDA](https://img.shields.io/badge/CUDA-Tùy chọn-76B900?logo=nvidia&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 ![UTF-8](https://img.shields.io/badge/Terminal-UTF--8-0F766E)
 
 Repo này tập trung vào 3 nhóm chức năng chính:
 
-- Chạy YOLO realtime trên webcam với cấu hình tự thích nghi theo phần cứng.
+- Chạy YOLO realtime trên webcam với cấu hình thích nghi theo phần cứng.
 - Kiểm tra, tư vấn và chẩn đoán runtime bằng terminal.
 - Huấn luyện, đánh giá và xuất model custom từ dataset riêng.
 
@@ -20,18 +20,10 @@ Repo này tập trung vào 3 nhóm chức năng chính:
 - Ngôn ngữ chính: Python.
 - Inference: Ultralytics YOLO, PyTorch, CUDA tùy chọn.
 - Xử lý ảnh và camera: OpenCV, NumPy.
-- Giao diện desktop: PySide6 (Qt for Python).
-- Terminal và log: UTF-8 trên Windows, hiển thị tiếng Việt đầy đủ.
+- Giao diện desktop: PySide6.
+- Terminal và log: UTF-8 trên Windows để hiển thị tiếng Việt đầy đủ.
 
-## Điểm nổi bật hiện tại
-
-- `run_app.py` mở camera realtime và chạy nhận diện thật, không còn rơi vào chế độ chỉ preview FPS.
-- FPS được hiển thị thành badge rõ ràng, bám theo box nhận diện chính; khi không có box, FPS sẽ tự rơi về góc an toàn trên khung hình.
-- Runtime camera hỗ trợ tinh chỉnh `confidence`, `IoU`, `imgsz`, ngưỡng hiển thị và tăng sáng khung hình tối từ `config/settings.yaml`.
-- `run_doctor.py` và chế độ tư vấn trong `run_app.py --advisor-only` đã đồng bộ với logic chọn runtime thực tế của `run_app.py`.
-- Terminal/log dùng UTF-8 trên Windows để hiển thị tiếng Việt đầy đủ.
-
-## Các script chính
+## Thành phần chính
 
 - `run_menu.py`: menu tổng để mở nhanh các công cụ chính.
 - `run_app.py`: camera realtime YOLO, có dashboard phần cứng và nhận diện.
@@ -45,34 +37,22 @@ Repo này tập trung vào 3 nhóm chức năng chính:
 
 Khi chạy `run_app.py`:
 
-1. Hệ thống dò CPU, RAM, GPU, VRAM, PyTorch và CUDA.
-2. Runtime được chọn theo phần cứng bằng bộ tối ưu trong `core/runtime_advisor.py`.
-3. YOLO load model local theo `candidate_models` của runtime và thứ tự ưu tiên trong `config/model_config.yaml`.
-4. Camera mở bằng luồng đọc frame riêng để giảm trễ.
-5. Nếu khung hình tối, pipeline có thể tăng sáng nhẹ trước khi inference.
-6. Kết quả nhận diện được lọc, làm mượt box, vẽ trail chuyển động và hiển thị FPS.
+1. Hệ thống đọc tham số CLI.
+2. `app.camera_runtime.bootstrap.resolve_start_bundle()` dò phần cứng và chọn runtime phù hợp.
+3. Dashboard khởi động được in ra terminal.
+4. `core.camera_runner.run_camera_session()` mở camera và bắt đầu inference.
+5. Kết quả nhận diện được lọc, làm mượt box, vẽ trail và hiển thị FPS.
 
-### FPS hiển thị như thế nào
-
-- Nếu có detection: badge `FPS` bám theo box có độ tin cậy cao nhất, ưu tiên góc phải phía dưới.
-- Nếu box ở sát mép ảnh: badge tự đổi vị trí để không bị cắt.
-- Nếu chưa có detection: badge `FPS` rơi về góc an toàn trên khung hình.
-- Bật/tắt bằng `camera.show_fps` trong `config/settings.yaml`.
-
-### Vì sao trước đó camera chỉ hiện FPS mà không nhận diện
-
-Nguyên nhân chính ở nhánh hiện tại là `run_app.py` đã từng bị đổi sang `run_camera_preview_session(...)`, nghĩa là chỉ mở camera để đo FPS chứ không gọi YOLO detect. Luồng này đã được khôi phục về `run_camera_session(...)`.
+Lưu ý: nhánh hiện tại đã dùng trực tiếp `run_camera_session(...)`. Luồng preview-only cũ không còn là đường chạy chính của ứng dụng.
 
 ## Tối ưu nhận diện hiện tại
 
-Các điểm đã được rà soát và tối ưu:
+Các điểm đã được tổ chức lại và tối ưu:
 
-- Mô hình: `run_app.py` dùng runtime tối ưu theo máy, thay vì cấu hình camera quá bảo thủ.
-- Confidence: vẫn giữ ngưỡng model base ở mức vừa phải, nhưng thêm ngưỡng hiển thị riêng cho `person`, `phone` và object chung.
-- IoU: đưa về cấu hình rõ ràng trong `config/settings.yaml` và truyền thẳng vào YOLO predict.
-- `imgsz`: chọn theo profile `high/medium/low`, phản ánh đúng năng lực GPU/CPU.
-- Tiền xử lý: thêm tăng sáng có điều kiện cho khung hình tối để cải thiện nhận diện webcam.
-- FPS: tách FPS ra khỏi panel tĩnh để tránh che góc ảnh và giúp đọc frame dễ hơn.
+- Runtime được chọn theo phần cứng, thay vì dùng một cấu hình cố định cho mọi máy.
+- `confidence`, `IoU`, `imgsz` và các ngưỡng hiển thị được cấu hình trong `config/settings.yaml`.
+- Có thể tăng sáng có điều kiện cho khung hình tối trước khi inference.
+- FPS được hiển thị thành badge riêng, tránh che khuất nội dung quan trọng trên khung hình.
 
 Nếu bạn cần nhận diện class custom thay vì object tổng quát từ model pretrained, có thể chạy:
 
@@ -80,7 +60,7 @@ Nếu bạn cần nhận diện class custom thay vì object tổng quát từ m
 .\.venv\Scripts\python run_app.py --model models/trained/best.pt
 ```
 
-Điều này đặc biệt quan trọng nếu `best.pt` của bạn được train cho class riêng như `face`, `helmet`, `phone`, v.v.
+Điều này đặc biệt quan trọng khi `best.pt` được train cho class riêng như `face`, `helmet`, `phone`, v.v.
 
 ## Cài đặt nhanh
 
@@ -135,17 +115,17 @@ Ví dụ ép dùng model custom:
 
 Các khóa quan trọng cho camera:
 
-- `camera.show_fps`: bật/tắt FPS.
+- `camera.show_fps`
 
 Các khóa quan trọng cho inference:
 
-- `inference.confidence`: ngưỡng confidence gốc truyền vào YOLO.
-- `inference.iou`: IoU threshold cho NMS.
-- `inference.display_confidence`: ngưỡng hiển thị object chung sau inference.
-- `inference.person_confidence`: ngưỡng hiển thị `person`/`face`.
-- `inference.phone_confidence`: ngưỡng hiển thị `phone`.
-- `inference.enhance_low_light`: bật tăng sáng khung hình tối trước inference.
-- `inference.low_light_mean_threshold`: ngưỡng sáng trung bình để quyết định có tăng sáng hay không.
+- `inference.confidence`
+- `inference.iou`
+- `inference.display_confidence`
+- `inference.person_confidence`
+- `inference.phone_confidence`
+- `inference.enhance_low_light`
+- `inference.low_light_mean_threshold`
 
 ## Training
 
@@ -154,7 +134,7 @@ Dataset đầu vào đặt ở:
 - `dataset/raw/images`
 - `dataset/raw/labels`
 
-Luồng chuẩn:
+Luồng khuyến nghị:
 
 ```powershell
 .\.venv\Scripts\python training\prepare_dataset.py
@@ -181,19 +161,18 @@ Nếu bạn muốn nhận diện class khác trong camera bằng model custom, c
 .\.venv\Scripts\python run_app.py --advisor-only
 ```
 
-`run_doctor.py` dùng để kiểm tra hệ thống có đủ điều kiện chạy hay không.
-
-`run_app.py --advisor-only` dùng để giải thích vì sao máy nên chạy `high`, `medium` hay `low`.
+- `run_doctor.py` dùng để kiểm tra hệ thống có đủ điều kiện chạy hay không.
+- `run_app.py --advisor-only` dùng để giải thích vì sao máy nên chạy `high`, `medium` hay `low`.
 
 ## Tài liệu chi tiết
 
-- `docs/install_guide.md`
-- `docs/training_guide.md`
-- `docs/project_overview.md`
-- `docs/runtime_tool_guide.md`
+- [docs/install_guide.md](docs/install_guide.md)
+- [docs/training_guide.md](docs/training_guide.md)
+- [docs/project_overview.md](docs/project_overview.md)
+- [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md)
 
 ## Ghi chú vận hành
 
 - Nhấn `Esc` để thoát camera realtime.
-- Nếu webcam tối, hãy bật thêm đèn hoặc xoay mặt/camera về phía có nguồn sáng, vì tăng sáng bằng phần mềm chỉ giúp một phần.
-- FPS cao không tự động đồng nghĩa với nhận diện tốt hơn; nếu phải hạ `imgsz` quá thấp để tăng FPS thì độ chính xác có thể giảm.
+- Nếu webcam tối, hãy tăng ánh sáng thực tế trước khi chỉ trông chờ vào tăng sáng bằng phần mềm.
+- FPS cao không đồng nghĩa với nhận diện tốt hơn; nếu phải hạ `imgsz` quá thấp để tăng FPS thì độ chính xác có thể giảm.
