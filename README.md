@@ -14,6 +14,8 @@ Repo này tập trung vào 3 nhóm chức năng chính:
 - Chạy YOLO realtime trên webcam với cấu hình thích nghi theo phần cứng.
 - Kiểm tra, tư vấn và chẩn đoán runtime bằng terminal.
 - Huấn luyện, đánh giá và xuất model custom từ dataset riêng.
+- Phân tích ảnh y khoa theo luồng upload ảnh, tạo report, lưu lịch sử ca và tính metric sàng lọc.
+- Tích hợp phân tích ảnh ung thư ngay trong giao diện chat khi người dùng gửi ảnh.
 
 ## Ngăn xếp công nghệ
 
@@ -94,6 +96,13 @@ Chạy trực tiếp từng công cụ:
 .\.venv\Scripts\python run_app.py
 .\.venv\Scripts\python run_chat.py
 .\.venv\Scripts\python run_doctor.py
+.\.venv\Scripts\python run_medical.py init-dataset
+.\\.venv\\Scripts\\python run_medical.py audit-dataset
+.\\.venv\\Scripts\\python run_medical.py split-dataset
+.\\.venv\\Scripts\\python run_medical.py train
+.\\.venv\\Scripts\\python run_medical.py validate
+.\\.venv\\Scripts\\python run_medical.py train-all
+.\.venv\Scripts\python run_medical.py analyze --image sample.jpg --patient-code BN001
 .\.venv\Scripts\python run_app.py --advisor-only
 .\.venv\Scripts\python run_tests.py
 .\.venv\Scripts\python run_train.py
@@ -111,11 +120,23 @@ Ví dụ ép dùng model custom:
 .\.venv\Scripts\python run_app.py --model models/trained/best.pt
 ```
 
+Ví dụ dùng giao diện chat để gửi ảnh y khoa:
+
+```powershell
+.\.venv\Scripts\python run_chat.py
+```
+
+Sau đó chọn ảnh trong chat; hệ thống sẽ tự phân tích, sinh ảnh đã đánh dấu và lưu báo cáo medical.
+
 ## Tinh chỉnh trong `config/settings.yaml`
 
 Các khóa quan trọng cho camera:
 
 - `camera.show_fps`
+- `output.captures_dir`
+- `output.recordings_dir`
+- `recording.codec`
+- `recording.fps`
 
 Các khóa quan trọng cho inference:
 
@@ -167,6 +188,7 @@ Nếu bạn muốn nhận diện class khác trong camera bằng model custom, c
 ## Tài liệu chi tiết
 
 - [docs/install_guide.md](docs/install_guide.md)
+- [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md)
 - [docs/training_guide.md](docs/training_guide.md)
 - [docs/project_overview.md](docs/project_overview.md)
 - [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md)
@@ -174,5 +196,10 @@ Nếu bạn muốn nhận diện class khác trong camera bằng model custom, c
 ## Ghi chú vận hành
 
 - Nhấn `Esc` để thoát camera realtime.
+- Nhấn `S` để chụp frame hiện tại vào `output/captures`.
+- Nhấn `R` để bật/tắt ghi video vào `output/recordings`.
+- Nhấn `O` để ẩn/hiện overlay box và nhãn.
+- Nhấn `F` để bật/tắt FPS.
+- Nhấn `T` để bật/tắt motion trail.
 - Nếu webcam tối, hãy tăng ánh sáng thực tế trước khi chỉ trông chờ vào tăng sáng bằng phần mềm.
 - FPS cao không đồng nghĩa với nhận diện tốt hơn; nếu phải hạ `imgsz` quá thấp để tăng FPS thì độ chính xác có thể giảm.

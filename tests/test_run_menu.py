@@ -110,6 +110,37 @@ class RunMenuTests(unittest.TestCase):
         self.assertTrue(any("run_app.py" in line for line in outputs))
         self.assertFalse(any("run_detect.py" in line for line in outputs))
 
+    def test_main_enters_medical_menu_and_runs_train_all(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        answers = iter(["6", "4", "0", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_medical.py", "train-all")
+        self.assertTrue(any("medical" in line.lower() or "run_medical.py train-all" in line.lower() for line in outputs))
+
+    def test_medical_analyze_prompts_for_path_and_patient_code(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        answers = iter(["6", "6", "sample.jpg", "BN009", "0", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_medical.py", "analyze", "--image", "sample.jpg", "--patient-code", "BN009")
+
 
 if __name__ == "__main__":
     unittest.main()

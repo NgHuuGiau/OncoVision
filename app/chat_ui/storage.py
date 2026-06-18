@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import json
 import os
 import sqlite3
 from collections import defaultdict
@@ -51,6 +52,7 @@ class ChatDatabase:
                     text TEXT,
                     attachment_path TEXT,
                     attachment_kind TEXT,
+                    metadata_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
                 )
@@ -64,6 +66,12 @@ class ChatDatabase:
                 )
                 """
             )
+            self._ensure_column(conn, "messages", "metadata_json", "TEXT")
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id
@@ -98,7 +106,7 @@ class ChatDatabase:
                 ).fetchall()
                 message_rows = conn.execute(
                     """
-                    SELECT conversation_id, sender, text, attachment_path, attachment_kind, id
+                    SELECT conversation_id, sender, text, attachment_path, attachment_kind, metadata_json, id
                     FROM messages
                     ORDER BY conversation_id ASC, id ASC
                     """
@@ -108,13 +116,14 @@ class ChatDatabase:
             return []
 
         messages_by_conversation: dict[int, list[ChatMessage]] = defaultdict(list)
-        for conversation_id, sender, text, path, kind, message_id in message_rows:
+        for conversation_id, sender, text, path, kind, metadata_json, message_id in message_rows:
             messages_by_conversation[conversation_id].append(
                 ChatMessage(
                     sender=sender,
                     text=text,
                     attachment_path=path,
                     attachment_kind=kind,
+                    metadata_json=metadata_json,
                     id=message_id,
                 )
             )
@@ -141,8 +150,8 @@ class ChatDatabase:
     def add_message(self, conv_id: int, msg: ChatMessage) -> int:
         with self._connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO messages (conversation_id, sender, text, attachment_path, attachment_kind) VALUES (?, ?, ?, ?, ?)",
-                (conv_id, msg.sender, msg.text, msg.attachment_path, msg.attachment_kind),
+                "INSERT INTO messages (conversation_id, sender, text, attachment_path, attachment_kind, metadata_json) VALUES (?, ?, ?, ?, ?, ?)",
+                (conv_id, msg.sender, msg.text, msg.attachment_path, msg.attachment_kind, msg.metadata_json),
             )
             return cursor.lastrowid
 

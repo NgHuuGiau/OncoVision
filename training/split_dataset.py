@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import random
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,6 +10,16 @@ except ModuleNotFoundError:
 
 ensure_project_root_on_path()
 
+from training.dataset_ops import (
+    DEFAULT_SEED,
+    DEFAULT_SPLITS,
+    IMAGE_EXTENSIONS,
+    copy_split,
+    is_valid_yolo_label_line,
+    iter_matching_files,
+    reset_processed_dirs,
+    split_items,
+)
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 from utils.file_utils import ensure_project_directories
 
@@ -20,9 +28,8 @@ RAW_IMAGES_DIR = Path("dataset/raw/images")
 RAW_LABELS_DIR = Path("dataset/raw/labels")
 PROCESSED_IMAGES_DIR = Path("dataset/processed/images")
 PROCESSED_LABELS_DIR = Path("dataset/processed/labels")
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
-SPLITS = (("train", 0.70), ("val", 0.15), ("test", 0.15))
-SEED = 42
+SPLITS = DEFAULT_SPLITS
+SEED = DEFAULT_SEED
 INVALID_YOLO_LABEL_REASON = "Định dạng YOLO không hợp lệ"
 
 
@@ -52,40 +59,18 @@ class RawDatasetAudit:
         return getattr(self, "eligible_pairs" if key == "eligible" else key)
 
 
-def _iter_matching_files(root: Path, *, suffixes: set[str]) -> list[Path]:
-    if not root.exists():
-        return []
-    return sorted(path for path in root.iterdir() if path.is_file() and path.suffix.lower() in suffixes)
-
-
-def _is_valid_yolo_label_line(line: str) -> bool:
-    parts = line.strip().split()
-    if not parts:
-        return True
-    if len(parts) != 5:
-        return False
-    try:
-        class_id = int(parts[0])
-        coords = [float(value) for value in parts[1:]]
-    except ValueError:
-        return False
-    if class_id < 0:
-        return False
-    return all(0.0 <= value <= 1.0 for value in coords)
-
-
 def _label_is_valid(path: Path) -> tuple[bool, bool]:
     lines = path.read_text(encoding="utf-8").splitlines()
     non_empty = [line for line in lines if line.strip()]
     if not non_empty:
         return True, True
-    return all(_is_valid_yolo_label_line(line) for line in non_empty), False
+    return all(is_valid_yolo_label_line(line) for line in non_empty), False
 
 
 def audit_raw_dataset() -> RawDatasetAudit:
     ensure_project_directories()
-    images = _iter_matching_files(RAW_IMAGES_DIR, suffixes=IMAGE_EXTENSIONS)
-    labels = _iter_matching_files(RAW_LABELS_DIR, suffixes={".txt"})
+    images = iter_matching_files(RAW_IMAGES_DIR, suffixes=IMAGE_EXTENSIONS)
+    labels = iter_matching_files(RAW_LABELS_DIR, suffixes={".txt"})
     label_by_stem = {path.stem: path for path in labels}
     image_stems = {path.stem for path in images}
 
@@ -120,32 +105,24 @@ def audit_raw_dataset() -> RawDatasetAudit:
 
 
 def _reset_processed_dirs() -> None:
-    for root in (PROCESSED_IMAGES_DIR, PROCESSED_LABELS_DIR):
-        if root.exists():
-            shutil.rmtree(root)
-    for split_name, _ in SPLITS:
-        (PROCESSED_IMAGES_DIR / split_name).mkdir(parents=True, exist_ok=True)
-        (PROCESSED_LABELS_DIR / split_name).mkdir(parents=True, exist_ok=True)
+    reset_processed_dirs(
+        processed_images_dir=PROCESSED_IMAGES_DIR,
+        processed_labels_dir=PROCESSED_LABELS_DIR,
+        splits=SPLITS,
+    )
 
 
 def _split_items(items: list[tuple[Path, Path]]) -> dict[str, list[tuple[Path, Path]]]:
-    shuffled = list(items)
-    random.Random(SEED).shuffle(shuffled)
-    total = len(shuffled)
-    split_ratios = dict(SPLITS)
-    train_end = int(total * split_ratios["train"])
-    val_end = train_end + int(total * split_ratios["val"])
-    return {
-        "train": shuffled[:train_end],
-        "val": shuffled[train_end:val_end],
-        "test": shuffled[val_end:],
-    }
+    return split_items(items, splits=SPLITS, seed=SEED)
 
 
 def _copy_split(split_name: str, items: list[tuple[Path, Path]]) -> None:
-    for image_path, label_path in items:
-        shutil.copy2(image_path, PROCESSED_IMAGES_DIR / split_name / image_path.name)
-        shutil.copy2(label_path, PROCESSED_LABELS_DIR / split_name / label_path.name)
+    copy_split(
+        split_name=split_name,
+        items=items,
+        processed_images_dir=PROCESSED_IMAGES_DIR,
+        processed_labels_dir=PROCESSED_LABELS_DIR,
+    )
 
 
 def main() -> None:

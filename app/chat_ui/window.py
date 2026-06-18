@@ -9,7 +9,9 @@ import os
 import platform
 from pathlib import Path
 
+from app.chat_ui.medical_controller import MedicalChatController
 from app.chat_ui.models import ChatMessage, Conversation
+from app.chat_ui.medical_worker import build_patient_code, create_medical_worker_base
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, build_chat_capture_path, get_chat_capture_dir
 from app.chat_ui.storage import ChatDatabase
 from utils.logger import get_logger
@@ -67,6 +69,10 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         )
     except ImportError as exc:
         raise RuntimeError("Missing PySide6. Install with: pip install PySide6 opencv-python") from exc
+
+    from medical.chat_service import MedicalChatService
+
+    MedicalAnalysisWorker = create_medical_worker_base(QThread, Signal)
 
     try:
         import numpy as np
@@ -147,6 +153,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "confirm_delete_msg": "Are you sure you want to delete this conversation?",
             "sidebar_expand": "Expand sidebar",
             "sidebar_collapse": "Collapse sidebar",
+            "medical_analyzing": "Analyzing medical image...",
+            "medical_pending": "Medical analysis is running...",
         },
         "vi": {
             "copied_hint": "Đã sao chép vào bộ nhớ tạm!",
@@ -202,6 +210,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "confirm_delete_msg": "Bạn có chắc muốn xóa cuộc trò chuyện này không?",
             "sidebar_expand": "Mở rộng thanh bên",
             "sidebar_collapse": "Thu gọn thanh bên",
+            "medical_analyzing": "Đang phân tích ảnh y khoa...",
+            "medical_pending": "Đang chạy pipeline sàng lọc y dược...",
         },
     }
 
@@ -2031,6 +2041,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.pending_image_attachments: list[tuple[str, str]] = []
             self.conversations: list[Conversation] = []
             self.db = ChatDatabase(str(CHAT_HISTORY_DB_PATH))
+            self.medical_controller = MedicalChatController(MedicalChatService())
+            self.medical_worker: MedicalAnalysisWorker | None = None
+            self.medical_status_message = ""
 
             self.language = self.db.get_setting("language", "vi")
             self.theme_mode = self.db.get_setting("theme", "dark")
@@ -2042,6 +2055,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.resize(1480, 920)
             self.setAcceptDrops(True)
             self.build_ui()
+            self._initialize_medical_status()
             self.conversations = self.db.get_all_conversations()
             if not self.conversations:
                 self.conversations = [
@@ -2069,6 +2083,13 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                     QSystemTrayIcon.Information,
                     3000
                 )
+
+        def _initialize_medical_status(self) -> None:
+            try:
+                model_path = self.medical_controller.ensure_ready()
+                self.medical_status_message = f"Medical model sẵn sàng: {Path(model_path).name}"
+            except Exception as exc:
+                self.medical_status_message = f"Medical model chưa sẵn sàng: {exc}"
 
         def scroll_to_bottom(self) -> None:
             if hasattr(self, "scroll_area"):
@@ -2368,10 +2389,14 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             composer_layout.addWidget(self.message_input_row)
             chat_layout.addWidget(self.composer)
 
-            self.disclaimer_label = QLabel("YOLO Chat AI có thể mắc lỗi. Hãy kiểm tra lại thông tin quan trọng.")
+            self.disclaimer_label = QLabel("Kết quả AI chỉ mang tính hỗ trợ. Hãy kiểm tra lại thông tin quan trọng với bác sĩ chuyên khoa.")
             self.disclaimer_label.setObjectName("Subtle")
             self.disclaimer_label.setAlignment(Qt.AlignCenter)
             chat_layout.addWidget(self.disclaimer_label)
+            self.medical_status_label = QLabel(self.medical_status_message)
+            self.medical_status_label.setObjectName("Subtle")
+            self.medical_status_label.setAlignment(Qt.AlignCenter)
+            chat_layout.addWidget(self.medical_status_label)
 
             self.search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
             self.search_shortcut.activated.connect(self.focus_search)
@@ -2573,6 +2598,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.dark_mode_button.setText(f"☾  {tr(self.language, 'dark')}")
             self.desktop_button.setText(self.runtime_badge_text())
             self.desktop_button.setToolTip(self.runtime_badge_text())
+            if hasattr(self, "medical_status_label"):
+                self.medical_status_label.setText(self.medical_status_message)
             self.update_sidebar_ui()
             self.refresh_history()
             self.apply_theme()
@@ -2903,6 +2930,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             return f"{len(self.pending_image_attachments)} attachments"
 
         def send_message(self) -> None:
+            if self.medical_controller.active:
+                QMessageBox.information(self, tr(self.language, "info_title"), tr(self.language, "medical_pending"))
+                return
             text = self.message_input.toPlainText().strip()
             if not text and not self.pending_image_attachments:
                 QMessageBox.information(self, tr(self.language, "info_title"), tr(self.language, "empty_send"))
@@ -2936,8 +2966,63 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
 
         def generate_ai_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
             source = attach_kind or "chat"
-            self.add_message(ChatMessage(sender="ai", text=self.build_ai_reply(text=prompt, source=source)))
+            if source in {"image", "camera"} and attach_path:
+                self._start_medical_analysis(prompt=prompt, attach_path=attach_path)
+            else:
+                self.add_message(ChatMessage(sender="ai", text=self.build_ai_reply(text=prompt, source=source)))
             self.scroll_to_bottom()
+
+        def _start_medical_analysis(self, *, prompt: str, attach_path: str) -> None:
+            if self.medical_controller.active:
+                self.add_message(ChatMessage(sender="ai", text=tr(self.language, "medical_pending")))
+                return
+            self.send_button.setEnabled(False)
+            self.plus_button.setEnabled(False)
+            self.micro_button.setEnabled(False)
+            self.message_input.setEnabled(False)
+            state, status_message = self.medical_controller.begin_analysis(tr(self.language, "medical_analyzing"))
+            self.message_input.setPlaceholderText(state.placeholder)
+            self.add_message(status_message)
+            self.medical_worker = MedicalAnalysisWorker(
+                self.medical_controller.service,
+                image_path=attach_path,
+                patient_code=self._build_patient_code(),
+                user_prompt=prompt,
+            )
+            self.medical_worker.result_ready.connect(self._on_medical_analysis_success)
+            self.medical_worker.error.connect(self._on_medical_analysis_error)
+            self.medical_worker.finished.connect(self._on_medical_analysis_finished)
+            self.medical_worker.start()
+
+        def _on_medical_analysis_success(self, medical_response) -> None:
+            self.add_message(
+                ChatMessage(
+                    sender="ai",
+                    text=medical_response.reply_text,
+                    attachment_path=medical_response.attachment_path,
+                    attachment_kind=medical_response.attachment_kind,
+                    metadata_json=medical_response.metadata_json,
+                )
+            )
+            self.scroll_to_bottom()
+
+        def _on_medical_analysis_error(self, err: str) -> None:
+            self.add_message(ChatMessage(sender="ai", text=self._format_error(err)))
+            self.scroll_to_bottom()
+
+        def _on_medical_analysis_finished(self) -> None:
+            state = self.medical_controller.finish_analysis(tr(self.language, "input_placeholder"))
+            self.send_button.setEnabled(True)
+            self.plus_button.setEnabled(True)
+            self.micro_button.setEnabled(True)
+            self.message_input.setEnabled(True)
+            self.message_input.setPlaceholderText(state.placeholder)
+            self.message_input.setFocus()
+            self.medical_worker = None
+
+        def _build_patient_code(self) -> str:
+            conversation = self.active_conversation()
+            return build_patient_code(conversation.id, int(time.time()))
 
         def start_typewriter(self, full_text: str):
             self.typewriter_content = full_text

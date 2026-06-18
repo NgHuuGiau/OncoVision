@@ -10,6 +10,7 @@ class ChatMessage:
     text: str
     attachment_path: str | None = None
     attachment_kind: Literal["image", "text", "camera"] | None = None
+    metadata_json: str | None = None
     id: int | None = None
 
 

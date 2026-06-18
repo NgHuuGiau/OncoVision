@@ -25,6 +25,8 @@ class FileUtilsTests(unittest.TestCase):
             project_dirs = (
                 Path(temp_dir) / "dataset/raw/images",
                 Path(temp_dir) / "models/pretrained",
+                Path(temp_dir) / "output/captures",
+                Path(temp_dir) / "output/recordings",
                 Path(temp_dir) / "output/logs",
             )
 

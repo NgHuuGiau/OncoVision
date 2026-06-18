@@ -1,0 +1,6 @@
+path: D:\YOLO\dataset\medical_skin_lesion
+train: processed/images/train
+val: processed/images/val
+test: processed/images/test
+names:
+  0: lesion

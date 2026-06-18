@@ -78,6 +78,14 @@ camera:
   label_font_scale: 0.8
   show_fps: true
 
+output:
+  captures_dir: output/captures
+  recordings_dir: output/recordings
+
+recording:
+  codec: mp4v
+  fps: 20
+
 camera_large:
   width: 1000
   height: 650

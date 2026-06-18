@@ -4,17 +4,21 @@ import ctypes
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
 
+from core.frame_capture import FrameCapture
 from core.fallback_manager import iter_fallback_configs
-from core.model_selector import RuntimeConfig
 from core.model_loader import LoadedModel, load_yolo_model
+from core.model_selector import RuntimeConfig
+from core.recorder import VideoRecorder
 from utils.camera_utils import open_camera_capture
-from utils.logger import get_logger
 from utils.draw_utils import draw_detection_results
+from utils.file_utils import load_yaml_cached
+from utils.logger import get_logger
 
 
 logger = get_logger(__name__)
@@ -48,6 +52,34 @@ TRACKING_STABLE_MOTION_RATIO = 0.06
 TRACK_TRAIL_MAX_POINTS = 10
 TRACK_TRAIL_MIN_MOVEMENT_PX = 4.0
 FRAME_READY_MAX_AGE_SECONDS = 0.25
+SETTINGS_PATH = Path("config/settings.yaml")
+
+
+@dataclass(frozen=True)
+class CameraSessionControls:
+    show_overlays: bool = True
+    show_fps: bool = True
+    show_trails: bool = True
+
+
+@dataclass(frozen=True)
+class CameraSessionOutputConfig:
+    capture_dir: Path
+    recording_dir: Path
+    recording_codec: str
+    recording_fps: float
+
+
+def _load_camera_session_output_config() -> CameraSessionOutputConfig:
+    settings = load_yaml_cached(SETTINGS_PATH) or {}
+    output = settings.get("output", {})
+    recording = settings.get("recording", {})
+    return CameraSessionOutputConfig(
+        capture_dir=Path(output.get("captures_dir", "output/captures")),
+        recording_dir=Path(output.get("recordings_dir", "output/recordings")),
+        recording_codec=str(recording.get("codec", "mp4v")),
+        recording_fps=float(recording.get("fps", 20.0)),
+    )
 
 @dataclass
 class DetectionRecord:
@@ -537,7 +569,11 @@ class CameraDetector:
                 self.release()
         raise RuntimeError(f"Không khởi tạo được detector. Lỗi cuối: {last_error}")
 
-    def read_and_detect(self) -> tuple[bool, Any, list[DetectionRecord], float]:
+    def read_and_detect(
+        self,
+        controls: CameraSessionControls | None = None,
+    ) -> tuple[bool, Any, list[DetectionRecord], float]:
+        controls = controls or CameraSessionControls(show_fps=bool(getattr(self.runtime, "show_fps", True)))
         if self.camera_stream is None or self.loaded_model is None:
             raise RuntimeError("Detector chưa được khởi tạo.")
 
@@ -575,15 +611,18 @@ class CameraDetector:
             else:
                 self.last_status_message = "Chưa có vật thể nào được nhận diện."
         fps = self._update_fps()
-        processed_frame = draw_detection_results(
-            image=frame,
-            detections=detections,
-            box_thickness=self._effective_box_thickness(),
-            label_font_scale=self._effective_label_font_scale(),
-            motion_trails=self.display_trails,
-            fps=fps,
-            show_fps=bool(getattr(self.runtime, "show_fps", True)),
-        )
+        if controls.show_overlays:
+            processed_frame = draw_detection_results(
+                image=frame,
+                detections=detections,
+                box_thickness=self._effective_box_thickness(),
+                label_font_scale=self._effective_label_font_scale(),
+                motion_trails=self.display_trails if controls.show_trails else None,
+                fps=fps,
+                show_fps=controls.show_fps,
+            )
+        else:
+            processed_frame = frame.copy()
         return True, processed_frame, detections, fps
 
     def _predict_frame(self, frame: np.ndarray) -> list[DetectionRecord]:
@@ -845,26 +884,66 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
     detector = CameraDetector(runtime=runtime, camera_index=camera_index)
     detector.initialize()
     window_positioned = False
+    output_config = _load_camera_session_output_config()
+    frame_capture = FrameCapture(output_config.capture_dir)
+    recorder = VideoRecorder(
+        output_config.recording_dir,
+        codec=output_config.recording_codec,
+        fps=output_config.recording_fps,
+    )
+    controls = CameraSessionControls(show_fps=bool(getattr(runtime, "show_fps", True)))
 
-    def _handle_runtime_key(key: int) -> bool:
+    def _handle_runtime_key(key: int, latest_frame: np.ndarray | None) -> bool:
+        nonlocal controls
         if key == 255:
             return False
         if key == 27:
             return True
+        if key in (ord("o"), ord("O")):
+            controls = CameraSessionControls(
+                show_overlays=not controls.show_overlays,
+                show_fps=controls.show_fps,
+                show_trails=controls.show_trails,
+            )
+        elif key in (ord("f"), ord("F")):
+            controls = CameraSessionControls(
+                show_overlays=controls.show_overlays,
+                show_fps=not controls.show_fps,
+                show_trails=controls.show_trails,
+            )
+        elif key in (ord("t"), ord("T")):
+            controls = CameraSessionControls(
+                show_overlays=controls.show_overlays,
+                show_fps=controls.show_fps,
+                show_trails=not controls.show_trails,
+            )
+        elif key in (ord("s"), ord("S")) and latest_frame is not None:
+            result = frame_capture.save_frame(latest_frame)
+            if result.success:
+                logger.info("Saved snapshot to %s", result.path)
+        elif key in (ord("r"), ord("R")) and latest_frame is not None:
+            if recorder.is_recording:
+                stopped = recorder.stop()
+                logger.info("Stopped recording: %s", stopped.path)
+            else:
+                started = recorder.start((latest_frame.shape[1], latest_frame.shape[0]))
+                logger.info("Started recording: %s", started.path)
         return False
 
     try:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
         while True:
-            ok, frame, _detections, _fps = detector.read_and_detect()
+            ok, frame, _detections, _fps = detector.read_and_detect(controls=controls)
             if not ok:
                 key = _poll_window_key(1)
-                if _handle_runtime_key(key):
+                if _handle_runtime_key(key, detector.last_raw_frame):
                     break
                 continue
 
             display_frame = frame
+            if recorder.is_recording:
+                recorder.write(display_frame)
 
             active_runtime = detector.runtime
             composed = _compose_camera_only_layout(display_frame, active_runtime.profile_name)
@@ -875,9 +954,10 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
                 _center_window(WINDOW_NAME, composed.shape[1], composed.shape[0])
                 window_positioned = True
             key = _poll_window_key(1)
-            if _handle_runtime_key(key):
+            if _handle_runtime_key(key, detector.last_raw_frame):
                 break
     finally:
+        recorder.stop()
         detector.release()
         cv2.destroyAllWindows()
 

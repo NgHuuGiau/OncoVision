@@ -1,0 +1,23 @@
+medical:
+  disease_name: skin_cancer_screening
+  dataset_root: dataset/medical_skin_lesion
+  model: models\trained\skin_cancer_screening_best.pt
+  base_model: yolo11n.pt
+  fallback_model: yolo11n.pt
+  image_size: 640
+  conf_threshold: 0.25
+  classify_high_risk_threshold: 0.75
+  classify_medium_risk_threshold: 0.45
+  epochs: 10
+  batch: 4
+  device: 0
+  workers: 2
+  cache: false
+  amp: true
+  patience: 10
+  run_name: medical_skin_lesion_isic2016
+  validation_name: medical_skin_lesion_isic2016_val
+  output_root: output/medical
+  reports_dir: output/medical/reports
+  processed_dir: output/medical/normalized_images
+  overlay_dir: output/medical/processed_images

@@ -43,6 +43,11 @@ HieraChain/
 dataset/raw/
 dataset/processed/
 dataset/sample/
+dataset/medical_skin_lesion/raw/
+dataset/medical_skin_lesion/processed/
+dataset/medical_skin_lesion/downloads/
+dataset/medical_skin_lesion/reports/
+dataset/medical_skin_lesion/metadata/isic2016_part3b_import.csv
 
 # Local model files
 models/pretrained/
@@ -51,3 +56,6 @@ models/exported/
 
 # Generated config
 training/.generated_data.yaml
+
+# Medical runtime artifacts
+output/medical/

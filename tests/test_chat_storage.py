@@ -65,6 +65,26 @@ class ChatStorageTests(unittest.TestCase):
             finally:
                 os.chdir(original_cwd)
 
+    def test_message_metadata_roundtrips(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "chat.db"
+            db = ChatDatabase(str(db_path))
+            conv_id = db.create_conversation("Medical", "Today")
+            db.add_message(
+                conv_id,
+                ChatMessage(
+                    sender="ai",
+                    text="medical reply",
+                    attachment_path="overlay.jpg",
+                    attachment_kind="image",
+                    metadata_json='{"risk_level":"high","medical_case_id":12}',
+                ),
+            )
+
+            conversations = db.get_all_conversations()
+
+            self.assertEqual(conversations[0].messages[0].metadata_json, '{"risk_level":"high","medical_case_id":12}')
+
 
 if __name__ == "__main__":
     unittest.main()
