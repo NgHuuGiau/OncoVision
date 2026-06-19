@@ -8,12 +8,15 @@ from collections import defaultdict
 
 from app.chat_ui.models import ChatMessage, Conversation
 from utils.logger import get_logger
+from utils.sqlite_utils import DEFAULT_SQLITE_TIMEOUT_SECONDS, create_sqlite_connection
 
 
 logger = get_logger(__name__)
 
 
 class ChatDatabase:
+    CONNECT_TIMEOUT_SECONDS = DEFAULT_SQLITE_TIMEOUT_SECONDS
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         directory = os.path.dirname(self.db_path)
@@ -21,11 +24,17 @@ class ChatDatabase:
             os.makedirs(directory, exist_ok=True)
         self._init_db()
 
+    def _create_connection(self) -> sqlite3.Connection:
+        return create_sqlite_connection(
+            self.db_path,
+            timeout_seconds=self.CONNECT_TIMEOUT_SECONDS,
+            enable_foreign_keys=True,
+        )
+
     @contextmanager
     def _connect(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = self._create_connection()
         try:
-            conn.execute("PRAGMA foreign_keys = ON")
             yield conn
             conn.commit()
         finally:
@@ -67,23 +76,26 @@ class ChatDatabase:
                 """
             )
             self._ensure_column(conn, "messages", "metadata_json", "TEXT")
+            self._ensure_indexes(conn)
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if column not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id
-                ON messages (conversation_id, id)
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_messages_text
-                ON messages (text)
-                """
-            )
+
+    def _ensure_indexes(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id
+            ON messages (conversation_id, id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_messages_text
+            ON messages (text)
+            """
+        )
 
     def get_setting(self, key: str, default: str) -> str:
         try:
@@ -91,7 +103,8 @@ class ChatDatabase:
                 cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
                 row = cursor.fetchone()
                 return row[0] if row else default
-        except Exception:
+        except sqlite3.Error:
+            logger.exception("Failed to read setting '%s' from chat history database", key)
             return default
 
     def set_setting(self, key: str, value: str):
@@ -111,7 +124,7 @@ class ChatDatabase:
                     ORDER BY conversation_id ASC, id ASC
                     """
                 ).fetchall()
-        except Exception:
+        except sqlite3.Error:
             logger.exception("Failed to load conversations from chat history database")
             return []
 
@@ -174,5 +187,6 @@ class ChatDatabase:
             with self._connect() as conn:
                 cursor = conn.execute("SELECT DISTINCT conversation_id FROM messages WHERE text LIKE ?", (f"%{query}%",))
                 return [row[0] for row in cursor]
-        except Exception:
+        except sqlite3.Error:
+            logger.exception("Failed to search conversations for query '%s'", query)
             return []

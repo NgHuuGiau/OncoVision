@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from app.camera_runtime.entrypoint import run_targeted_entrypoint
+from app.camera_runtime.launching import CAMERA_BOOT_FINISH_MESSAGE, CAMERA_BOOT_STEPS
 
 
 class RuntimeEntryTests(unittest.TestCase):
@@ -32,18 +33,16 @@ class RuntimeEntryTests(unittest.TestCase):
             ui_title="ignored",
             dashboard_title="YOLO Camera Realtime",
             resolve_start_bundle_fn=resolve_start_bundle,
-            launch_chat_ai_app_fn=MagicMock(),
+            launch_chat_app_fn=MagicMock(),
             print_runtime_dashboard_fn=print_runtime_dashboard,
             run_camera_session_fn=run_camera_session,
         )
 
         self.assertEqual(result, 0)
         boot_progress_mock.assert_called_once_with("YOLO Camera Realtime")
-        progress.advance_to.assert_any_call(16, "Đang nhận cấu hình khởi động")
-        progress.advance_to.assert_any_call(42, "Đang kiểm tra CPU / GPU / CUDA")
-        progress.advance_to.assert_any_call(68, "Đang chọn model và runtime phù hợp")
-        progress.advance_to.assert_any_call(88, "Đang chuẩn bị mở camera")
-        progress.finish.assert_called_once_with("Sẵn sàng mở camera")
+        for percent, message in CAMERA_BOOT_STEPS:
+            progress.advance_to.assert_any_call(percent, message)
+        progress.finish.assert_called_once_with(CAMERA_BOOT_FINISH_MESSAGE)
         print_runtime_dashboard.assert_called_once_with(
             title="YOLO Camera Realtime",
             runtime=runtime,
@@ -55,7 +54,7 @@ class RuntimeEntryTests(unittest.TestCase):
 
     @patch("app.camera_runtime.entrypoint.BootProgress")
     def test_ui_target_skips_boot_progress_dashboard_and_camera_path(self, boot_progress_mock) -> None:
-        launch_chat_ai_app = MagicMock(return_value=7)
+        launch_chat_app = MagicMock(return_value=7)
         print_runtime_dashboard = MagicMock()
         run_camera_session = MagicMock()
 
@@ -73,13 +72,13 @@ class RuntimeEntryTests(unittest.TestCase):
                     hardware=object(),
                 )
             ),
-            launch_chat_ai_app_fn=launch_chat_ai_app,
+            launch_chat_app_fn=launch_chat_app,
             print_runtime_dashboard_fn=print_runtime_dashboard,
             run_camera_session_fn=run_camera_session,
         )
 
         self.assertEqual(result, 7)
-        launch_chat_ai_app.assert_called_once_with(
+        launch_chat_app.assert_called_once_with(
             window_title="Chat AI",
             camera_index=0,
             app_mode="medium",

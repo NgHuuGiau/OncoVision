@@ -15,8 +15,8 @@ from training.dataset_ops import (
     DEFAULT_SPLITS,
     IMAGE_EXTENSIONS,
     copy_split,
-    is_valid_yolo_label_line,
     iter_matching_files,
+    read_yolo_label_status,
     reset_processed_dirs,
     split_items,
 )
@@ -59,14 +59,6 @@ class RawDatasetAudit:
         return getattr(self, "eligible_pairs" if key == "eligible" else key)
 
 
-def _label_is_valid(path: Path) -> tuple[bool, bool]:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    non_empty = [line for line in lines if line.strip()]
-    if not non_empty:
-        return True, True
-    return all(is_valid_yolo_label_line(line) for line in non_empty), False
-
-
 def audit_raw_dataset() -> RawDatasetAudit:
     ensure_project_directories()
     images = iter_matching_files(RAW_IMAGES_DIR, suffixes=IMAGE_EXTENSIONS)
@@ -84,7 +76,7 @@ def audit_raw_dataset() -> RawDatasetAudit:
         if label_path is None:
             missing_labels.append(image_path)
             continue
-        is_valid, is_empty = _label_is_valid(label_path)
+        is_valid, is_empty = read_yolo_label_status(label_path)
         if not is_valid:
             invalid_labels.append((label_path, INVALID_YOLO_LABEL_REASON))
             continue

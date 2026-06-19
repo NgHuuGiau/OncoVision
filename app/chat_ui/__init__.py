@@ -9,7 +9,7 @@ from app.chat_ui.paths import (
     get_chat_capture_dir,
 )
 from app.chat_ui.storage import ChatDatabase
-from app.chat_ui.window import launch_chat_ai_app
+from app.chat_ui.window import launch_chat_app
 
 __all__ = [
     "CHAT_CAPTURES_DIR",
@@ -22,5 +22,5 @@ __all__ = [
     "build_chat_arg_parser",
     "build_chat_capture_path",
     "get_chat_capture_dir",
-    "launch_chat_ai_app",
+    "launch_chat_app",
 ]

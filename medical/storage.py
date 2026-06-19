@@ -8,6 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from utils.logger import get_logger
+from utils.sqlite_utils import DEFAULT_SQLITE_TIMEOUT_SECONDS, create_sqlite_connection
+
+
+logger = get_logger(__name__)
+
 
 @dataclass(frozen=True)
 class MedicalCaseRecord:
@@ -25,14 +31,22 @@ class MedicalCaseRecord:
 
 
 class MedicalCaseDatabase:
+    CONNECT_TIMEOUT_SECONDS = DEFAULT_SQLITE_TIMEOUT_SECONDS
+
     def __init__(self, db_path: str | Path = "output/medical/medical_cases.db") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
+    def _create_connection(self) -> sqlite3.Connection:
+        return create_sqlite_connection(
+            self.db_path,
+            timeout_seconds=self.CONNECT_TIMEOUT_SECONDS,
+        )
+
     @contextmanager
     def _connect(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = self._create_connection()
         try:
             yield conn
             conn.commit()
@@ -58,6 +72,21 @@ class MedicalCaseDatabase:
                 )
                 """
             )
+            self._ensure_indexes(conn)
+
+    def _ensure_indexes(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_medical_cases_patient_code
+            ON medical_cases (patient_code)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_medical_cases_created_at
+            ON medical_cases (created_at DESC, id DESC)
+            """
+        )
 
     def save_case(self, *, patient_code: str, image_path: str, processed_image_path: str, report_json_path: str, report_md_path: str, suspected_malignant: bool, risk_level: str, recommendation: str, metadata: dict[str, Any]) -> int:
         with self._connect() as conn:
@@ -129,7 +158,7 @@ class MedicalCaseDatabase:
                     os.remove(path)
                     deleted_paths.append(str(path))
                 except OSError:
-                    pass
+                    logger.warning("Failed to delete medical artifact: %s", path)
         deleted = self.delete_case(case_id)
         return deleted, deleted_paths
 

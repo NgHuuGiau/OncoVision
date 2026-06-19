@@ -32,6 +32,14 @@ def is_valid_yolo_label_line(line: str) -> bool:
     return all(0.0 <= value <= 1.0 for value in coords)
 
 
+def read_yolo_label_status(path: Path) -> tuple[bool, bool]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    non_empty = [line for line in lines if line.strip()]
+    if not non_empty:
+        return True, True
+    return all(is_valid_yolo_label_line(line) for line in non_empty), False
+
+
 def reset_processed_dirs(
     *,
     processed_images_dir: Path,

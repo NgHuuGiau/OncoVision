@@ -6,7 +6,7 @@ from typing import Literal
 
 @dataclass
 class ChatMessage:
-    sender: Literal["user", "ai"]
+    sender: Literal["user", "assistant"]
     text: str
     attachment_path: str | None = None
     attachment_kind: Literal["image", "text", "camera"] | None = None

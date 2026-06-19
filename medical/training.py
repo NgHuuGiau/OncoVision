@@ -6,11 +6,12 @@ from typing import Any
 
 from training.common import require_yolo
 from training.dataset_ops import (
+    DEFAULT_SEED,
     DEFAULT_SPLITS,
     IMAGE_EXTENSIONS,
     copy_split,
-    is_valid_yolo_label_line,
     iter_matching_files,
+    read_yolo_label_status,
     reset_processed_dirs,
     split_items,
 )
@@ -21,6 +22,7 @@ from utils.file_utils import load_yaml, save_yaml
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
 SPLITS = DEFAULT_SPLITS
+SEED = DEFAULT_SEED
 
 
 @dataclass(frozen=True)
@@ -72,18 +74,10 @@ def medical_training_paths() -> MedicalTrainingPaths:
     )
 
 
-def _matching_files(root: Path, suffixes: set[str]) -> list[Path]:
-    return iter_matching_files(root, suffixes=suffixes)
-
-
-def _valid_yolo_line(line: str) -> bool:
-    return is_valid_yolo_label_line(line)
-
-
 def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict[str, Any]:
     paths = paths or medical_training_paths()
-    images = _matching_files(paths.raw_images_dir, IMAGE_EXTENSIONS)
-    labels = _matching_files(paths.raw_labels_dir, {".txt"})
+    images = iter_matching_files(paths.raw_images_dir, suffixes=IMAGE_EXTENSIONS)
+    labels = iter_matching_files(paths.raw_labels_dir, suffixes={".txt"})
     label_map = {path.stem: path for path in labels}
     eligible: list[tuple[Path, Path]] = []
     missing_labels: list[Path] = []
@@ -93,8 +87,8 @@ def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict
         if label_path is None:
             missing_labels.append(image_path)
             continue
-        label_lines = label_path.read_text(encoding="utf-8").splitlines()
-        if not all(_valid_yolo_line(line) for line in label_lines if line.strip()):
+        is_valid, _is_empty = read_yolo_label_status(label_path)
+        if not is_valid:
             invalid_labels.append(label_path)
             continue
         eligible.append((image_path, label_path))
@@ -116,7 +110,7 @@ def _reset_processed_dirs(paths: MedicalTrainingPaths) -> None:
 
 
 def _split_items(items: list[tuple[Path, Path]]) -> dict[str, list[tuple[Path, Path]]]:
-    return split_items(items, splits=SPLITS, seed=42)
+    return split_items(items, splits=SPLITS, seed=SEED)
 
 
 def prepare_medical_training_dataset(paths: MedicalTrainingPaths | None = None) -> MedicalTrainingSummary:

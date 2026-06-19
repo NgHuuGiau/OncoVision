@@ -83,21 +83,21 @@ class RunEntrypointsTests(unittest.TestCase):
         run_train.main()
         train_main_mock.assert_called_once()
 
-    @patch("run_chat.launch_chat_ai_app")
+    @patch("run_chat.launch_chat_app")
     @patch("run_chat.build_chat_arg_parser")
     def test_run_chat_main_forces_medium_mode(
         self,
         build_parser_mock,
-        launch_chat_ai_app_mock,
+        launch_chat_app_mock,
     ) -> None:
         parser = build_parser_mock.return_value
         parser.parse_args.return_value = SimpleNamespace(camera_index=3)
-        launch_chat_ai_app_mock.return_value = 5
+        launch_chat_app_mock.return_value = 5
 
         result = run_chat.main()
 
         self.assertEqual(result, 5)
-        launch_chat_ai_app_mock.assert_called_once_with(
+        launch_chat_app_mock.assert_called_once_with(
             window_title="YOLO Chat AI",
             camera_index=3,
             app_mode="medium",

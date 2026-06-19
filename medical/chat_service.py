@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from medical.case_payloads import build_detection_metadata
 from medical.pipeline import MedicalImageAnalyzer
 from medical.storage import MedicalCaseDatabase
 
@@ -28,8 +29,10 @@ class MedicalChatService:
     def check_ready(self) -> Path:
         return self.analyzer.ensure_ready()
 
+    def _build_case_metadata(self, result, *, user_prompt: str) -> dict[str, object]:
+        return build_detection_metadata(result, user_prompt=user_prompt)
+
     def analyze_attachment(self, *, image_path: str | Path, patient_code: str, user_prompt: str = "") -> MedicalChatResponse:
-        self.check_ready()
         result = self.analyzer.analyze_image(image_path, patient_code=patient_code)
         case_id = self.case_db.save_case(
             patient_code=result.patient_code,
@@ -40,16 +43,7 @@ class MedicalChatService:
             suspected_malignant=result.suspected_malignant,
             risk_level=result.risk_level,
             recommendation=result.recommendation,
-            metadata={
-                "normalized_image": str(result.normalized_image),
-                "average_confidence": result.average_confidence,
-                "model_name": result.model_name,
-                "detection_count": len(result.detections),
-                "detections": [
-                    {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in result.detections
-                ],
-                "user_prompt": user_prompt,
-            },
+            metadata=self._build_case_metadata(result, user_prompt=user_prompt),
         )
         metadata = {
             "medical_case_id": case_id,

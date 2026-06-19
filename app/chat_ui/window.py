@@ -33,7 +33,7 @@ except ImportError:
     np = None
 
 
-def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: str = "medium", selected_model: str | None = None) -> int:
+def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str = "medium", selected_model: str | None = None) -> int:
     try:
         from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, Signal, QThread, QVariantAnimation, QEasingCurve, QTemporaryFile, QRectF, QPropertyAnimation, QPoint, QParallelAnimationGroup
         from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap, QColor, QPen, QShortcut, QKeySequence, QPalette, QTextOption
@@ -80,9 +80,9 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         import wave
         import torch
         from faster_whisper import WhisperModel
-        VOICE_AI_AVAILABLE = True
+        VOICE_LOCAL_AVAILABLE = True
     except ImportError:
-        VOICE_AI_AVAILABLE = False
+        VOICE_LOCAL_AVAILABLE = False
 
     voice_model_cache: dict[tuple[str, str], object] = {}
 
@@ -127,14 +127,14 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "camera_missing": "opencv-python is not installed.",
             "camera_save_dir": "Saved photos folder: {path}",
             "camera_save_failed": "Could not save the captured photo.",
-            "ai_reply_text": "I received the content and will process it in this chat context.",
-            "ai_reply_image": "Image received. I will use it as input for this chat.",
+            "system_reply_text": "I received the content and will process it locally in this chat context.",
+            "system_reply_image": "Image received. Local analysis will use it in this chat.",
             "image_model_error": "AI chat is unavailable in this build.",
-            "ai_unavailable": "AI chat has been removed from this build.",
-            "ai_reply_camera": "Camera snapshot received and added to the chat.",
+            "system_unavailable": "AI chat has been removed from this build.",
+            "system_reply_camera": "Camera snapshot received and added to the chat.",
             "empty_send": "Enter a message before sending.",
             "info_title": "Info",
-            "loading_model": "Waking up Voice AI...",
+            "loading_model": "Starting local voice processing...",
             "recording_status": "Listening...",
             "voice_error": "Could not recognize voice or Mic error.",
             "settings_title": "Settings",
@@ -184,14 +184,14 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             "camera_missing": "Chưa cài opencv-python.",
             "camera_save_dir": "Ảnh chụp sẽ được lưu tại: {path}",
             "camera_save_failed": "Không lưu được ảnh vừa chụp.",
-            "ai_reply_text": "Tôi đã nhận nội dung và sẽ xử lý trong ngữ cảnh cuộc trò chuyện này.",
-            "ai_reply_image": "Đã nhận ảnh. Tôi sẽ dùng ảnh làm dữ liệu đầu vào cho cuộc trò chuyện này.",
-            "image_model_error": "Tính năng chat AI không có trong bản dựng này.",
-            "ai_unavailable": "Tính năng chat AI đã được gỡ khỏi bản dựng này.",
-            "ai_reply_camera": "Đã nhận ảnh chụp từ camera và thêm vào cuộc trò chuyện.",
+            "system_reply_text": "Tôi đã nhận nội dung và sẽ xử lý trong ngữ cảnh cuộc trò chuyện này.",
+            "system_reply_image": "Đã nhận ảnh. Tôi sẽ dùng ảnh làm dữ liệu đầu vào cho cuộc trò chuyện này.",
+            "image_model_error": "Bản dựng local này không có phân tích ảnh ngoài tuyến.",
+            "system_unavailable": "Bản dựng này chạy local hoàn toàn và không dùng dịch vụ bên ngoài.",
+            "system_reply_camera": "Đã nhận ảnh chụp từ camera và thêm vào cuộc trò chuyện.",
             "empty_send": "Hãy nhập tin nhắn trước khi gửi.",
             "info_title": "Thông tin",
-            "loading_model": "Đang nạp AI giọng nói...",
+            "loading_model": "Đang khởi động xử lý giọng nói cục bộ...",
             "recording_status": "Đang lắng nghe...",
             "voice_error": "Không nhận diện được giọng nói hoặc lỗi mic.",
             "settings_title": "Cài đặt",
@@ -422,7 +422,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border-bottom-left-radius: 24px;
         border-bottom-right-radius: 24px;
     }
-    QFrame#BubbleAI {
+    QFrame#BubbleSystem {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.06);
         border-top-left-radius: 8px;
@@ -926,7 +926,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         border-bottom-left-radius: 24px;
         border-bottom-right-radius: 24px;
     }
-    QFrame#BubbleAI {
+    QFrame#BubbleSystem {
         background: rgba(255, 255, 255, 0.9);
         border: 1px solid rgba(17, 24, 39, 0.06);
         border-top-left-radius: 8px;
@@ -1658,7 +1658,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 self.setStyleSheet("background: rgba(0,0,0,0.6); border: none; border-radius: 16px;")
                 self.label.setStyleSheet("color: white; font-weight: 700; font-size: 14px;")
 
-    if VOICE_AI_AVAILABLE:
+    if VOICE_LOCAL_AVAILABLE:
         class VoiceWorker(QThread):
             result_ready = Signal(str)
             intensity_changed = Signal(int)
@@ -1923,7 +1923,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 outer.addStretch(1)
 
             self.bubble = QFrame()
-            self.bubble.setObjectName("BubbleUser" if align_right else "BubbleAI")
+            self.bubble.setObjectName("BubbleUser" if align_right else "BubbleSystem")
             self.bubble.setMaximumWidth(680)
             self.bubble.setMinimumWidth(96)
             self.bubble.setMinimumHeight(52)
@@ -2006,7 +2006,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                 self.typing_indicator.hide()
             self.text_label.show()
 
-            is_error = text.startswith("API Error:") or text.startswith("Error:")
+            is_error = text.startswith("Phan tich loi:") or text.startswith("Error:")
             if self.effective_theme == "light" and is_error:
                 self.text_label.setStyleSheet(
                     "font-size: 15px; color: #b00020; font-weight: 700; background: rgba(176,0,32,0.08); padding: 6px; border-radius: 8px;"
@@ -2958,23 +2958,23 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             prompt = text or self.pending_attachment_prompt()
             first_attachment = self.pending_image_attachments[0] if self.pending_image_attachments else None
             self.clear_pending_image_previews()
-            self.generate_ai_response(
+            self.generate_system_response(
                 prompt,
                 first_attachment[0] if first_attachment else None,
                 first_attachment[1] if first_attachment else None,
             )
 
-        def generate_ai_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
+        def generate_system_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
             source = attach_kind or "chat"
             if source in {"image", "camera"} and attach_path:
                 self._start_medical_analysis(prompt=prompt, attach_path=attach_path)
             else:
-                self.add_message(ChatMessage(sender="ai", text=self.build_ai_reply(text=prompt, source=source)))
+                self.add_message(ChatMessage(sender="assistant", text=self.build_system_reply(text=prompt, source=source)))
             self.scroll_to_bottom()
 
         def _start_medical_analysis(self, *, prompt: str, attach_path: str) -> None:
             if self.medical_controller.active:
-                self.add_message(ChatMessage(sender="ai", text=tr(self.language, "medical_pending")))
+                self.add_message(ChatMessage(sender="assistant", text=tr(self.language, "medical_pending")))
                 return
             self.send_button.setEnabled(False)
             self.plus_button.setEnabled(False)
@@ -2997,7 +2997,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         def _on_medical_analysis_success(self, medical_response) -> None:
             self.add_message(
                 ChatMessage(
-                    sender="ai",
+                    sender="assistant",
                     text=medical_response.reply_text,
                     attachment_path=medical_response.attachment_path,
                     attachment_kind=medical_response.attachment_kind,
@@ -3007,7 +3007,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.scroll_to_bottom()
 
         def _on_medical_analysis_error(self, err: str) -> None:
-            self.add_message(ChatMessage(sender="ai", text=self._format_error(err)))
+            self.add_message(ChatMessage(sender="assistant", text=self._format_error(err)))
             self.scroll_to_bottom()
 
         def _on_medical_analysis_finished(self) -> None:
@@ -3027,7 +3027,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         def start_typewriter(self, full_text: str):
             self.typewriter_content = full_text
             self.typewriter_idx = 0
-            self.current_ai_text = ""
+            self.current_system_text = ""
             
             if self.typing_timer.isActive():
                 self.typing_timer.stop()
@@ -3037,8 +3037,8 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
         def typewriter_tick(self):
             if self.typewriter_idx < len(self.typewriter_content):
                 char = self.typewriter_content[self.typewriter_idx]
-                self.current_ai_text += char
-                self.update_last_message(self.current_ai_text)
+                self.current_system_text += char
+                self.update_last_message(self.current_system_text)
                 self.typewriter_idx += 1
                 
                 delay = random.randint(10, 45)
@@ -3064,7 +3064,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
                         last_bubble = item.widget()
                         if isinstance(last_bubble, ChatBubble):
                             last_bubble.update_display_text(text)
-                            if text.startswith("Error:") or text.startswith("API Error:"):
+                            if text.startswith("Error:") or text.startswith("Phan tich loi:"):
                                 self.shake_bubble(last_bubble)
 
         def shake_bubble(self, bubble: ChatBubble):
@@ -3083,7 +3083,7 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             shake.start(QPropertyAnimation.DeleteWhenStopped)
 
         def start_voice_input(self) -> None:
-            if not VOICE_AI_AVAILABLE:
+            if not VOICE_LOCAL_AVAILABLE:
                 return
 
             if self.is_recording:
@@ -3123,21 +3123,21 @@ def launch_chat_ai_app(*, window_title: str, camera_index: int = 0, app_mode: st
             self.message_input.setEnabled(True)
             self.message_input.setFocus()
 
-        def build_ai_reply(self, *, text: str, source: str) -> str:
+        def build_system_reply(self, *, text: str, source: str) -> str:
             if source == "image":
-                return tr(self.language, "ai_reply_image")
+                return tr(self.language, "system_reply_image")
             if source == "camera":
-                return tr(self.language, "ai_reply_camera")
+                return tr(self.language, "system_reply_camera")
             if source == "text_file":
-                return tr(self.language, "ai_reply_text")
+                return tr(self.language, "system_reply_text")
             if source == "chat":
-                return tr(self.language, "ai_unavailable")
-            return f"{tr(self.language, 'ai_reply_text')} {text[:120]}".strip()
+                return tr(self.language, "system_unavailable")
+            return f"{tr(self.language, 'system_reply_text')} {text[:120]}".strip()
 
         def _format_error(self, err: str) -> str:
             if "does not support image input" in err or "Cannot read" in err:
                 return tr(self.language, "image_model_error")
-            return f"API Error: {err}"
+            return f"Phan tich loi: {err}"
 
         def pick_image(self) -> None:
             path, _ = QFileDialog.getOpenFileName(

@@ -28,7 +28,7 @@ class MedicalChatController:
     def begin_analysis(self, analyzing_text: str) -> tuple[MedicalUIState, ChatMessage]:
         self._active = True
         state = MedicalUIState(active=True, placeholder=analyzing_text, status_text=analyzing_text)
-        return state, ChatMessage(sender="ai", text=analyzing_text)
+        return state, ChatMessage(sender="assistant", text=analyzing_text)
 
     def finish_analysis(self, input_placeholder: str) -> MedicalUIState:
         self._active = False

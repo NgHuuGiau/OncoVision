@@ -9,6 +9,7 @@ import time
 import unittest
 from dataclasses import dataclass
 
+from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
 from utils.console_ui import BOLD, CYAN, GREEN, MAGENTA, ORANGE, RED, YELLOW, color, meter, pad, rule, section, status_meter
 from utils.file_utils import ensure_project_directories
@@ -33,49 +34,13 @@ class CameraCheckResult:
 
 
 def check_camera(index: int = 0, attempts: int = 3) -> CameraCheckResult:
-    try:
-        capture = _open_camera_capture(index)
-    except Exception as exc:
-        return CameraCheckResult(
-            level="ERROR",
-            summary=f"Camera thật       ERROR | Không tạo được camera index {index}",
-            detail=f"Lý do không chạy   {exc}",
-        )
-
-    if capture is None or not capture.isOpened():
-        if capture is not None:
-            capture.release()
-        return CameraCheckResult(
-            level="WARN",
-            summary=f"Camera thật       WARN  | Không mở được camera index {index}",
-            detail="Lý do không chạy   Camera không sẵn sàng, đang bị app khác chiếm hoặc không có webcam.",
-        )
-
-    frame_width = 0
-    frame_height = 0
-    got_frame = False
-    try:
-        for _ in range(max(1, attempts)):
-            success, frame = capture.read()
-            if success and frame is not None:
-                frame_height, frame_width = frame.shape[:2]
-                got_frame = True
-                break
-    finally:
-        capture.release()
-
-    if not got_frame:
-        return CameraCheckResult(
-            level="WARN",
-            summary=f"Camera thật       WARN  | Mở được camera index {index} nhưng không đọc được frame",
-            detail="Lý do không chạy   Webcam mở được nhưng không trả về khung hình hợp lệ.",
-        )
-
-    return CameraCheckResult(
-        level="PASS",
-        summary=f"Camera thật       PASS  | Đọc frame thành công tại index {index}",
-        detail=f"Chi tiết          {frame_width}x{frame_height}",
+    result = probe_camera(
+        index=index,
+        attempts=attempts,
+        unavailable_detail="Ly do khong chay   Camera khong san sang, dang bi app khac chiem hoac khong co webcam.",
+        open_camera_capture_fn=_open_camera_capture,
     )
+    return CameraCheckResult(level=result.level, summary=result.summary, detail=result.detail)
 
 
 class PrettyTestResult(unittest.TextTestResult):
@@ -135,14 +100,14 @@ class PrettyTestResult(unittest.TextTestResult):
     def addSuccess(self, test):
         elapsed = time.perf_counter() - self.test_start_time
         self.passed_count += 1
-        self.stream.write(color(pad(f"    PASS   {elapsed:.3f}s   | đã pass {self.passed_count}/{self.total_tests}"), GREEN) + "\n")
+        self.stream.write(color(pad(f"    PASS   {elapsed:.3f}s   | da pass {self.passed_count}/{self.total_tests}"), GREEN) + "\n")
         self.stream.flush()
         super().addSuccess(test)
 
     def addFailure(self, test, err):
         elapsed = time.perf_counter() - self.test_start_time
         self.failed_count += 1
-        self.stream.write(color(pad(f"    FAIL   {elapsed:.3f}s   | lỗi {self.failed_count}"), RED) + "\n")
+        self.stream.write(color(pad(f"    FAIL   {elapsed:.3f}s   | loi {self.failed_count}"), RED) + "\n")
         self.stream.flush()
         super().addFailure(test, err)
 
@@ -216,14 +181,14 @@ class PrettyTestRunner(unittest.TextTestRunner):
     def _check_dependencies(self) -> list[str]:
         missing = []
         deps = {
-            "PySide6": "Giao diện (UI)",
+            "PySide6": "Giao dien (UI)",
             "faster_whisper": "Voice Recognition",
             "pyaudio": "Audio Input",
-            "pygments": "Syntax Highlighting"
+            "pygments": "Syntax Highlighting",
         }
         import importlib.util
         for lib, desc in deps.items():
-            if importlib.util.find_spec(lib.split('.')[0]) is None:
+            if importlib.util.find_spec(lib.split(".")[0]) is None:
                 missing.append(f"{lib} ({desc})")
         return missing
 
@@ -232,27 +197,27 @@ class PrettyTestRunner(unittest.TextTestRunner):
 
     def _write_camera_section(self) -> None:
         if self.camera_result is not None:
-            self.output_stream.write(section("KIỂM TRA THIẾT BỊ", YELLOW) + "\n")
+            self.output_stream.write(section("KIEM TRA THIET BI", YELLOW) + "\n")
             self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
             self.output_stream.write(color(pad(self.camera_result.detail), self.camera_result.style) + "\n")
             self.output_stream.write(color(rule("-"), CYAN) + "\n")
 
         missing_deps = self._check_dependencies()
         if missing_deps:
-            self.output_stream.write(section("CẢNH BÁO THƯ VIỆN", RED) + "\n")
+            self.output_stream.write(section("CANH BAO THU VIEN", RED) + "\n")
             for dep in missing_deps:
-                self.output_stream.write(color(pad(f"Thiếu: {dep}"), YELLOW) + "\n")
+                self.output_stream.write(color(pad(f"Thieu: {dep}"), YELLOW) + "\n")
             self.output_stream.write(color(rule("-"), CYAN) + "\n")
 
     def run(self, test):
         self.output_stream.write(color(rule("="), CYAN) + "\n")
         self.output_stream.write(color(pad("YOLO PROJECT :: SYSTEM TEST DASHBOARD"), BOLD + CYAN) + "\n")
         self.output_stream.write(color(rule("="), CYAN) + "\n")
-        self.output_stream.write(section("TỔNG QUAN", GREEN) + "\n")
-        self.output_stream.write(color(pad(f"Tổng số test      {self.total_tests}"), GREEN) + "\n")
-        self.output_stream.write(color(pad("Chế độ            Chạy từng test, hiện kết quả theo thời gian thực"), GREEN) + "\n")
-        self.output_stream.write(color(pad(f"Tiến độ khởi động  [{meter(0, self.total_tests)}] 0/{self.total_tests}"), YELLOW) + "\n")
-        self.output_stream.write(color(pad("Trạng thái        Đang quét toàn bộ hệ thống..."), YELLOW) + "\n")
+        self.output_stream.write(section("TONG QUAN", GREEN) + "\n")
+        self.output_stream.write(color(pad(f"Tong so test      {self.total_tests}"), GREEN) + "\n")
+        self.output_stream.write(color(pad("Che do            Chay tung test, hien ket qua theo thoi gian thuc"), GREEN) + "\n")
+        self.output_stream.write(color(pad(f"Tien do khoi dong  [{meter(0, self.total_tests)}] 0/{self.total_tests}"), YELLOW) + "\n")
+        self.output_stream.write(color(pad("Trang thai        Dang quet toan bo he thong..."), YELLOW) + "\n")
         self.output_stream.write(color(rule("-"), CYAN) + "\n")
         self._write_camera_section()
         self.output_stream.flush()
@@ -267,21 +232,21 @@ class PrettyTestRunner(unittest.TextTestRunner):
         skip_bar, skip_style = status_meter(result.skipped_count, self.total_tests, GREEN, YELLOW)
 
         self.output_stream.write("\n" + color(rule("="), CYAN) + "\n")
-        self.output_stream.write(color(pad("YOLO PROJECT :: TỔNG KẾT KIỂM THỬ"), BOLD + CYAN) + "\n")
+        self.output_stream.write(color(pad("YOLO PROJECT :: TONG KET KIEM THU"), BOLD + CYAN) + "\n")
         self.output_stream.write(color(rule("="), CYAN) + "\n")
-        self.output_stream.write(section("TỔNG KẾT", CYAN) + "\n")
-        self.output_stream.write(color(pad(f"Tiến độ tổng      [{meter(result.current_test, self.total_tests)}] {result.current_test}/{self.total_tests}"), CYAN) + "\n")
+        self.output_stream.write(section("TONG KET", CYAN) + "\n")
+        self.output_stream.write(color(pad(f"Tien do tong      [{meter(result.current_test, self.total_tests)}] {result.current_test}/{self.total_tests}"), CYAN) + "\n")
         self.output_stream.write(color(pad(f"PASS              [{pass_bar}] {result.passed_count}/{self.total_tests}"), pass_style) + "\n")
         self.output_stream.write(color(pad(f"FAIL              [{fail_bar}] {result.failed_count}"), fail_style) + "\n")
         self.output_stream.write(color(pad(f"ERROR             [{error_bar}] {result.error_count}"), error_style) + "\n")
         self.output_stream.write(color(pad(f"SKIP              [{skip_bar}] {result.skipped_count}"), skip_style) + "\n")
-        self.output_stream.write(color(pad(f"Thời gian tổng    {duration:.3f}s"), CYAN) + "\n")
+        self.output_stream.write(color(pad(f"Thoi gian tong    {duration:.3f}s"), CYAN) + "\n")
         if self.camera_result is not None:
             self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
 
         if result.failures or result.errors:
             self.output_stream.write("\n" + color(rule("-"), RED) + "\n")
-            self.output_stream.write(section("CHI TIẾT TEST LỖI", RED) + "\n")
+            self.output_stream.write(section("CHI TIET TEST LOI", RED) + "\n")
             self.output_stream.write(color(rule("-"), RED) + "\n")
             for test, traceback_text in result.failures + result.errors:
                 self.output_stream.write(color(f"{self.resultclass.getDescription(result, test)}\n", RED))
@@ -295,27 +260,27 @@ class PrettyTestRunner(unittest.TextTestRunner):
         suite_ok = result.wasSuccessful()
         camera_ok = self.camera_result is None or self.camera_result.ok or not self.strict_camera
         if suite_ok and camera_ok:
-            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      TOÀN BỘ TEST PASS"), BOLD + GREEN) + "\n")
+            self.output_stream.write(color(pad("KET QUA CUOI      TOAN BO TEST PASS"), BOLD + GREEN) + "\n")
         elif suite_ok and not camera_ok:
-            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      UNIT TEST PASS, NHƯNG CAMERA THẬT KHÔNG ĐẠT"), BOLD + RED) + "\n")
+            self.output_stream.write(color(pad("KET QUA CUOI      UNIT TEST PASS, NHUNG CAMERA THAT KHONG DAT"), BOLD + RED) + "\n")
         else:
-            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      CÓ TEST LỖI, CẦN KIỂM TRA LẠI"), BOLD + RED) + "\n")
+            self.output_stream.write(color(pad("KET QUA CUOI      CO TEST LOI, CAN KIEM TRA LAI"), BOLD + RED) + "\n")
         self.output_stream.flush()
         return result
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Chạy test toàn hệ thống cho dự án YOLO.")
-    parser.add_argument("--camera-index", type=int, default=0, help="Camera index để kiểm tra camera thật.")
+    parser = argparse.ArgumentParser(description="Chay test toan he thong cho du an YOLO.")
+    parser.add_argument("--camera-index", type=int, default=0, help="Camera index de kiem tra camera that.")
     parser.add_argument(
         "--skip-camera-check",
         action="store_true",
-        help="Bỏ qua bước kiểm tra camera thật trước khi chạy unit test.",
+        help="Bo qua buoc kiem tra camera that truoc khi chay unit test.",
     )
     parser.add_argument(
         "--strict-camera",
         action="store_true",
-        help="Nếu camera thật không đạt thì coi như bài test tổng thể fail.",
+        help="Neu camera that khong dat thi coi nhu bai test tong the fail.",
     )
     return parser.parse_args()
 

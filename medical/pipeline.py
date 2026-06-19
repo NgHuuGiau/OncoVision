@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from time import strftime
 from typing import Any, Protocol
@@ -32,6 +32,9 @@ class MedicalImageAnalyzerConfig:
     conf_threshold: float = 0.25
     classify_high_risk_threshold: float = 0.75
     classify_medium_risk_threshold: float = 0.45
+
+    def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
+        return replace(self, model_path=Path(model_path))
 
 
 @dataclass(frozen=True)
@@ -181,7 +184,7 @@ class MedicalImageAnalyzer:
 
     def ensure_ready(self) -> Path:
         model_path = validate_medical_model_path(self.config)
-        object.__setattr__(self.config, "model_path", model_path)
+        self.config = self.config.with_model_path(model_path)
         return model_path
 
     def _load_default_backend(self) -> DetectorBackend:

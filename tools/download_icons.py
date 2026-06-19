@@ -28,7 +28,7 @@ def create_default_icons() -> None:
     for name, content in ICONS.items():
         (ICONS_DIR / name).write_text(content, encoding="utf-8")
         print(f"Created: {name}")
-    print("\nHoan tat! Hay khoi dong lai ung dung Chat AI de thay ket qua.")
+    print("\nHoan tat! Hay khoi dong lai ung dung chat local de thay ket qua.")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from medical.case_payloads import build_case_export_payload, build_detection_metadata
 from medical.compliance import build_medical_disclaimer
 from medical.dataset import create_default_skin_cancer_dataset_config, ensure_medical_dataset_structure
 from medical.metrics import compute_medical_metrics
@@ -55,20 +56,6 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_parser.add_argument("--predictions", required=True, help="JSON array bool.")
     return parser
 
-
-def _build_detection_metadata(result) -> dict[str, object]:
-    return {
-        "normalized_image": str(result.normalized_image),
-        "average_confidence": result.average_confidence,
-        "model_name": result.model_name,
-        "detection_count": len(result.detections),
-        "detections": [
-            {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in result.detections
-        ],
-        "quality_warnings": result.quality_warnings,
-    }
-
-
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -94,7 +81,7 @@ def main() -> int:
             suspected_malignant=result.suspected_malignant,
             risk_level=result.risk_level,
             recommendation=result.recommendation,
-            metadata=_build_detection_metadata(result),
+            metadata=build_detection_metadata(result),
         )
         print(f"Mã ca bệnh: {case_id}")
         print(f"Mức độ sàng lọc nguy cơ: {result.risk_level}")
@@ -138,20 +125,7 @@ def main() -> int:
         if item is None:
             print(f"Không tìm thấy ca bệnh #{args.case_id}.")
             return 1
-        payload = {
-            "case_id": item.case_id,
-            "patient_code": item.patient_code,
-            "source_image": item.image_path,
-            "processed_image": item.processed_image_path,
-            "report_json_path": item.report_json_path,
-            "report_md_path": item.report_md_path,
-            "risk_level": item.risk_level,
-            "suspected_malignant": item.suspected_malignant,
-            "recommendation": item.recommendation,
-            "quality_warnings": item.metadata.get("quality_warnings", []),
-            "detections": item.metadata.get("detections", []),
-            "model_name": item.metadata.get("model_name", "-"),
-        }
+        payload = build_case_export_payload(item)
         bundle_path = export_case_bundle(
             payload,
             args.output_dir,

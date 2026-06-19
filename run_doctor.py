@@ -7,6 +7,7 @@ from pathlib import Path
 from core.hardware_info import detect_hardware
 from core.runtime_advisor import select_runtime_config_optimized
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
+from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
 from utils.file_utils import ensure_project_directories
 
@@ -21,9 +22,9 @@ ICONS_DIR = Path("assets/icons")
 ICON_WARNING_THRESHOLD = 10
 ICON_AUTOFIX_THRESHOLD = 5
 RUNTIME_RECOMMENDATION_MODES = (
-    ("Cao nhất", "high"),
-    ("Trung bình", "medium"),
-    ("Yếu", "low"),
+    ("Cao nhat", "high"),
+    ("Trung binh", "medium"),
+    ("Yeu", "low"),
 )
 
 
@@ -65,63 +66,27 @@ _open_camera_capture = open_camera_capture
 
 
 def _probe_camera(index: int = 0) -> CameraProbeResult:
-    try:
-        capture = _open_camera_capture(index)
-    except Exception as exc:
-        return CameraProbeResult(
-            level="ERROR",
-            summary=f"Camera thật       ERROR | Không tạo được camera index {index}",
-            detail=f"Lý do không chạy   {exc}",
-        )
-
-    if capture is None or not capture.isOpened():
-        if capture is not None:
-            capture.release()
-        return CameraProbeResult(
-            level="WARN",
-            summary=f"Camera thật       WARN  | Không mở được camera index {index}",
-            detail="Lý do không chạy   Webcam không sẵn sàng, đang bị app khác chiếm hoặc chưa cắm.",
-        )
-
-    width = 0
-    height = 0
-    ok = False
-    try:
-        for _ in range(3):
-            success, frame = capture.read()
-            if success and frame is not None:
-                height, width = frame.shape[:2]
-                ok = True
-                break
-    finally:
-        capture.release()
-
-    if not ok:
-        return CameraProbeResult(
-            level="WARN",
-            summary=f"Camera thật       WARN  | Mở được camera index {index} nhưng không đọc được frame",
-            detail="Lý do không chạy   Webcam mở được nhưng không trả về khung hình hợp lệ.",
-        )
-
-    return CameraProbeResult(
-        level="PASS",
-        summary=f"Camera thật       PASS  | Đọc frame thành công tại index {index}",
-        detail=f"Chi tiết          {width}x{height}",
+    result = probe_camera(
+        index=index,
+        attempts=3,
+        unavailable_detail="Ly do khong chay   Webcam khong san sang, dang bi app khac chiem hoac chua cam.",
+        open_camera_capture_fn=_open_camera_capture,
     )
+    return CameraProbeResult(level=result.level, summary=result.summary, detail=result.detail)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Kiểm tra sức khỏe toàn hệ thống cho dự án YOLO.")
-    parser.add_argument("--camera-index", type=int, default=0, help="Camera index để kiểm tra webcam thật.")
+    parser = argparse.ArgumentParser(description="Kiem tra suc khoe toan he thong cho du an YOLO.")
+    parser.add_argument("--camera-index", type=int, default=0, help="Camera index de kiem tra webcam that.")
     parser.add_argument(
         "--skip-camera-check",
         action="store_true",
-        help="Bỏ qua bước kiểm tra camera thật.",
+        help="Bo qua buoc kiem tra camera that.",
     )
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="Tự động sửa các lỗi cơ bản như thiếu icon.",
+        help="Tu dong sua cac loi co ban nhu thieu icon.",
     )
     return parser.parse_args()
 
@@ -130,21 +95,21 @@ def _run_autofix() -> None:
     print(line(rule("-"), CYAN))
     print(section("AUTO-FIX", YELLOW))
     if not ICONS_DIR.exists() or sum(1 for _ in ICONS_DIR.iterdir()) < ICON_AUTOFIX_THRESHOLD:
-        print(row("Icons", "Đang tạo bộ icon mặc định...", YELLOW))
+        print(row("Icons", "Dang tao bo icon mac dinh...", YELLOW))
         from tools.download_icons import create_default_icons
 
         create_default_icons()
-    print(row("Trạng thái", "Đã chạy xong Auto-fix!", GREEN))
+    print(row("Trang thai", "Da chay xong Auto-fix!", GREEN))
 
 
 def _print_camera_probe(camera_probe: CameraProbeResult) -> None:
     print(line(rule("-"), CYAN))
-    print(section("CAMERA THẬT", camera_probe.color))
-    print(row("Trạng thái", camera_probe.summary.split("|", 1)[-1].strip(), camera_probe.color, bounded=False))
+    print(section("CAMERA THAT", camera_probe.color))
+    print(row("Trang thai", camera_probe.summary.split("|", 1)[-1].strip(), camera_probe.color, bounded=False))
     print(
         row(
-            "Chi tiết",
-            camera_probe.detail.replace("Chi tiết          ", "").replace("Lý do không chạy   ", ""),
+            "Chi tiet",
+            camera_probe.detail.replace("Chi tiet          ", "").replace("Ly do khong chay   ", ""),
             camera_probe.color,
             bounded=False,
         )
@@ -153,7 +118,7 @@ def _print_camera_probe(camera_probe: CameraProbeResult) -> None:
 
 def _print_recommendations(recommendations: dict[str, object]) -> None:
     print(line(rule("-"), CYAN))
-    print(section("GỢI Ý CHẠY THEO MÁY", GREEN))
+    print(section("GOI Y CHAY THEO MAY", GREEN))
     for label, runtime in recommendations.items():
         value = f"{runtime.primary_model_name} / {runtime.resolved_device} / imgsz {runtime.imgsz}"
         color = GREEN if runtime.primary_model_name != "yolo11n.pt" else YELLOW
@@ -168,7 +133,7 @@ def _print_recommended_commands(
     split_ok: bool,
 ) -> None:
     print(line(rule("-"), CYAN))
-    print(section("LỆNH NÊN CHẠY", CYAN))
+    print(section("LENH NEN CHAY", CYAN))
     command_index = 1
     if missing_models:
         print(command_row(command_index, "python training\\download_models.py"))
@@ -209,15 +174,15 @@ def main() -> None:
     camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
     recommendations = _runtime_recommendations(hardware)
 
-    for item in header("YOLO DOCTOR :: KIỂM TRA TOÀN HỆ THỐNG"):
+    for item in header("YOLO DOCTOR :: KIEM TRA TOAN HE THONG"):
         print(item)
 
-    print(section("PHẦN CỨNG", GREEN if hardware.cuda_available else YELLOW))
+    print(section("PHAN CUNG", GREEN if hardware.cuda_available else YELLOW))
     print(row("CPU", hardware.cpu_name, GREEN))
     print(row("RAM / OS", f"{hardware.ram_gb:.1f} GB / {hardware.os_name}", GREEN))
     print(row("GPU", hardware.gpu_name, GREEN if hardware.gpu_hardware_available else YELLOW))
     print(row("VRAM / GPU", f"{hardware.vram_gb:.1f} GB / {hardware.gpu_count}", GREEN if hardware.gpu_hardware_available else YELLOW))
-    print(row("PyTorch", hardware.torch_version, GREEN if hardware.torch_version != "Không có PyTorch" else RED, bounded=False))
+    print(row("PyTorch", hardware.torch_version, GREEN if hardware.torch_version != "Khong co PyTorch" else RED, bounded=False))
     print(row("CUDA", hardware.cuda_runtime_reason, GREEN if hardware.cuda_available else YELLOW, bounded=False))
 
     if camera_probe is not None:
@@ -225,25 +190,25 @@ def main() -> None:
 
     print(line(rule("-"), CYAN))
     icons_ok = icon_count >= ICON_WARNING_THRESHOLD
-    print(section("GIAO DIỆN & ICONS", GREEN if icons_ok else YELLOW))
+    print(section("GIAO DIEN & ICONS", GREEN if icons_ok else YELLOW))
     print(row("Icons (.svg)", f"{icon_count} file trong assets/icons", GREEN if icons_ok else RED, bounded=False))
     if not icons_ok:
-        print(row("Cảnh báo", "Thiếu icon sẽ làm giao diện bị đen trắng.", RED, bounded=False))
+        print(row("Canh bao", "Thieu icon se lam giao dien bi den trang.", RED, bounded=False))
 
     print(line(rule("-"), CYAN))
     print(section("MODEL YOLO11", GREEN if not missing_models else YELLOW))
-    print(row("Đã có", ", ".join(present_models) if present_models else "Chưa có model nào", GREEN if present_models else RED, bounded=False))
+    print(row("Da co", ", ".join(present_models) if present_models else "Chua co model nao", GREEN if present_models else RED, bounded=False))
     if missing_models:
-        print(row("Thiếu", ", ".join(missing_models), RED, bounded=False))
+        print(row("Thieu", ", ".join(missing_models), RED, bounded=False))
     else:
-        print(row("Trạng thái", "Đã có đủ 5 model YOLO11.", GREEN, bounded=False))
+        print(row("Trang thai", "Da co du 5 model YOLO11.", GREEN, bounded=False))
 
     _print_recommendations(recommendations)
 
     print(line(rule("-"), CYAN))
     dataset_ok = raw_images > 0 and raw_labels > 0
     split_ok = train_images > 0 and val_images > 0
-    print(section("DỮ LIỆU", GREEN if dataset_ok else YELLOW))
+    print(section("DU LIEU", GREEN if dataset_ok else YELLOW))
     print(row("Raw images", f"{RAW_IMAGES_DIR} ({raw_images} file)", GREEN if raw_images else RED, bounded=False))
     print(row("Raw labels", f"{RAW_LABELS_DIR} ({raw_labels} file)", GREEN if raw_labels else RED, bounded=False))
     print(row("Train split", f"{PROCESSED_TRAIN_DIR} ({train_images} file)", GREEN if train_images else YELLOW, bounded=False))
@@ -251,23 +216,23 @@ def main() -> None:
 
     print(line(rule("-"), CYAN))
     ready = bool(present_models) and dataset_ok
-    print(section("KẾT LUẬN", GREEN if ready else YELLOW))
+    print(section("KET LUAN", GREEN if ready else YELLOW))
     if not present_models:
-        print(row("Lý do", "Chưa có model local trong models/pretrained.", RED, bounded=False))
+        print(row("Ly do", "Chua co model local trong models/pretrained.", RED, bounded=False))
     elif missing_models:
-        print(row("Lý do", "Máy vẫn chạy được, nhưng chưa có đủ 5 model để chọn hết mọi mức.", YELLOW, bounded=False))
+        print(row("Ly do", "May van chay duoc, nhung chua co du 5 model de chon het moi muc.", YELLOW, bounded=False))
     else:
-        print(row("Model", "Đã sẵn sàng để chạy đủ các mức YOLO11.", GREEN, bounded=False))
+        print(row("Model", "Da san sang de chay du cac muc YOLO11.", GREEN, bounded=False))
 
     if camera_probe is not None and camera_probe.level != "PASS":
-        print(row("Camera", camera_probe.detail.replace("Lý do không chạy   ", ""), YELLOW, bounded=False))
+        print(row("Camera", camera_probe.detail.replace("Ly do khong chay   ", ""), YELLOW, bounded=False))
 
     if not dataset_ok:
-        print(row("Dataset", "Chưa có dữ liệu raw để train.", YELLOW, bounded=False))
+        print(row("Dataset", "Chua co du lieu raw de train.", YELLOW, bounded=False))
     elif not split_ok:
-        print(row("Dataset", "Đã có raw nhưng chưa split train/val.", YELLOW, bounded=False))
+        print(row("Dataset", "Da co raw nhung chua split train/val.", YELLOW, bounded=False))
     else:
-        print(row("Dataset", "Dữ liệu train/val đã sẵn sàng.", GREEN, bounded=False))
+        print(row("Dataset", "Du lieu train/val da san sang.", GREEN, bounded=False))
 
     _print_recommended_commands(
         missing_models=missing_models,

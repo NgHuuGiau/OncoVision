@@ -81,3 +81,28 @@ class MedicalStorageTests(unittest.TestCase):
             self.assertEqual(len(deleted_paths), 4)
             self.assertFalse(image.exists())
             self.assertIsNone(db.get_case(case_id))
+
+    def test_init_creates_indexes_for_lookup_and_history(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            db_path = Path(temp_dir) / "medical.db"
+            db = MedicalCaseDatabase(db_path)
+
+            with db._connect() as conn:
+                indexes = {
+                    row[1]
+                    for row in conn.execute("PRAGMA index_list(medical_cases)").fetchall()
+                }
+
+            self.assertIn("idx_medical_cases_patient_code", indexes)
+            self.assertIn("idx_medical_cases_created_at", indexes)
+
+    def test_connection_enables_wal_mode_and_busy_timeout(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            db = MedicalCaseDatabase(Path(temp_dir) / "medical.db")
+
+            with db._connect() as conn:
+                journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+                busy_timeout = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+
+            self.assertEqual(str(journal_mode).lower(), "wal")
+            self.assertEqual(busy_timeout, 5000)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from app.camera_runtime.compat import resolve_legacy_start_options
 from core.hardware_info import detect_hardware
 from core.runtime_advisor import select_runtime_config_optimized
 from utils.console_ui import prompt_launch_target, prompt_runtime_mode
@@ -97,10 +98,8 @@ def resolve_start_bundle(
 
 
 def resolve_start_options(*, requested_mode: str | None, requested_model: str | None) -> tuple[str, str]:
-    start_options = resolve_start_bundle(
+    return resolve_legacy_start_options(
         requested_mode=requested_mode,
         requested_model=requested_model,
-        requested_target="ui",
-        preferred_target="ui",
+        resolve_start_bundle_fn=resolve_start_bundle,
     )
-    return start_options.selected_mode, start_options.selected_model
