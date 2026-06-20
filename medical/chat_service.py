@@ -6,6 +6,7 @@ from pathlib import Path
 
 from medical.case_payloads import build_detection_metadata
 from medical.pipeline import MedicalImageAnalyzer
+from medical.reporting import update_case_report_case_id
 from medical.storage import MedicalCaseDatabase
 
 
@@ -45,10 +46,16 @@ class MedicalChatService:
             recommendation=result.recommendation,
             metadata=self._build_case_metadata(result, user_prompt=user_prompt),
         )
+        update_case_report_case_id(
+            result.report_json_path,
+            result.report_md_path,
+            case_id=case_id,
+        )
         metadata = {
             "medical_case_id": case_id,
             "risk_level": result.risk_level,
             "suspected_malignant": result.suspected_malignant,
+            "processed_image_path": str(result.processed_image),
             "report_json_path": str(result.report_json_path),
             "report_md_path": str(result.report_md_path),
             "recommendation": result.recommendation,
@@ -71,6 +78,9 @@ class MedicalChatService:
             f"Tom tat phat hien: {detection_summary}. "
             f"Khuyen nghi: {result.recommendation}."
             f"{quality_text} "
+            f"Da luu anh da xu ly tai: {result.processed_image}. "
+            f"Da luu bao cao JSON tai: {result.report_json_path}. "
+            f"Da luu bao cao Markdown tai: {result.report_md_path}. "
             f"Luu y: {result.disclaimer}"
         )
         return MedicalChatResponse(

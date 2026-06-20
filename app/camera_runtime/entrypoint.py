@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import argparse
 
+from app.camera_runtime.cli import build_camera_arg_parser
 from app.camera_runtime.launching import CAMERA_BOOT_FINISH_MESSAGE, CAMERA_BOOT_STEPS, run_camera_launch_flow
-from app.chat_ui.cli import build_chat_arg_parser
 from utils.console_ui import BootProgress
 
 
 def build_targeted_parser(description: str) -> argparse.ArgumentParser:
-    parser = build_chat_arg_parser(description)
+    parser = build_camera_arg_parser(description)
     parser.add_argument(
         "--target",
         default=None,

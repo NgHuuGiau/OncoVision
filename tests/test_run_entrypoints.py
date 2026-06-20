@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -91,7 +92,7 @@ class RunEntrypointsTests(unittest.TestCase):
         launch_chat_app_mock,
     ) -> None:
         parser = build_parser_mock.return_value
-        parser.parse_args.return_value = SimpleNamespace(camera_index=3)
+        parser.parse_args.return_value = SimpleNamespace(camera_index=3, cleanup_output=False, older_than_days=None, model="skin.pt")
         launch_chat_app_mock.return_value = 5
 
         result = run_chat.main()
@@ -101,8 +102,40 @@ class RunEntrypointsTests(unittest.TestCase):
             window_title="YOLO Chat AI",
             camera_index=3,
             app_mode="medium",
+            selected_model="skin.pt",
         )
+
+    @patch("run_chat.cleanup_chat_outputs")
+    @patch("run_chat.build_chat_arg_parser")
+    def test_run_chat_cleanup_output_reports_summary(
+        self,
+        build_parser_mock,
+        cleanup_mock,
+    ) -> None:
+        parser = build_parser_mock.return_value
+        parser.parse_args.return_value = SimpleNamespace(
+            camera_index=0,
+            cleanup_output=True,
+            older_than_days=14,
+            model=None,
+        )
+        cleanup_mock.return_value = SimpleNamespace(
+            removed_files=4,
+            removed_dirs=1,
+            freed_bytes=2048,
+        )
+
+        with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            result = run_chat.main()
+
+        self.assertEqual(result, 0)
+        cleanup_mock.assert_called_once_with(older_than_days=14)
+        self.assertIn("Da xoa file chat: 4", stdout.getvalue())
 
     def test_mode_to_ui_defaults_maps_modes(self) -> None:
         self.assertEqual(mode_to_ui_defaults("auto"), ("auto", "medium"))
         self.assertEqual(mode_to_ui_defaults("high"), ("manual", "high"))
+
+
+if __name__ == "__main__":
+    unittest.main()

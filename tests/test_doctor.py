@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
+from medical.system_status import MedicalSystemStatus
 import run_doctor
 
 
@@ -46,6 +47,8 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("1280x720", result.detail)
 
     @patch("builtins.print")
+    @patch("run_doctor.recommended_medical_commands", return_value=["python run_medical.py train-all"])
+    @patch("run_doctor.get_medical_system_status")
     @patch("run_doctor.select_runtime_config_optimized")
     @patch("run_doctor.detect_hardware")
     @patch("run_doctor.ensure_project_directories")
@@ -56,6 +59,8 @@ class DoctorTests(unittest.TestCase):
         _ensure_dirs_mock,
         detect_hardware_mock,
         select_runtime_config_optimized_mock,
+        medical_status_mock,
+        _medical_commands_mock,
         print_mock,
     ) -> None:
         parse_args_mock.return_value = Mock(camera_index=0, skip_camera_check=True, fix=False)
@@ -63,7 +68,7 @@ class DoctorTests(unittest.TestCase):
             cpu_name="Intel Core i7",
             ram_gb=16.0,
             os_name="Windows 11",
-            gpu_name="KhĂ´ng phĂ¡t hiá»‡n GPU",
+            gpu_name="Kh\u00f4ng ph\u00e1t hi\u1ec7n GPU",
             gpu_count=0,
             vram_gb=0.0,
             torch_version="2.0",
@@ -76,10 +81,31 @@ class DoctorTests(unittest.TestCase):
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),
         ]
+        medical_status_mock.return_value = MedicalSystemStatus(
+            configured_model_path=Path("models/trained/skin.pt"),
+            resolved_model_path=None,
+            allow_fallback_model=False,
+            using_fallback_model=False,
+            model_ready=False,
+            model_message="missing medical model",
+            dataset_root=Path("dataset/medical_skin_lesion"),
+            data_yaml_path=Path("dataset/medical_skin_lesion/data.yaml"),
+            raw_images=0,
+            raw_labels=0,
+            train_images=0,
+            val_images=0,
+            test_images=0,
+            report_files=0,
+            normalized_files=0,
+            overlay_files=0,
+            export_files=0,
+            case_db_path=Path("output/medical/medical_cases.db"),
+            case_count=0,
+        )
 
         with patch("run_doctor._present_and_missing_models", return_value=([], ["yolo11n.pt"])), patch(
             "run_doctor._count_files",
-            side_effect=[0, 0, 0, 0, 0],
+            side_effect=[0, 0, 0, 0, 0, 0],
         ):
             run_doctor.main()
 
@@ -87,6 +113,7 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("download_models.py", output)
         self.assertIn("prepare_dataset.py", output)
         self.assertIn("model local", output)
+        self.assertIn("run_medical.py train-all", output)
 
 
 if __name__ == "__main__":

@@ -1,23 +1,15 @@
 from __future__ import annotations
 
 from core.hardware_info import detect_hardware
+from core.model_catalog import MODEL_QUALITY_SCORES, YOLO11_MODELS_DESC
 from core.model_selector import RuntimeConfig, select_runtime_config
 
-
-MODEL_QUALITY_SCORES = {
-    "yolo11x.pt": 100,
-    "yolo11l.pt": 92,
-    "yolo11m.pt": 84,
-    "yolo11s.pt": 74,
-    "yolo11n.pt": 58,
-}
-
 MODE_ORDER = ("high", "medium", "low")
-YOLO11_VARIANTS = ("yolo11x.pt", "yolo11l.pt", "yolo11m.pt", "yolo11s.pt", "yolo11n.pt")
+YOLO11_VARIANTS = YOLO11_MODELS_DESC
 MODE_META = {
-    "high": {"label": "mạnh nhất", "title": "MẠNH NHẤT", "meaning": "mức cao nhất có thể ưu tiên"},
-    "medium": {"label": "trung bình", "title": "TRUNG BÌNH", "meaning": "mức cân bằng dễ dùng nhất"},
-    "low": {"label": "yếu nhất", "title": "YẾU NHẤT", "meaning": "mức nhẹ nhất / dễ chạy nhất"},
+    "high": {"label": "manh nhat", "title": "MANH NHAT", "meaning": "muc cao nhat co the uu tien"},
+    "medium": {"label": "trung binh", "title": "TRUNG BINH", "meaning": "muc can bang de dung nhat"},
+    "low": {"label": "yeu nhat", "title": "YEU NHAT", "meaning": "muc nhe nhat / de chay nhat"},
 }
 
 
