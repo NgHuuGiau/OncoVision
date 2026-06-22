@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import unittest
 from types import SimpleNamespace
+from pathlib import Path
 from unittest.mock import patch
 
 import run_app
@@ -83,6 +84,28 @@ class RunEntrypointsTests(unittest.TestCase):
     def test_run_train_module_exposes_training_main(self, train_main_mock) -> None:
         run_train.main()
         train_main_mock.assert_called_once()
+
+    @patch("run_train.resolve_model_source", side_effect=lambda value: Path(value))
+    @patch("run_train.load_yaml")
+    @patch("run_train._module_available")
+    @patch("run_train.ensure_project_directories")
+    def test_run_train_preflight_warns_when_models_missing_but_does_not_fail(
+        self,
+        ensure_dirs_mock,
+        module_available_mock,
+        load_yaml_mock,
+        _resolve_model_source_mock,
+    ) -> None:
+        module_available_mock.return_value = True
+        load_yaml_mock.return_value = {"model": "models/pretrained/yolo11s.pt", "fallback_model": "yolo11n.pt"}
+
+        with patch("run_train._count_files", side_effect=[0, 0, 0, 0]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            result = run_train.run_train_preflight()
+
+        self.assertEqual(result, 0)
+        ensure_dirs_mock.assert_called_once_with()
+        self.assertIn("Warning: thiếu pretrained model", stdout.getvalue())
+        self.assertIn("training\\download_models.py", stdout.getvalue())
 
     @patch("run_chat.launch_chat_app")
     @patch("run_chat.build_chat_arg_parser")

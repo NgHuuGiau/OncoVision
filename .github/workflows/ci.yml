@@ -28,5 +28,8 @@ jobs:
       - name: Lint
         run: ruff check . --line-length 140 --target-version py310
 
+      - name: Smoke check
+        run: python run_smoke.py
+
       - name: Run tests
         run: python -m unittest
