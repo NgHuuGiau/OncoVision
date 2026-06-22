@@ -1,152 +1,128 @@
-# Dự án YOLO Realtime Camera
+# Tổng quan dự án
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)
-![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO11-111827)
-![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?logo=opencv&logoColor=white)
-![PySide6](https://img.shields.io/badge/PySide6-Qt_for_Python-41CD52?logo=qt&logoColor=white)
-![CUDA](https://img.shields.io/badge/CUDA-Tùy chọn-76B900?logo=nvidia&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
-![UTF-8](https://img.shields.io/badge/Terminal-UTF--8-0F766E)
+## 1. Mục tiêu
 
-Repo này tập trung vào 3 nhóm chức năng chính:
+Dự án này được xây quanh 3 trục chính:
 
-- Chạy YOLO realtime trên webcam với cấu hình thích nghi theo phần cứng.
-- Kiểm tra, tư vấn và chẩn đoán runtime bằng terminal.
-- Huấn luyện, đánh giá và xuất model custom từ dataset riêng.
-- Phân tích ảnh y khoa theo luồng upload ảnh, tạo report, lưu lịch sử ca và tính metric sàng lọc.
-- Tích hợp phân tích ảnh ung thư ngay trong giao diện chat khi người dùng gửi ảnh.
+- Camera YOLO realtime trên desktop.
+- Bộ công cụ chẩn đoán và tư vấn runtime theo phần cứng.
+- Pipeline training cho model custom.
 
-## Ngăn xếp công nghệ
+## 2. Điểm vào chính của hệ thống
 
-- Ngôn ngữ chính: Python.
-- Inference: Ultralytics YOLO, PyTorch, CUDA tùy chọn.
-- Xử lý ảnh và camera: OpenCV, NumPy.
-- Giao diện desktop: PySide6.
-- Terminal và log: UTF-8 trên Windows để hiển thị tiếng Việt đầy đủ.
+```text
+run_menu.py
+  -> run_app.py
+  -> run_chat.py
+  -> run_doctor.py
+  -> run_tests.py
+  -> run_train.py
+```
 
-## Thành phần chính
+## 3. Kiến trúc runtime camera hiện tại
 
-- `run_menu.py`: menu tổng để mở nhanh các công cụ chính.
-- `run_app.py`: camera realtime YOLO, có dashboard phần cứng và nhận diện.
-- `run_chat.py`: giao diện desktop/chat.
-- `run_doctor.py`: kiểm tra phần cứng, camera, model, dữ liệu và gợi ý runtime.
-- `run_app.py --advisor-only`: bộ tư vấn runtime, giải thích vì sao máy nên chạy mức nào mà không mở camera.
-- `run_tests.py`: chạy toàn bộ test của repo.
-- `run_train.py`: huấn luyện model custom.
+```text
+run_app.py
+  -> app.camera_runtime.bootstrap
+  -> core.runtime_advisor
+  -> core.model_selector
+  -> core.model_loader
+  -> core.camera_runner
+  -> utils.draw_utils
+```
 
-## Luồng camera realtime
+Lưu ý:
+
+- `run_app.py` hiện đi thẳng vào `resolve_start_bundle(...)` rồi `run_camera_session(...)`.
+- `app/camera_runtime/entrypoint.py` vẫn còn trong repo để giữ tương thích và phục vụ test, nhưng không còn là đường chạy chính.
+- `run_camera_preview_session(...)` là nhánh preview cũ, không còn được ứng dụng chính sử dụng mặc định.
+
+## 4. Vai trò từng module quan trọng
+
+### `run_app.py`
+
+- Nhận tham số CLI.
+- Gọi `resolve_start_bundle(...)` để lấy runtime phù hợp.
+- In dashboard khởi động.
+- Gọi `run_camera_session(...)` để mở camera và inference.
+
+### `app/camera_runtime/bootstrap.py`
+
+- Dò phần cứng hiện tại.
+- Xây `StartOptions`.
+- Chọn mode mặc định theo target và phần cứng.
+- Áp model người dùng yêu cầu vào runtime cuối cùng.
+
+### `core/runtime_advisor.py`
+
+- Tạo runtime tối ưu cho `high`, `medium`, `low` và `auto`.
+- Là nguồn recommendation chính cho `run_app.py` và `run_doctor.py`.
+
+### `core/model_selector.py`
+
+- Đọc `config/settings.yaml`.
+- Tạo `RuntimeConfig`.
+- Giữ các tham số inference như `confidence`, `iou`, `imgsz`, `show_fps`, tăng sáng khung hình tối.
+
+### `core/model_loader.py`
+
+- Load model local từ `models/pretrained/`, file local root hoặc `models/trained/best.pt`.
+- Tuân theo thứ tự ưu tiên trong `config/model_config.yaml`.
+
+### `core/camera_runner.py`
+
+- Mở camera và đọc frame theo luồng riêng.
+- Chạy YOLO predict.
+- Lọc detection, làm mượt box, gán track id, vẽ motion trail.
+- Tăng sáng frame tối trước khi inference khi cần.
+- Trả FPS và trạng thái runtime.
+
+### `utils/draw_utils.py`
+
+- Vẽ box và label.
+- Neo badge FPS vào box nhận diện chính.
+- Tự tránh mép khung hình nếu box nằm sát rìa.
+
+### `run_doctor.py`
+
+- Kiểm tra sức khỏe hệ thống.
+- Kiểm tra camera thật, model local, icon và dataset.
+- In các lệnh nên chạy tiếp theo.
+
+### `run_tests.py`
+
+- Chạy toàn bộ unit test.
+- Có phần kiểm tra camera thật trước test nếu người dùng không bỏ qua.
+- In dashboard test để theo dõi tiến độ.
+
+## 5. Cách hệ thống chọn runtime
 
 Khi chạy `run_app.py`:
 
-1. Hệ thống đọc tham số CLI.
-2. `app.camera_runtime.bootstrap.resolve_start_bundle()` dò phần cứng và chọn runtime phù hợp.
-3. Dashboard khởi động được in ra terminal.
-4. `core.camera_runner.run_camera_session()` mở camera và bắt đầu inference.
-5. Kết quả nhận diện được lọc, làm mượt box, vẽ trail và hiển thị FPS.
+1. Dò phần cứng bằng `detect_hardware()`.
+2. Tạo recommendation bằng `core.runtime_advisor`.
+3. Resolve `RuntimeConfig` tương ứng với `high`, `medium`, `low` hoặc `auto`.
+4. Dùng runtime đó để load model và mở camera.
 
-Lưu ý: nhánh hiện tại đã dùng trực tiếp `run_camera_session(...)`. Luồng preview-only cũ không còn là đường chạy chính của ứng dụng.
+### Ý nghĩa các mode
 
-## Tối ưu nhận diện hiện tại
+- `high`: mức chất lượng cao nhất máy còn gánh được.
+- `medium`: mức cân bằng để dùng thường xuyên.
+- `low`: mức an toàn nhất khi cần mượt và ổn định.
+- `auto`: để hệ thống tự chọn cấu hình hợp lý từ thông tin phần cứng.
 
-Các điểm đã được tổ chức lại và tối ưu:
+## 6. Vì sao `run_doctor.py` và `run_app.py` phải đồng bộ
 
-- Runtime được chọn theo phần cứng, thay vì dùng một cấu hình cố định cho mọi máy.
-- `confidence`, `IoU`, `imgsz` và các ngưỡng hiển thị được cấu hình trong `config/settings.yaml`.
-- Có thể tăng sáng có điều kiện cho khung hình tối trước khi inference.
-- FPS được hiển thị thành badge riêng, tránh che khuất nội dung quan trọng trên khung hình.
+Nếu `run_doctor.py` dùng logic chọn runtime cũ còn `run_app.py` dùng logic mới, người dùng sẽ thấy:
 
-Nếu bạn cần nhận diện class custom thay vì object tổng quát từ model pretrained, có thể chạy:
+- Doctor gợi ý một model.
+- Camera thực tế lại chạy model khác.
 
-```powershell
-.\.venv\Scripts\python run_app.py --model models/trained/best.pt
-```
+Hiện tại hai luồng này đã được đồng bộ ở mức chọn runtime, nhưng vẫn còn lặp một phần logic kiểm tra camera giữa `run_doctor.py` và `run_tests.py`. Đây là vùng có thể tiếp tục refactor sau.
 
-Điều này đặc biệt quan trọng khi `best.pt` được train cho class riêng như `face`, `helmet`, `phone`, v.v.
+## 7. Tinh chỉnh nhận diện
 
-## Cài đặt nhanh
-
-```powershell
-cd D:\YOLO
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-.\.venv\Scripts\python training\prepare_dataset.py
-.\.venv\Scripts\python training\download_models.py
-```
-
-Nếu PowerShell chặn script:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\.venv\Scripts\Activate.ps1
-```
-
-## Cách chạy
-
-Menu tổng:
-
-```powershell
-.\.venv\Scripts\python run_menu.py
-```
-
-Chạy trực tiếp từng công cụ:
-
-```powershell
-.\.venv\Scripts\python run_app.py
-.\.venv\Scripts\python run_chat.py
-.\.venv\Scripts\python run_doctor.py
-.\.venv\Scripts\python run_medical.py init-dataset
-.\\.venv\\Scripts\\python run_medical.py audit-dataset
-.\\.venv\\Scripts\\python run_medical.py status
-.\\.venv\\Scripts\\python run_medical.py split-dataset
-.\\.venv\\Scripts\\python run_medical.py train
-.\\.venv\\Scripts\\python run_medical.py validate
-.\\.venv\\Scripts\\python run_medical.py train-all
-.\.venv\Scripts\python run_medical.py analyze --image sample.jpg --patient-code BN001
-.\\.venv\\Scripts\\python run_medical.py cleanup-output --older-than-days 30
-.\.venv\Scripts\python run_app.py --advisor-only
-.\.venv\Scripts\python run_tests.py
-.\.venv\Scripts\python run_train.py
-```
-
-Ví dụ chọn mode và camera:
-
-```powershell
-.\.venv\Scripts\python run_app.py --mode medium --camera-index 0
-```
-
-Ví dụ ép dùng model custom:
-
-```powershell
-.\.venv\Scripts\python run_app.py --model models/trained/best.pt
-```
-
-Ví dụ dùng giao diện chat để gửi ảnh y khoa:
-
-```powershell
-.\.venv\Scripts\python run_chat.py
-```
-
-Sau đó chọn ảnh trong chat; hệ thống sẽ tự phân tích, sinh ảnh đã đánh dấu và lưu báo cáo medical.
-
-Lưu ý cho medical:
-
-- Nhánh medical mặc định yêu cầu model chuyên dụng trong `config/medical_settings.yaml`.
-- Hệ thống không còn tự rơi sang `yolo11n.pt` để trả kết quả screening nếu thiếu model medical.
-- Chỉ bật `medical.allow_fallback_model: true` khi bạn chấp nhận đây là chế độ nghiên cứu/thử nghiệm.
-
-## Tinh chỉnh trong `config/settings.yaml`
-
-Các khóa quan trọng cho camera:
-
-- `camera.show_fps`
-- `output.captures_dir`
-- `output.recordings_dir`
-- `recording.codec`
-- `recording.fps`
-
-Các khóa quan trọng cho inference:
+Các tham số hiện có trong `config/settings.yaml`:
 
 - `inference.confidence`
 - `inference.iou`
@@ -156,58 +132,79 @@ Các khóa quan trọng cho inference:
 - `inference.enhance_low_light`
 - `inference.low_light_mean_threshold`
 
-## Training
+Mục tiêu của việc tách các tham số này là:
 
-Dataset đầu vào đặt ở:
+- Dễ phân tích nguyên nhân nhận diện yếu.
+- Dễ tăng recall hoặc giảm false positive theo từng loại object.
+- Dễ document và debug hơn.
 
-- `dataset/raw/images`
-- `dataset/raw/labels`
+## 8. Cấu trúc thư mục chính
 
-Luồng khuyến nghị:
-
-```powershell
-.\.venv\Scripts\python training\prepare_dataset.py
-.\.venv\Scripts\python training\validate_dataset.py
-.\.venv\Scripts\python training\split_dataset.py
-.\.venv\Scripts\python run_train.py
-.\.venv\Scripts\python training\validate_model.py
-.\.venv\Scripts\python training\export_model.py
+```text
+app/
+core/
+docs/
+models/
+tests/
+tools/
+training/
+utils/
+config/
+run_app.py
+run_chat.py
+run_doctor.py
+run_menu.py
+run_tests.py
+run_train.py
 ```
 
-Hiện tại `training/data.yaml` đang khai báo tối thiểu:
+## 9. Training flow
+
+```text
+dataset/raw
+  -> training/validate_dataset.py
+  -> training/split_dataset.py
+  -> run_train.py
+  -> training/validate_model.py
+  -> training/export_model.py
+```
+
+## 10. Model flow
+
+### Runtime camera tổng quát
+
+```text
+models/pretrained/*.pt
+  -> model_loader
+  -> run_app.py
+  -> camera realtime
+```
+
+### Runtime camera với model custom
+
+```text
+models/trained/best.pt
+  -> run_app.py --model models/trained/best.pt
+  -> camera realtime cho class riêng
+```
+
+## 11. Trạng thái hiện tại của dataset
+
+`training/data.yaml` hiện khai báo:
 
 ```yaml
 names:
   0: person
 ```
 
-Nếu bạn muốn nhận diện class khác trong camera bằng model custom, cần cập nhật dataset và `training/data.yaml` đồng bộ trước khi train lại.
+Điều này rất quan trọng khi phân tích lỗi nhận diện:
 
-## Chẩn đoán nhanh
+- Nếu bạn mong đợi class khác ngoài `person`, cần xem lại dataset và model custom.
+- Nếu bạn đang dùng model pretrained, camera sẽ nhận diện object tổng quát theo COCO.
 
-```powershell
-.\.venv\Scripts\python run_doctor.py
-.\.venv\Scripts\python run_app.py --advisor-only
-```
+## 12. Các điểm cần nhớ khi bảo trì
 
-- `run_doctor.py` dùng để kiểm tra hệ thống có đủ điều kiện chạy hay không.
-- `run_app.py --advisor-only` dùng để giải thích vì sao máy nên chạy `high`, `medium` hay `low`.
-
-## Tài liệu chi tiết
-
-- [docs/install_guide.md](docs/install_guide.md)
-- [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md)
-- [docs/training_guide.md](docs/training_guide.md)
-- [docs/project_overview.md](docs/project_overview.md)
-- [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md)
-
-## Ghi chú vận hành
-
-- Nhấn `Esc` để thoát camera realtime.
-- Nhấn `S` để chụp frame hiện tại vào `output/captures`.
-- Nhấn `R` để bật/tắt ghi video vào `output/recordings`.
-- Nhấn `O` để ẩn/hiện overlay box và nhãn.
-- Nhấn `F` để bật/tắt FPS.
-- Nhấn `T` để bật/tắt motion trail.
-- Nếu webcam tối, hãy tăng ánh sáng thực tế trước khi chỉ trông chờ vào tăng sáng bằng phần mềm.
-- FPS cao không đồng nghĩa với nhận diện tốt hơn; nếu phải hạ `imgsz` quá thấp để tăng FPS thì độ chính xác có thể giảm.
+- Không đổi logic recommendation ở `run_app.py` mà quên cập nhật `run_doctor.py`.
+- Không đổi vị trí hiển thị FPS mà quên sửa test visualization.
+- Không đổi threshold trong `config/settings.yaml` mà quên cập nhật README/docs.
+- Nếu terminal bị lỗi dấu tiếng Việt, kiểm tra helper UTF-8 trong `utils/terminal_encoding.py`.

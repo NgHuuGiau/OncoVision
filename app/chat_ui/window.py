@@ -155,7 +155,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.medical_status_message = ""
 
             self.language = self.db.get_setting("language", "vi")
-            self.theme_mode = self.db.get_setting("theme", "dark")
+            self.theme_mode = self.db.get_setting("theme", "system")
             
             self.active_conversation_index = 0
             self.setup_tray_icon()
@@ -645,7 +645,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.plus_button.setIconSize(QSize(18, 18))
             self.micro_button.setIcon(themed_icon("mic.svg", strong, 18))
             self.micro_button.setIconSize(QSize(18, 18))
-            self.send_button.setIcon(themed_icon("send.svg", "#ffffff", 18))
+            self.send_button.setIcon(themed_icon("send.svg", strong, 18))
             self.send_button.setIconSize(QSize(18, 18))
             self.message_input.apply_visual_style(dark_mode=self.effective_theme == "dark")
             self.refresh_topbar_buttons()

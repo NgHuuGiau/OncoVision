@@ -441,13 +441,24 @@ _BASE_SHARED = """
 """
 
 
+def _render_stylesheet(template: str, **colors: str) -> str:
+    rendered = template
+    for key, value in colors.items():
+        rendered = rendered.replace(f"{{{key}}}", value)
+    return rendered.replace("{{", "{").replace("}}", "}")
+
+
 def _build_stylesheet(**colors: str) -> str:
-    return """
+    return _render_stylesheet(
+        """
     QMainWindow, QDialog, QWidget#Root {{
-        background: {root_bg};
+        background: {colors["root_bg"]};
         font-family: "Inter", "Segoe UI", "Roboto", "Arial", sans-serif;
     }}
-    """.format(**colors) + _BASE_SHARED.format(**colors)
+    """
+        + _BASE_SHARED,
+        **colors,
+    )
 
 
 DARK_STYLESHEET = _build_stylesheet(

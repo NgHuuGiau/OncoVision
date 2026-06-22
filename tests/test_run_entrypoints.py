@@ -87,7 +87,7 @@ class RunEntrypointsTests(unittest.TestCase):
 
     @patch("run_train.resolve_model_source", side_effect=lambda value: Path(value))
     @patch("run_train.load_yaml")
-    @patch("run_train._module_available")
+    @patch("run_train.module_available")
     @patch("run_train.ensure_project_directories")
     def test_run_train_preflight_warns_when_models_missing_but_does_not_fail(
         self,

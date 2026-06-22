@@ -28,6 +28,7 @@ MENU_OPTIONS: dict[str, MenuOption] = {
     "6": MenuOption("run_medical.py", "Medical menu", "Mở menu y dược: dataset, train, validate, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
     "7": MenuOption("run_chat.py", "Dọn output chat", "Xóa nhanh ảnh camera capture cũ trong output chat.", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
     "8": MenuOption("run_medical.py", "Dọn output medical", "Xóa nhanh report, ảnh xử lý và export medical cũ.", "BẢO TRÌ", YELLOW, ("cleanup-output",)),
+    "9": MenuOption("run_smoke.py", "Smoke check", "Chạy chuỗi kiểm tra an toàn cho các entrypoint chính.", "KIỂM TRA", YELLOW),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED),
 }
 PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
@@ -158,6 +159,37 @@ def _run_medical_menu(input_fn=input, print_fn=print, run_script_fn=_run_script,
         )
 
 
+def _run_menu_choice(
+    choice: str,
+    *,
+    input_fn=input,
+    print_fn=print,
+    run_script_fn=_run_script,
+    clear_terminal_fn=_clear_terminal,
+) -> bool:
+    option = MENU_OPTIONS.get(choice)
+    if option is None:
+        print_fn(line(TESTED_INVALID_TEXT, RED))
+        return False
+    if choice == "6":
+        clear_terminal_fn()
+        _run_medical_menu(
+            input_fn=input_fn,
+            print_fn=print_fn,
+            run_script_fn=run_script_fn,
+            clear_terminal_fn=clear_terminal_fn,
+        )
+        return True
+    _run_selected_option(
+        option,
+        args=option.args,
+        print_fn=print_fn,
+        run_script_fn=run_script_fn,
+        clear_terminal_fn=clear_terminal_fn,
+    )
+    return True
+
+
 def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> int:
     _configure_terminal_encoding()
     while True:
@@ -166,22 +198,9 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
         if choice == "0":
             print_fn(line(TESTED_EXIT_TEXT, YELLOW))
             return 0
-        option = MENU_OPTIONS.get(choice)
-        if option is None:
-            print_fn(line(TESTED_INVALID_TEXT, RED))
-            continue
-        if choice == "6":
-            clear_terminal_fn()
-            _run_medical_menu(
-                input_fn=input_fn,
-                print_fn=print_fn,
-                run_script_fn=run_script_fn,
-                clear_terminal_fn=clear_terminal_fn,
-            )
-            continue
-        _run_selected_option(
-            option,
-            args=option.args,
+        _run_menu_choice(
+            choice,
+            input_fn=input_fn,
             print_fn=print_fn,
             run_script_fn=run_script_fn,
             clear_terminal_fn=clear_terminal_fn,

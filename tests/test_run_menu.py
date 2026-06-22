@@ -98,9 +98,27 @@ class RunMenuTests(unittest.TestCase):
         self.assertTrue(any("run_medical.py cleanup-output" in line for line in outputs))
         clear_terminal.assert_called_once()
 
+    def test_main_runs_smoke_check_option(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        clear_terminal = MagicMock()
+        answers = iter(["9", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=clear_terminal,
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_smoke.py")
+        self.assertTrue(any("run_smoke.py" in line for line in outputs))
+        clear_terminal.assert_called_once()
+
     def test_main_retries_on_invalid_choice(self) -> None:
         outputs: list[str] = []
-        answers = iter(["9", "3", "0"])
+        answers = iter(["10", "3", "0"])
         run_script = MagicMock(return_value=0)
         clear_terminal = MagicMock()
 

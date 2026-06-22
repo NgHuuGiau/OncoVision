@@ -28,6 +28,9 @@ jobs:
       - name: Lint
         run: ruff check . --line-length 140 --target-version py310
 
+      - name: Verify entrypoint help
+        run: python scripts/verify_entrypoints_help.py
+
       - name: Smoke check
         run: python run_smoke.py
 

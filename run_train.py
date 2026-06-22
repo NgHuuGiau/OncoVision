@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 from pathlib import Path
 
 from training.model_paths import resolve_model_source
@@ -12,6 +11,7 @@ from training.train_model import (
     RAW_LABELS_DIR,
     main as run_training_main,
 )
+from utils.entrypoint_checks import module_available
 from utils.file_utils import ensure_project_directories, load_yaml
 
 
@@ -22,10 +22,6 @@ def _count_files(path: Path) -> int:
     if not path.exists():
         return 0
     return sum(1 for item in path.iterdir() if item.is_file())
-
-
-def _module_available(name: str) -> bool:
-    return importlib.util.find_spec(name) is not None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,8 +50,8 @@ def run_train_preflight(print_fn=print) -> int:
     fallback_model = resolve_model_source(config.get("fallback_model", "yolo11n.pt"))
 
     modules_ok = {
-        "ultralytics": _module_available("ultralytics"),
-        "torch": _module_available("torch"),
+        "ultralytics": module_available("ultralytics"),
+        "torch": module_available("torch"),
     }
     missing_models: list[str] = []
     if not primary_model.exists():
