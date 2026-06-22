@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import argparse
 
 from app.camera_runtime.cli import build_camera_arg_parser
 from app.camera_runtime.bootstrap import resolve_start_bundle
 from app.camera_runtime.launching import run_camera_launch_flow
-from core.runtime_advisor import build_recommendations
-from core.hardware_info import detect_hardware
 from core.camera_runner import run_camera_session
+from core.hardware_info import detect_hardware
+from core.runtime_advisor import build_recommendations
 from tools.runtime_tool import prompt_runtime_mode
 from utils.console_ui import BootProgress, print_runtime_dashboard
 
