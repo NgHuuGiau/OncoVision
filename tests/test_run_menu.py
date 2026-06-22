@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import os
+import re
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import run_menu
+
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class RunMenuTests(unittest.TestCase):
@@ -55,6 +60,42 @@ class RunMenuTests(unittest.TestCase):
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_train.py")
         self.assertTrue(any("run_train.py" in line for line in outputs))
+        clear_terminal.assert_called_once()
+
+    def test_main_runs_chat_cleanup_option(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        clear_terminal = MagicMock()
+        answers = iter(["7", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=clear_terminal,
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_chat.py", "--cleanup-output")
+        self.assertTrue(any("run_chat.py --cleanup-output" in line for line in outputs))
+        clear_terminal.assert_called_once()
+
+    def test_main_runs_medical_cleanup_option(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        clear_terminal = MagicMock()
+        answers = iter(["8", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=clear_terminal,
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_medical.py", "cleanup-output")
+        self.assertTrue(any("run_medical.py cleanup-output" in line for line in outputs))
         clear_terminal.assert_called_once()
 
     def test_main_retries_on_invalid_choice(self) -> None:
@@ -140,6 +181,34 @@ class RunMenuTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_medical.py", "analyze", "--image", "sample.jpg", "--patient-code", "BN009")
+
+    def test_medical_menu_runs_status(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        answers = iter(["6", "7", "0", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_medical.py", "status")
+
+    def test_render_menu_wraps_long_descriptions_on_narrow_terminal(self) -> None:
+        outputs: list[str] = []
+
+        with patch("training.terminal_ui.os.get_terminal_size", return_value=os.terminal_size((60, 20))):
+            run_menu._render_menu(print_fn=outputs.append)
+
+        plain_outputs = [ANSI_RE.sub("", item) for item in outputs]
+        self.assertTrue(any("\n" in item for item in plain_outputs))
+        self.assertTrue(
+            all(len(line) <= 58 for item in plain_outputs for line in item.splitlines()),
+            msg="\n".join(plain_outputs),
+        )
 
 
 if __name__ == "__main__":

@@ -4,20 +4,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.hardware_info import HardwareInfo
+from core.model_catalog import DEFAULT_MODEL_FALLBACK, YOLO11_MODELS_DESC, build_model_backups
 from utils.file_utils import load_yaml_cached
 
 
 SETTINGS_PATH = Path("config/settings.yaml")
 VRAM_EPSILON_GB = 0.05
 LOW_PROFILE_MIN_GPU_VRAM_GB = 3.0
-MODEL_BACKUPS = {
-    "yolo11x.pt": (None, "yolo11l.pt", "yolo11m.pt", "yolo11s.pt", "yolo11n.pt"),
-    "yolo11l.pt": (None, "yolo11m.pt", "yolo11s.pt", "yolo11n.pt"),
-    "yolo11m.pt": (None, "yolo11s.pt", "yolo11n.pt"),
-    "yolo11s.pt": (None, "yolo11n.pt"),
-    "yolo11n.pt": (None,),
-}
-MODEL_DEGRADE_ORDER = ("yolo11x.pt", "yolo11l.pt", "yolo11m.pt", "yolo11s.pt", "yolo11n.pt")
+MODEL_BACKUPS = build_model_backups()
+MODEL_DEGRADE_ORDER = YOLO11_MODELS_DESC
 MODE_DEVICE_HINTS = {"high": "gpu", "medium": "gpu"}
 FALLBACK_CHAINS = {
     "high": ("high", "fallback_gpu_1", "fallback_gpu_2", "fallback_cpu", "fallback_cpu_weak"),
@@ -127,7 +122,7 @@ def _camera_flag(camera: dict, settings: dict, key: str, default: bool = True) -
 
 
 def build_candidates(model_name: str, settings: dict) -> list[str]:
-    backup_key, *fallbacks = MODEL_BACKUPS.get(model_name, (None, "yolo11n.pt"))
+    backup_key, *fallbacks = MODEL_BACKUPS.get(model_name, (None, DEFAULT_MODEL_FALLBACK))
     backup_model = settings.get("stable_backup", {}).get(backup_key) if backup_key else None
     return list(dict.fromkeys([model_name, *(item for item in [backup_model, *fallbacks] if item)]))
 

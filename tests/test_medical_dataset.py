@@ -30,3 +30,13 @@ class MedicalDatasetTests(unittest.TestCase):
             with Image.open(normalized) as image:
                 self.assertEqual(image.size, (256, 256))
                 self.assertEqual(image.mode, "RGB")
+
+    def test_normalize_uploaded_image_uses_unique_filenames(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            source = Path(temp_dir) / "input.png"
+            Image.new("RGB", (64, 64), color=(10, 20, 30)).save(source)
+
+            first = normalize_uploaded_image(source, Path(temp_dir) / "out", image_size=128)
+            second = normalize_uploaded_image(source, Path(temp_dir) / "out", image_size=128)
+
+            self.assertNotEqual(first.name, second.name)

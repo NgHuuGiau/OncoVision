@@ -4,6 +4,7 @@ medical:
   model: models\trained\skin_cancer_screening_best.pt
   base_model: yolo11n.pt
   fallback_model: yolo11n.pt
+  allow_fallback_model: false
   image_size: 640
   conf_threshold: 0.25
   classify_high_risk_threshold: 0.75

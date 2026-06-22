@@ -26,6 +26,8 @@ MENU_OPTIONS: dict[str, MenuOption] = {
     "4": MenuOption("run_doctor.py", "Doctor", "Rà soát phần cứng, model, camera, dữ liệu và gợi ý runtime.", "KIỂM TRA", YELLOW),
     "5": MenuOption("run_train.py", "Huấn luyện chung", "Chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model tổng quát.", "HUẤN LUYỆN", CYAN),
     "6": MenuOption("run_medical.py", "Medical menu", "Mở menu y dược: dataset, train, validate, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
+    "7": MenuOption("run_chat.py", "Dọn output chat", "Xóa nhanh ảnh camera capture cũ trong output chat.", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
+    "8": MenuOption("run_medical.py", "Dọn output medical", "Xóa nhanh report, ảnh xử lý và export medical cũ.", "BẢO TRÌ", YELLOW, ("cleanup-output",)),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED),
 }
 PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
@@ -42,6 +44,8 @@ MEDICAL_OPTIONS: dict[str, MenuOption] = {
     "4": MenuOption("run_medical.py", "Huấn luyện toàn bộ", "Chạy split, train, validate cho model y dược.", "HUẤN LUYỆN", CYAN, ("train-all",)),
     "5": MenuOption("run_medical.py", "Xem lịch sử ca", "Hiển thị các ca bệnh đã phân tích gần đây.", "KẾT QUẢ", YELLOW, ("history",)),
     "6": MenuOption("run_medical.py", "Phân tích ảnh", "Phân tích một ảnh y khoa với mã bệnh nhân nhập tay.", "KẾT QUẢ", YELLOW),
+    "7": MenuOption("run_medical.py", "Medical status", "Kiểm tra nhanh model, dataset, case database và output medical.", "BẢO TRÌ", YELLOW, ("status",)),
+    "8": MenuOption("run_medical.py", "Dọn output medical", "Xóa report, ảnh xử lý và export medical cũ.", "BẢO TRÌ", YELLOW, ("cleanup-output",)),
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
 }
 MEDICAL_PRIMARY_KEYS = tuple(key for key in MEDICAL_OPTIONS if key != "0")

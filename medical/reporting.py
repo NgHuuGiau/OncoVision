@@ -1,30 +1,47 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import zipfile
 from pathlib import Path
-from time import strftime
 from typing import Any
+from uuid import uuid4
 
 from medical.compliance import build_medical_disclaimer
+
+
+def build_artifact_stamp() -> str:
+    return f"{datetime.now():%Y%m%d_%H%M%S_%f}_{uuid4().hex[:8]}"
+
+
+def _write_case_report_files(json_path: Path, md_path: Path, payload: dict[str, Any]) -> None:
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    md_path.write_text(_markdown_report(payload), encoding="utf-8")
 
 
 def write_case_report(output_dir: str | Path, payload: dict[str, Any]) -> tuple[Path, Path]:
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    stamp = strftime("%Y%m%d_%H%M%S")
+    stamp = build_artifact_stamp()
     json_path = target_dir / f"case_report_{stamp}.json"
     md_path = target_dir / f"case_report_{stamp}.md"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    md_path.write_text(_markdown_report(payload), encoding="utf-8")
+    _write_case_report_files(json_path, md_path, payload)
     return json_path, md_path
+
+
+def update_case_report_case_id(json_path: str | Path, md_path: str | Path, *, case_id: int) -> None:
+    json_file = Path(json_path)
+    md_file = Path(md_path)
+    payload = json.loads(json_file.read_text(encoding="utf-8"))
+    payload["case_id"] = case_id
+    _write_case_report_files(json_file, md_file, payload)
 
 
 def export_case_bundle(case_payload: dict[str, Any], export_dir: str | Path, *, include_files: list[str] | None = None) -> Path:
     target_dir = Path(export_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     case_id = case_payload.get("case_id", "unknown")
-    stamp = strftime("%Y%m%d_%H%M%S")
+    stamp = build_artifact_stamp()
     bundle_path = target_dir / f"medical_case_{case_id}_{stamp}.zip"
     include_files = include_files or []
     with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:

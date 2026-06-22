@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from time import strftime
 
 from PIL import Image
 
+from medical.reporting import build_artifact_stamp
 from utils.file_utils import save_yaml
 
 
@@ -99,6 +99,6 @@ def normalize_uploaded_image(
         background = Image.new("RGB", (image_size, image_size), (0, 0, 0))
         offset = ((image_size - normalized.width) // 2, (image_size - normalized.height) // 2)
         background.paste(normalized, offset)
-        target_path = destination_dir / f"{source.stem}_{strftime('%Y%m%d_%H%M%S')}.jpg"
+        target_path = destination_dir / f"{source.stem}_{build_artifact_stamp()}.jpg"
         background.save(target_path, format="JPEG", quality=95)
     return target_path

@@ -98,11 +98,13 @@ Chạy trực tiếp từng công cụ:
 .\.venv\Scripts\python run_doctor.py
 .\.venv\Scripts\python run_medical.py init-dataset
 .\\.venv\\Scripts\\python run_medical.py audit-dataset
+.\\.venv\\Scripts\\python run_medical.py status
 .\\.venv\\Scripts\\python run_medical.py split-dataset
 .\\.venv\\Scripts\\python run_medical.py train
 .\\.venv\\Scripts\\python run_medical.py validate
 .\\.venv\\Scripts\\python run_medical.py train-all
 .\.venv\Scripts\python run_medical.py analyze --image sample.jpg --patient-code BN001
+.\\.venv\\Scripts\\python run_medical.py cleanup-output --older-than-days 30
 .\.venv\Scripts\python run_app.py --advisor-only
 .\.venv\Scripts\python run_tests.py
 .\.venv\Scripts\python run_train.py
@@ -127,6 +129,12 @@ Ví dụ dùng giao diện chat để gửi ảnh y khoa:
 ```
 
 Sau đó chọn ảnh trong chat; hệ thống sẽ tự phân tích, sinh ảnh đã đánh dấu và lưu báo cáo medical.
+
+Lưu ý cho medical:
+
+- Nhánh medical mặc định yêu cầu model chuyên dụng trong `config/medical_settings.yaml`.
+- Hệ thống không còn tự rơi sang `yolo11n.pt` để trả kết quả screening nếu thiếu model medical.
+- Chỉ bật `medical.allow_fallback_model: true` khi bạn chấp nhận đây là chế độ nghiên cứu/thử nghiệm.
 
 ## Tinh chỉnh trong `config/settings.yaml`
 

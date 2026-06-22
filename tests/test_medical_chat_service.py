@@ -30,7 +30,25 @@ class MedicalChatServiceTests(unittest.TestCase):
             overlay = Path(temp_dir) / "overlay.jpg"
             source = Path(temp_dir) / "source.jpg"
             normalized = Path(temp_dir) / "normalized.jpg"
-            for path in (report_json, report_md, overlay, source, normalized):
+            report_json.write_text(
+                json.dumps(
+                    {
+                        "case_id": None,
+                        "risk_level": "high",
+                        "suspected_malignant": True,
+                        "model_name": "best.pt",
+                        "source_image": str(source),
+                        "processed_image": str(overlay),
+                        "recommendation": "Can kham chuyen khoa",
+                        "quality_warnings": ["Anh hoi mo"],
+                        "detections": [{"label": "lesion", "confidence": 0.91, "bbox": [1, 2, 3, 4]}],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            report_md.write_text("pending", encoding="utf-8")
+            for path in (overlay, source, normalized):
                 path.write_text("x", encoding="utf-8")
             result = MedicalAnalysisResult(
                 case_id=None,
@@ -57,6 +75,11 @@ class MedicalChatServiceTests(unittest.TestCase):
             metadata = json.loads(response.metadata_json)
             self.assertIn("medical_case_id", metadata)
             self.assertEqual(metadata["risk_level"], "high")
+            self.assertEqual(metadata["processed_image_path"], str(overlay))
             self.assertEqual(response.attachment_path, str(overlay))
             self.assertIn("BN777", response.reply_text)
             self.assertIn("Anh hoi mo", response.reply_text)
+            self.assertIn(str(report_json), response.reply_text)
+            self.assertIn(str(report_md), response.reply_text)
+            synced_payload = json.loads(report_json.read_text(encoding="utf-8"))
+            self.assertEqual(synced_payload["case_id"], metadata["medical_case_id"])

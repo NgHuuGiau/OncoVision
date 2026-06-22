@@ -4,11 +4,12 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import cv2
 import numpy as np
 
-from medical.pipeline import DetectionFinding, MedicalImageAnalyzer, MedicalImageAnalyzerConfig
+from medical.pipeline import DetectionFinding, MedicalImageAnalyzer, MedicalImageAnalyzerConfig, validate_medical_model_path
 
 
 class _FakeValue:
@@ -46,9 +47,11 @@ class MedicalPipelineTests(unittest.TestCase):
     def test_analyze_image_generates_overlay_and_reports(self) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             image_path = Path(temp_dir) / "input.jpg"
+            model_path = Path(temp_dir) / "medical_model.pt"
             cv2.imwrite(str(image_path), np.full((120, 160, 3), 200, dtype=np.uint8))
+            model_path.write_text("weights", encoding="utf-8")
             config = MedicalImageAnalyzerConfig(
-                model_path=Path("models/pretrained/yolo11n.pt"),
+                model_path=model_path,
                 working_dir=Path(temp_dir) / "work",
                 reports_dir=Path(temp_dir) / "reports",
                 processed_dir=Path(temp_dir) / "normalized",
@@ -124,3 +127,44 @@ class MedicalPipelineTests(unittest.TestCase):
 
         self.assertTrue(warnings)
         self.assertTrue(any("qua toi" in warning for warning in warnings))
+
+    def test_validate_medical_model_path_rejects_generic_pretrained_model_by_default(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            pretrained_dir = Path(temp_dir) / "models" / "pretrained"
+            pretrained_dir.mkdir(parents=True, exist_ok=True)
+            generic_model = pretrained_dir / "yolo11n.pt"
+            generic_model.write_text("weights", encoding="utf-8")
+            config = MedicalImageAnalyzerConfig(
+                model_path=generic_model,
+                working_dir=Path(temp_dir) / "work",
+                reports_dir=Path(temp_dir) / "reports",
+                processed_dir=Path(temp_dir) / "normalized",
+                overlay_dir=Path(temp_dir) / "overlay",
+            )
+
+            with patch("medical.pipeline.PRETRAINED_MODELS_DIR", pretrained_dir):
+                with self.assertRaises(FileNotFoundError) as raised:
+                    validate_medical_model_path(config)
+
+        self.assertIn("YOLO tong quat", str(raised.exception))
+
+    def test_validate_medical_model_path_allows_explicit_fallback_mode(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            pretrained_dir = Path(temp_dir) / "models" / "pretrained"
+            pretrained_dir.mkdir(parents=True, exist_ok=True)
+            fallback_model = pretrained_dir / "yolo11n.pt"
+            fallback_model.write_text("weights", encoding="utf-8")
+            config = MedicalImageAnalyzerConfig(
+                model_path=Path(temp_dir) / "models" / "trained" / "missing.pt",
+                working_dir=Path(temp_dir) / "work",
+                reports_dir=Path(temp_dir) / "reports",
+                processed_dir=Path(temp_dir) / "normalized",
+                overlay_dir=Path(temp_dir) / "overlay",
+                fallback_model_path=fallback_model,
+                allow_fallback_model=True,
+            )
+
+            with patch("medical.pipeline.PRETRAINED_MODELS_DIR", pretrained_dir):
+                resolved = validate_medical_model_path(config)
+
+        self.assertEqual(resolved, fallback_model)

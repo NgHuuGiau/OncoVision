@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from time import strftime
 from typing import Any, Protocol
 
 import cv2
 import numpy as np
 
+from core.model_catalog import YOLO11_MODELS_ASC
 from medical.compliance import build_medical_disclaimer
 from medical.dataset import normalize_uploaded_image
-from medical.reporting import write_case_report
-from training.model_paths import resolve_model_source, resolve_trained_model_path
+from medical.reporting import build_artifact_stamp, write_case_report
+from training.model_paths import PRETRAINED_MODELS_DIR, resolve_model_source
 from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
 
@@ -28,6 +28,8 @@ class MedicalImageAnalyzerConfig:
     reports_dir: Path
     processed_dir: Path
     overlay_dir: Path
+    fallback_model_path: Path | None = None
+    allow_fallback_model: bool = False
     image_size: int = 640
     conf_threshold: float = 0.25
     classify_high_risk_threshold: float = 0.75
@@ -66,14 +68,14 @@ class MedicalAnalysisResult:
 def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     settings = load_yaml("config/medical_settings.yaml").get("medical", {})
     configured_model = Path(settings.get("model", "models/trained/best.pt"))
-    fallback_model = str(settings.get("fallback_model", "yolo11n.pt"))
-    model_path = configured_model if configured_model.exists() else resolve_trained_model_path(required=False, fallback=fallback_model)
     return MedicalImageAnalyzerConfig(
-        model_path=resolve_model_source(model_path),
+        model_path=resolve_model_source(configured_model),
         working_dir=Path(settings.get("output_root", "output/medical")),
         reports_dir=Path(settings.get("reports_dir", "output/medical/reports")),
         processed_dir=Path(settings.get("processed_dir", "output/medical/normalized_images")),
         overlay_dir=Path(settings.get("overlay_dir", "output/medical/processed_images")),
+        fallback_model_path=Path(settings["fallback_model"]) if settings.get("fallback_model") else None,
+        allow_fallback_model=bool(settings.get("allow_fallback_model", False)),
         image_size=int(settings.get("image_size", 640)),
         conf_threshold=float(settings.get("conf_threshold", 0.25)),
         classify_high_risk_threshold=float(settings.get("classify_high_risk_threshold", 0.75)),
@@ -81,13 +83,32 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     )
 
 
+def _is_generic_pretrained_model(model_path: Path) -> bool:
+    resolved_model = model_path.resolve(strict=False)
+    pretrained_root = PRETRAINED_MODELS_DIR.resolve(strict=False)
+    return resolved_model.name in YOLO11_MODELS_ASC and pretrained_root in resolved_model.parents
+
+
 def validate_medical_model_path(config: MedicalImageAnalyzerConfig) -> Path:
-    model_path = resolve_model_source(config.model_path)
-    if not Path(model_path).exists():
-        raise FileNotFoundError(
-            f"Chưa tìm thấy model y dược tại {model_path}. Hãy huấn luyện bằng run_medical.py train-all hoặc cập nhật config/medical_settings.yaml."
-        )
-    return Path(model_path)
+    resolved_model_path = Path(resolve_model_source(config.model_path))
+    if resolved_model_path.exists():
+        if not config.allow_fallback_model and _is_generic_pretrained_model(resolved_model_path):
+            raise FileNotFoundError(
+                "Model medical hien tai dang tro vao model YOLO tong quat. "
+                "Hay train model chuyen dung va cap nhat config/medical_settings.yaml. "
+                "Chi bat allow_fallback_model khi ban chap nhan day la che do nghien cuu."
+            )
+        return resolved_model_path
+
+    if config.allow_fallback_model and config.fallback_model_path is not None:
+        fallback_model_path = Path(resolve_model_source(config.fallback_model_path))
+        if fallback_model_path.exists():
+            return fallback_model_path
+
+    raise FileNotFoundError(
+        f"Chua tim thay model y duoc chuyen dung tai {resolved_model_path}. "
+        "Hay huan luyen bang run_medical.py train-all hoac cap nhat config/medical_settings.yaml."
+    )
 
 
 class MedicalImageAnalyzer:
@@ -232,6 +253,6 @@ class MedicalImageAnalyzer:
             show_fps=False,
         )
         self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
-        path = self.config.overlay_dir / f"{patient_code}_{strftime('%Y%m%d_%H%M%S')}.jpg"
+        path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}.jpg"
         cv2.imwrite(str(path), overlay)
         return path

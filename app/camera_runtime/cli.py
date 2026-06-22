@@ -3,23 +3,23 @@ from __future__ import annotations
 import argparse
 
 
-def build_chat_arg_parser(description: str) -> argparse.ArgumentParser:
+def build_camera_arg_parser(description: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--mode",
         default=None,
         choices=["auto", "high", "medium", "low"],
-        help="Kept for compatibility. Chat interface does not use this parameter.",
+        help="Che do runtime cho camera realtime.",
     )
     parser.add_argument(
         "--camera-index",
         default=0,
         type=int,
-        help="Default camera index when opening photo capture dialog.",
+        help="Camera index de mo luong realtime.",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="Model label hien thi trong giao dien chat khi khoi dong.",
+        help="Model local hoac ten model de uu tien khi khoi dong camera.",
     )
     return parser

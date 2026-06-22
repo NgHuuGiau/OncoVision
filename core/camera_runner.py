@@ -880,6 +880,62 @@ def _poll_window_key(wait_ms: int, poll_slice_ms: int = 8) -> int:
     return 255
 
 
+def _window_escape_requested(key: int) -> bool:
+    return key == 27
+
+
+def _ensure_window_positioned(*, composed: np.ndarray, window_positioned: bool) -> bool:
+    if window_positioned:
+        return True
+    cv2.resizeWindow(WINDOW_NAME, composed.shape[1], composed.shape[0])
+    _center_window(WINDOW_NAME, composed.shape[1], composed.shape[0])
+    return True
+
+
+def _toggle_session_controls(controls: CameraSessionControls, key: int) -> CameraSessionControls:
+    if key in (ord("o"), ord("O")):
+        return CameraSessionControls(
+            show_overlays=not controls.show_overlays,
+            show_fps=controls.show_fps,
+            show_trails=controls.show_trails,
+        )
+    if key in (ord("f"), ord("F")):
+        return CameraSessionControls(
+            show_overlays=controls.show_overlays,
+            show_fps=not controls.show_fps,
+            show_trails=controls.show_trails,
+        )
+    if key in (ord("t"), ord("T")):
+        return CameraSessionControls(
+            show_overlays=controls.show_overlays,
+            show_fps=controls.show_fps,
+            show_trails=not controls.show_trails,
+        )
+    return controls
+
+
+def _handle_recording_and_capture_keys(
+    *,
+    key: int,
+    latest_frame: np.ndarray | None,
+    frame_capture: FrameCapture,
+    recorder: VideoRecorder,
+) -> None:
+    if latest_frame is None:
+        return
+    if key in (ord("s"), ord("S")):
+        result = frame_capture.save_frame(latest_frame)
+        if result.success:
+            logger.info("Saved snapshot to %s", result.path)
+    elif key in (ord("r"), ord("R")):
+        if recorder.is_recording:
+            stopped = recorder.stop()
+            logger.info("Stopped recording: %s", stopped.path)
+        else:
+            started = recorder.start((latest_frame.shape[1], latest_frame.shape[0]))
+            logger.info("Started recording: %s", started.path)
+
+
 def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
     detector = CameraDetector(runtime=runtime, camera_index=camera_index)
     detector.initialize()
@@ -897,37 +953,15 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
         nonlocal controls
         if key == 255:
             return False
-        if key == 27:
+        if _window_escape_requested(key):
             return True
-        if key in (ord("o"), ord("O")):
-            controls = CameraSessionControls(
-                show_overlays=not controls.show_overlays,
-                show_fps=controls.show_fps,
-                show_trails=controls.show_trails,
-            )
-        elif key in (ord("f"), ord("F")):
-            controls = CameraSessionControls(
-                show_overlays=controls.show_overlays,
-                show_fps=not controls.show_fps,
-                show_trails=controls.show_trails,
-            )
-        elif key in (ord("t"), ord("T")):
-            controls = CameraSessionControls(
-                show_overlays=controls.show_overlays,
-                show_fps=controls.show_fps,
-                show_trails=not controls.show_trails,
-            )
-        elif key in (ord("s"), ord("S")) and latest_frame is not None:
-            result = frame_capture.save_frame(latest_frame)
-            if result.success:
-                logger.info("Saved snapshot to %s", result.path)
-        elif key in (ord("r"), ord("R")) and latest_frame is not None:
-            if recorder.is_recording:
-                stopped = recorder.stop()
-                logger.info("Stopped recording: %s", stopped.path)
-            else:
-                started = recorder.start((latest_frame.shape[1], latest_frame.shape[0]))
-                logger.info("Started recording: %s", started.path)
+        controls = _toggle_session_controls(controls, key)
+        _handle_recording_and_capture_keys(
+            key=key,
+            latest_frame=latest_frame,
+            frame_capture=frame_capture,
+            recorder=recorder,
+        )
         return False
 
     try:
@@ -949,10 +983,7 @@ def run_camera_session(runtime: RuntimeConfig, camera_index: int = 0) -> None:
             composed = _compose_camera_only_layout(display_frame, active_runtime.profile_name)
 
             cv2.imshow(WINDOW_NAME, composed)
-            if not window_positioned:
-                cv2.resizeWindow(WINDOW_NAME, composed.shape[1], composed.shape[0])
-                _center_window(WINDOW_NAME, composed.shape[1], composed.shape[0])
-                window_positioned = True
+            window_positioned = _ensure_window_positioned(composed=composed, window_positioned=window_positioned)
             key = _poll_window_key(1)
             if _handle_runtime_key(key, detector.last_raw_frame):
                 break
@@ -972,7 +1003,7 @@ def run_camera_preview_session(runtime: RuntimeConfig, camera_index: int = 0) ->
     def _handle_runtime_key(key: int) -> bool:
         if key == 255:
             return False
-        if key == 27:
+        if _window_escape_requested(key):
             return True
         return False
 
@@ -999,10 +1030,7 @@ def run_camera_preview_session(runtime: RuntimeConfig, camera_index: int = 0) ->
             composed = _compose_camera_only_layout(preview_frame, runtime.profile_name)
 
             cv2.imshow(WINDOW_NAME, composed)
-            if not window_positioned:
-                cv2.resizeWindow(WINDOW_NAME, composed.shape[1], composed.shape[0])
-                _center_window(WINDOW_NAME, composed.shape[1], composed.shape[0])
-                window_positioned = True
+            window_positioned = _ensure_window_positioned(composed=composed, window_positioned=window_positioned)
             key = _poll_window_key(1)
             if _handle_runtime_key(key):
                 break
