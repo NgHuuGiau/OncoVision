@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+from app.chat_ui.models import ChatMessage
+from app.chat_ui.widgets import ComposerPreviewThumb
+
+
+def refresh_image_previews(window) -> None:
+    while window.image_preview_layout.count() > 1:
+        item = window.image_preview_layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.deleteLater()
+
+    has_attachments = bool(window.pending_image_attachments)
+    window.image_preview_area.setVisible(has_attachments)
+    window.composer.setMinimumHeight(152 if has_attachments else 82)
+
+    if not has_attachments:
+        return
+
+    for index, (path, attachment_kind) in enumerate(window.pending_image_attachments):
+        thumb_widget = ComposerPreviewThumb(
+            path=path,
+            attachment_kind=attachment_kind,
+            remove_callback=lambda _checked=False, idx=index: remove_pending_image_attachment(window, idx),
+        )
+        window.image_preview_layout.insertWidget(window.image_preview_layout.count() - 1, thumb_widget)
+
+
+def remove_pending_image_attachment(window, index: int) -> None:
+    if not (0 <= index < len(window.pending_image_attachments)):
+        return
+    window.pending_image_attachments.pop(index)
+    refresh_image_previews(window)
+    window.message_input.setFocus()
+
+
+def clear_pending_image_previews(window) -> None:
+    window.pending_image_attachments.clear()
+    refresh_image_previews(window)
+
+
+def add_pending_image_attachment(window, path: str, attachment_kind: str) -> None:
+    window.pending_image_attachments.append((path, attachment_kind))
+    refresh_image_previews(window)
+
+
+def pending_attachment_prompt(window) -> str:
+    if not window.pending_image_attachments:
+        return ""
+    if len(window.pending_image_attachments) == 1:
+        _, attachment_kind = window.pending_image_attachments[0]
+        return window.tr(window.language, "attach_camera_label") if attachment_kind == "camera" else window.tr(window.language, "attach_image_label")
+    return f"{len(window.pending_image_attachments)} attachments"
+
+
+def add_user_message(window, text: str, attachments: list[tuple[str, str]]) -> None:
+    for index, (path, attachment_kind) in enumerate(attachments):
+        attachment_text = text if index == 0 and text else ""
+        window.add_message(
+            ChatMessage(
+                sender="user",
+                text=attachment_text,
+                attachment_path=path,
+                attachment_kind=attachment_kind,
+            )
+        )
+
+    if text and not attachments:
+        window.add_message(ChatMessage(sender="user", text=text))
+
+def submit_user_message(window, text: str = "", attachments: list[tuple[str, str]] | None = None) -> None:
+    attachments = attachments or []
+    if window.medical_controller.active:
+        QMessageBox.information(window, window.tr(window.language, "info_title"), window.tr(window.language, "medical_pending"))
+        return
+    if not text and not attachments:
+        QMessageBox.information(window, window.tr(window.language, "info_title"), window.tr(window.language, "empty_send"))
+        return
+
+    add_user_message(window, text, attachments)
+    prompt = text or (pending_attachment_prompt(window) if attachments else "")
+    first_attachment = attachments[0] if attachments else None
+    clear_pending_image_previews(window)
+    window.generate_system_response(
+        prompt,
+        first_attachment[0] if first_attachment else None,
+        first_attachment[1] if first_attachment else None,
+    )
+
+
+def send_message(window) -> None:
+    text = window.message_input.toPlainText().strip()
+    submit_user_message(window, text, list(window.pending_image_attachments))
+    window.message_input.clear()
+
+
+def handle_dropped_image(window, path: str) -> None:
+    add_pending_image_attachment(window, path, "image")
+
+
+def pick_image(window) -> None:
+    path, _ = QFileDialog.getOpenFileName(
+        window,
+        window.tr(window.language, "choose_image"),
+        "",
+        "Images (*.png *.jpg *.jpeg *.bmp *.webp)",
+    )
+    if not path:
+        return
+    add_pending_image_attachment(window, path, "image")
+
+
+def handle_camera_capture(window, path: str) -> None:
+    add_pending_image_attachment(window, path, "camera")

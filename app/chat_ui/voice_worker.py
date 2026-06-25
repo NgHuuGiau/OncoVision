@@ -44,8 +44,8 @@ def build_voice_worker_class(
                 while self.is_running:
                     data = stream.read(chunk, exception_on_overflow=False)
                     frames.append(data)
-                    audio_data = np_module.frombuffer(data, dtype=np_module.int16)
-                    rms = np_module.sqrt(np_module.mean(audio_data**2)) if len(audio_data) > 0 else 0
+                    audio_data = np_module.frombuffer(data, dtype=np_module.int16).astype(np_module.float32)
+                    rms = np_module.sqrt(np_module.mean(audio_data**2)) if len(audio_data) > 0 else 0.0
                     intensity = int(min(100, (rms ** 0.65) * 2.2))
                     self.intensity_changed.emit(intensity)
                     if rms < 80:

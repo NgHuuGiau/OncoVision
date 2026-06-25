@@ -78,7 +78,7 @@ class HistoryItemWidget(QFrame):
         if icon_pixmap is not None:
             icon_label.setPixmap(icon_pixmap)
         icon_label.setFixedSize(20, 20)
-        layout.addWidget(icon_label, 0, Qt.AlignTop)
+        layout.addWidget(icon_label, 0, Qt.AlignVCenter)
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(4)
@@ -138,19 +138,24 @@ class RecordingPanel(QFrame):
         layout.setSpacing(12)
 
         self.waveform = WaveformWidget("#FF5252")
+        self.waveform.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        layout.setAlignment(self.waveform, Qt.AlignVCenter)
         layout.addWidget(self.waveform)
 
         self.label = QLabel(tr(language, "recording_status"))
         self.label.setStyleSheet("color: #FF5252; font-weight: 700; font-size: 14px;")
+        self.label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         layout.addWidget(self.label)
         self.hide()
 
     def setup_styles(self) -> None:
         if self._window and getattr(self._window, "effective_theme", "dark") == "light":
-            self.setStyleSheet("background: rgba(0,0,0,0.55); border: none; border-radius: 16px;")
-            self.label.setStyleSheet("color: #111827; font-weight: 700; font-size: 14px;")
+            self.setStyleSheet("background: transparent; border: none;")
+            self.label.setStyleSheet("color: #0f172a; font-weight: 700; font-size: 14px;")
+            self.waveform.color = QColor("#ef4444")
+            self.waveform.update()
             return
-        self.setStyleSheet("background: rgba(0,0,0,0.6); border: none; border-radius: 16px;")
+        self.setStyleSheet("background: transparent; border: none;")
         self.label.setStyleSheet("color: white; font-weight: 700; font-size: 14px;")
 
 
@@ -247,7 +252,7 @@ class ComposerPreviewThumb(QFrame):
         if not pixmap.isNull():
             self.thumb_label.setPixmap(pixmap.scaled(88, 88, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
         else:
-            self.thumb_label.setText("IMG" if attachment_kind == "image" else "CAM")
+            self.thumb_label.setText("Ảnh" if attachment_kind == "image" else "Chụp")
             self.thumb_label.setStyleSheet("font-size: 12px; font-weight: 700;")
         thumb_layout.addWidget(self.thumb_label)
 
@@ -308,12 +313,7 @@ class ChatBubble(QWidget):
         self.bubble_layout.setSpacing(8)
 
         if message.attachment_path:
-            attachment_key = {
-                "image": "attach_image_label",
-                "text": "attach_text_label",
-                "camera": "attach_camera_label",
-            }.get(message.attachment_kind, "attach_image_label")
-            attachment_label = QLabel(f"{tr(language, attachment_key)}: {Path(message.attachment_path).name}")
+            attachment_label = QLabel(Path(message.attachment_path).name)
             attachment_label.setObjectName("Attachment")
             attachment_label.setToolTip(message.attachment_path)
             self.bubble_layout.addWidget(attachment_label)
@@ -321,7 +321,7 @@ class ChatBubble(QWidget):
                 pixmap = QPixmap(message.attachment_path)
                 if not pixmap.isNull():
                     self.preview_img = QLabel()
-                    self.preview_img.setPixmap(pixmap.scaled(320, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                    self.preview_img.setPixmap(pixmap.scaled(360, 240, Qt.KeepAspectRatio, Qt.SmoothTransformation))
                     self.preview_img.setCursor(Qt.PointingHandCursor)
                     self.preview_img.setToolTip(message.attachment_path)
                     self.preview_img.mousePressEvent = lambda e: self.show_image_full(message.attachment_path)

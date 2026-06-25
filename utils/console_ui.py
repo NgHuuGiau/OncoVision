@@ -234,7 +234,7 @@ def _render_prompt(hardware: Any | None = None, recommendations: dict[str, Any] 
     suggested_mode = getattr(suggested_runtime, "mode", "medium") if suggested_runtime else "medium"
     lines = [
         _line(_rule("="), CYAN),
-        _line(_pad("YOLO REALTIME CAMERA : CHON CAU HINH CHAY"), BOLD + CYAN),
+        _line(_pad("OncoVision CAMERA : CHON CAU HINH CHAY"), BOLD + CYAN),
         _line(_rule("="), CYAN),
         _section("PHAN CUNG", GREEN),
         _row("CPU", getattr(hardware, "cpu_name", "Kh\u00f4ng r\u00f5 CPU") if hardware is not None else "Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u", GREEN if hardware is not None else YELLOW, bounded=False),
@@ -299,7 +299,7 @@ def prompt_launch_target(
         _clear_terminal()
         lines = [
             _line(_rule("="), CYAN),
-            _line(_pad("YOLO REALTIME CAMERA :: CHON KIEU KHOI DONG"), BOLD + CYAN),
+            _line(_pad("OncoVision CAMERA :: CHON KIEU KHOI DONG"), BOLD + CYAN),
             _line(_rule("="), CYAN),
             _row("Cau hinh", f"{mode_label(selected_mode)} | {selected_model}", GREEN, bounded=False),
             _row("De xuat", launch_target_label(preferred_target), YELLOW, bounded=False),
@@ -426,17 +426,17 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
                 "Thu doi camera index sang 1 hoac 2.",
                 "Neu dang mo app camera khac, hay tat truoc khi chay lai.",
             ],
-            [r".\.venv\Scripts\python run_app.py --camera-index 1"],
+            [r".\\.venv\\Scripts\\python run_app.py --camera-index 1"],
         )
     if "khong khoi tao duoc ultralytics" in lower_message or "khong khoi tao duoc detector" in lower_message:
         return (
-            "Khong nap duoc YOLO / ultralytics de bat dau nhan dien.",
+            "Khong nap duoc OncoVision / ultralytics de bat dau nhan dien.",
             [
                 "Kiem tra moi truong .venv va goi ultralytics, torch, torchvision.",
                 "Kiem tra model local trong models/pretrained hoac models/trained.",
                 "Neu may yeu hoac loi CUDA, thu mode low.",
             ],
-            [r".\.venv\Scripts\python run_app.py --mode low"],
+            [r".\\.venv\\Scripts\\python run_app.py --mode low"],
         )
     if "cuda" in lower_message or "pytorch" in lower_message or "torch" in lower_message:
         return (

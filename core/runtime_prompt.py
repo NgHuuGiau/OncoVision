@@ -175,7 +175,7 @@ def _runtime_overview_lines(
     ceiling_runtime = recommendations[ceiling_mode]
 
     lines: list[str] = []
-    lines.extend(header("BỘ TƯ VẤN RUNTIME YOLO :: THĂM DÒ MÁY VÀ CHỌN ĐÚNG MỨC CHẠY"))
+    lines.extend(header("BỘ TƯ VẤN RUNTIME OncoVision :: THĂM DÒ MÁY VÀ CHỌN ĐÚNG MỨC CHẠY"))
     lines.extend(
         [
             section("TỔNG QUAN MÁY", GREEN),

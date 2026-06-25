@@ -1,26 +1,33 @@
-# Medical Imaging Guide
+# Hướng Dẫn Medical Imaging
 
-Tai lieu nay mo ta nhanh workflow moi de sang loc ung thu da tu anh upload.
+Tài liệu này mô tả workflow phân tích ảnh y khoa của dự án OncoVision.
 
-## Muc tieu
+## Mục tiêu
 
-- Nhan anh y khoa/da lieu tu file upload.
-- Chuan hoa anh truoc khi suy luan.
-- Phat hien vung nghi ngo bang model YOLO.
-- Gan muc nguy co `low`, `medium`, `high`.
-- Tao report JSON/Markdown.
-- Luu lich su ca phan tich vao SQLite.
-- Nhac lai canh bao phap ly va y khoa trong moi ket qua.
+- nhận ảnh y khoa từ file upload
+- chuẩn hóa ảnh trước khi suy luận
+- phát hiện vùng nghi ngờ bằng model YOLO
+- gán mức nguy cơ `low`, `medium`, `high`
+- tạo report JSON và Markdown
+- lưu lịch sử ca phân tích vào SQLite
 
-## Dataset duoc chuan hoa san
+## Công nghệ dùng trong luồng medical
 
-Lenh:
+- Python
+- PySide6 cho UI chat
+- OpenCV và Pillow để xử lý ảnh
+- YOLO / Ultralytics để inference
+- SQLite để lưu lịch sử
+
+## Dataset medical đã được chuẩn hóa sẵn
+
+Khởi tạo cấu trúc mặc định:
 
 ```powershell
-.\.venv\Scripts\python run_medical.py init-dataset
+python run_medical.py init-dataset
 ```
 
-Cau truc mac dinh:
+Cấu trúc chính:
 
 ```text
 dataset/medical_skin_lesion/
@@ -37,95 +44,95 @@ dataset/medical_skin_lesion/
   data.yaml
 ```
 
-## Quy trinh train medical day du
+## Quy trình medical đầy đủ
 
-1. Bo anh va label YOLO vao:
+1. Đưa ảnh và label vào:
 
 ```text
 dataset/medical_skin_lesion/raw/images
 dataset/medical_skin_lesion/raw/labels
 ```
 
-2. Kiem tra dataset:
+2. Kiểm tra dataset:
 
 ```powershell
-.\.venv\Scripts\python run_medical.py audit-dataset
+python run_medical.py audit-dataset
 ```
 
 3. Chia train/val/test:
 
 ```powershell
-.\.venv\Scripts\python run_medical.py split-dataset
+python run_medical.py split-dataset
 ```
 
 4. Train model:
 
 ```powershell
-.\.venv\Scripts\python run_medical.py train
+python run_medical.py train
 ```
 
 5. Validate model:
 
 ```powershell
-.\.venv\Scripts\python run_medical.py validate
+python run_medical.py validate
 ```
 
-6. Hoac chay tron goi:
+6. Hoặc chạy trọn gói:
 
 ```powershell
-.\.venv\Scripts\python run_medical.py train-all
+python run_medical.py train-all
 ```
 
-Sau khi train xong, `config/medical_settings.yaml` se tu dong cap nhat duong dan model moi de giao dien chat va CLI su dung cung mot model.
+Sau khi train xong, `config/medical_settings.yaml` sẽ được cập nhật để giao diện chat và CLI dùng cùng model.
 
-## Phan tich anh
+## Phân tích ảnh
 
 ```powershell
-.\.venv\Scripts\python run_medical.py analyze --image path\to\image.jpg --patient-code BN001
+python run_medical.py analyze --image path\to\image.jpg --patient-code BN001
 ```
 
-Dau ra:
+Đầu ra thường gồm:
 
 - `output/medical/normalized_images/`
 - `output/medical/processed_images/`
 - `output/medical/reports/`
 - `output/medical/medical_cases.db`
 
-## Phan tich ngay trong giao dien chat
+## Phân tích trong giao diện chat
 
-Sau khi mo:
-
-```powershell
-.\.venv\Scripts\python run_chat.py
-```
-
-ban co the:
-
-- bam `Chon anh`
-- tai anh da lieu/y khoa len khung chat
-- gui anh
-
-Khi do giao dien chat se:
-
-- goi medical pipeline
-- tao anh overlay danh dau vung nghi ngo
-- luu report JSON/Markdown
-- luu ho so ca vao SQLite
-- tra ket qua ngay trong cuoc tro chuyen
-
-## Xem lich su
+Sau khi mở:
 
 ```powershell
-.\.venv\Scripts\python run_medical.py history --limit 10
+python run_chat.py
 ```
 
-## Tinh metric y khoa
+bạn có thể:
+
+- chọn ảnh
+- tải ảnh y khoa lên khung chat
+- gửi ảnh để phân tích
+
+Luồng chat sẽ:
+
+- gọi medical pipeline
+- tạo ảnh overlay đánh dấu vùng nghi ngờ
+- lưu report JSON và Markdown
+- lưu hồ sơ ca vào SQLite
+- trả kết quả ngay trong hội thoại
+
+## Xem lịch sử
 
 ```powershell
-.\.venv\Scripts\python run_medical.py metrics --truths "[true,false,true]" --predictions "[true,false,false]"
+python run_medical.py history --limit 10
 ```
 
-Metric hien co:
+## Tính metric y khoa
+
+```powershell
+python run_medical.py metrics --truths "[true,false,true]" --predictions "[true,false,false]"
+```
+
+Metric hiện có:
 
 - sensitivity
 - specificity
@@ -134,8 +141,8 @@ Metric hien co:
 - accuracy
 - f1_score
 
-## Luu y quan trong
+## Lưu ý quan trọng
 
-- Day la he thong ho tro sang loc, khong thay the bac si.
-- Neu dung anh benh nhan that, can an danh du lieu va quan ly quyen truy cap.
-- Neu doi bai toan sang MRI/CT/X-ray, can them buoc tien xu ly chuyen biet.
+- Đây là hệ thống hỗ trợ sàng lọc, không thay thế bác sĩ
+- Nếu dùng ảnh bệnh nhân thật, cần ẩn danh dữ liệu và quản lý quyền truy cập
+- Nếu đổi bài toán sang MRI, CT hoặc X-ray, cần thêm bước tiền xử lý chuyên biệt

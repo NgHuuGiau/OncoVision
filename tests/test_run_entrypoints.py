@@ -65,14 +65,14 @@ class RunEntrypointsTests(unittest.TestCase):
             requested_target="camera",
             preferred_target="camera",
         )
-        boot_progress_mock.assert_called_once_with("YOLO Camera Realtime")
+        boot_progress_mock.assert_called_once_with("OncoVision Camera Realtime")
         progress.advance_to.assert_any_call(16, "Dang nhan cau hinh khoi dong")
         progress.advance_to.assert_any_call(42, "Dang kiem tra CPU / GPU / CUDA")
         progress.advance_to.assert_any_call(68, "Dang chon model va runtime phu hop")
         progress.advance_to.assert_any_call(88, "Dang chuan bi mo camera")
         progress.finish.assert_called_once_with("San sang mo camera")
         print_dashboard_mock.assert_called_once_with(
-            title="YOLO Camera Realtime",
+            title="OncoVision Camera Realtime",
             runtime=runtime,
             hardware=hardware,
             camera_index=2,
@@ -122,7 +122,7 @@ class RunEntrypointsTests(unittest.TestCase):
 
         self.assertEqual(result, 5)
         launch_chat_app_mock.assert_called_once_with(
-            window_title="YOLO Chat AI",
+            window_title="OncoVision Chat AI",
             camera_index=3,
             app_mode="medium",
             selected_model="skin.pt",
@@ -161,8 +161,8 @@ class RunEntrypointsTests(unittest.TestCase):
         self.assertEqual(result, 0)
         cleanup_mock.assert_called_once_with(older_than_days=14)
         cleanup_medical_mock.assert_called_once_with(older_than_days=14)
-        self.assertIn("Da xoa file chat: 4", stdout.getvalue())
-        self.assertIn("Da xoa file medical: 2", stdout.getvalue())
+        self.assertIn("Đã xóa file chat: 4", stdout.getvalue())
+        self.assertIn("Đã xóa file medical: 2", stdout.getvalue())
 
     def test_mode_to_ui_defaults_maps_modes(self) -> None:
         self.assertEqual(mode_to_ui_defaults("auto"), ("auto", "medium"))

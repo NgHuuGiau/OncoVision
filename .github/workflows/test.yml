@@ -26,6 +26,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,33 +40,149 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
+      - name: Prepare log folder
+        run: mkdir -p ci-logs
+
+      - name: Write CI log helper
+        run: |
+          cat <<'EOF' > ci-logs/ci_helpers.sh
+          mark_check() {
+            local status="$1"
+            local name="$2"
+            local log_file="$3"
+            local exit_file="${log_file%.txt}.exitcode"
+            local failed_file="${log_file%.txt}.failed"
+
+            echo "$status" > "ci-logs/$exit_file"
+            if [ "$status" -ne 0 ]; then
+              touch "ci-logs/$failed_file"
+            fi
+          }
+
+          print_result() {
+            local title="$1"
+            local purpose="$2"
+            local log_file="$3"
+            local exit_file="${log_file%.txt}.exitcode"
+            local failed_file="${log_file%.txt}.failed"
+            local result="SKIPPED / NOT RUN"
+
+            if [ -f "ci-logs/$failed_file" ]; then
+              result="FAILED"
+            elif [ -f "ci-logs/$exit_file" ]; then
+              result="PASSED"
+            fi
+
+            echo "| $title | $purpose | $result | $log_file |"
+          }
+          EOF
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff
-          pip install mypy
+          set +e
+          {
+            echo "Installing Python dependencies..."
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install ruff mypy
+          } > ci-logs/01-install-dependencies.txt 2>&1
 
-      - name: Lint
-        run: ruff check . --line-length 140 --target-version py310
+          status=$?
+          echo "$status" > ci-logs/01-install-dependencies.exitcode
+          if [ "$status" -ne 0 ]; then touch ci-logs/01-install-dependencies.failed; fi
+          exit 0
 
-      - name: Type check
-        run: mypy . > type-check-results.txt 2>&1
-        continue-on-error: true
+      - name: Lint with Ruff
+        run: |
+          set +e
+          ruff check . --line-length 140 --target-version py310 > ci-logs/02-ruff-lint.txt 2>&1
+          status=$?
+          echo "$status" > ci-logs/02-ruff-lint.exitcode
+          if [ "$status" -ne 0 ]; then touch ci-logs/02-ruff-lint.failed; fi
+          exit 0
 
-      - name: Upload type check results
+      - name: Type check with mypy
+        run: |
+          set +e
+          mypy . > ci-logs/03-mypy-type-check.txt 2>&1
+          status=$?
+          echo "$status" > ci-logs/03-mypy-type-check.exitcode
+          if [ "$status" -ne 0 ]; then touch ci-logs/03-mypy-type-check.failed; fi
+          exit 0
+
+      - name: Verify entrypoint help
+        run: |
+          set +e
+          python scripts/verify_entrypoints_help.py > ci-logs/04-verify-entrypoints-help.txt 2>&1
+          status=$?
+          echo "$status" > ci-logs/04-verify-entrypoints-help.exitcode
+          if [ "$status" -ne 0 ]; then touch ci-logs/04-verify-entrypoints-help.failed; fi
+          exit 0
+
+      - name: Smoke check
+        run: |
+          set +e
+          python run_smoke.py > ci-logs/05-smoke-check.txt 2>&1
+          status=$?
+          echo "$status" > ci-logs/05-smoke-check.exitcode
+          if [ "$status" -ne 0 ]; then touch ci-logs/05-smoke-check.failed; fi
+          exit 0
+
+      - name: Run unit tests
+        run: |
+          set +e
+          python -m unittest discover -v > ci-logs/06-unit-tests.txt 2>&1
+          status=$?
+          echo "$status" > ci-logs/06-unit-tests.exitcode
+          if [ "$status" -ne 0 ]; then touch ci-logs/06-unit-tests.failed; fi
+          exit 0
+
+      - name: Create CI summary
+        if: always()
+        run: |
+          source ci-logs/ci_helpers.sh
+          {
+            echo "# CI Test Summary"
+            echo ""
+            echo "| Step | What it tests | Result | Log file |"
+            echo "|---|---|---|---|"
+
+            print_result "Install dependencies" "Cài requirements.txt, ruff, mypy" "01-install-dependencies.txt"
+            print_result "Ruff lint" "Kiểm tra lỗi style/code quality Python" "02-ruff-lint.txt"
+            print_result "mypy type check" "Kiểm tra lỗi type hint/type annotation" "03-mypy-type-check.txt"
+            print_result "Entrypoint help" "Kiểm tra các CLI/entrypoint có chạy help được không" "04-verify-entrypoints-help.txt"
+            print_result "Smoke check" "Chạy kiểm tra nhanh bằng run_smoke.py" "05-smoke-check.txt"
+            print_result "Unit tests" "Chạy toàn bộ unittest trong project" "06-unit-tests.txt"
+
+            echo ""
+            echo "## Failed logs"
+            failed_logs=$(find ci-logs -name "*.failed" -print | sort)
+            if [ -n "$failed_logs" ]; then
+              while IFS= read -r failed_file; do
+                base_name=$(basename "$failed_file" .failed)
+                echo "- $base_name.txt"
+              done <<< "$failed_logs"
+            else
+              echo "- None"
+            fi
+          } > ci-logs/00-ci-summary.txt
+
+          cat ci-logs/00-ci-summary.txt
+          cat ci-logs/00-ci-summary.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload CI logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: type-check-results
-          path: type-check-results.txt
+          name: ci-test-logs
+          path: ci-logs/
           retention-days: 7
 
-      - name: Verify entrypoint help
-        run: python scripts/verify_entrypoints_help.py
-
-      - name: Smoke check
-        run: python run_smoke.py
-
-      - name: Run unit tests
-        run: python -m unittest
+      - name: Fail workflow if any check failed
+        if: always()
+        run: |
+          if ls ci-logs/*.failed >/dev/null 2>&1; then
+            echo "One or more CI checks failed. Download artifact 'ci-test-logs' to view .txt logs."
+            exit 1
+          fi
+          echo "All CI checks passed."

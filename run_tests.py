@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
+from utils.entrypoint_common import run_entrypoint
 from utils.console_ui import BOLD, CYAN, GREEN, MAGENTA, ORANGE, RED, YELLOW, color, meter, pad, rule, section, status_meter
 from utils.file_utils import ensure_project_directories
 
@@ -310,4 +311,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_entrypoint(main))

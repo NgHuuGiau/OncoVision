@@ -6,6 +6,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from utils.entrypoint_common import run_entrypoint
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -145,4 +147,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_entrypoint(main))

@@ -106,7 +106,7 @@ def _print_dataset_ready_help(error: FileNotFoundError) -> None:
     raw_images_color = GREEN if raw_images_count > 0 else RED
     raw_labels_color = GREEN if raw_labels_count > 0 else RED
     print_help_screen(
-        title="YOLO TRAINING :: DỮ LIỆU CHƯA SẴN SÀNG",
+        title="OncoVision TRAINING :: DỮ LIỆU CHƯA SẴN SÀNG",
         reason=str(error),
         checks=[
             ("Raw images", f"{RAW_IMAGES_DIR} ({raw_images_count} file)", raw_images_color),

@@ -38,7 +38,7 @@ from core.frame_processing import (
 )
 
 logger = get_logger(__name__)
-WINDOW_NAME = "YOLO Realtime Camera"
+WINDOW_NAME = "OncoVision Camera Realtime"
 MOTION_STABLE_THRESHOLD = 2.8
 WINDOW_MARGIN = 16
 TRACK_TRAIL_MAX_POINTS = 10

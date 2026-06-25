@@ -13,7 +13,7 @@ from training.train_model import (
 )
 from utils.entrypoint_checks import module_available
 from utils.file_utils import ensure_project_directories, load_yaml
-from utils.terminal_encoding import ensure_utf8_console
+from utils.entrypoint_common import run_entrypoint
 
 
 TRAIN_CONFIG_PATH = Path("training/train_config.yaml")
@@ -102,7 +102,6 @@ def run_train_preflight(print_fn=print) -> int:
 
 
 def main() -> int:
-    ensure_utf8_console()
     args = parse_args()
     if getattr(args, "check_only", False):
         return run_train_preflight()
@@ -115,4 +114,4 @@ __all__ = ["main", "run_train_preflight", "run_training_main", "parse_args", "bu
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_entrypoint(main))

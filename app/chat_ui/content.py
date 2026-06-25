@@ -3,7 +3,7 @@ from __future__ import annotations
 TRANSLATIONS = {
     "en": {
         "new_chat": "New chat",
-        "search": "Search chats",
+        "search": "Search conversations...",
         "history": "Chat history",
         "settings": "Settings",
         "greeting_title": "Hello!",
@@ -62,7 +62,7 @@ TRANSLATIONS = {
         "copied_hint": "\u0110\u00e3 sao ch\u00e9p v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m!",
         "new_message": "Tin nh\u1eafn m\u1edbi t\u1eeb AI",
         "new_chat": "Cu\u1ed9c tr\u00f2 chuy\u1ec7n m\u1edbi",
-        "search": "T\u00ecm ki\u1ebfm cu\u1ed9c tr\u00f2 chuy\u1ec7n",
+        "search": "T\u00ecm ki\u1ebfm cu\u1ed9c tr\u00f2 chuy\u1ec7n...",
         "history": "L\u1ecbch s\u1eed tr\u00f2 chuy\u1ec7n",
         "settings": "C\u00e0i \u0111\u1eb7t",
         "greeting_title": "Xin ch\u00e0o!",
@@ -107,7 +107,7 @@ TRANSLATIONS = {
         "days_ago": "ng\u00e0y tr\u01b0\u1edbc",
         "english": "Ti\u1ebfng Anh",
         "vietnamese": "Ti\u1ebfng Vi\u1ec7t",
-        "delete_chat": "X\u00f3a cu\u1ed9c tr\u00f2 chuy\u1ec7n",
+        "delete_chat": "X\u00f3a tr\u00f2 chuy\u1ec7n",
         "confirm_delete_title": "X\u00e1c nh\u1eadn x\u00f3a",
         "confirm_delete_msg": "B\u1ea1n c\u00f3 ch\u1eafc mu\u1ed1n x\u00f3a cu\u1ed9c tr\u00f2 chuy\u1ec7n n\u00e0y kh\u00f4ng?",
         "sidebar_expand": "M\u1edf r\u1ed9ng thanh b\u00ean",

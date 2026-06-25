@@ -1,119 +1,109 @@
-# Tổng quan dự án
+# Tổng Quan Dự Án
 
-## 1. Điểm vào chính
+## Mục đích
 
-| File | Chức năng | Mô tả chi tiết |
-|------|-----------|----------------|
-| `run_menu.py` | Menu chính | Điểm vào để truy cập các chức năng khác |
-| `run_app.py` | Camera realtime | Chạy camera thời gian thực với detection |
-| `run_chat.py` | Chat + medical analysis | Giao diện chat tích hợp phân tích y khoa |
-| `run_doctor.py` | System health check | Kiểm tra sức khỏe hệ thống |
-| `run_tests.py` | Unit tests | Chạy các bài test đơn vị |
-| `run_train.py` | Training pipeline | Pipeline huấn luyện mô hình |
-| `run_medical.py` | Medical analysis CLI | CLI phân tích y khoa (init-dataset, analyze) |
-| `run_smoke.py` | Smoke tests | Kiểm tra nhanh các chức năng cơ bản |
+OncoVision là bộ ứng dụng dùng để:
 
-## 2. Cấu trúc thư mục dự án
+- chạy camera realtime với YOLO
+- phân tích ảnh y khoa qua chat UI
+- huấn luyện model custom
+- kiểm tra sức khỏe hệ thống
+- chạy smoke test an toàn cho CI
+
+## Entry points chính
+
+| File | Mục đích |
+|---|---|
+| `run_menu.py` | Menu trung tâm để mở các chức năng chính |
+| `run_app.py` | Camera realtime |
+| `run_chat.py` | Chat UI và phân tích ảnh y khoa |
+| `run_doctor.py` | Kiểm tra sức khỏe hệ thống |
+| `run_tests.py` | Chạy test hồi quy |
+| `run_train.py` | Huấn luyện model |
+| `run_medical.py` | CLI cho luồng medical |
+| `run_smoke.py` | Kiểm tra an toàn entrypoint |
+
+## Cấu trúc thư mục
 
 ### `app/`
-- **Files**: `chat_ui/*.py`
-- **Chức năng**: Giao diện chat UI, bootstrap camera
-- **Xử lý**: UI người dùng, khởi động camera pipeline
+
+Giao diện chat, bootstrap camera runtime và logic khởi chạy ứng dụng.
 
 ### `core/`
-- **Files**: `runtime_advisor.py`, `model_selector.py`, `model_loader.py`, `camera_runner.py`
-- **Chức năng**: Runtime engine, load model, camera pipeline
-- **Xử lý**: Đề xuất cấu hình runtime, chọn model, tải mô hình, chạy camera
 
-### `docs/`
-- **Files**: `*.md`
-- **Chức năng**: Tài liệu dự án
+Runtime advisor, model selector, model loader, camera runner và logic nền.
 
 ### `medical/`
-- **Files**: `chat_service.py`, `controller.py`, `system_status.py`, `storage.py`
-- **Chức năng**: Medical imaging pipeline
-- **Xử lý**: Dịch vụ chat y tế, điều khiển phân tích, trạng thái hệ thống, lưu trữ dữ liệu
 
-### `tests/`
-- **Files**: `test_*.py`
-- **Chức năng**: Unit tests (30+ files)
+Pipeline phân tích ảnh y khoa, lưu lịch sử ca, export report và trạng thái hệ thống.
 
 ### `training/`
-- **Files**: `train_model.py`, `validate_dataset.py`, `split_dataset.py`, `export_model.py`
-- **Chức năng**: Training pipeline
-- **Xử lý**: Huấn luyện mô hình, xác thực dataset, chia dữ liệu, xuất mô hình
+
+Chuẩn bị dữ liệu, chia dataset, train, validate và export model.
 
 ### `utils/`
-- **Files**: `icons.py`, `draw_utils.py`, `file_utils.py`
-- **Chức năng**: Helper utilities
-- **Xử lý**: Quản lý icon, vẽ bounding box, xử lý file
+
+Helper dùng chung: icon, terminal, file, draw, camera probe.
 
 ### `config/`
-- **Files**: `settings.yaml`, `model_config.yaml`
-- **Chức năng**: Cấu hình inference, model
 
-### `assets/`
-- **Files**: `icons/*.svg`
-- **Chức năng**: Icons SVG cho UI
+Cấu hình runtime, model và medical settings.
 
-### `models/`
-- **Files**: `pretrained/*.pt`, `trained/*.pt`
-- **Chức năng**: Model storage (gitignore)
+### `docs/`
 
-### `dataset/`
-- **Files**: `raw/images`, `raw/labels`, `processed/`
-- **Chức năng**: Dữ liệu training (gitignore)
+Tài liệu cài đặt, vận hành, training và tổng quan.
 
-### `output/`
-- **Files**: `chat_captures/`, `medical/`
-- **Chức năng**: Kết quả xuất (gitignore)
+### `tests/`
 
-## 3. Kiến trúc runtime camera
+Unit tests và smoke/regression checks.
+
+## Luồng chạy chính
+
+```text
+run_menu.py
+├── run_app.py
+├── run_chat.py
+├── run_doctor.py
+├── run_train.py
+└── run_medical.py
+```
+
+## Luồng camera realtime
 
 ```text
 run_app.py
-└─> app/camera_runtime/bootstrap
-    ├─> core/runtime_advisor (recommendation)
-    ├─> core/model_selector (config)
-    ├─> core/model_loader (load model)
-    ├─> core/camera_runner (stream + detect)
-    └─> utils/draw_utils (vẽ box)
+→ runtime advisor
+→ model selector
+→ model loader
+→ camera runner
+→ draw utils
 ```
 
-## 4. Training Flow
+## Luồng training
 
 ```text
-dataset/raw/images
-  → training/validate_dataset.py (kiểm tra ảnh/label)
-  → training/split_dataset.py (chia train/val/test)
-  → run_train.py (huấn luyện)
-  → training/validate_model.py (đánh giá)
-  → training/export_model.py (xuất model)
+dataset/raw
+→ training/validate_dataset.py
+→ training/split_dataset.py
+→ run_train.py
+→ training/validate_model.py
+→ training/export_model.py
 ```
 
-## 5. Medical Flow
+## Luồng medical
 
 ```text
 run_medical.py init-dataset
-  → dataset/medical_skin_lesion/ (tạo cấu trúc)
+→ tạo cấu trúc dataset medical
 
-run_medical.py analyze --image <file>
-  → medical/controller
-    → normalize image
-    → detect lesion
-    → classify risk (low/med/high)
-    → save report + case to SQLite
-
-run_chat.py
-  → upload image
-  → medical pipeline (xử lý trên)
+run_medical.py analyze
+→ normalize ảnh
+→ detect
+→ phân loại nguy cơ
+→ lưu report + history
 ```
 
-## 6. Mode inference
+## Ghi chú
 
-| Mode | Mục đích |
-|------|----------|
-| `high` | Chất lượng cao nhất máy gánh được |
-| `medium` | Cân bằng performance/chất lượng |
-| `low` | Tối ưu FPS, ít tài nguyên |
-| `auto` | Hệ thống tự chọn dựa phần cứng |
+- `dataset/`, `models/`, `output/` thường là dữ liệu sinh ra lúc chạy và nên quản lý riêng.
+- Khi đổi branding hoặc title UI, nên cập nhật entrypoint và test contract cùng lúc.

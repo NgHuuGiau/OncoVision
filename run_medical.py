@@ -19,6 +19,7 @@ from medical.training import (
     train_medical_model,
     validate_medical_model,
 )
+from utils.entrypoint_common import run_entrypoint
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -71,7 +72,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.command == "init-dataset":
+    def handle_init_dataset() -> int:
         config = create_default_skin_cancer_dataset_config(args.dataset_root)
         summary = ensure_medical_dataset_structure(config)
         print(f"Da tao dataset tai: {summary.dataset_root}")
@@ -79,7 +80,7 @@ def main() -> int:
         print(build_medical_disclaimer())
         return 0
 
-    if args.command == "analyze":
+    def handle_analyze() -> int:
         analyzer = MedicalImageAnalyzer()
         db = MedicalCaseDatabase()
         result = analyzer.analyze_image(args.image, patient_code=args.patient_code)
@@ -94,11 +95,7 @@ def main() -> int:
             recommendation=result.recommendation,
             metadata=build_detection_metadata(result),
         )
-        update_case_report_case_id(
-            result.report_json_path,
-            result.report_md_path,
-            case_id=case_id,
-        )
+        update_case_report_case_id(result.report_json_path, result.report_md_path, case_id=case_id)
         print(f"Ma ca benh: {case_id}")
         print(f"Muc do sang loc nguy co: {result.risk_level}")
         if result.quality_warnings:
@@ -111,7 +108,7 @@ def main() -> int:
         print(result.disclaimer)
         return 0
 
-    if args.command == "history":
+    def handle_history() -> int:
         db = MedicalCaseDatabase()
         for item in db.list_cases()[: args.limit]:
             print(f"#{item.case_id} | {item.patient_code} | {item.risk_level} | suspicious={item.suspected_malignant} | {item.created_at}")
@@ -119,7 +116,7 @@ def main() -> int:
             print(f"  report={item.report_md_path}")
         return 0
 
-    if args.command == "show-case":
+    def handle_show_case() -> int:
         db = MedicalCaseDatabase()
         item = db.get_case(args.case_id)
         if item is None:
@@ -136,7 +133,7 @@ def main() -> int:
         print(f"Metadata: {json.dumps(item.metadata, ensure_ascii=False, indent=2)}")
         return 0
 
-    if args.command == "status":
+    def handle_status() -> int:
         status = get_medical_system_status()
         print("Medical system status")
         print(f"Model config: {status.configured_model_path}")
@@ -162,7 +159,7 @@ def main() -> int:
             print(f"- {command}")
         return 0
 
-    if args.command == "export-case":
+    def handle_export_case() -> int:
         db = MedicalCaseDatabase()
         item = db.get_case(args.case_id)
         if item is None:
@@ -177,7 +174,7 @@ def main() -> int:
         print(f"Da export ca benh #{item.case_id} ra: {bundle_path}")
         return 0
 
-    if args.command == "delete-case":
+    def handle_delete_case() -> int:
         db = MedicalCaseDatabase()
         if args.delete_files:
             deleted, deleted_paths = db.delete_case_with_files(args.case_id)
@@ -194,7 +191,7 @@ def main() -> int:
                 print(f"- {path}")
         return 0
 
-    if args.command == "metrics":
+    def handle_metrics() -> int:
         truths = json.loads(args.truths)
         predictions = json.loads(args.predictions)
         metrics = compute_medical_metrics(truths, predictions)
@@ -202,14 +199,14 @@ def main() -> int:
         print(build_medical_disclaimer())
         return 0
 
-    if args.command == "cleanup-output":
+    def handle_cleanup_output() -> int:
         summary = cleanup_medical_outputs(older_than_days=args.older_than_days)
         print(f"Da xoa file: {summary.removed_files}")
         print(f"Da xoa thu muc rong: {summary.removed_dirs}")
         print(f"Dung luong giai phong: {summary.freed_bytes} bytes")
         return 0
 
-    if args.command == "audit-dataset":
+    def handle_audit_dataset() -> int:
         audit = audit_medical_raw_dataset()
         print(f"Anh raw: {len(audit['raw_images'])}")
         print(f"Nhan raw: {len(audit['raw_labels'])}")
@@ -218,25 +215,25 @@ def main() -> int:
         print(f"Nhan loi: {len(audit['invalid_labels'])}")
         return 0
 
-    if args.command == "split-dataset":
+    def handle_split_dataset() -> int:
         summary = prepare_medical_training_dataset()
         print(f"Train: {summary.train_count}")
         print(f"Val: {summary.val_count}")
         print(f"Test: {summary.test_count}")
         return 0
 
-    if args.command == "train":
+    def handle_train() -> int:
         model_path = train_medical_model()
         print(f"Da luu model medical: {model_path}")
         return 0
 
-    if args.command == "validate":
+    def handle_validate() -> int:
         metrics = validate_medical_model()
         print(metrics)
         print(build_medical_disclaimer())
         return 0
 
-    if args.command == "train-all":
+    def handle_train_all() -> int:
         report = run_full_medical_training_pipeline()
         print(f"Train: {report['train_count']}")
         print(f"Val: {report['val_count']}")
@@ -246,9 +243,29 @@ def main() -> int:
         print(build_medical_disclaimer())
         return 0
 
-    parser.error("Lenh chua duoc ho tro")
-    return 1
+    handlers = {
+        "init-dataset": handle_init_dataset,
+        "analyze": handle_analyze,
+        "history": handle_history,
+        "show-case": handle_show_case,
+        "status": handle_status,
+        "export-case": handle_export_case,
+        "delete-case": handle_delete_case,
+        "metrics": handle_metrics,
+        "cleanup-output": handle_cleanup_output,
+        "audit-dataset": handle_audit_dataset,
+        "split-dataset": handle_split_dataset,
+        "train": handle_train,
+        "validate": handle_validate,
+        "train-all": handle_train_all,
+    }
+
+    handler = handlers.get(args.command)
+    if handler is None:
+        parser.error("Lenh chua duoc ho tro")
+        return 1
+    return handler()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_entrypoint(main))

@@ -51,6 +51,8 @@ _BASE_SHARED = """
     QLabel#Attachment {{
         color: {attachment_color};
         font-weight: 600;
+        font-size: 13px;
+        padding: 0;
     }}
     QLabel#Avatar {{
         min-width: 32px;
@@ -159,7 +161,15 @@ _BASE_SHARED = """
     QFrame#SearchBox {{
         background: {search_bg};
         border: 1px solid {search_border};
-        border-radius: 14px;
+        border-radius: 16px;
+    }}
+    QFrame#SidebarCompactSearchButton {{
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 18px;
+    }}
+    QFrame#SidebarCompactSearchButton:hover {{
+        background: transparent;
     }}
     QFrame#SettingsShell,
     QFrame#ImagePreviewShell {{
@@ -188,6 +198,7 @@ _BASE_SHARED = """
     QFrame#HistoryItem[selected="true"] {{
         background: {history_selected_bg};
         border: 1px solid {history_selected_border};
+        border-left: 3px solid #2563ff;
     }}
     QFrame#BubbleUser {{
         background: rgba(77, 184, 255, 0.14);
@@ -239,13 +250,14 @@ _BASE_SHARED = """
     QPushButton#ModeButton {{
         background: {mode_button_bg};
         border: 1px solid {mode_button_border};
-        border-radius: 14px;
+        border-radius: 999px;
         color: {mode_button_text};
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 600;
-        padding: 6px 14px;
+        padding: 0 12px;
         text-align: center;
-        min-height: 34px;
+        min-height: 38px;
+        qproperty-iconSize: 16px 16px;
     }}
     QPushButton#ModeButton:hover {{
         background: {mode_button_hover};
@@ -273,14 +285,14 @@ _BASE_SHARED = """
         background: {button_hover};
     }}
     QPushButton#SidebarPrimaryButton {{
-        min-height: 44px;
-        padding-left: 16px;
-        font-size: 15px;
-        font-weight: 600;
+        min-height: 52px;
+        padding-left: 14px;
+        font-size: 14px;
+        font-weight: 700;
         border: none;
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563ff, stop:1 #1d4ed8);
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563ff, stop:0.55 #8b5cf6, stop:1 #c026d3);
         color: #ffffff;
-        border-radius: 12px;
+        border-radius: 16px;
     }}
     QPushButton#TopActionButton,
     QPushButton#SidebarAppButton,
@@ -291,13 +303,14 @@ _BASE_SHARED = """
         padding: 0;
     }}
     QPushButton#TopActionButton {{
-        min-width: 40px;
-        max-width: 40px;
-        min-height: 40px;
-        max-height: 40px;
-        border-radius: 14px;
+        min-width: 36px;
+        max-width: 36px;
+        min-height: 36px;
+        max-height: 36px;
+        border-radius: 12px;
         color: {button_text};
-        font-size: 18px;
+        font-size: 16px;
+        qproperty-iconSize: 16px 16px;
     }}
     QPushButton#TopActionButton:hover {{
         background: {top_action_hover};
@@ -309,39 +322,51 @@ _BASE_SHARED = """
     QPushButton#SidebarAppButton:hover {{
         background: {sidebar_hover};
     }}
+    QFrame#SidebarCompactSearchButton:hover {{
+        background: {sidebar_hover};
+    }}
     QPushButton#SidebarAppButton,
     QPushButton#SidebarCompactButton,
     QPushButton#SidebarCompactSearchButton {{
+        min-width: 46px;
+        max-width: 46px;
+        min-height: 46px;
+        max-height: 46px;
+        border-radius: 18px;
+        qproperty-iconSize: 20px 20px;
+    }}
+    QFrame#SidebarCompactSearchButton {{
         min-width: 52px;
         max-width: 52px;
         min-height: 52px;
         max-height: 52px;
-        border-radius: 20px;
+        background: transparent;
+        border: 1px solid transparent;
     }}
     QPushButton#RoundButton {{
-        min-width: 44px;
-        max-width: 44px;
-        min-height: 44px;
-        max-height: 44px;
-        border-radius: 20px;
+        min-width: 40px;
+        max-width: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        border-radius: 18px;
         border: 1px solid {round_button_border};
         background: {round_button_bg};
         color: {round_button_text};
-        font-size: 20px;
+        font-size: 18px;
     }}
     QPushButton#RoundButton:hover {{
         background: {round_button_hover};
     }}
     QPushButton#SendButton {{
-        min-width: 44px;
-        max-width: 44px;
-        min-height: 44px;
-        max-height: 44px;
-        border-radius: 20px;
+        min-width: 40px;
+        max-width: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        border-radius: 18px;
         border: none;
         background: #2563ff;
         color: #ffffff;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
         padding: 0;
         text-align: center;
@@ -350,13 +375,14 @@ _BASE_SHARED = """
         background: #1d4ed8;
     }}
     QPushButton#SidebarFooterButton {{
-        min-height: 44px;
+        min-height: 40px;
         border-radius: 14px;
         background: {footer_button_bg};
         border: 1px solid {footer_button_border};
-        padding: 0 14px;
-        font-size: 15px;
+        padding: 0 12px;
+        font-size: 14px;
         font-weight: 600;
+        qproperty-iconSize: 18px 18px;
     }}
     QPushButton#SidebarFooterButton:hover {{
         background: {footer_button_hover};
@@ -373,7 +399,7 @@ _BASE_SHARED = """
         border: 1px solid {settings_nav_button_border};
         border-radius: 16px;
         text-align: left;
-        padding: 14px 18px;
+        padding: 12px 16px;
         font-weight: 600;
         color: {settings_nav_button_text};
     }}
@@ -387,9 +413,9 @@ _BASE_SHARED = """
     }}
     QComboBox#SettingsCombo {{
         min-width: 220px;
-        min-height: 44px;
-        padding: 10px 14px;
-        font-size: 15px;
+        min-height: 40px;
+        padding: 8px 12px;
+        font-size: 14px;
         font-weight: 600;
         color: {combo_text};
         background: {combo_bg};

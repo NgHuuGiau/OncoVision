@@ -1,15 +1,17 @@
-# Quick Commands
+# Lệnh Nhanh
 
-Use these commands for fast verification and CI-style checks:
+Dùng các lệnh này để kiểm tra nhanh dự án:
 
 ```powershell
-.\.venv\Scripts\python run_app.py --advisor-only
-.\.venv\Scripts\python run_chat.py --check-only
-.\.venv\Scripts\python run_train.py --check-only
-.\.venv\Scripts\python run_smoke.py
+python run_app.py --advisor-only
+python run_chat.py --check-only
+python run_train.py --check-only
+python run_smoke.py
+python -m unittest discover -v
 ```
 
-- `run_app.py --advisor-only` prints runtime recommendations and never opens the camera.
-- `run_chat.py --check-only` validates chat dependencies, icons, output paths, and the medical model.
-- `run_train.py --check-only` validates training dependencies, pretrained models, and dataset readiness.
-- `run_smoke.py` runs the safe end-to-end entrypoint sequence used by CI.
+- `run_app.py --advisor-only` in khuyến nghị runtime mà không mở camera
+- `run_chat.py --check-only` kiểm tra thư viện, icon, output và medical model
+- `run_train.py --check-only` kiểm tra training dependencies, model và dataset
+- `run_smoke.py` chạy chuỗi entrypoint an toàn dùng cho CI
+- `python -m unittest discover -v` chạy toàn bộ test suite

@@ -10,6 +10,7 @@ from core.model_catalog import YOLO11_MODELS_ASC
 from core.runtime_advisor import select_runtime_config_optimized
 from medical.system_status import MedicalSystemStatus, get_medical_system_status, recommended_medical_commands
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
+from utils.entrypoint_common import run_entrypoint
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
 from utils.file_utils import ensure_project_directories
@@ -79,7 +80,7 @@ def _probe_camera(index: int = 0) -> CameraProbeResult:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Kiem tra suc khoe toan he thong cho du an YOLO.")
+    parser = argparse.ArgumentParser(description="Kiem tra suc khoe toan he thong cho du an OncoVision.")
     parser.add_argument("--camera-index", type=int, default=0, help="Camera index de kiem tra webcam that.")
     parser.add_argument(
         "--skip-camera-check",
@@ -216,7 +217,7 @@ def main() -> None:
     camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
     recommendations = _runtime_recommendations(hardware)
 
-    for item in header("YOLO DOCTOR :: KIEM TRA TOAN HE THONG"):
+    for item in header("OncoVision DOCTOR :: KIEM TRA TOAN HE THONG"):
         print(item)
 
     print(section("PHAN CUNG", GREEN if hardware.cuda_available else YELLOW))
@@ -294,4 +295,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(run_entrypoint(main))

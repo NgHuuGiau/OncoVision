@@ -1,19 +1,29 @@
-# Hướng dẫn training
+# Hướng Dẫn Training
 
-Tài liệu này mô tả đầy đủ luồng chuẩn bị dữ liệu, huấn luyện, đánh giá và dùng model custom trong dự án YOLO.
+Tài liệu này mô tả đầy đủ luồng chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model custom trong dự án.
 
-## 1. Cấu trúc dữ liệu đầu vào
+## Công nghệ dùng trong training
 
-Pipeline training hiện dùng trực tiếp dữ liệu trong:
+- Python
+- Ultralytics YOLO
+- PyTorch
+- OpenCV
+- NumPy
+- PyYAML
+- tqdm
+
+## Dữ liệu đầu vào
+
+Pipeline training sử dụng trực tiếp:
 
 - `dataset/raw/images`
 - `dataset/raw/labels`
 
-Project không còn dùng luồng trung gian `dataset/sample`.
+Mỗi ảnh trong `images` nên có file `.txt` tương ứng trong `labels`.
 
-## 2. Định dạng label YOLO
+## Định dạng label YOLO
 
-Mỗi file label có dạng:
+Mỗi dòng label có dạng:
 
 ```text
 class_id x_center y_center width height
@@ -21,138 +31,127 @@ class_id x_center y_center width height
 
 Trong đó:
 
-- `class_id`: chỉ số lớp.
-- `x_center`, `y_center`, `width`, `height`: giá trị chuẩn hóa trong khoảng `0..1`.
+- `class_id`: số lớp
+- `x_center`, `y_center`, `width`, `height`: giá trị chuẩn hóa trong khoảng `0..1`
 
-## 3. Cấu hình class hiện tại
+## Cấu hình class hiện tại
 
-File `training/data.yaml` hiện đang khai báo:
+File `training/data.yaml` định nghĩa mapping class của dự án.
+Nếu bạn muốn train class riêng, hãy cập nhật đồng thời:
 
-```yaml
-names:
-  0: person
-```
+- ảnh trong `dataset/raw/`
+- label trong `dataset/raw/`
+- mapping class trong `training/data.yaml`
 
-Điều này có nghĩa:
-
-- Dataset hiện được cấu hình tối thiểu cho class `person`.
-- Nếu bạn muốn train thêm `phone`, `face`, `helmet` hoặc class khác, bạn phải cập nhật đồng thời ảnh và label trong `dataset/raw/`, cùng mapping class trong `training/data.yaml`.
-
-## 4. Luồng training khuyến nghị
+## Luồng training khuyến nghị
 
 ```powershell
-.\.venv\Scripts\python training\prepare_dataset.py
-.\.venv\Scripts\python training\validate_dataset.py
-.\.venv\Scripts\python training\split_dataset.py
-.\.venv\Scripts\python run_train.py
-.\.venv\Scripts\python training\validate_model.py
-.\.venv\Scripts\python training\export_model.py
+python training\prepare_dataset.py
+python training\validate_dataset.py
+python training\split_dataset.py
+python run_train.py
+python training\validate_model.py
+python training\export_model.py
 ```
 
-## 5. Ý nghĩa từng bước
+## Ý nghĩa từng bước
 
 ### `training/prepare_dataset.py`
 
-- Tạo khung thư mục cần thiết.
-- Chuẩn hóa môi trường dataset trước khi làm việc tiếp.
+- tạo khung thư mục cần thiết
+- chuẩn hóa môi trường dataset
 
 ### `training/validate_dataset.py`
 
-- Kiểm tra file ảnh thiếu.
-- Kiểm tra file label thiếu hoặc sai format.
-- Kiểm tra class id không khớp với `training/data.yaml`.
+- kiểm tra ảnh thiếu
+- kiểm tra label thiếu hoặc sai format
+- kiểm tra class id không khớp
 
 ### `training/split_dataset.py`
 
-- Chia dữ liệu thành `train`, `val`, `test`.
-- Ghi kết quả vào `dataset/processed/`.
+- chia dữ liệu thành `train`, `val`, `test`
+- ghi kết quả vào `dataset/processed/`
 
 ### `run_train.py`
 
-- Gọi pipeline huấn luyện chính.
-- Sinh ra weights trong thư mục huấn luyện.
+- chạy pipeline huấn luyện chính
+- sinh weights trong thư mục train
 
 ### `training/validate_model.py`
 
-- Đánh giá model sau khi train.
-- Dùng để so sánh chất lượng trước khi đưa vào runtime camera.
+- đánh giá model sau khi train
+- dùng để so sánh với runtime camera
 
 ### `training/export_model.py`
 
-- Xuất model phục vụ deploy hoặc dùng ở bước khác.
-- Đồng bộ model đích về `models/trained/best.pt` nếu pipeline yêu cầu.
+- xuất model phục vụ deploy
+- đồng bộ model đích về `models/trained/best.pt` nếu cần
 
-## 6. Phân biệt model pretrained và model custom
-
-Project hiện có hai nhóm model:
+## Pretrained và custom model
 
 ### `models/pretrained/*.pt`
 
-- Dùng cho nhận diện tổng quát trên webcam.
-- Phù hợp khi bạn muốn nhận diện các object phổ biến như `person`, `cell phone`, `bottle`, `car`, `chair`, v.v.
+- dùng cho nhận diện tổng quát
+- hợp với bài toán camera realtime phổ biến
 
 ### `models/trained/best.pt`
 
-- Là model custom do bạn train từ dataset riêng.
-- Dùng khi bài toán của bạn có class chuyên biệt hoặc cần logic riêng.
+- là model custom sau khi bạn train từ dataset riêng
+- hợp khi bài toán có class chuyên biệt
 
-## 7. Khi nào nên dùng `best.pt` trong camera
+## Khi nào nên dùng `best.pt`
 
-Nên chạy camera với model custom nếu:
+Nên dùng model custom nếu:
 
-- Bạn train cho class không có sẵn trong COCO.
-- Bạn cần độ chính xác cao trên bài toán hẹp.
-- Bạn chấp nhận đánh đổi khả năng detect object tổng quát để lấy chất lượng trên class riêng.
+- bạn train class không có trong COCO
+- bạn cần độ chính xác cao cho domain riêng
+- bạn muốn tối ưu cho dữ liệu thực tế của dự án
 
 Ví dụ:
 
 ```powershell
-.\.venv\Scripts\python run_app.py --model models/trained/best.pt
+python run_app.py --model models/trained/best.pt
 ```
 
-## 8. Vì sao camera có thể “không nhận diện đúng”
+## Vì sao camera có thể nhận diện chưa đúng
 
-Những nguyên nhân thường gặp:
+Nguyên nhân thường gặp:
 
-- Dùng model pretrained cho bài toán cần class custom.
-- `training/data.yaml` không khớp với label thật.
-- Dataset quá ít, lệch góc chụp hoặc thiếu ánh sáng.
-- Ảnh train không giống điều kiện webcam thực tế.
-- `imgsz` quá thấp để giữ FPS nên box nhỏ bị bỏ sót.
+- dùng pretrained model cho bài toán cần class custom
+- `training/data.yaml` không khớp với label thật
+- dataset quá ít hoặc quá lệch góc chụp
+- ảnh train khác quá xa điều kiện webcam thực tế
+- `imgsz` quá thấp để giữ FPS
 
-## 9. Khuyến nghị dữ liệu để model ổn định hơn
+## Cách làm model ổn định hơn
 
-- Chụp đủ nhiều góc quay: chính diện, nghiêng trái, nghiêng phải, gần, xa.
-- Có nhiều mức sáng khác nhau.
-- Có cả ảnh nền sạch và nền phức tạp.
-- Gắn label nhất quán giữa mọi file.
-- Không để class map thay đổi giữa các lần train.
+- chụp nhiều góc
+- có nhiều mức sáng
+- có cả nền sạch và nền phức tạp
+- gắn label nhất quán
+- giữ class map ổn định giữa các lần train
 
-## 10. Kiểm tra model sau training
+## Kiểm tra sau training
 
-Sau khi train, nên trả lời 4 câu hỏi:
+Sau khi train xong, nên trả lời các câu hỏi:
 
-1. Model có nhận diện đúng class mong muốn không?
+1. Model có nhận đúng class không?
 2. Có bỏ sót object nhỏ không?
-3. Có sinh nhiều false positive không?
-4. Khi chạy webcam thật, model có còn ổn dưới ánh sáng yếu không?
+3. Có quá nhiều false positive không?
+4. Chạy webcam thật có ổn dưới ánh sáng yếu không?
 
-Nếu câu trả lời chưa tốt, hãy ưu tiên cải thiện dataset trước khi tăng model quá lớn.
+## Gợi ý chọn model
 
-## 11. Gợi ý chiến lược chọn model
+- Máy có GPU khá: bắt đầu với `yolo11s.pt` hoặc `yolo11m.pt`
+- Máy yếu hơn: bắt đầu với `yolo11n.pt`
+- Class khó nhưng nhỏ: ưu tiên dataset tốt trước khi tăng model size
 
-- Máy có GPU khá: bắt đầu với `yolo11s.pt` hoặc `yolo11m.pt`.
-- Máy yếu hơn: bắt đầu với `yolo11n.pt`.
-- Nếu class của bạn ít nhưng khó, hãy ưu tiên dataset tốt trước khi tăng model size.
-
-## 12. Sau training nên làm gì
-
-Quy trình khép kín nên là:
+## Sau training nên làm gì
 
 ```powershell
-.\.venv\Scripts\python training\validate_model.py
-.\.venv\Scripts\python run_doctor.py --skip-camera-check
-.\.venv\Scripts\python run_app.py --model models/trained/best.pt
+python training\validate_model.py
+python run_doctor.py --skip-camera-check
+python run_app.py --model models/trained/best.pt
 ```
 
-Mục tiêu là kiểm tra model custom ngay trong điều kiện camera thật, thay vì chỉ nhìn metric offline.
+Mục tiêu là kiểm tra model custom ngay trong điều kiện camera thật.

@@ -1,4 +1,4 @@
-"""Main interactive menu for the YOLO Hub application."""
+"""Main interactive menu for the OncoVision application."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class MenuOption:
 
 
 MENU_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_app.py", "Camera nhận diện", "Mở camera realtime, chạy YOLO và hiển thị FPS cùng khung phát hiện.", "CHẠY CHÍNH", GREEN),
+    "1": MenuOption("run_app.py", "Camera thời gian thực", "Mở camera thời gian thực, chạy model và hiển thị FPS cùng khung phát hiện.", "CHẠY CHÍNH", GREEN),
     "2": MenuOption("run_chat.py", "Chat y dược", "Mở giao diện chat để tải ảnh y khoa lên phân tích và xem kết quả.", "CHẠY CHÍNH", GREEN),
     "3": MenuOption("run_tests.py", "Kiểm thử", "Chạy toàn bộ unit test và các kiểm tra hồi quy chính.", "KIỂM TRA", YELLOW),
     "4": MenuOption("run_doctor.py", "Doctor", "Rà soát phần cứng, model, camera, dữ liệu và gợi ý runtime.", "KIỂM TRA", YELLOW),
@@ -42,6 +42,7 @@ MENU_OPTIONS: dict[str, MenuOption] = {
     "8": MenuOption("run_smoke.py", "Smoke check", "Chạy chuỗi kiểm tra an toàn cho các entrypoint chính.", "KIỂM TRA", YELLOW),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED),
 }
+
 PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
 TESTED_EXIT_TEXT = "Đã thoát menu."
 TESTED_INVALID_TEXT = "Lựa chọn không hợp lệ. Hãy nhập lại."
@@ -82,6 +83,7 @@ def _get_terminal_width() -> int:
 
 def _wrap_text(text: str, width: int) -> list[str]:
     import textwrap
+
     return textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False) or [""]
 
 
@@ -104,7 +106,7 @@ def _render_options(
         if option.group != current_group:
             current_group = option.group
             print_fn(f"{BOLD}{option.color}  [{current_group}]{RESET}")
-            print_fn(f"{option.color}  {'─' * min(len(current_group) + 2, width - 4)}{RESET}")
+            print_fn(f"{option.color}  {'-' * min(len(current_group) + 2, width - 4)}{RESET}")
 
         label = f"{key}. {option.title}"
         cmd = _command_text(option)
@@ -113,7 +115,7 @@ def _render_options(
         indent = "  " + " " * len(label) + " "
         wrap_width = max(20, width - len(indent) - 2)
         wrapped_desc = _wrap_text(desc, wrap_width)
-        
+
         for i, line in enumerate(wrapped_desc):
             if i == 0:
                 print_fn(f"{option.color}  {label} {line}{RESET}")
@@ -121,16 +123,16 @@ def _render_options(
                 print_fn(f"{option.color}{indent}{line}{RESET}")
 
     print_fn("")
-    print_fn(f"{DIM}{'─' * width}{RESET}")
+    print_fn(f"{DIM}{'-' * width}{RESET}")
     print_fn("")
 
 
 def _render_menu(print_fn=print) -> None:
-    _render_options(MENU_OPTIONS, PRIMARY_KEYS, "YOLO HUB : MENU ĐIỀU KHIỂN", print_fn=print_fn)
+    _render_options(MENU_OPTIONS, PRIMARY_KEYS, "OncoVision : MENU ĐIỀU KHIỂN", print_fn=print_fn)
 
 
 def _render_medical_menu(print_fn=print) -> None:
-    _render_options(MEDICAL_OPTIONS, MEDICAL_PRIMARY_KEYS, "YOLO HUB : MEDICAL MENU", print_fn=print_fn)
+    _render_options(MEDICAL_OPTIONS, MEDICAL_PRIMARY_KEYS, "OncoVision : MEDICAL MENU", print_fn=print_fn)
 
 
 def _clear_terminal() -> None:
@@ -164,12 +166,12 @@ def _run_selected_option(
 ) -> None:
     clear_terminal_fn()
     width = _get_terminal_width()
-    print_fn(f"{BOLD}{option.color}{'─' * width}{RESET}")
+    print_fn(f"{BOLD}{option.color}{'-' * width}{RESET}")
     print_fn(f"{BOLD}{option.color}  ĐANG CHẠY: {option.title}{RESET}")
     command_text = f"python {option.script} {' '.join(args)}".strip()
     print_fn(f"{option.color}  Lệnh   : {command_text}{RESET}")
     print_fn(f"{option.color}  Ghi chú: {option.description}{RESET}")
-    print_fn(f"{BOLD}{option.color}{'─' * width}{RESET}")
+    print_fn(f"{BOLD}{option.color}{'-' * width}{RESET}")
     try:
         exit_code = run_script_fn(option.script, *args)
     except OSError as exc:
@@ -177,8 +179,7 @@ def _run_selected_option(
         return
     status = "Đã chạy xong" if exit_code == 0 else "Kết thúc với lỗi"
     color = GREEN if exit_code == 0 else YELLOW
-    message = f"{color}{status} {option.script}. {back_text} (exit={exit_code}){RESET}"
-    print_fn(message)
+    print_fn(f"{color}{status} {option.script}. {back_text} (exit={exit_code}){RESET}")
 
 
 def _run_medical_menu(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> None:

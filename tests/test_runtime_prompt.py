@@ -21,7 +21,7 @@ class RuntimePromptTests(unittest.TestCase):
         printed: list[str] = []
         mode = console_prompt_runtime_mode(input_fn=lambda _: next(answers), print_fn=printed.append)
         self.assertEqual(mode, "medium")
-        self.assertTrue(any("YOLO REALTIME CAMERA" in line for line in printed))
+        self.assertTrue(any("OncoVision" in line for line in printed))
 
     def test_prompt_runtime_mode_retries_on_invalid_choice(self) -> None:
         answers = iter(["9", "", "3"])
@@ -128,7 +128,7 @@ class RuntimePromptTests(unittest.TestCase):
         )
 
         self.assertEqual(mode, "medium")
-        self.assertTrue(any("BỘ TƯ VẤN RUNTIME YOLO" in line for line in printed))
+        self.assertTrue(any("BỘ TƯ VẤN RUNTIME OncoVision" in line for line in printed))
         self.assertTrue(any("CHỌN CHẾ ĐỘ SẼ CHẠY" in line for line in printed))
         self.assertTrue(any("Model / Imgsz" in line for line in printed))
         self.assertTrue(any("Nên chọn ngay" in line for line in printed))
