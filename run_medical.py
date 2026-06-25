@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 
 from medical.case_payloads import build_case_export_payload, build_detection_metadata
 from medical.compliance import build_medical_disclaimer

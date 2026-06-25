@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tools.runtime_tool import prompt_runtime_mode as tool_prompt_runtime_mode, prompt_runtime_model
+from core.runtime_prompt import prompt_runtime_mode as tool_prompt_runtime_mode, prompt_runtime_model
 from utils.console_ui import mode_to_ui_defaults, prompt_launch_target, prompt_runtime_mode as console_prompt_runtime_mode
 
 
@@ -65,13 +65,13 @@ class RuntimePromptTests(unittest.TestCase):
         self.assertEqual(model, "yolo11s.pt")
         self.assertTrue(any("CHỌN MODEL SẼ CHẠY" in line for line in printed))
 
-    @patch("tools.runtime_tool._available_models", return_value=(["yolo11s.pt"], ["yolo11x.pt"]))
+    @patch("core.runtime_prompt._available_models", return_value=(["yolo11s.pt"], ["yolo11x.pt"]))
     @patch(
-        "tools.runtime_tool.load_yaml_cached",
+        "core.runtime_prompt.load_yaml_cached",
         return_value={"preferred_models": {"primary_gpu": "yolo11s.pt"}, "priority_order": ["models/pretrained/yolo11s.pt"]},
     )
     @patch(
-        "tools.runtime_tool.load_settings",
+        "core.runtime_prompt.load_settings",
         return_value={
             "models": {
                 "high": {"model": "yolo11l.pt", "imgsz": 768},

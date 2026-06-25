@@ -1,0 +1,68 @@
+﻿name: Test Python Compatibility
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - 'config/**'
+      - 'training/data.yaml'
+      - 'training/train_config.yaml'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - 'config/**'
+      - 'training/data.yaml'
+      - 'training/train_config.yaml'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    name: CI (Python 3.10)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+          pip install mypy
+
+      - name: Lint
+        run: ruff check . --line-length 140 --target-version py310
+
+      - name: Type check
+        run: mypy . > type-check-results.txt 2>&1
+        continue-on-error: true
+
+      - name: Upload type check results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: type-check-results
+          path: type-check-results.txt
+          retention-days: 7
+
+      - name: Verify entrypoint help
+        run: python scripts/verify_entrypoints_help.py
+
+      - name: Smoke check
+        run: python run_smoke.py
+
+      - name: Run unit tests
+        run: python -m unittest

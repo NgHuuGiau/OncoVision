@@ -136,26 +136,25 @@ def draw_detection_results(
     fps: float | None = None,
     show_fps: bool = False,
 ) -> np.ndarray:
-    trail_overlay = image.copy()
-    drew_trail = False
     detection_list = list(detections)
-    for detection in detection_list:
-        if not motion_trails:
-            continue
-        trail_points = motion_trails.get(getattr(detection, "track_id", -1), [])
-        if len(trail_points) < 2:
-            continue
-        drew_trail = True
-        box_color = _color_for_label(detection.label)
-        for index in range(1, len(trail_points)):
-            start = trail_points[index - 1]
-            end = trail_points[index]
-            segment_ratio = index / max(1, len(trail_points) - 1)
-            thickness = max(1, int(round(max(1, box_thickness) * (0.6 + (segment_ratio * 0.8)))))
-            cv2.line(trail_overlay, start, end, box_color, thickness, cv2.LINE_AA)
-            cv2.circle(trail_overlay, end, max(1, thickness // 2), box_color, -1, cv2.LINE_AA)
-    if drew_trail:
-        image = cv2.addWeighted(trail_overlay, 0.30, image, 0.70, 0.0)
+    trail_overlay = image.copy() if (motion_trails and len(motion_trails) > 0) else None
+    drew_trail = False
+    if trail_overlay is not None:
+        for detection in detection_list:
+            trail_points = motion_trails.get(getattr(detection, "track_id", -1), [])
+            if len(trail_points) < 2:
+                continue
+            drew_trail = True
+            box_color = _color_for_label(detection.label)
+            for index in range(1, len(trail_points)):
+                start = trail_points[index - 1]
+                end = trail_points[index]
+                segment_ratio = index / max(1, len(trail_points) - 1)
+                thickness = max(1, int(round(max(1, box_thickness) * (0.6 + (segment_ratio * 0.8)))))
+                cv2.line(trail_overlay, start, end, box_color, thickness, cv2.LINE_AA)
+                cv2.circle(trail_overlay, end, max(1, thickness // 2), box_color, -1, cv2.LINE_AA)
+        if drew_trail:
+            image = cv2.addWeighted(trail_overlay, 0.30, image, 0.70, 0.0)
     for detection in detection_list:
         clamped_bbox = _clamp_bbox_to_image(detection.bbox, image.shape)
         if clamped_bbox is None:

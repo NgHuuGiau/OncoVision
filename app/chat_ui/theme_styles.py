@@ -452,7 +452,7 @@ def _build_stylesheet(**colors: str) -> str:
     return _render_stylesheet(
         """
     QMainWindow, QDialog, QWidget#Root {{
-        background: {colors["root_bg"]};
+        background: {root_bg};
         font-family: "Inter", "Segoe UI", "Roboto", "Arial", sans-serif;
     }}
     """

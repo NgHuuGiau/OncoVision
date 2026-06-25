@@ -7,8 +7,8 @@ from app.camera_runtime.bootstrap import resolve_start_bundle
 from app.camera_runtime.launching import run_camera_launch_flow
 from core.camera_runner import run_camera_session
 from core.hardware_info import detect_hardware
+from core.runtime_prompt import prompt_runtime_mode
 from core.runtime_advisor import build_recommendations
-from tools.runtime_tool import prompt_runtime_mode
 from utils.console_ui import BootProgress, print_runtime_dashboard
 
 

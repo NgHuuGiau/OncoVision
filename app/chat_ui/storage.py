@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-import json
 import os
 import sqlite3
 from collections import defaultdict

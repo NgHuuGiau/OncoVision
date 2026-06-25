@@ -1,210 +1,119 @@
 # Tổng quan dự án
 
-## 1. Mục tiêu
+## 1. Điểm vào chính
 
-Dự án này được xây quanh 3 trục chính:
+| File | Chức năng | Mô tả chi tiết |
+|------|-----------|----------------|
+| `run_menu.py` | Menu chính | Điểm vào để truy cập các chức năng khác |
+| `run_app.py` | Camera realtime | Chạy camera thời gian thực với detection |
+| `run_chat.py` | Chat + medical analysis | Giao diện chat tích hợp phân tích y khoa |
+| `run_doctor.py` | System health check | Kiểm tra sức khỏe hệ thống |
+| `run_tests.py` | Unit tests | Chạy các bài test đơn vị |
+| `run_train.py` | Training pipeline | Pipeline huấn luyện mô hình |
+| `run_medical.py` | Medical analysis CLI | CLI phân tích y khoa (init-dataset, analyze) |
+| `run_smoke.py` | Smoke tests | Kiểm tra nhanh các chức năng cơ bản |
 
-- Camera YOLO realtime trên desktop.
-- Bộ công cụ chẩn đoán và tư vấn runtime theo phần cứng.
-- Pipeline training cho model custom.
+## 2. Cấu trúc thư mục dự án
 
-## 2. Điểm vào chính của hệ thống
+### `app/`
+- **Files**: `chat_ui/*.py`
+- **Chức năng**: Giao diện chat UI, bootstrap camera
+- **Xử lý**: UI người dùng, khởi động camera pipeline
 
-```text
-run_menu.py
-  -> run_app.py
-  -> run_chat.py
-  -> run_doctor.py
-  -> run_tests.py
-  -> run_train.py
-```
+### `core/`
+- **Files**: `runtime_advisor.py`, `model_selector.py`, `model_loader.py`, `camera_runner.py`
+- **Chức năng**: Runtime engine, load model, camera pipeline
+- **Xử lý**: Đề xuất cấu hình runtime, chọn model, tải mô hình, chạy camera
 
-## 3. Kiến trúc runtime camera hiện tại
+### `docs/`
+- **Files**: `*.md`
+- **Chức năng**: Tài liệu dự án
+
+### `medical/`
+- **Files**: `chat_service.py`, `controller.py`, `system_status.py`, `storage.py`
+- **Chức năng**: Medical imaging pipeline
+- **Xử lý**: Dịch vụ chat y tế, điều khiển phân tích, trạng thái hệ thống, lưu trữ dữ liệu
+
+### `tests/`
+- **Files**: `test_*.py`
+- **Chức năng**: Unit tests (30+ files)
+
+### `training/`
+- **Files**: `train_model.py`, `validate_dataset.py`, `split_dataset.py`, `export_model.py`
+- **Chức năng**: Training pipeline
+- **Xử lý**: Huấn luyện mô hình, xác thực dataset, chia dữ liệu, xuất mô hình
+
+### `utils/`
+- **Files**: `icons.py`, `draw_utils.py`, `file_utils.py`
+- **Chức năng**: Helper utilities
+- **Xử lý**: Quản lý icon, vẽ bounding box, xử lý file
+
+### `config/`
+- **Files**: `settings.yaml`, `model_config.yaml`
+- **Chức năng**: Cấu hình inference, model
+
+### `assets/`
+- **Files**: `icons/*.svg`
+- **Chức năng**: Icons SVG cho UI
+
+### `models/`
+- **Files**: `pretrained/*.pt`, `trained/*.pt`
+- **Chức năng**: Model storage (gitignore)
+
+### `dataset/`
+- **Files**: `raw/images`, `raw/labels`, `processed/`
+- **Chức năng**: Dữ liệu training (gitignore)
+
+### `output/`
+- **Files**: `chat_captures/`, `medical/`
+- **Chức năng**: Kết quả xuất (gitignore)
+
+## 3. Kiến trúc runtime camera
 
 ```text
 run_app.py
-  -> app.camera_runtime.bootstrap
-  -> core.runtime_advisor
-  -> core.model_selector
-  -> core.model_loader
-  -> core.camera_runner
-  -> utils.draw_utils
+└─> app/camera_runtime/bootstrap
+    ├─> core/runtime_advisor (recommendation)
+    ├─> core/model_selector (config)
+    ├─> core/model_loader (load model)
+    ├─> core/camera_runner (stream + detect)
+    └─> utils/draw_utils (vẽ box)
 ```
 
-Lưu ý:
-
-- `run_app.py` hiện đi thẳng vào `resolve_start_bundle(...)` rồi `run_camera_session(...)`.
-- `app/camera_runtime/entrypoint.py` vẫn còn trong repo để giữ tương thích và phục vụ test, nhưng không còn là đường chạy chính.
-- `run_camera_preview_session(...)` là nhánh preview cũ, không còn được ứng dụng chính sử dụng mặc định.
-
-## 4. Vai trò từng module quan trọng
-
-### `run_app.py`
-
-- Nhận tham số CLI.
-- Gọi `resolve_start_bundle(...)` để lấy runtime phù hợp.
-- In dashboard khởi động.
-- Gọi `run_camera_session(...)` để mở camera và inference.
-
-### `app/camera_runtime/bootstrap.py`
-
-- Dò phần cứng hiện tại.
-- Xây `StartOptions`.
-- Chọn mode mặc định theo target và phần cứng.
-- Áp model người dùng yêu cầu vào runtime cuối cùng.
-
-### `core/runtime_advisor.py`
-
-- Tạo runtime tối ưu cho `high`, `medium`, `low` và `auto`.
-- Là nguồn recommendation chính cho `run_app.py` và `run_doctor.py`.
-
-### `core/model_selector.py`
-
-- Đọc `config/settings.yaml`.
-- Tạo `RuntimeConfig`.
-- Giữ các tham số inference như `confidence`, `iou`, `imgsz`, `show_fps`, tăng sáng khung hình tối.
-
-### `core/model_loader.py`
-
-- Load model local từ `models/pretrained/`, file local root hoặc `models/trained/best.pt`.
-- Tuân theo thứ tự ưu tiên trong `config/model_config.yaml`.
-
-### `core/camera_runner.py`
-
-- Mở camera và đọc frame theo luồng riêng.
-- Chạy YOLO predict.
-- Lọc detection, làm mượt box, gán track id, vẽ motion trail.
-- Tăng sáng frame tối trước khi inference khi cần.
-- Trả FPS và trạng thái runtime.
-
-### `utils/draw_utils.py`
-
-- Vẽ box và label.
-- Neo badge FPS vào box nhận diện chính.
-- Tự tránh mép khung hình nếu box nằm sát rìa.
-
-### `run_doctor.py`
-
-- Kiểm tra sức khỏe hệ thống.
-- Kiểm tra camera thật, model local, icon và dataset.
-- In các lệnh nên chạy tiếp theo.
-
-### `run_tests.py`
-
-- Chạy toàn bộ unit test.
-- Có phần kiểm tra camera thật trước test nếu người dùng không bỏ qua.
-- In dashboard test để theo dõi tiến độ.
-
-## 5. Cách hệ thống chọn runtime
-
-Khi chạy `run_app.py`:
-
-1. Dò phần cứng bằng `detect_hardware()`.
-2. Tạo recommendation bằng `core.runtime_advisor`.
-3. Resolve `RuntimeConfig` tương ứng với `high`, `medium`, `low` hoặc `auto`.
-4. Dùng runtime đó để load model và mở camera.
-
-### Ý nghĩa các mode
-
-- `high`: mức chất lượng cao nhất máy còn gánh được.
-- `medium`: mức cân bằng để dùng thường xuyên.
-- `low`: mức an toàn nhất khi cần mượt và ổn định.
-- `auto`: để hệ thống tự chọn cấu hình hợp lý từ thông tin phần cứng.
-
-## 6. Vì sao `run_doctor.py` và `run_app.py` phải đồng bộ
-
-Nếu `run_doctor.py` dùng logic chọn runtime cũ còn `run_app.py` dùng logic mới, người dùng sẽ thấy:
-
-- Doctor gợi ý một model.
-- Camera thực tế lại chạy model khác.
-
-Hiện tại hai luồng này đã được đồng bộ ở mức chọn runtime, nhưng vẫn còn lặp một phần logic kiểm tra camera giữa `run_doctor.py` và `run_tests.py`. Đây là vùng có thể tiếp tục refactor sau.
-
-## 7. Tinh chỉnh nhận diện
-
-Các tham số hiện có trong `config/settings.yaml`:
-
-- `inference.confidence`
-- `inference.iou`
-- `inference.display_confidence`
-- `inference.person_confidence`
-- `inference.phone_confidence`
-- `inference.enhance_low_light`
-- `inference.low_light_mean_threshold`
-
-Mục tiêu của việc tách các tham số này là:
-
-- Dễ phân tích nguyên nhân nhận diện yếu.
-- Dễ tăng recall hoặc giảm false positive theo từng loại object.
-- Dễ document và debug hơn.
-
-## 8. Cấu trúc thư mục chính
+## 4. Training Flow
 
 ```text
-app/
-core/
-docs/
-models/
-tests/
-tools/
-training/
-utils/
-config/
-run_app.py
+dataset/raw/images
+  → training/validate_dataset.py (kiểm tra ảnh/label)
+  → training/split_dataset.py (chia train/val/test)
+  → run_train.py (huấn luyện)
+  → training/validate_model.py (đánh giá)
+  → training/export_model.py (xuất model)
+```
+
+## 5. Medical Flow
+
+```text
+run_medical.py init-dataset
+  → dataset/medical_skin_lesion/ (tạo cấu trúc)
+
+run_medical.py analyze --image <file>
+  → medical/controller
+    → normalize image
+    → detect lesion
+    → classify risk (low/med/high)
+    → save report + case to SQLite
+
 run_chat.py
-run_doctor.py
-run_menu.py
-run_tests.py
-run_train.py
+  → upload image
+  → medical pipeline (xử lý trên)
 ```
 
-## 9. Training flow
+## 6. Mode inference
 
-```text
-dataset/raw
-  -> training/validate_dataset.py
-  -> training/split_dataset.py
-  -> run_train.py
-  -> training/validate_model.py
-  -> training/export_model.py
-```
-
-## 10. Model flow
-
-### Runtime camera tổng quát
-
-```text
-models/pretrained/*.pt
-  -> model_loader
-  -> run_app.py
-  -> camera realtime
-```
-
-### Runtime camera với model custom
-
-```text
-models/trained/best.pt
-  -> run_app.py --model models/trained/best.pt
-  -> camera realtime cho class riêng
-```
-
-## 11. Trạng thái hiện tại của dataset
-
-`training/data.yaml` hiện khai báo:
-
-```yaml
-names:
-  0: person
-```
-
-Điều này rất quan trọng khi phân tích lỗi nhận diện:
-
-- Nếu bạn mong đợi class khác ngoài `person`, cần xem lại dataset và model custom.
-- Nếu bạn đang dùng model pretrained, camera sẽ nhận diện object tổng quát theo COCO.
-
-## 12. Các điểm cần nhớ khi bảo trì
-
-- Không đổi logic recommendation ở `run_app.py` mà quên cập nhật `run_doctor.py`.
-- Không đổi vị trí hiển thị FPS mà quên sửa test visualization.
-- Không đổi threshold trong `config/settings.yaml` mà quên cập nhật README/docs.
-- Nếu terminal bị lỗi dấu tiếng Việt, kiểm tra helper UTF-8 trong `utils/terminal_encoding.py`.
+| Mode | Mục đích |
+|------|----------|
+| `high` | Chất lượng cao nhất máy gánh được |
+| `medium` | Cân bằng performance/chất lượng |
+| `low` | Tối ưu FPS, ít tài nguyên |
+| `auto` | Hệ thống tự chọn dựa phần cứng |

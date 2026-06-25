@@ -9,11 +9,13 @@ import numpy as np
 from core.camera_runner import (
     CameraDetector,
     DetectionRecord,
-    _bbox_iou,
-    _compute_motion_score,
+    run_camera_preview_session,
+)
+from core.tracking.bbox_math import _bbox_iou
+from core.frame_processing import _compute_motion_score
+from core.tracking.detection_filter import (
     _dedupe_display_detections,
     _filter_person_detections,
-    run_camera_preview_session,
 )
 from core.hardware_info import HardwareInfo
 from core.model_selector import select_runtime_config

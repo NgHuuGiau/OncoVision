@@ -1,9 +1,12 @@
 from __future__ import annotations
-import os
-import time
+
+from typing import TYPE_CHECKING
 
 from app.chat_ui.content import translate
 from app.chat_ui.paths import build_chat_capture_path, get_chat_capture_dir
+
+if TYPE_CHECKING:
+    from app.chat_ui.window import ChatWindow
 
 try:
     import cv2

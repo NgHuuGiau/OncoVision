@@ -128,12 +128,14 @@ class RunEntrypointsTests(unittest.TestCase):
             selected_model="skin.pt",
         )
 
+    @patch("run_chat.cleanup_medical_outputs")
     @patch("run_chat.cleanup_chat_outputs")
     @patch("run_chat.build_chat_arg_parser")
     def test_run_chat_cleanup_output_reports_summary(
         self,
         build_parser_mock,
         cleanup_mock,
+        cleanup_medical_mock,
     ) -> None:
         parser = build_parser_mock.return_value
         parser.parse_args.return_value = SimpleNamespace(
@@ -147,13 +149,20 @@ class RunEntrypointsTests(unittest.TestCase):
             removed_dirs=1,
             freed_bytes=2048,
         )
+        cleanup_medical_mock.return_value = SimpleNamespace(
+            removed_files=2,
+            removed_dirs=0,
+            freed_bytes=1024,
+        )
 
         with patch("sys.stdout", new_callable=io.StringIO) as stdout:
             result = run_chat.main()
 
         self.assertEqual(result, 0)
         cleanup_mock.assert_called_once_with(older_than_days=14)
+        cleanup_medical_mock.assert_called_once_with(older_than_days=14)
         self.assertIn("Da xoa file chat: 4", stdout.getvalue())
+        self.assertIn("Da xoa file medical: 2", stdout.getvalue())
 
     def test_mode_to_ui_defaults_maps_modes(self) -> None:
         self.assertEqual(mode_to_ui_defaults("auto"), ("auto", "medium"))

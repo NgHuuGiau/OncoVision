@@ -87,7 +87,7 @@ def _to_yolo_line(class_id: int, bbox: tuple[float, float, float, float], image_
     )
 
 
-def auto_label_raw_images(*, overwrite: bool = False, conf: float = 0.25, device: str = "cpu") -> dict[str, object]:
+def auto_label_raw_images(*, overwrite: bool = False, conf: float = 0.25, device: str = "cpu", batch_size: int = 16) -> dict[str, object]:
     ensure_project_directories()
     RAW_LABELS_DIR.mkdir(parents=True, exist_ok=True)
     image_paths = _iter_raw_images()
@@ -107,30 +107,43 @@ def auto_label_raw_images(*, overwrite: bool = False, conf: float = 0.25, device
     skipped_existing = 0
     no_detection: list[str] = []
 
+    pending_paths: list[Path] = []
     for image_path in image_paths:
         label_path = RAW_LABELS_DIR / f"{image_path.stem}.txt"
         if label_path.exists() and not overwrite:
             skipped_existing += 1
             continue
+        pending_paths.append(image_path)
 
-        with Image.open(image_path) as image:
-            image_size = image.size
+    if not pending_paths:
+        return {
+            "images": len(image_paths),
+            "generated": 0,
+            "skipped_existing": skipped_existing,
+            "no_detection": [],
+            "model_path": model_path,
+        }
 
-        results = model.predict(source=str(image_path), conf=conf, device=device, verbose=False)
-        lines: list[str] = []
-        for result in results:
+    for i in range(0, len(pending_paths), batch_size):
+        batch_paths = pending_paths[i:i + batch_size]
+        image_sizes = {}
+        for p in batch_paths:
+            with Image.open(p) as img:
+                image_sizes[p] = img.size
+
+        results = model.predict(source=[str(p) for p in batch_paths], conf=conf, device=device, verbose=False)
+        for result, image_path in zip(results, batch_paths):
+            lines: list[str] = []
             for box in result.boxes:
                 class_id = int(box.cls[0].item())
                 x1, y1, x2, y2 = [float(value) for value in box.xyxy[0].tolist()]
-                lines.append(_to_yolo_line(class_id, (x1, y1, x2, y2), image_size))
-
-        if not lines:
-            no_detection.append(image_path.name)
-            continue
-
-        label_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        generated += 1
-        logger.info("Auto label created for %s", image_path.name)
+                lines.append(_to_yolo_line(class_id, (x1, y1, x2, y2), image_sizes[image_path]))
+            if not lines:
+                no_detection.append(image_path.name)
+            else:
+                (RAW_LABELS_DIR / f"{image_path.stem}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+                generated += 1
+                logger.info("Auto label created for %s", image_path.name)
 
     return {
         "images": len(image_paths),
@@ -146,12 +159,13 @@ def main() -> None:
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing label .txt files")
     parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold for detection")
     parser.add_argument("--device", default="cpu", help="Inference device, e.g. cpu or cuda:0")
+    parser.add_argument("--batch-size", type=int, default=16, help="Batch size for parallel inference")
     args = parser.parse_args()
 
     for item in header("YOLO AUTO LABEL :: GENERATE COORDINATES FOR RAW IMAGES"):
         print(item)
     try:
-        report = auto_label_raw_images(overwrite=args.overwrite, conf=args.conf, device=args.device)
+        report = auto_label_raw_images(overwrite=args.overwrite, conf=args.conf, device=args.device, batch_size=args.batch_size)
     except Exception as exc:
         print(section("ERROR", RED))
         print(row("Reason cannot run", str(exc), RED, bounded=False))

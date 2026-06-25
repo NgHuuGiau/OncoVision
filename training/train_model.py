@@ -24,7 +24,6 @@ except ModuleNotFoundError:
 from utils.file_utils import ensure_project_directories, load_yaml
 from utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None

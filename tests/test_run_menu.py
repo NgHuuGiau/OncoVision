@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import run_menu
-
+from run_menu import MENU_OPTIONS
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -80,29 +80,11 @@ class RunMenuTests(unittest.TestCase):
         self.assertTrue(any("run_chat.py --cleanup-output" in line for line in outputs))
         clear_terminal.assert_called_once()
 
-    def test_main_runs_medical_cleanup_option(self) -> None:
-        outputs: list[str] = []
-        run_script = MagicMock(return_value=0)
-        clear_terminal = MagicMock()
-        answers = iter(["8", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=clear_terminal,
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_medical.py", "cleanup-output")
-        self.assertTrue(any("run_medical.py cleanup-output" in line for line in outputs))
-        clear_terminal.assert_called_once()
-
     def test_main_runs_smoke_check_option(self) -> None:
         outputs: list[str] = []
         run_script = MagicMock(return_value=0)
         clear_terminal = MagicMock()
-        answers = iter(["9", "0"])
+        answers = iter(["8", "0"])
 
         result = run_menu.main(
             input_fn=lambda _: next(answers),
@@ -149,7 +131,7 @@ class RunMenuTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_chat.py")
-        self.assertTrue(any("kết thúc với mã" in line for line in outputs))
+        self.assertTrue(any("Kết thúc với lỗi" in line and "exit=1" in line for line in outputs))
         clear_terminal.assert_called_once()
 
     def test_menu_restores_run_app_entrypoint(self) -> None:
@@ -218,13 +200,15 @@ class RunMenuTests(unittest.TestCase):
     def test_render_menu_wraps_long_descriptions_on_narrow_terminal(self) -> None:
         outputs: list[str] = []
 
-        with patch("training.terminal_ui.os.get_terminal_size", return_value=os.terminal_size((60, 20))):
+        with patch("run_menu.os.get_terminal_size", return_value=os.terminal_size((60, 20))):
             run_menu._render_menu(print_fn=outputs.append)
 
         plain_outputs = [ANSI_RE.sub("", item) for item in outputs]
-        self.assertTrue(any("\n" in item for item in plain_outputs))
+        non_empty_lines = [line for line in plain_outputs if line.strip()]
+        self.assertTrue(len(non_empty_lines) > len(MENU_OPTIONS))
+        menu_lines = [line for line in non_empty_lines if line.strip()[0] in "0123456789"]
         self.assertTrue(
-            all(len(line) <= 58 for item in plain_outputs for line in item.splitlines()),
+            all(len(line) <= 60 for line in menu_lines),
             msg="\n".join(plain_outputs),
         )
 

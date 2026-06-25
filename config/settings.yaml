@@ -86,25 +86,11 @@ recording:
   codec: mp4v
   fps: 20
 
-camera_large:
-  width: 1000
-  height: 650
-  font_size: 20
-  box_thickness: 3
-  label_font_scale: 1.0
-
 display_camera:
   width: 800
   height: 600
   font_size: 26
   box_thickness: 4
-  label_font_scale: 1.2
-
-camera_presentation:
-  width: 1280
-  height: 720
-  font_size: 22
-  box_thickness: 3
   label_font_scale: 1.2
 
 inference:

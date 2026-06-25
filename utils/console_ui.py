@@ -7,7 +7,6 @@ import time
 import unicodedata
 from typing import Any
 
-from utils.terminal_encoding import ensure_utf8_console
 
 
 MODE_CHOICES = {"0": "exit", "1": "high", "2": "medium", "3": "low"}
@@ -56,9 +55,6 @@ RULE_GLYPHS = {"=": "=", "-": "-", ".": "."}
 FILLED_BLOCK = "#"
 EMPTY_BLOCK = " "
 PARTIAL_BLOCKS = ("", ".", ":", "-", "=", "+", "*", "#")
-
-
-ensure_utf8_console()
 
 
 def _clear_terminal() -> None:

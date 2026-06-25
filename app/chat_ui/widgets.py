@@ -386,3 +386,7 @@ class ChatBubble(QWidget):
             base_color = "#111827" if self.effective_theme == "light" else "#f8fafc"
             self.text_label.setStyleSheet(f"font-size: 15px; color: {base_color}; background: transparent; padding: 0;")
         self.text_label.setText(text)
+
+    def refresh_theme(self, effective_theme: str) -> None:
+        self.effective_theme = effective_theme
+        self.update_display_text(self.text_label.text())

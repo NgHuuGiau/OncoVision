@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import subprocess
@@ -36,7 +36,7 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
         key="chat-preflight",
         title="Chat preflight",
         description="Kiem tra dep bat buoc, icon va do san sang cua luong chat/medical.",
-        command=("run_chat.py", "--check-only"),
+        command=("run_chat.py", "--check-only", "--auto-fix-icons"),
         warning_exit_codes=(2,),
     ),
     SmokeCheck(

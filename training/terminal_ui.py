@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import textwrap
 
-from utils.terminal_encoding import ensure_utf8_console
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -16,9 +15,6 @@ DIM = "\033[2m"
 CARD_WIDTH = 88
 MIN_CARD_WIDTH = 40
 LABEL_WIDTH = 16
-
-
-ensure_utf8_console()
 
 
 def line(text: str = "", color: str = "") -> str:

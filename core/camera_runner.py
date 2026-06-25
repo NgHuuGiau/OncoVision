@@ -20,39 +20,34 @@ from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml_cached
 from utils.logger import get_logger
 
+# Import helpers from submodules
+from core.tracking.bbox_math import _bbox_center
+from core.tracking.detection_filter import (
+    _filter_person_detections,
+    _dedupe_display_detections,
+    PERSON_MIN_CONFIDENCE,
+    PHONE_MIN_CONFIDENCE,
+    DISPLAY_MIN_CONFIDENCE,
+)
+from core.tracking.detection_tracker import _match_and_smooth_detections
+from core.frame_processing import (
+    _compute_motion_score,
+    _mean_luminance,
+    _enhance_low_light_frame,
+    _compose_camera_only_layout,
+)
 
 logger = get_logger(__name__)
 WINDOW_NAME = "YOLO Realtime Camera"
 MOTION_STABLE_THRESHOLD = 2.8
 WINDOW_MARGIN = 16
-CAMERA_ONLY_WIDTH = 800
-CAMERA_ONLY_HEIGHT = 600
-DISPLAY_MIN_CONFIDENCE = 0.50
-PERSON_MIN_CONFIDENCE = 0.60
-PHONE_MIN_CONFIDENCE = 0.55
-DISPLAY_NMS_IOU = 0.45
-PERSON_MAX_AREA_RATIO = 0.6
-PERSON_MAX_WIDTH_HEIGHT_RATIO = 1.35
-PERSON_EDGE_TOUCH_RATIO = 0.02
-FACE_LABEL = "face"
-PERSON_LABEL = "person"
-PHONE_LABEL = "phone"
-PHONE_LABEL_ALIASES = {PHONE_LABEL, "cell phone", "mobile phone", "smartphone"}
-FACE_TRACKING_STICKY_ALPHA = 0.90
-FACE_TRACKING_STABLE_MOTION_RATIO = 0.14
-FACE_JITTER_FREEZE_RATIO = 0.035
-FACE_JITTER_MAX_SIZE_CHANGE_RATIO = 0.08
-TRACKING_MATCH_IOU = 0.35
-TRACKING_SMOOTHING_ALPHA = 0.65
-TRACKING_FAST_SMOOTHING_ALPHA = 0.30
-TRACKING_STABLE_SMOOTHING_ALPHA = 0.80
-TRACKING_MATCH_CENTER_RATIO = 0.42
-TRACKING_PREDICTION_MOTION_RATIO = 0.22
-TRACKING_STABLE_MOTION_RATIO = 0.06
 TRACK_TRAIL_MAX_POINTS = 10
 TRACK_TRAIL_MIN_MOVEMENT_PX = 4.0
 FRAME_READY_MAX_AGE_SECONDS = 0.25
 SETTINGS_PATH = Path("config/settings.yaml")
+
+PHONE_LABEL = "phone"
+PHONE_LABEL_ALIASES = {PHONE_LABEL, "cell phone", "mobile phone", "smartphone"}
 
 
 @dataclass(frozen=True)
@@ -81,6 +76,7 @@ def _load_camera_session_output_config() -> CameraSessionOutputConfig:
         recording_fps=float(recording.get("fps", 20.0)),
     )
 
+
 @dataclass
 class DetectionRecord:
     class_id: int
@@ -88,244 +84,6 @@ class DetectionRecord:
     confidence: float
     bbox: tuple[int, int, int, int]
     track_id: int = -1
-
-
-def _bbox_iou(box_a: tuple[int, int, int, int], box_b: tuple[int, int, int, int]) -> float:
-    ax1, ay1, ax2, ay2 = box_a
-    bx1, by1, bx2, by2 = box_b
-    inter_x1 = max(ax1, bx1)
-    inter_y1 = max(ay1, by1)
-    inter_x2 = min(ax2, bx2)
-    inter_y2 = min(ay2, by2)
-    inter_w = max(0, inter_x2 - inter_x1)
-    inter_h = max(0, inter_y2 - inter_y1)
-    inter_area = inter_w * inter_h
-    if inter_area <= 0:
-        return 0.0
-    area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
-    area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
-    union = area_a + area_b - inter_area
-    if union <= 0:
-        return 0.0
-    return inter_area / union
-
-
-def _smooth_bbox(
-    previous_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-    alpha: float = TRACKING_SMOOTHING_ALPHA,
-) -> tuple[int, int, int, int]:
-    alpha = max(0.0, min(1.0, float(alpha)))
-    return tuple(
-        int(round((previous_value * alpha) + (current_value * (1.0 - alpha))))
-        for previous_value, current_value in zip(previous_bbox, current_bbox)
-    )
-
-
-def _bbox_center(box: tuple[int, int, int, int]) -> tuple[float, float]:
-    x1, y1, x2, y2 = box
-    return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
-
-
-def _bbox_center_distance(box_a: tuple[int, int, int, int], box_b: tuple[int, int, int, int]) -> float:
-    center_ax, center_ay = _bbox_center(box_a)
-    center_bx, center_by = _bbox_center(box_b)
-    return float(((center_ax - center_bx) ** 2 + (center_ay - center_by) ** 2) ** 0.5)
-
-
-def _bbox_reference_size(box: tuple[int, int, int, int]) -> float:
-    x1, y1, x2, y2 = box
-    width = max(1, x2 - x1)
-    height = max(1, y2 - y1)
-    return float(max(width, height))
-
-
-def _estimate_motion_bbox(
-    previous_display_bbox: tuple[int, int, int, int],
-    previous_observed_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-) -> tuple[int, int, int, int]:
-    deltas = [current_value - previous_value for previous_value, current_value in zip(previous_observed_bbox, current_bbox)]
-    predicted = tuple(previous_display_value + delta for previous_display_value, delta in zip(previous_display_bbox, deltas))
-    return predicted
-
-
-def _adaptive_tracking_alpha(
-    previous_observed_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-) -> float:
-    movement_ratio = _bbox_movement_ratio(previous_observed_bbox, current_bbox)
-    if movement_ratio <= TRACKING_STABLE_MOTION_RATIO:
-        return TRACKING_STABLE_SMOOTHING_ALPHA
-    if movement_ratio >= 0.35:
-        return TRACKING_FAST_SMOOTHING_ALPHA
-    blend = max(0.0, min(1.0, (movement_ratio - TRACKING_STABLE_MOTION_RATIO) / (0.35 - TRACKING_STABLE_MOTION_RATIO)))
-    return TRACKING_STABLE_SMOOTHING_ALPHA + ((TRACKING_FAST_SMOOTHING_ALPHA - TRACKING_STABLE_SMOOTHING_ALPHA) * blend)
-
-
-def _bbox_movement_ratio(
-    previous_observed_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-) -> float:
-    movement_distance = _bbox_center_distance(previous_observed_bbox, current_bbox)
-    reference_size = max(_bbox_reference_size(previous_observed_bbox), _bbox_reference_size(current_bbox), 1.0)
-    return movement_distance / reference_size
-
-
-def _bbox_size_change_ratio(
-    previous_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-) -> float:
-    previous_width = max(1, previous_bbox[2] - previous_bbox[0])
-    previous_height = max(1, previous_bbox[3] - previous_bbox[1])
-    current_width = max(1, current_bbox[2] - current_bbox[0])
-    current_height = max(1, current_bbox[3] - current_bbox[1])
-    width_ratio = abs(current_width - previous_width) / max(previous_width, current_width, 1)
-    height_ratio = abs(current_height - previous_height) / max(previous_height, current_height, 1)
-    return max(width_ratio, height_ratio)
-
-
-def _can_match_detection(
-    previous_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-    iou_threshold: float = TRACKING_MATCH_IOU,
-    center_ratio_threshold: float = TRACKING_MATCH_CENTER_RATIO,
-) -> bool:
-    overlap = _bbox_iou(previous_bbox, current_bbox)
-    if overlap >= iou_threshold:
-        return True
-    center_distance = _bbox_center_distance(previous_bbox, current_bbox)
-    reference_size = max(_bbox_reference_size(previous_bbox), _bbox_reference_size(current_bbox), 1.0)
-    return center_distance <= (reference_size * center_ratio_threshold)
-
-
-def _tracking_match_score(
-    previous_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-) -> float:
-    overlap = _bbox_iou(previous_bbox, current_bbox)
-    center_distance = _bbox_center_distance(previous_bbox, current_bbox)
-    reference_size = max(_bbox_reference_size(previous_bbox), _bbox_reference_size(current_bbox), 1.0)
-    normalized_distance = min(1.0, center_distance / reference_size)
-    return overlap + (1.0 - normalized_distance)
-
-
-def _match_and_smooth_detections(
-    current_detections: list[DetectionRecord],
-    previous_detections: list[DetectionRecord],
-    previous_observed_detections: list[DetectionRecord] | None = None,
-    iou_threshold: float = TRACKING_MATCH_IOU,
-) -> list[DetectionRecord]:
-    if not current_detections:
-        return []
-    if not previous_detections:
-        return list(current_detections)
-
-    smoothed: list[DetectionRecord] = []
-    matched_previous_indices: set[int] = set()
-    for current in current_detections:
-        best_match_index = -1
-        best_score = -1.0
-        for index, previous in enumerate(previous_detections):
-            if index in matched_previous_indices:
-                continue
-            if previous.class_id != current.class_id or previous.label != current.label:
-                continue
-            if not _can_match_detection(previous.bbox, current.bbox, iou_threshold=iou_threshold):
-                continue
-            score = _tracking_match_score(previous.bbox, current.bbox)
-            if score > best_score:
-                best_score = score
-                best_match_index = index
-        if best_match_index >= 0:
-            matched_previous_indices.add(best_match_index)
-            previous = previous_detections[best_match_index]
-            previous_observed = (
-                previous_observed_detections[best_match_index]
-                if previous_observed_detections is not None and best_match_index < len(previous_observed_detections)
-                else previous
-            )
-            adaptive_alpha = _adaptive_tracking_alpha(previous_observed.bbox, current.bbox)
-            movement_ratio = _bbox_movement_ratio(previous_observed.bbox, current.bbox)
-            if movement_ratio >= TRACKING_PREDICTION_MOTION_RATIO:
-                smoothing_source_bbox = _estimate_motion_bbox(previous.bbox, previous_observed.bbox, current.bbox)
-            else:
-                smoothing_source_bbox = previous.bbox
-            smoothed_bbox = (
-                _stabilize_face_bbox(
-                    previous_display_bbox=previous.bbox,
-                    previous_observed_bbox=previous_observed.bbox,
-                    current_bbox=current.bbox,
-                    adaptive_alpha=adaptive_alpha,
-                )
-                if _is_refined_face_label(current.label)
-                else _smooth_bbox(smoothing_source_bbox, current.bbox, alpha=adaptive_alpha)
-            )
-            smoothed.append(
-                DetectionRecord(
-                    class_id=current.class_id,
-                    label=current.label,
-                    confidence=current.confidence,
-                    bbox=smoothed_bbox,
-                    track_id=previous.track_id,
-                )
-            )
-            continue
-        smoothed.append(current)
-    return smoothed
-
-
-def _dedupe_display_detections(detections: list[DetectionRecord], iou_threshold: float = DISPLAY_NMS_IOU) -> list[DetectionRecord]:
-    selected: list[DetectionRecord] = []
-    for detection in sorted(detections, key=lambda item: item.confidence, reverse=True):
-        if any(
-            detection.label == existing.label and _bbox_iou(detection.bbox, existing.bbox) >= iou_threshold
-            for existing in selected
-        ):
-            continue
-        selected.append(detection)
-    return selected
-
-
-def _box_area_ratio(box: tuple[int, int, int, int], frame_shape: tuple[int, ...]) -> float:
-    frame_h, frame_w = frame_shape[:2]
-    x1, y1, x2, y2 = box
-    return (max(0, x2 - x1) * max(0, y2 - y1)) / max(1, frame_w * frame_h)
-
-
-def _touches_frame_edge(box: tuple[int, int, int, int], frame_shape: tuple[int, ...], margin_ratio: float = PERSON_EDGE_TOUCH_RATIO) -> bool:
-    frame_h, frame_w = frame_shape[:2]
-    margin_x = max(1, int(frame_w * margin_ratio))
-    margin_y = max(1, int(frame_h * margin_ratio))
-    x1, y1, x2, y2 = box
-    return x1 <= margin_x or y1 <= margin_y or x2 >= frame_w - margin_x or y2 >= frame_h - margin_y
-
-
-def _person_shape_is_plausible(box: tuple[int, int, int, int]) -> bool:
-    x1, y1, x2, y2 = box
-    width = max(1, x2 - x1)
-    height = max(1, y2 - y1)
-    return (width / height) <= PERSON_MAX_WIDTH_HEIGHT_RATIO
-
-
-def _is_refined_face_label(label: str) -> bool:
-    return str(label).lower() == FACE_LABEL
-
-
-def _stabilize_face_bbox(
-    previous_display_bbox: tuple[int, int, int, int],
-    previous_observed_bbox: tuple[int, int, int, int],
-    current_bbox: tuple[int, int, int, int],
-    adaptive_alpha: float,
-) -> tuple[int, int, int, int]:
-    movement_ratio = _bbox_movement_ratio(previous_observed_bbox, current_bbox)
-    size_change_ratio = _bbox_size_change_ratio(previous_observed_bbox, current_bbox)
-    if movement_ratio <= FACE_JITTER_FREEZE_RATIO and size_change_ratio <= FACE_JITTER_MAX_SIZE_CHANGE_RATIO:
-        return previous_display_bbox
-    face_alpha = adaptive_alpha
-    if movement_ratio <= FACE_TRACKING_STABLE_MOTION_RATIO:
-        face_alpha = max(face_alpha, FACE_TRACKING_STICKY_ALPHA)
-    return _smooth_bbox(previous_display_bbox, current_bbox, alpha=face_alpha)
 
 
 def _normalize_detection_label_and_bbox(
@@ -336,46 +94,6 @@ def _normalize_detection_label_and_bbox(
     if normalized_label in PHONE_LABEL_ALIASES:
         return PHONE_LABEL, bbox
     return normalized_label, bbox
-
-
-def _filter_person_detections(
-    detections: list[DetectionRecord],
-    frame_shape: tuple[int, ...],
-    *,
-    person_confidence: float = PERSON_MIN_CONFIDENCE,
-    phone_confidence: float = PHONE_MIN_CONFIDENCE,
-    display_confidence: float = DISPLAY_MIN_CONFIDENCE,
-) -> list[DetectionRecord]:
-    filtered: list[DetectionRecord] = []
-
-    for item in detections:
-        label = str(item.label).lower()
-
-        if label == PERSON_LABEL:
-            if (
-                item.confidence >= person_confidence
-                and _person_shape_is_plausible(item.bbox)
-                and not (_touches_frame_edge(item.bbox, frame_shape) and _box_area_ratio(item.bbox, frame_shape) > PERSON_MAX_AREA_RATIO)
-            ):
-                filtered.append(item)
-
-        elif label == FACE_LABEL:
-            if (
-                item.confidence >= person_confidence
-                and _person_shape_is_plausible(item.bbox)
-                and not (_touches_frame_edge(item.bbox, frame_shape) and _box_area_ratio(item.bbox, frame_shape) > PERSON_MAX_AREA_RATIO)
-            ):
-                filtered.append(item)
-
-        elif label == PHONE_LABEL:
-            if item.confidence >= phone_confidence:
-                filtered.append(item)
-
-        else:
-            if item.confidence >= display_confidence:
-                filtered.append(item)
-
-    return filtered
 
 
 class CameraStream:
@@ -427,6 +145,11 @@ class CameraStream:
         self.capture_stop_event.clear()
         self.capture_ready_event.clear()
         self.capture_thread = threading.Thread(
+            target=self._capture_worker_loop,
+            name="camera-capture-worker",
+            focus_camera_check=False,
+            daemon=True,
+        ) if hasattr(threading.Thread, "focus_camera_check") else threading.Thread(
             target=self._capture_worker_loop,
             name="camera-capture-worker",
             daemon=True,
@@ -550,6 +273,11 @@ class CameraDetector:
                 self.loaded_model, resolved_device = load_yolo_model(self.runtime)
                 self.runtime.resolved_device = resolved_device
                 self.runtime.active_model_name = self.loaded_model.model_name
+                dummy_frame = np.zeros((self.runtime.imgsz, self.runtime.imgsz, 3), dtype=np.uint8)
+                try:
+                    self.loaded_model.model.predict(source=dummy_frame, verbose=False)
+                except Exception:
+                    pass
                 self.last_frame_ts = time.perf_counter()
                 self._reset_runtime_state()
                 self.last_error_message = ""
@@ -794,41 +522,6 @@ class CameraDetector:
         self.last_status_message = "Camera đã dừng."
 
 
-def _compute_motion_score(current_frame: np.ndarray, previous_gray: np.ndarray | None) -> tuple[float, np.ndarray]:
-    current_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-    current_gray = cv2.GaussianBlur(current_gray, (7, 7), 0)
-    current_gray = cv2.resize(current_gray, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-    if previous_gray is None:
-        return 0.0, current_gray
-    if previous_gray.shape != current_gray.shape:
-        previous_gray = cv2.resize(previous_gray, (current_gray.shape[1], current_gray.shape[0]), interpolation=cv2.INTER_AREA)
-    return float(cv2.absdiff(current_gray, previous_gray).mean()), current_gray
-
-
-def _mean_luminance(frame: np.ndarray) -> float:
-    if frame.size == 0:
-        return 255.0
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    return float(gray.mean())
-
-
-def _enhance_low_light_frame(frame: np.ndarray) -> np.ndarray:
-    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-    l_channel, a_channel, b_channel = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced_l = clahe.apply(l_channel)
-    merged = cv2.merge((enhanced_l, a_channel, b_channel))
-    return cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
-
-
-def _compose_camera_only_layout(frame: np.ndarray, profile_name: str | None = None) -> np.ndarray:
-    if profile_name == "high":
-        return frame
-    interpolation = cv2.INTER_AREA if frame.shape[1] > CAMERA_ONLY_WIDTH or frame.shape[0] > CAMERA_ONLY_HEIGHT else cv2.INTER_LINEAR
-    return cv2.resize(frame, (CAMERA_ONLY_WIDTH, CAMERA_ONLY_HEIGHT), interpolation=interpolation)
-
-
-
 def _center_window(window_name: str, width: int, height: int) -> None:
     try:
         user32 = ctypes.windll.user32
@@ -860,6 +553,7 @@ def _center_window(window_name: str, width: int, height: int) -> None:
         cv2.moveWindow(window_name, x, y)
     except Exception:
         return
+
 
 def _next_smoothed_fps(previous_fps: float, last_frame_ts: float) -> tuple[float, float]:
     now = time.perf_counter()

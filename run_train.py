@@ -13,6 +13,7 @@ from training.train_model import (
 )
 from utils.entrypoint_checks import module_available
 from utils.file_utils import ensure_project_directories, load_yaml
+from utils.terminal_encoding import ensure_utf8_console
 
 
 TRAIN_CONFIG_PATH = Path("training/train_config.yaml")
@@ -101,6 +102,7 @@ def run_train_preflight(print_fn=print) -> int:
 
 
 def main() -> int:
+    ensure_utf8_console()
     args = parse_args()
     if getattr(args, "check_only", False):
         return run_train_preflight()

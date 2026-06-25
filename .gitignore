@@ -38,13 +38,12 @@ tmp*.db
 # Runtime output
 output/
 runs/
-images/
-HieraChain/
 
 # Dataset generated locally
 dataset/raw/
 dataset/processed/
 dataset/sample/
+dataset/medical_skin_lesion/
 dataset/medical_skin_lesion/raw/
 dataset/medical_skin_lesion/processed/
 dataset/medical_skin_lesion/downloads/

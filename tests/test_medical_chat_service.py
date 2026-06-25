@@ -4,7 +4,6 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 
 from medical.chat_service import MedicalChatService
 from medical.pipeline import MedicalAnalysisResult, DetectionFinding

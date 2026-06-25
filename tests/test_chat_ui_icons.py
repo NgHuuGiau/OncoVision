@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from tools.download_icons import ICONS
+from utils.icons import ICONS
 
 
 class ChatUiIconAssetsTests(unittest.TestCase):

@@ -99,7 +99,7 @@ def _run_autofix() -> None:
     print(section("AUTO-FIX", YELLOW))
     if not ICONS_DIR.exists() or sum(1 for _ in ICONS_DIR.iterdir()) < ICON_AUTOFIX_THRESHOLD:
         print(row("Icons", "Dang tao bo icon mac dinh...", YELLOW))
-        from tools.download_icons import create_default_icons
+        from utils.icons import create_default_icons
 
         create_default_icons()
     print(row("Trang thai", "Da chay xong Auto-fix!", GREEN))

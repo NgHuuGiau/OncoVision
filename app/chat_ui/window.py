@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import math
-import re
 import sys
 import time
 import random
-import os
 import platform
 from pathlib import Path
 
 from app.chat_ui.medical_controller import MedicalChatController
 from app.chat_ui.models import ChatMessage, Conversation
 from app.chat_ui.medical_worker import build_patient_code, create_medical_worker_base
-from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, build_chat_capture_path, get_chat_capture_dir
+from app.chat_ui.paths import CHAT_HISTORY_DB_PATH
 from app.chat_ui.storage import ChatDatabase
 from utils.logger import get_logger
 
@@ -20,9 +17,9 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 try:
-    from pygments import highlight
-    from pygments.lexers import get_lexer_by_name, guess_lexer
-    from pygments.formatters import HtmlFormatter
+    from pygments import highlight  # noqa: F401
+    from pygments.lexers import get_lexer_by_name, guess_lexer  # noqa: F401
+    from pygments.formatters import HtmlFormatter  # noqa: F401
     PYGMENTS_AVAILABLE = True
 except ImportError:
     PYGMENTS_AVAILABLE = False
@@ -35,12 +32,27 @@ except ImportError:
 
 def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str = "medium", selected_model: str | None = None) -> int:
     try:
-        from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, Signal, QThread, QVariantAnimation, QEasingCurve, QTemporaryFile, QRectF, QPropertyAnimation, QPoint, QParallelAnimationGroup
-        from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPainter, QPixmap, QColor, QPen, QShortcut, QKeySequence, QPalette, QTextOption
-        from PySide6.QtSvg import QSvgRenderer
-        from PySide6.QtWidgets import (
+        from PySide6.QtCore import (  # noqa: F401
+            QParallelAnimationGroup,
+            QPropertyAnimation,
+            Qt,
+            QTimer,
+            Signal,
+            QThread,
+            QVariantAnimation,
+            QEasingCurve,
+            QPoint,
+        )
+        from PySide6.QtGui import (  # noqa: F401
+            QAction,
+            QPixmap,
+            QColor,
+            QShortcut,
+            QKeySequence,
+        )
+        from PySide6.QtSvg import QSvgRenderer  # noqa: F401
+        from PySide6.QtWidgets import (  # noqa: F401
             QApplication,
-            QComboBox,
             QDialog,
             QFileDialog,
             QFrame,
@@ -52,17 +64,12 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             QMainWindow,
             QMenu,
             QMessageBox,
-            QToolTip,
             QSystemTrayIcon,
             QPushButton,
-            QProgressBar,
-            QPlainTextEdit,
             QScrollArea,
             QSizePolicy,
             QSpacerItem,
-            QWidgetAction,
             QGraphicsDropShadowEffect,
-            QGraphicsBlurEffect,
             QGraphicsOpacityEffect,
             QVBoxLayout,
             QWidget,
@@ -75,10 +82,10 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
     MedicalAnalysisWorker = create_medical_worker_base(QThread, Signal)
 
     try:
-        import numpy as np
-        import pyaudio
-        import wave
-        import torch
+        import numpy as np  # noqa: F401
+        import pyaudio  # noqa: F401
+        import wave  # noqa: F401
+        import torch  # noqa: F401
         from faster_whisper import WhisperModel
         VOICE_LOCAL_AVAILABLE = True
     except ImportError:
@@ -96,19 +103,19 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         return model
 
     try:
-        import cv2
+        import cv2  # noqa: F401
     except ImportError:
-        cv2 = None
+        pass
 
     from app.chat_ui.content import translate
     from app.chat_ui.theme_styles import DARK_STYLESHEET, LIGHT_STYLESHEET
-    from app.chat_ui.icons import icon, themed_icon, themed_pixmap
+    from app.chat_ui.icons import themed_icon, themed_pixmap
     from app.chat_ui.voice_worker import build_voice_worker_class
 
     def tr(language: str, key: str) -> str:
         return translate(language, key)
 
-    from app.chat_ui.dialogs import CameraCaptureDialog, ImagePreviewDialog, SettingsDialog
+    from app.chat_ui.dialogs import CameraCaptureDialog, SettingsDialog
 
     from app.chat_ui.widgets import (
         ChatBubble,
@@ -116,8 +123,6 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         HistoryItemWidget,
         MessageInput,
         RecordingPanel,
-        TypingIndicator,
-        WaveformWidget,
     )
 
     VoiceWorker = None
@@ -648,8 +653,14 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.send_button.setIcon(themed_icon("send.svg", strong, 18))
             self.send_button.setIconSize(QSize(18, 18))
             self.message_input.apply_visual_style(dark_mode=self.effective_theme == "dark")
+            self.recording_panel.setup_styles()
             self.refresh_topbar_buttons()
             self.refresh_empty_state_theme()
+            for i in range(self.messages_layout.count()):
+                item = self.messages_layout.itemAt(i)
+                widget = item.widget()
+                if isinstance(widget, ChatBubble):
+                    widget.refresh_theme(self.effective_theme)
 
         def refresh_topbar_buttons(self) -> None:
             dark_mode = self.effective_theme == "dark"

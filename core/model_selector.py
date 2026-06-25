@@ -95,8 +95,8 @@ class RuntimeConfig:
         )
 
 
-def _camera_preset(profile_name: str, settings: dict) -> dict:
-    return settings.get("display_camera", settings["camera_large"])
+def _camera_preset(settings: dict) -> dict:
+    return settings.get("display_camera", settings["camera"])
 
 
 def _as_bool(value, default: bool) -> bool:
@@ -299,7 +299,7 @@ def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
     requested_profile_name = _requested_profile_name(mode)
     requested_device, model_name, imgsz, max_det, profile_name = _mode_profile(mode, hardware, settings)
     requested_profile = settings["models"].get(requested_profile_name, settings["models"]["low"]) if requested_profile_name != "auto" else None
-    camera = _camera_preset(profile_name, settings)
+    camera = _camera_preset(settings)
     resolved_device = _resolved_device(requested_device, hardware)
     return RuntimeConfig(
         mode=mode,

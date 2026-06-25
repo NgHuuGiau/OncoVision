@@ -117,5 +117,5 @@ def recommended_medical_commands(status: MedicalSystemStatus) -> list[str]:
     else:
         commands.append("python run_medical.py validate")
     if any((status.report_files, status.normalized_files, status.overlay_files, status.export_files)):
-        commands.append("python run_medical.py cleanup-output --older-than-days 30")
+        commands.append("python run_chat.py --cleanup-output --older-than-days 30")
     return list(dict.fromkeys(commands))
