@@ -40,9 +40,7 @@ jobs:
 
       - name: Type check with mypy
         run: |
-          set +e
-          mypy . 2>&1 | tee ci-logs/05-mypy-type-check.txt || echo "MyPy completed with issues"
-          exit 0
+          mypy . 2>&1 | tee ci-logs/05-mypy-type-check.txt
 
       - name: Verify entrypoint help
         run: |
@@ -67,12 +65,14 @@ jobs:
       - name: Create CI summary
         if: always()
         run: |
-          echo "# CI Test Summary" > ci-logs/00-ci-summary.txt
-          echo "" >> ci-logs/00-ci-summary.txt
-          echo "Xem loi truc tiep o step mau do trong tab Actions. File log cung duoc upload o artifact ben duoi." >> ci-logs/00-ci-summary.txt
-          echo "" >> ci-logs/00-ci-summary.txt
-          echo "## Log files" >> ci-logs/00-ci-summary.txt
-          ls -la ci-logs >> ci-logs/00-ci-summary.txt || true
+          {
+            echo "# CI Test Summary"
+            echo ""
+            echo "Xem lỗi trực tiếp ở step màu đỏ trong tab Actions. File log cũng được upload ở artifact bên dưới."
+            echo ""
+            echo "## Log files"
+            ls -la ci-logs || true
+          } > ci-logs/00-ci-summary.txt
 
           cat ci-logs/00-ci-summary.txt
           cat ci-logs/00-ci-summary.txt >> "$GITHUB_STEP_SUMMARY"
