@@ -1,4 +1,4 @@
-﻿name: Test Python Compatibility
+name: Test Python Compatibility
 
 on:
   push:
@@ -7,11 +7,25 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: CI (Python 3.10)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: CI (${{ matrix.os }} / Python 3.10)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            timeout: 20
+          - os: windows-latest
+            timeout: 45
+    env:
+      PYTHONIOENCODING: utf-8
 
     steps:
       - name: Checkout code
@@ -20,31 +34,62 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: "3.10"
+          cache: "pip"
 
-      - name: Prepare log folder
+      - name: Prepare log folder (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           mkdir -p ci-logs
-          echo "CI started" > ci-logs/00-start.txt
+          echo "CI started on $RUNNER_OS" > ci-logs/00-start.txt
 
-      - name: Install dependencies
+      - name: Prepare log folder (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ci-logs | Out-Null
+          "CI started on $env:RUNNER_OS" | Set-Content -Path ci-logs/00-start.txt
+
+      - name: Install dependencies (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           python -m pip install --upgrade pip 2>&1 | tee ci-logs/01-install-pip.txt
-          pip install -r requirements.txt 2>&1 | tee ci-logs/02-install-requirements.txt
+          pip install --prefer-binary -r requirements-ci.txt 2>&1 | tee ci-logs/02-install-requirements.txt
           pip install ruff mypy 2>&1 | tee ci-logs/03-install-tools.txt
 
-      - name: Lint with Ruff
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          ruff check . --line-length 140 --target-version py310 2>&1 | tee ci-logs/04-ruff-lint.txt
+          python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath ci-logs/01-install-pip.txt
+          pip install --prefer-binary -r requirements-ci.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
+          pip install ruff 2>&1 | Tee-Object -FilePath ci-logs/03-install-tools.txt
 
-      - name: Type check with mypy
+      - name: Lint with Ruff (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ruff check . --line-length 140 --target-version py310 2>&1 | tee ci-logs/04-ruff.txt
+
+      - name: Lint with Ruff (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ruff check . --line-length 140 --target-version py310 --ignore E402 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
+
+      - name: Type check with mypy (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           set +e
           mypy . 2>&1 | tee ci-logs/05-mypy-type-check.txt || echo "MyPy completed with issues"
           exit 0
 
-      - name: Verify entrypoint help
+      - name: Verify entrypoint help (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           if [ -f scripts/verify_entrypoints_help.py ]; then
             python scripts/verify_entrypoints_help.py 2>&1 | tee ci-logs/06-verify-entrypoints-help.txt
@@ -52,36 +97,79 @@ jobs:
             echo "Skipped: scripts/verify_entrypoints_help.py not found" | tee ci-logs/06-verify-entrypoints-help.txt
           fi
 
-      - name: Smoke check
+      - name: Verify entrypoint help (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path "scripts/verify_entrypoints_help.py") {
+            python scripts/verify_entrypoints_help.py 2>&1 | Tee-Object -FilePath ci-logs/06-verify-entrypoints-help.txt
+          } else {
+            "Skipped: scripts/verify_entrypoints_help.py not found" | Tee-Object -FilePath ci-logs/06-verify-entrypoints-help.txt
+          }
+
+      - name: Smoke check (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           if [ -f run_smoke.py ]; then
-            python run_smoke.py 2>&1 | tee ci-logs/07-smoke-check.txt
+            python run_smoke.py --ci-safe --stop-on-fail 2>&1 | tee ci-logs/07-smoke-check.txt
           else
             echo "Skipped: run_smoke.py not found" | tee ci-logs/07-smoke-check.txt
           fi
 
-      - name: Run unit tests
+      - name: Smoke check (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path "run_smoke.py") {
+            python run_smoke.py --ci-safe --stop-on-fail 2>&1 | Tee-Object -FilePath ci-logs/07-smoke-check.txt
+          } else {
+            "Skipped: run_smoke.py not found" | Tee-Object -FilePath ci-logs/07-smoke-check.txt
+          }
+
+      - name: Run unit tests (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           python -m unittest discover -v 2>&1 | tee ci-logs/08-unit-tests.txt
 
-      - name: Create CI summary
-        if: always()
+      - name: Run unit tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          echo "# CI Test Summary" > ci-logs/00-ci-summary.txt
-          echo "" >> ci-logs/00-ci-summary.txt
-          echo "Xem loi truc tiep o step mau do trong tab Actions. File log cung duoc upload o artifact ben duoi." >> ci-logs/00-ci-summary.txt
-          echo "" >> ci-logs/00-ci-summary.txt
-          echo "## Log files" >> ci-logs/00-ci-summary.txt
-          ls -la ci-logs >> ci-logs/00-ci-summary.txt || true
+          python -m unittest discover -s tests -p "test_*.py" -v 2>&1 | Tee-Object -FilePath ci-logs/08-unit-tests.txt
 
-          cat ci-logs/00-ci-summary.txt
-          cat ci-logs/00-ci-summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Create CI summary (Linux)
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          cat <<'EOF' > ci-logs/00-ci-summary.md
+          # CI Test Summary
+
+          Neu co step mau do, mo truc tiep step do trong tab Actions de xem log day du.
+          Ban sao log cung duoc upload thanh artifact ben duoi.
+          EOF
+          cat ci-logs/00-ci-summary.md
+          cat ci-logs/00-ci-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create CI summary (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          @"
+          # Windows CI Summary
+
+          Neu co step mau do, mo truc tiep step do trong tab Actions de xem log day du.
+          Ban sao log cung duoc upload thanh artifact ben duoi.
+          "@ | Set-Content -Path ci-logs/00-ci-summary.md
+          Get-Content ci-logs/00-ci-summary.md
+          Get-Content ci-logs/00-ci-summary.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Upload CI logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-test-logs-${{ github.sha }}
+          name: ci-logs-${{ matrix.os }}-${{ github.sha }}
           path: ci-logs
           retention-days: 7
           if-no-files-found: warn

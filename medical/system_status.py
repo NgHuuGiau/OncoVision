@@ -52,12 +52,15 @@ class MedicalSystemStatus:
 def _count_cases(case_db_path: Path) -> int:
     if not case_db_path.exists():
         return 0
-    conn = sqlite3.connect(case_db_path)
     try:
-        row = conn.execute("SELECT COUNT(*) FROM medical_cases").fetchone()
-        return int(row[0]) if row else 0
-    finally:
-        conn.close()
+        conn = sqlite3.connect(case_db_path)
+        try:
+            row = conn.execute("SELECT COUNT(*) FROM medical_cases").fetchone()
+            return int(row[0]) if row else 0
+        finally:
+            conn.close()
+    except (sqlite3.Error, OSError):
+        return 0
 
 
 def get_medical_system_status() -> MedicalSystemStatus:

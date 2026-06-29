@@ -1,51 +1,116 @@
-# Hướng Dẫn Training
+# Huong Dan Training Object Detection
 
-Tài liệu này mô tả đầy đủ luồng chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model custom.
+Tai lieu nay mo ta day du luong train YOLO object detection trong OncoVision, tu du lieu raw den model `best.pt` dua vao runtime camera.
 
-## Công nghệ dùng trong training
+## 1. Muc Tieu
 
-- Python
-- Ultralytics YOLO
-- PyTorch
-- OpenCV
-- NumPy
-- PyYAML
-- tqdm
+Nhanh training duoc dung de:
 
-## Dữ liệu đầu vào
+- chuan bi dataset object detection,
+- validate du lieu va label,
+- split train/val/test,
+- train model YOLO custom,
+- validate va export model,
+- dua model vao `run_app.py`.
 
-Pipeline training sử dụng trực tiếp:
+## 2. Thu Muc Va Tep Lien Quan
 
-- `dataset/object_detection/raw/images`
-- `dataset/object_detection/raw/labels`
+```text
+dataset/object_detection/raw/
+  images/
+  labels/
 
-Mỗi ảnh trong `images` nên có file `.txt` tương ứng trong `labels`.
+dataset/object_detection/processed/
+  images/
+    train/
+    val/
+    test/
 
-## Định dạng label YOLO
+training/
+  data.yaml
+  train_config.yaml
+  prepare_dataset.py
+  validate_dataset.py
+  split_dataset.py
+  train_model.py
+  validate_model.py
+  export_model.py
+```
 
-Mỗi dòng label có dạng:
+## 3. Dau Vao Chuan
+
+### Anh goc
+
+- dat trong `dataset/object_detection/raw/images/`
+
+### Label YOLO
+
+- dat trong `dataset/object_detection/raw/labels/`
+- ten file phai khop ten anh
+
+Vi du:
+
+```text
+images/
+  sample_001.jpg
+labels/
+  sample_001.txt
+```
+
+## 4. Dinh Dang Label YOLO
+
+Moi dong label:
 
 ```text
 class_id x_center y_center width height
 ```
 
-Trong đó:
+Trong do:
 
-- `class_id`: số lớp
-- `x_center`, `y_center`, `width`, `height`: giá trị chuẩn hóa trong khoảng `0..1`
+- `class_id`: chi so lop
+- `x_center`, `y_center`, `width`, `height`: gia tri chuan hoa trong khoang `0..1`
 
-## Cấu hình class hiện tại
+## 5. File Cau Hinh Quan Trong
 
-File `training/data.yaml` định nghĩa mapping class của dự án.
-Nếu bạn muốn train class riêng, hãy cập nhật đồng thời:
+### `training/data.yaml`
 
-- ảnh trong `dataset/object_detection/raw/`
-- label trong `dataset/object_detection/raw/`
-- mapping class trong `training/data.yaml`
+Dung de:
 
-## Luồng training khuyến nghị
+- khai bao `train`, `val`, `test`,
+- map class names,
+- dua cho YOLO biet dataset dang dung class nao.
+
+Neu doi class map, phai doi dong thoi:
+
+- raw labels,
+- dataset split,
+- data.yaml,
+- logic train / validate lien quan.
+
+### `training/train_config.yaml`
+
+Dung de:
+
+- chon model mac dinh,
+- fallback model,
+- epoch, batch, image size, output setup neu du an dang su dung.
+
+## 6. Cac Script Trong `training/`
+
+| Script | Vai tro |
+|---|---|
+| `prepare_dataset.py` | Tao / dam bao khung dataset |
+| `validate_dataset.py` | Soat loi anh, label, class id |
+| `split_dataset.py` | Chia train / val / test |
+| `train_model.py` | Logic train noi bo |
+| `validate_model.py` | Danh gia model sau train |
+| `export_model.py` | Dong bo / xuat model sau train |
+| `download_models.py` | Tai pretrained models neu can |
+
+## 7. Luong Training Khuyen Nghi
 
 ```powershell
+python run_train.py --check-only
 python training\prepare_dataset.py
 python training\validate_dataset.py
 python training\split_dataset.py
@@ -54,99 +119,114 @@ python training\validate_model.py
 python training\export_model.py
 ```
 
-## Ý nghĩa từng bước
+## 8. Y Nghia Tung Buoc
 
-### `training/prepare_dataset.py`
+### Buoc 1. `run_train.py --check-only`
 
-- tạo khung thư mục cần thiết
-- chuẩn hóa môi trường dataset
+Dung de tra loi:
 
-### `training/validate_dataset.py`
+- dependency `ultralytics` / `torch` co san khong,
+- pretrained model co ton tai khong,
+- raw data da co chua,
+- processed train/val da san sang chua.
 
-- kiểm tra ảnh thiếu
-- kiểm tra label thiếu hoặc sai format
-- kiểm tra class id không khớp
+### Buoc 2. `prepare_dataset.py`
 
-### `training/split_dataset.py`
+Dung de:
 
-- chia dữ liệu thành `train`, `val`, `test`
-- ghi kết quả vào `dataset/object_detection/processed/`
+- tao khung thu muc dataset can thiet,
+- dong bo layout local.
 
-### `run_train.py`
+### Buoc 3. `validate_dataset.py`
 
-- chạy pipeline huấn luyện chính
-- sinh weights trong thư mục train
+Dung de:
 
-### `training/validate_model.py`
+- phat hien anh thieu label,
+- phat hien label sai format,
+- phat hien `class_id` khong hop le,
+- phat hien du lieu xau truoc khi train.
 
-- đánh giá model sau khi train
-- dùng để so sánh với runtime camera
+### Buoc 4. `split_dataset.py`
 
-### `training/export_model.py`
+Dung de:
 
-- xuất model phục vụ deploy
-- đồng bộ model đích về `models/trained/best.pt` nếu cần
+- chia du lieu sang `train`, `val`, `test`,
+- dua du lieu vao layout ma YOLO co the dung.
 
-## Pretrained và custom model
+### Buoc 5. `run_train.py`
+
+Dung de:
+
+- kich hoat training pipeline chinh,
+- sinh artifact train trong `runs/`,
+- tao model custom moi.
+
+### Buoc 6. `validate_model.py`
+
+Dung de:
+
+- danh gia model sau train,
+- xac minh model moi co dung duoc cho deployment / runtime hay khong.
+
+### Buoc 7. `export_model.py`
+
+Dung de:
+
+- xuat model duoc chon,
+- dong bo ve `models/trained/best.pt` neu quy trinh du an can.
+
+## 9. Model Nao Nen Dung
 
 ### `models/pretrained/*.pt`
 
-- dùng cho nhận diện tổng quát
-- hợp với bài toán camera realtime phổ biến
+Dung khi:
+
+- can baseline nhanh,
+- chua co dataset custom du tot,
+- dang debug pipeline runtime.
 
 ### `models/trained/best.pt`
 
-- là model custom sau khi bạn train từ dataset riêng
-- hợp khi bài toán có class chuyên biệt
+Dung khi:
 
-## Khi nào nên dùng `best.pt`
+- da train xong bo du lieu noi bo,
+- can tang do chinh xac cho class rieng,
+- muon demo bang model cua du an thay vi pretrained.
 
-Nên dùng model custom nếu:
-
-- bạn train class không có trong COCO
-- bạn cần độ chính xác cao cho domain riêng
-- bạn muốn tối ưu cho dữ liệu thực tế của dự án
-
-Ví dụ:
+## 10. Cach Dua Model Vao Runtime
 
 ```powershell
 python run_app.py --model models/trained/best.pt
 ```
 
-## Vì sao camera có thể nhận diện chưa đúng
+Co the ket hop voi mode:
 
-Nguyên nhân thường gặp:
+```powershell
+python run_app.py --model models/trained/best.pt --mode medium
+```
 
-- dùng pretrained model cho bài toán cần class custom
-- `training/data.yaml` không khớp với label thật
-- dataset quá ít hoặc quá lệch góc chụp
-- ảnh train khác quá xa điều kiện webcam thực tế
-- `imgsz` quá thấp để giữ FPS
+## 11. Dau Hieu Dataset Chua Tot
 
-## Cách làm model ổn định hơn
+Thuong gap:
 
-- chụp nhiều góc
-- có nhiều mức sáng
-- có cả nền sạch và nền phức tạp
-- gắn label nhất quán
-- giữ class map ổn định giữa các lần train
+- label thieu hoac sai format,
+- class map khong dong nhat,
+- qua it anh,
+- anh train khac xa moi truong webcam that,
+- object nho nhung `imgsz` thap,
+- goc chup qua it bien the.
 
-## Kiểm tra sau training
+## 12. Cach Lam Model On Dinh Hon
 
-Sau khi train xong, nên trả lời các câu hỏi:
+- chup nhieu goc khac nhau,
+- co anh sang yeu va anh sang manh,
+- co background sach va background phuc tap,
+- gan nhan nhat quan,
+- khong doi class order tuy tien giua cac lan train.
 
-1. Model có nhận đúng class không?
-2. Có bỏ sót object nhỏ không?
-3. Có quá nhiều false positive không?
-4. Chạy webcam thật có ổn dưới ánh sáng yếu không?
+## 13. Kiem Tra Sau Training
 
-## Gợi ý chọn model
-
-- Máy có GPU khá: bắt đầu với `yolo11s.pt` hoặc `yolo11m.pt`
-- Máy yếu hơn: bắt đầu với `yolo11n.pt`
-- Class khó nhưng nhỏ: ưu tiên dataset tốt trước khi tăng model size
-
-## Sau training nên làm gì
+Sau khi train xong, nen chay:
 
 ```powershell
 python training\validate_model.py
@@ -154,4 +234,34 @@ python run_doctor.py --skip-camera-check
 python run_app.py --model models/trained/best.pt
 ```
 
-Mục tiêu là kiểm tra model custom ngay trong điều kiện camera thật.
+Muc dich:
+
+- xac minh model ton tai,
+- kiem tra runtime van mo duoc,
+- test trong boi canh webcam that.
+
+## 14. Cac Cau Hoi Nen Tu Tra Loi Sau Moi Lan Train
+
+1. Model co nhan dung class chinh khong?
+2. Co bo sot object nho khong?
+3. Co false positive qua nhieu khong?
+4. Khi chay webcam that, FPS con chap nhan duoc khong?
+5. Model custom co thuc su tot hon pretrained khong?
+
+## 15. Kiem Loi Nhanh Theo Trieu Chung
+
+| Trieu chung | Noi nen debug |
+|---|---|
+| `run_train.py --check-only` fail | `training/train_config.yaml`, `training/model_paths.py`, dependency local |
+| Dataset split xong nhung count sai | `training/split_dataset.py`, `training/dataset_ops.py` |
+| Train chay nhung model kem | dataset raw, class map, dieu kien chup, `data.yaml` |
+| Runtime camera nhan dien khac training ky vong | `run_app.py`, `config/settings.yaml`, model da nap, image size |
+
+## 16. Lien Quan Toi Nhanh Medical
+
+Nhanh object detection va nhanh medical tach biet ve du lieu:
+
+- object detection: `dataset/object_detection/`
+- medical: `dataset/medical/`
+
+Khong nen tron 2 layout nay vao nhau. Neu can huan luyen medical rieng, hay di theo huong dan o `medical_imaging_guide.md`.
