@@ -1,65 +1,65 @@
 # OncoVision
 
-OncoVision la bo cong cu AI noi bo gom hai nhanh chinh:
+OncoVision là bộ công cụ AI nội bộ gồm hai nhánh chính:
 
-- `Y duoc`: quan ly dataset y khoa, phan tich anh, theo doi trang thai model, va ho tro quy trinh TCIA.
-- `Vat the`: train, danh gia, va chay YOLO realtime cho bai toan nhan dien vat the bang camera.
+- `Y dược`: quản lý dataset y khoa, phân tích ảnh, theo dõi trạng thái model và hỗ trợ quy trình TCIA.
+- `Vật thể`: train, đánh giá và chạy YOLO realtime cho bài toán nhận diện vật thể bằng camera.
 
-README nay duoc viet theo huong giup nguoi moi vao du an co the:
+README này được viết theo hướng giúp người mới vào dự án có thể:
 
-1. hieu nhanh du an dang lam gi,
-2. biet can chay lenh nao truoc,
-3. tim dung tai lieu chi tiet trong thu muc `docs/`.
+1. hiểu nhanh dự án đang làm gì,
+2. biết cần chạy lệnh nào trước,
+3. tìm đúng tài liệu chi tiết trong thư mục `docs/`.
 
-## Diem Noi Bat
+## Điểm Nổi Bật
 
-| Nhom | Gia tri |
+| Nhóm | Giá trị |
 |---|---|
-| Realtime camera | Chay camera desktop voi che do runtime `auto`, `high`, `medium`, `low` |
-| Medical workflow | Quan ly skin lesion dataset, TCIA collections, output reports, va trang thai model |
-| Entrypoint ro rang | Moi tac vu lon deu co file `run_*.py` rieng |
-| Kiem tra nhanh | Co `run_doctor.py`, `run_smoke.py`, `run_tests.py` de soat loi som |
-| Tai lieu van hanh | Co bo `docs/` cho cai dat, training, runtime, medical va tong quan kien truc |
+| Realtime camera | Chạy camera desktop với chế độ runtime `auto`, `high`, `medium`, `low` |
+| Medical workflow | Quản lý skin lesion dataset, TCIA collections, output reports và trạng thái model |
+| Entrypoint rõ ràng | Mỗi tác vụ lớn đều có file `run_*.py` riêng |
+| Kiểm tra nhanh | Có `run_doctor.py`, `run_smoke.py`, `run_tests.py` để soát lỗi sớm |
+| Tài liệu vận hành | Có bộ `docs/` cho cài đặt, training, runtime, medical và tổng quan kiến trúc |
 
-## Ban Do Nhanh Cua Du An
+## Bản Đồ Nhanh Của Dự Án
 
 ```text
-run_menu.py      -> menu tong hop
+run_menu.py      -> menu tổng hợp
 run_app.py       -> camera realtime / runtime advisor
 run_chat.py      -> chat UI / medical preflight / cleanup output
-run_doctor.py    -> doctor scan tong the he thong
+run_doctor.py    -> doctor scan tổng thể hệ thống
 run_train.py     -> train YOLO object detection
-run_medical.py   -> CLI quan ly luong medical
+run_medical.py   -> CLI quản lý luồng medical
 run_smoke.py     -> smoke check entrypoint
 run_tests.py     -> dashboard unit test
 ```
 
-## Khi Nao Nen Dung File Nao
+## Khi Nào Nên Dùng File Nào
 
-| Ban muon lam gi | Entrypoint nen dung |
+| Bạn muốn làm gì | Entrypoint nên dùng |
 |---|---|
-| Xem toan bo chuc nang dang co | `python run_menu.py` |
-| Kiem tra may nen chay runtime nao | `python run_app.py --advisor-only` |
-| Mo camera realtime | `python run_app.py` |
-| Kiem tra chat UI co san sang khong | `python run_chat.py --check-only` |
-| Kiem tra tong the moi truong | `python run_doctor.py --skip-camera-check` |
+| Xem toàn bộ chức năng đang có | `python run_menu.py` |
+| Kiểm tra máy nên chạy runtime nào | `python run_app.py --advisor-only` |
+| Mở camera realtime | `python run_app.py` |
+| Kiểm tra chat UI có sẵn sàng không | `python run_chat.py --check-only` |
+| Kiểm tra tổng thể môi trường | `python run_doctor.py --skip-camera-check` |
 | Train YOLO object detection | `python run_train.py` |
-| Kiem tra nhanh luong y duoc | `python run_medical.py status` |
-| Chay smoke check an toan | `python run_smoke.py` |
-| Chay unit test | `python -m unittest discover -s tests -p "test_*.py"` |
+| Kiểm tra nhanh luồng y dược | `python run_medical.py status` |
+| Chạy smoke check an toàn | `python run_smoke.py` |
+| Chạy unit test | `python -m unittest discover -s tests -p "test_*.py"` |
 
-## Cau Truc Luong Nghiep Vu
+## Cấu Trúc Luồng Nghiệp Vụ
 
-### 1. Nhanh Vat The
+### 1. Nhánh Vật Thể
 
-Muc tieu:
+Mục tiêu:
 
-- quan ly dataset object detection,
+- quản lý dataset object detection,
 - train model YOLO custom,
 - validate model,
-- dua model vao camera realtime.
+- đưa model vào camera realtime.
 
-Thu muc du lieu lien quan:
+Thư mục dữ liệu liên quan:
 
 ```text
 dataset/object_detection/raw/
@@ -68,7 +68,7 @@ models/pretrained/
 models/trained/
 ```
 
-Luong co ban:
+Luồng cơ bản:
 
 ```powershell
 python run_train.py --check-only
@@ -80,16 +80,16 @@ python training\validate_model.py
 python run_app.py --model models/trained/best.pt
 ```
 
-### 2. Nhanh Y Duoc
+### 2. Nhánh Y Dược
 
-Muc tieu:
+Mục tiêu:
 
-- to chuc dataset skin lesion va TCIA,
-- theo doi do san sang cua model medical,
-- chay cac lenh khoi tao, status, ready, sources, verify,
-- phuc vu chat UI va pipeline phan tich medical.
+- tổ chức dataset skin lesion và TCIA,
+- theo dõi độ sẵn sàng của model medical,
+- chạy các lệnh khởi tạo, status, ready, sources, verify,
+- phục vụ chat UI và pipeline phân tích medical.
 
-Thu muc du lieu lien quan:
+Thư mục dữ liệu liên quan:
 
 ```text
 dataset/medical/skin_lesion/
@@ -97,7 +97,7 @@ dataset/medical/tcia/
 output/medical/
 ```
 
-Luong co ban:
+Luồng cơ bản:
 
 ```powershell
 python run_medical.py init-dataset
@@ -107,7 +107,7 @@ python run_medical.py ready
 python run_chat.py --check-only
 ```
 
-## Cai Dat Nhanh
+## Cài Đặt Nhanh
 
 ```powershell
 python -m venv .venv
@@ -118,46 +118,46 @@ python run_doctor.py --skip-camera-check
 python run_smoke.py
 ```
 
-Neu PowerShell chan script:
+Nếu PowerShell chặn script:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-## Bo Tai Lieu Trong `docs/`
+## Bộ Tài Liệu Trong `docs/`
 
-| File | Noi dung |
+| File | Nội dung |
 |---|---|
-| [docs/install_guide.md](/abs/path/D:/OncoVision/docs/install_guide.md:1) | Huong dan cai dat, khoi tao moi truong, va checklist sau cai dat |
-| [docs/project_overview.md](/abs/path/D:/OncoVision/docs/project_overview.md:1) | Tong quan kien truc, cay thu muc, va vai tro tung module |
-| [docs/quick_commands.md](/abs/path/D:/OncoVision/docs/quick_commands.md:1) | Lenh nhanh cho van hanh hang ngay |
-| [docs/runtime_tool_guide.md](/abs/path/D:/OncoVision/docs/runtime_tool_guide.md:1) | Giai thich `run_app.py --advisor-only` va runtime modes |
-| [docs/training_guide.md](/abs/path/D:/OncoVision/docs/training_guide.md:1) | Huong dan chi tiet cho object detection training |
-| [docs/medical_imaging_guide.md](/abs/path/D:/OncoVision/docs/medical_imaging_guide.md:1) | Huong dan chi tiet cho luong y duoc |
+| [docs/install_guide.md](/abs/path/D:/OncoVision/docs/install_guide.md:1) | Hướng dẫn cài đặt, khởi tạo môi trường và checklist sau cài đặt |
+| [docs/project_overview.md](/abs/path/D:/OncoVision/docs/project_overview.md:1) | Tổng quan kiến trúc, cây thư mục và vai trò từng module |
+| [docs/quick_commands.md](/abs/path/D:/OncoVision/docs/quick_commands.md:1) | Lệnh nhanh cho vận hành hằng ngày |
+| [docs/runtime_tool_guide.md](/abs/path/D:/OncoVision/docs/runtime_tool_guide.md:1) | Giải thích `run_app.py --advisor-only` và runtime modes |
+| [docs/training_guide.md](/abs/path/D:/OncoVision/docs/training_guide.md:1) | Hướng dẫn chi tiết cho object detection training |
+| [docs/medical_imaging_guide.md](/abs/path/D:/OncoVision/docs/medical_imaging_guide.md:1) | Hướng dẫn chi tiết cho luồng y dược |
 
-## Checklist Cho Nguoi Moi Vao Du An
+## Checklist Cho Người Mới Vào Dự Án
 
-1. Doc [project_overview.md](/abs/path/D:/OncoVision/docs/project_overview.md:1) de nam bo cuc repo.
-2. Chay `python run_doctor.py --skip-camera-check` de xem may con thieu gi.
-3. Chay `python run_smoke.py` de test nhanh cac entrypoint quan trong.
-4. Neu lam object detection, doc [training_guide.md](/abs/path/D:/OncoVision/docs/training_guide.md:1).
-5. Neu lam y duoc, doc [medical_imaging_guide.md](/abs/path/D:/OncoVision/docs/medical_imaging_guide.md:1).
+1. Đọc [project_overview.md](/abs/path/D:/OncoVision/docs/project_overview.md:1) để nắm bố cục repo.
+2. Chạy `python run_doctor.py --skip-camera-check` để xem máy còn thiếu gì.
+3. Chạy `python run_smoke.py` để test nhanh các entrypoint quan trọng.
+4. Nếu làm object detection, đọc [training_guide.md](/abs/path/D:/OncoVision/docs/training_guide.md:1).
+5. Nếu làm y dược, đọc [medical_imaging_guide.md](/abs/path/D:/OncoVision/docs/medical_imaging_guide.md:1).
 
-## Ghi Chu Van Hanh
+## Ghi Chú Vận Hành
 
-- `run_smoke.py --ci-safe` duoc thiet ke cho CI: chi chay nhung check nhe, it phu thuoc camera va dataset cuc bo.
-- `run_chat.py --check-only` dung de preflight giao dien chat ma khong mo GUI.
-- `run_doctor.py --skip-camera-check` la lenh an toan nhat de ra soat tong quat tren may moi.
-- Logger hien da co fallback neu file log bi khoa, nhung van nen giu thu muc `output/` co quyen ghi.
+- `run_smoke.py --ci-safe` được thiết kế cho CI: chỉ chạy những check nhẹ, ít phụ thuộc camera và dataset cục bộ.
+- `run_chat.py --check-only` dùng để preflight giao diện chat mà không mở GUI.
+- `run_doctor.py --skip-camera-check` là lệnh an toàn nhất để rà soát tổng quát trên máy mới.
+- Logger hiện đã có fallback nếu file log bị khóa, nhưng vẫn nên giữ thư mục `output/` có quyền ghi.
 
-## Muc Tieu Cua Repo
+## Mục Tiêu Của Repo
 
-OncoVision khong chi la mot app don le. Repo nay dong vai tro:
+OncoVision không chỉ là một app đơn lẻ. Repo này đóng vai trò:
 
-- bo cong cu van hanh,
-- bo thu vien helper,
-- noi luu tru quy trinh huan luyen,
-- va la tai lieu ky thuat cho ca nhom.
+- bộ công cụ vận hành,
+- bộ thư viện helper,
+- nơi lưu trữ quy trình huấn luyện,
+- và là tài liệu kỹ thuật cho cả nhóm.
 
-Vi vay, cach su dung tot nhat la di tu entrypoint `run_*.py`, sau do moi di sau vao `medical/`, `training/`, `core/`, va `utils/`.
+Vì vậy, cách sử dụng tốt nhất là đi từ entrypoint `run_*.py`, sau đó mới đi sâu vào `medical/`, `training/`, `core/` và `utils/`.

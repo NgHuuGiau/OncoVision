@@ -9,7 +9,7 @@ YOLO11_VARIANTS = YOLO11_MODELS_DESC
 MODE_META = {
     "high": {"label": "manh nhat", "title": "MANH NHAT", "meaning": "muc cao nhat co the uu tien"},
     "medium": {"label": "trung binh", "title": "TRUNG BINH", "meaning": "muc can bang de dung nhat"},
-    "low": {"label": "yeu nhat", "title": "YEU NHAT", "meaning": "muc nhe nhat / de chay nhat"},
+    "low": {"label": "yếu nhất", "title": "YẾU NHẤT", "meaning": "mức nhẹ nhất / dễ chạy nhất"},
 }
 
 

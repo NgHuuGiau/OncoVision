@@ -1,23 +1,23 @@
-# Huong Dan Cai Dat
+# Hướng Dẫn Cài Đặt
 
-Tai lieu nay huong dan cai dat OncoVision tren Windows, khoi tao thu muc du an, va kiem tra moi truong truoc khi dua vao su dung.
+Tài liệu này hướng dẫn cài đặt OncoVision trên Windows, khởi tạo thư mục dự án và kiểm tra môi trường trước khi đưa vào sử dụng.
 
-## 1. Yeu Cau He Thong
+## 1. Yêu Cầu Hệ Thống
 
-### Bat buoc
+### Bắt buộc
 
-- Windows 10 hoac Windows 11
-- Python 3.10 tro len
-- Quyen tao virtual environment
-- Quyen ghi trong thu muc du an
+- Windows 10 hoặc Windows 11
+- Python 3.10 trở lên
+- Quyền tạo virtual environment
+- Quyền ghi trong thư mục dự án
 
-### Khuyen nghi
+### Khuyến nghị
 
-- GPU NVIDIA neu muon toi uu train va inference
-- Webcam neu muon chay `run_app.py`
-- Windows Terminal hoac PowerShell 7 de hien thi Unicode tot hon
+- GPU NVIDIA nếu muốn tối ưu train và inference
+- Webcam nếu muốn chạy `run_app.py`
+- Windows Terminal hoặc PowerShell 7 để hiển thị Unicode tốt hơn
 
-## 2. Tao Moi Truong Ao
+## 2. Tạo Môi Trường Ảo
 
 ```powershell
 cd D:\OncoVision
@@ -27,22 +27,22 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Neu bi chan script trong PowerShell:
+Nếu bị chặn script trong PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-## 3. Khoi Tao Thu Muc Du An
+## 3. Khởi Tạo Thư Mục Dự Án
 
-Lan chay dau tien nen dung:
+Lần chạy đầu tiên nên dùng:
 
 ```powershell
 python run_menu.py
 ```
 
-Lenh nay giup tao va dong bo cac nhom thu muc nhu:
+Lệnh này giúp tạo và đồng bộ các nhóm thư mục như:
 
 ```text
 dataset/
@@ -51,45 +51,45 @@ output/
 runs/
 ```
 
-Sau do cac luong `medical`, `training`, `chat`, `camera` se tu bo sung nhung thu muc con can thiet.
+Sau đó các luồng `medical`, `training`, `chat`, `camera` sẽ tự bổ sung những thư mục còn cần thiết.
 
-## 4. Kiem Tra Sau Cai Dat
+## 4. Kiểm Tra Sau Cài Đặt
 
-### Kiem tra tong quat an toan
+### Kiểm tra tổng quát an toàn
 
 ```powershell
 python run_doctor.py --skip-camera-check
 ```
 
-Muc dich:
+Mục đích:
 
-- kiem tra dependency quan trong,
-- kiem tra model,
-- kiem tra dataset,
-- kiem tra output directories,
-- khong yeu cau webcam that.
+- kiểm tra dependency quan trọng,
+- kiểm tra model,
+- kiểm tra dataset,
+- kiểm tra output directories,
+- không yêu cầu webcam thật.
 
-### Kiem tra chuoi entrypoint
+### Kiểm tra chuỗi entrypoint
 
 ```powershell
 python run_smoke.py
 ```
 
-Neu dang chay trong CI hoac muon check nhe:
+Nếu đang chạy trong CI hoặc muốn check nhẹ:
 
 ```powershell
 python run_smoke.py --ci-safe --stop-on-fail
 ```
 
-### Kiem tra unit test
+### Kiểm tra unit test
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## 5. Chay Thu Tung Chuc Nang
+## 5. Chạy Thử Từng Chức Năng
 
-### Menu tong
+### Menu tổng
 
 ```powershell
 python run_menu.py
@@ -131,85 +131,85 @@ python run_medical.py ready
 python run_medical.py sources
 ```
 
-## 6. Cau Truc Dependency
+## 6. Cấu Trúc Dependency
 
-Repo hien co ba nhom dependency de de van hanh:
+Repo hiện có ba nhóm dependency để dễ vận hành:
 
-| File | Muc dich |
+| File | Mục đích |
 |---|---|
-| `requirements.txt` | Bo dependency day du cho runtime chinh |
-| `requirements-ci.txt` | Dependency toi thieu de chay workflow CI |
-| `requirements-dev.txt` | Runtime day du + cong cu phat trien nhu `ruff`, `mypy` |
+| `requirements.txt` | Bộ dependency đầy đủ cho runtime chính |
+| `requirements-ci.txt` | Dependency tối thiểu để chạy workflow CI |
+| `requirements-dev.txt` | Runtime đầy đủ + công cụ phát triển như `ruff`, `mypy` |
 
-## 7. Xu Ly Loi Thuong Gap
+## 7. Xử Lý Lỗi Thường Gặp
 
-### Khong mo duoc camera
+### Không mở được camera
 
-Thu:
+Thử:
 
 ```powershell
 python run_app.py --mode low --camera-index 1
 ```
 
-Neu van loi:
+Nếu vẫn lỗi:
 
-- kiem tra app khac co dang giu webcam khong,
-- chay `run_doctor.py --skip-camera-check` de xem canh bao he thong,
-- doi `camera-index` sang `0`, `1`, `2`.
+- kiểm tra app khác có đang giữ webcam không,
+- chạy `run_doctor.py --skip-camera-check` để xem cảnh báo hệ thống,
+- đổi `camera-index` sang `0`, `1`, `2`.
 
-### Thieu model
+### Thiếu model
 
-Kiem tra:
+Kiểm tra:
 
 ```text
 models/pretrained/
 models/trained/
 ```
 
-Neu can object detection pretrained model, xem cac script trong `training/download_models.py`.
+Nếu cần object detection pretrained model, xem các script trong `training/download_models.py`.
 
-### Loi CUDA hoac torch
+### Lỗi CUDA hoặc torch
 
-Kiem tra:
+Kiểm tra:
 
 ```powershell
 python run_app.py --advisor-only
 python run_doctor.py --skip-camera-check
 ```
 
-Hai lenh nay se cho biet:
+Hai lệnh này sẽ cho biết:
 
-- GPU co duoc nhan khong,
-- CUDA co san sang khong,
-- torch dang build theo CPU hay CUDA.
+- GPU có được nhận không,
+- CUDA có sẵn sàng không,
+- torch đang build theo CPU hay CUDA.
 
-### Giao dien chat chua san sang
+### Giao diện chat chưa sẵn sàng
 
-Dung:
+Dùng:
 
 ```powershell
 python run_chat.py --check-only --auto-fix-icons
 ```
 
-Lenh nay giup:
+Lệnh này giúp:
 
 - check icon,
-- check module bat buoc,
+- check module bắt buộc,
 - check medical model status,
-- tu tao icon neu dang thieu.
+- tự tạo icon nếu đang thiếu.
 
-## 8. Checklist Sau Khi Cai Dat Xong
+## 8. Checklist Sau Khi Cài Đặt Xong
 
-Moi truong co the xem la san sang khi cac muc sau deu on:
+Môi trường có thể xem là sẵn sàng khi các mục sau đều ổn:
 
-1. `python run_doctor.py --skip-camera-check` chay xong khong co loi nghiem trong.
-2. `python run_smoke.py` hoac `python run_smoke.py --ci-safe` pass.
-3. `python run_app.py --advisor-only` in duoc khuyen nghi runtime.
-4. `python run_chat.py --check-only` bao trang thai san sang.
-5. `python run_train.py --check-only` khong bi fail do thieu dependency.
+1. `python run_doctor.py --skip-camera-check` chạy xong không có lỗi nghiêm trọng.
+2. `python run_smoke.py` hoặc `python run_smoke.py --ci-safe` pass.
+3. `python run_app.py --advisor-only` in được khuyến nghị runtime.
+4. `python run_chat.py --check-only` báo trạng thái sẵn sàng.
+5. `python run_train.py --check-only` không bị fail do thiếu dependency.
 
-## 9. Khuyen Nghi Cho Team
+## 9. Khuyến Nghị Cho Team
 
-- Khong chay thang training hoac camera tren may moi ma chua chay doctor/smoke.
-- Neu chi muon review code tren CI, uu tien `requirements-ci.txt`.
-- Neu debug local feature day du, dung `requirements.txt` hoac `requirements-dev.txt`.
+- Không chạy thẳng training hoặc camera trên máy mới mà chưa chạy doctor/smoke.
+- Nếu chỉ muốn review code trên CI, ưu tiên `requirements-ci.txt`.
+- Nếu debug local feature đầy đủ, dùng `requirements.txt` hoặc `requirements-dev.txt`.

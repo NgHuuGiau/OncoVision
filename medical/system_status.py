@@ -74,9 +74,9 @@ def get_medical_system_status() -> MedicalSystemStatus:
         using_fallback_model = resolved_model_path.resolve(strict=False) != config.model_path.resolve(strict=False)
         model_ready = True
         if using_fallback_model:
-            model_message = f"Dang dung fallback model: {resolved_model_path.name}"
+            model_message = f"Đang dùng fallback model: {resolved_model_path.name}"
         else:
-            model_message = f"Da san sang voi model: {resolved_model_path.name}"
+            model_message = f"Đã sẵn sàng với model: {resolved_model_path.name}"
     except Exception as exc:
         resolved_model_path = None
         using_fallback_model = False

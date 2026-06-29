@@ -69,7 +69,7 @@ class MedicalChatService:
         }
         detection_summary = ", ".join(
             f"{item.label} {item.confidence:.2f}" for item in result.detections[:5]
-        ) or "khong ghi nhan vung nghi ngo ro rang"
+        ) or "không ghi nhận vùng nghi ngờ rõ ràng"
         target_summary = ", ".join(supported_cancer_labels())
         quality_text = (
             " Canh bao chat luong anh: " + "; ".join(result.quality_warnings)
@@ -79,10 +79,10 @@ class MedicalChatService:
         reply_text = (
             f"Da phan tich anh y khoa cho ma benh nhan {patient_code}. "
             f"Muc do sang loc nguy co: {result.risk_level}. "
-            f"So vung ton thuong ghi nhan: {len(result.detections)}. "
+            f"Số vùng tổn thương ghi nhận: {len(result.detections)}. "
             f"Tom tat phat hien: {detection_summary}. "
             f"He thong hien ho tro danh muc sang loc: {target_summary}. "
-            f"Khuyen nghi: {result.recommendation}."
+            f"Khuyến nghị: {result.recommendation}."
             f"{quality_text} "
             f"Anh goc: {result.source_image}. "
             f"Da luu anh da xu ly tai: {result.processed_image}. "

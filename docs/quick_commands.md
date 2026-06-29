@@ -1,8 +1,8 @@
-# Lenh Nhanh
+# Lệnh Nhanh
 
-Tai lieu nay la bang lenh de dung hang ngay. Neu ban da hieu repo, day la file mo dau tien de thao tac nhanh.
+Tài liệu này là bảng lệnh để dùng hằng ngày. Nếu bạn đã hiểu repo, đây là file mở đầu tiên để thao tác nhanh.
 
-## 1. Kiem Tra Moi Truong
+## 1. Kiểm Tra Môi Trường
 
 ```powershell
 python run_doctor.py --skip-camera-check
@@ -54,18 +54,18 @@ python training\validate_model.py
 python training\export_model.py
 ```
 
-## 6. Giai Thich Nhanh
+## 6. Giải Thích Nhanh
 
-| Lenh | Dung khi nao |
+| Lệnh | Dùng khi nào |
 |---|---|
-| `run_doctor.py --skip-camera-check` | Muon doctor scan an toan, khong can webcam |
-| `run_smoke.py` | Muon check nhanh chuoi entrypoint |
-| `run_smoke.py --ci-safe` | Muon check nhe, phu hop CI hoac may chua du data |
-| `run_app.py --advisor-only` | Muon biet mode runtime phu hop truoc khi mo camera |
-| `run_chat.py --check-only` | Muon biet chat UI va medical preflight da san sang chua |
-| `run_train.py --check-only` | Muon xac minh train pipeline co the chay duoc hay khong |
+| `run_doctor.py --skip-camera-check` | Muốn doctor scan an toàn, không cần webcam |
+| `run_smoke.py` | Muốn check nhanh chuỗi entrypoint |
+| `run_smoke.py --ci-safe` | Muốn check nhẹ, phù hợp CI hoặc máy chưa đủ data |
+| `run_app.py --advisor-only` | Muốn biết mode runtime phù hợp trước khi mở camera |
+| `run_chat.py --check-only` | Muốn biết chat UI và medical preflight đã sẵn sàng chưa |
+| `run_train.py --check-only` | Muốn xác minh train pipeline có thể chạy được hay không |
 
-## 7. Trinh Tu Khuyen Nghi Tren May Moi
+## 7. Trình Tự Khuyến Nghị Trên Máy Mới
 
 ```powershell
 python run_menu.py

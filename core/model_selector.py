@@ -305,7 +305,7 @@ def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
     inference = settings.get("inference", {})
     models = settings.get("models", {})
     if not models:
-        raise KeyError("config/settings.yaml thieu muc `models`.")
+        raise KeyError("config/settings.yaml thiếu mục `models`.")
     requested_profile_name = _requested_profile_name(mode)
     requested_device, model_name, imgsz, max_det, profile_name = _mode_profile(mode, hardware, settings)
     requested_profile = models.get(requested_profile_name, models.get("low")) if requested_profile_name != "auto" else None

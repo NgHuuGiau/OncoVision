@@ -46,8 +46,8 @@ def probe_camera(
     except Exception as exc:
         return CameraProbeResult(
             level="ERROR",
-            summary=f"Camera that       ERROR | Khong tao duoc camera index {index}",
-            detail=f"Ly do khong chay   {exc}",
+            summary=f"Camera thật       ERROR | Không tạo được camera index {index}",
+            detail=f"Lý do không chạy  {exc}",
         )
 
     if capture is None or not capture.isOpened():
@@ -55,7 +55,7 @@ def probe_camera(
             capture.release()
         return CameraProbeResult(
             level="WARN",
-            summary=f"Camera that       WARN  | Khong mo duoc camera index {index}",
+            summary=f"Camera thật       WARN  | Không mở được camera index {index}",
             detail=unavailable_detail,
         )
 
@@ -75,12 +75,12 @@ def probe_camera(
     if not got_frame:
         return CameraProbeResult(
             level="WARN",
-            summary=f"Camera that       WARN  | Mo duoc camera index {index} nhung khong doc duoc frame",
-            detail="Ly do khong chay   Webcam mo duoc nhung khong tra ve khung hinh hop le.",
+            summary=f"Camera thật       WARN  | Mở được camera index {index} nhưng không đọc được frame",
+            detail="Lý do không chạy  Webcam mở được nhưng không trả về khung hình hợp lệ.",
         )
 
     return CameraProbeResult(
         level="PASS",
-        summary=f"Camera that       PASS  | Doc frame thanh cong tai index {index}",
-        detail=f"Chi tiet          {frame_width}x{frame_height}",
+        summary=f"Camera thật       PASS  | Đọc frame thành công tại index {index}",
+        detail=f"Chi tiết          {frame_width}x{frame_height}",
     )

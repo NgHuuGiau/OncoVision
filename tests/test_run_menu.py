@@ -40,11 +40,45 @@ class RunMenuTests(unittest.TestCase):
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_app.py")
 
-    def test_main_runs_smoke_check_option(self) -> None:
+    def test_main_enters_check_menu_and_runs_doctor_option(self) -> None:
         outputs: list[str] = []
         run_script = MagicMock(return_value=0)
         clear_terminal = MagicMock()
-        answers = iter(["5", "0"])
+        answers = iter(["5", "1", "0", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=clear_terminal,
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_doctor.py", "--skip-camera-check")
+        self.assertTrue(any("run_doctor.py --skip-camera-check" in line for line in outputs))
+        self.assertEqual(clear_terminal.call_count, 2)
+
+    def test_main_enters_check_menu_and_runs_test_option(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        answers = iter(["5", "2", "0", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_tests.py", "--skip-camera-check")
+        self.assertTrue(any("run_tests.py --skip-camera-check" in line for line in outputs))
+
+    def test_main_enters_check_menu_and_runs_smoke_check_option(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        clear_terminal = MagicMock()
+        answers = iter(["5", "3", "0", "0"])
 
         result = run_menu.main(
             input_fn=lambda _: next(answers),
@@ -56,7 +90,23 @@ class RunMenuTests(unittest.TestCase):
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_smoke.py")
         self.assertTrue(any("run_smoke.py" in line for line in outputs))
-        clear_terminal.assert_called_once()
+        self.assertEqual(clear_terminal.call_count, 2)
+
+    def test_main_enters_check_menu_and_runs_smoke_plus_tests_option(self) -> None:
+        outputs: list[str] = []
+        run_script = MagicMock(return_value=0)
+        answers = iter(["5", "4", "0", "0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_smoke.py", "--include-tests")
+        self.assertTrue(any("run_smoke.py --include-tests" in line for line in outputs))
 
     def test_main_runs_chat_cleanup_option(self) -> None:
         outputs: list[str] = []
@@ -76,7 +126,23 @@ class RunMenuTests(unittest.TestCase):
 
     def test_main_retries_on_invalid_choice(self) -> None:
         outputs: list[str] = []
-        answers = iter(["13", "5", "0"])
+        answers = iter(["13", "5", "3", "0", "0"])
+        run_script = MagicMock(return_value=0)
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=run_script,
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_smoke.py")
+        self.assertTrue(any("Lựa chọn không hợp lệ" in line for line in outputs))
+
+    def test_check_menu_retries_on_invalid_choice(self) -> None:
+        outputs: list[str] = []
+        answers = iter(["5", "9", "3", "0", "0"])
         run_script = MagicMock(return_value=0)
 
         result = run_menu.main(

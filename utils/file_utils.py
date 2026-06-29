@@ -60,10 +60,10 @@ def load_yaml(path: str | Path) -> Any:
 def yaml_mapping_issues(data: Any, *, required_keys: tuple[str, ...] = (), label: str = "yaml") -> list[str]:
     issues: list[str] = []
     if not isinstance(data, dict):
-        return [f"{label} khong phai dang mapping hop le."]
+        return [f"{label} không phải dạng mapping hợp lệ."]
     for key in required_keys:
         if key not in data:
-            issues.append(f"{label} thieu truong `{key}`.")
+            issues.append(f"{label} thiếu trường `{key}`.")
     return issues
 
 
@@ -72,7 +72,7 @@ def yaml_file_issues(path: str | Path, *, required_keys: tuple[str, ...] = (), l
     try:
         data = load_yaml(resolved_path)
     except Exception as exc:
-        return [f"Khong doc duoc {label or resolved_path}: {exc}"]
+        return [f"Không đọc được {label or resolved_path}: {exc}"]
     return yaml_mapping_issues(data, required_keys=required_keys, label=str(label or resolved_path))
 
 

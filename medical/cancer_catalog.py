@@ -16,7 +16,7 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
     CancerScreeningTarget(
         key="skin",
         label="Ung thu da",
-        description="Sang loc ton thuong da va nguy co ung thu da.",
+        description="Sàng lọc tổn thương da và nguy cơ ung thư da.",
         model_ready=True,
         notes="Da co model skin_cancer_screening trong he thong hien tai.",
     ),
@@ -44,7 +44,7 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
     CancerScreeningTarget(
         key="liver",
         label="Ung thu gan",
-        description="Sang loc lien quan ton thuong gan.",
+        description="Sàng lọc liên quan tổn thương gan.",
         model_ready=False,
         notes="Can model cho siêu am/CT/MRI chuyen dung.",
     ),
@@ -60,7 +60,7 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
         label="Ung thu tuyen tien liet",
         description="Sang loc lien quan tuyen tien liet.",
         model_ready=False,
-        notes="Can model va du lieu rieng cho imaging/lab data.",
+        notes="Cần model và dữ liệu riêng cho imaging/lab data.",
     ),
     CancerScreeningTarget(
         key="stomach",
@@ -78,4 +78,3 @@ def list_common_cancer_targets() -> tuple[CancerScreeningTarget, ...]:
 
 def supported_cancer_labels() -> list[str]:
     return [target.label for target in COMMON_CANCER_TARGETS]
-

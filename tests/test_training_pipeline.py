@@ -13,10 +13,11 @@ class TrainingPipelineTests(unittest.TestCase):
     @patch("training.train_model._auto_prepare_training_dataset")
     @patch("training.train_model._ensure_training_dataset_ready")
     @patch("training.train_model._copy_best_weight")
+    @patch("training.train_model.resolve_data_config_path", return_value=Path("training/.generated_data.yaml"))
     @patch("training.train_model.YOLO")
     @patch("training.train_model.load_yaml")
     def test_train_main_falls_back_to_lighter_model(
-        self, load_yaml_mock, yolo_mock, copy_best_mock, ensure_dataset_ready_mock, auto_prepare_mock
+        self, load_yaml_mock, yolo_mock, resolve_data_config_path_mock, copy_best_mock, ensure_dataset_ready_mock, auto_prepare_mock
     ) -> None:
         load_yaml_mock.return_value = {
             "model": "yolo11s.pt",
@@ -55,12 +56,20 @@ class TrainingPipelineTests(unittest.TestCase):
     @patch("training.train_model._copy_split")
     @patch("training.train_model._split_items", return_value={"train": [("img", "lbl")], "val": [], "test": []})
     @patch("training.train_model._reset_processed_dirs")
+    @patch("training.train_model._save_auto_prepare_state")
+    @patch("training.train_model._auto_label_device", return_value="cuda:0")
+    @patch("training.train_model._load_auto_prepare_state", return_value=None)
+    @patch("training.train_model._dataset_signature", side_effect=["before", "after"])
     @patch("training.train_model.auto_label_raw_images", return_value={"generated": 2, "no_detection": ["c.jpg"]})
     @patch("training.train_model.audit_raw_dataset")
     def test_auto_prepare_training_dataset_auto_labels_and_splits(
         self,
         audit_mock,
         auto_label_mock,
+        dataset_signature_mock,
+        load_state_mock,
+        auto_label_device_mock,
+        save_state_mock,
         reset_mock,
         split_items_mock,
         copy_split_mock,
@@ -71,7 +80,7 @@ class TrainingPipelineTests(unittest.TestCase):
 
         report = train_model._auto_prepare_training_dataset()
 
-        auto_label_mock.assert_called_once_with(overwrite=False, conf=0.25, device="cpu")
+        auto_label_mock.assert_called_once_with(overwrite=False, conf=0.25, device="cuda:0")
         reset_mock.assert_called_once()
         split_items_mock.assert_called_once_with([("img", "lbl")])
         copy_split_mock.assert_any_call("train", [("img", "lbl")])
@@ -80,30 +89,59 @@ class TrainingPipelineTests(unittest.TestCase):
         self.assertEqual(report["auto_labeled"], 2)
         self.assertEqual(report["eligible"], 1)
         self.assertEqual(report["no_detection"], ["c.jpg"])
+        self.assertEqual(report["device"], "cuda:0")
+        save_state_mock.assert_called_once_with("after")
+
+    @patch("training.train_model._save_auto_prepare_state")
+    @patch("training.train_model._load_auto_prepare_state", return_value="same-signature")
+    @patch("training.train_model._dataset_signature", return_value="same-signature")
+    @patch("training.train_model.auto_label_raw_images")
+    @patch("training.train_model.audit_raw_dataset")
+    @patch("training.train_model.PROCESSED_VAL_DIR")
+    @patch("training.train_model.PROCESSED_TRAIN_DIR")
+    @patch("training.train_model._reset_processed_dirs")
+    def test_auto_prepare_training_dataset_skips_rebuild_when_dataset_unchanged(
+        self,
+        reset_mock,
+        processed_train_mock,
+        processed_val_mock,
+        audit_mock,
+        auto_label_mock,
+        dataset_signature_mock,
+        load_state_mock,
+        save_state_mock,
+    ) -> None:
+        processed_train_mock.exists.return_value = True
+        processed_train_mock.iterdir.return_value = iter([Path("train-item")])
+        processed_val_mock.exists.return_value = True
+        processed_val_mock.iterdir.return_value = iter([Path("val-item")])
+        audit_mock.return_value = SimpleNamespace(raw_image_count=3, missing_labels=[], eligible=[("img", "lbl")])
+
+        report = train_model._auto_prepare_training_dataset()
+
+        self.assertTrue(report["skipped_rebuild"])
+        self.assertEqual(report["eligible"], 1)
+        auto_label_mock.assert_not_called()
+        reset_mock.assert_not_called()
+        save_state_mock.assert_not_called()
 
     def test_copy_best_weight_copies_when_present(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
             run_dir = Path(temp_dir)
             weights_dir = run_dir / "weights"
             weights_dir.mkdir(parents=True, exist_ok=True)
             best_path = weights_dir / "best.pt"
             best_path.write_text("fake-weight", encoding="utf-8")
-
-            target = Path("models/trained/best.pt")
-            original = target.read_bytes() if target.exists() else None
-            try:
+            target = run_dir / "trained-best.pt"
+            with patch("training.train_model.TRAINED_BEST_MODEL_PATH", target):
                 train_model._copy_best_weight(run_dir)
-                self.assertTrue(target.exists())
-                self.assertEqual(target.read_text(encoding="utf-8"), "fake-weight")
-            finally:
-                if original is None and target.exists():
-                    target.unlink()
-                elif original is not None:
-                    target.write_bytes(original)
+            self.assertTrue(target.exists())
+            self.assertEqual(target.read_text(encoding="utf-8"), "fake-weight")
 
     @patch("training.validate_model._ensure_validation_dataset_ready")
+    @patch("training.validate_model.resolve_data_config_path", return_value=Path("training/.generated_data.yaml"))
     @patch("training.validate_model.YOLO")
-    def test_validate_model_falls_back_to_yolo11n_when_best_missing(self, yolo_mock, ensure_validation_ready_mock) -> None:
+    def test_validate_model_falls_back_to_yolo11n_when_best_missing(self, yolo_mock, resolve_data_config_path_mock, ensure_validation_ready_mock) -> None:
         model = MagicMock()
         yolo_mock.return_value = model
         ensure_validation_ready_mock.return_value = None

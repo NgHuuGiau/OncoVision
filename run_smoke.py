@@ -26,20 +26,20 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
     SmokeCheck(
         key="runtime-advisor",
         title="Runtime advisor",
-        description="Kiem tra entrypoint tu van runtime ma khong mo camera.",
+        description="Kiểm tra entrypoint tư vấn runtime mà không mở camera.",
         command=("run_app.py", "--advisor-only"),
     ),
     SmokeCheck(
         key="doctor",
         title="Doctor scan",
-        description="Ra soat tong the phan cung, model va du lieu ma khong can webcam that.",
+        description="Rà soát tổng thể phần cứng, model và dữ liệu mà không cần webcam thật.",
         command=("run_doctor.py", "--skip-camera-check"),
         ci_safe=False,
     ),
     SmokeCheck(
         key="chat-preflight",
         title="Chat preflight",
-        description="Kiem tra dep bat buoc, icon va do san sang cua luong chat/medical.",
+        description="Kiểm tra dependency bắt buộc, icon và độ sẵn sàng của luồng chat/medical.",
         command=("run_chat.py", "--check-only", "--auto-fix-icons"),
         warning_exit_codes=(2,),
         ci_safe=False,
@@ -47,13 +47,13 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
     SmokeCheck(
         key="training-preflight",
         title="Training preflight",
-        description="Kiem tra config, model va dataset cho entrypoint train tong quat.",
+        description="Kiểm tra config, model và dataset cho entrypoint train tổng quát.",
         command=("run_train.py", "--check-only"),
     ),
     SmokeCheck(
         key="medical-status",
         title="Medical status",
-        description="Kiem tra nhanh model, dataset va output cua nhanh medical.",
+        description="Kiểm tra nhanh model, dataset và output của nhánh medical.",
         command=("run_medical.py", "status"),
         ci_safe=False,
     ),
@@ -62,27 +62,27 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
 TEST_SUITE_CHECK = SmokeCheck(
     key="test-suite",
     title="Test suite",
-    description="Chay unit test va hoi quy ma khong yeu cau camera that.",
+    description="Chạy unit test và hồi quy mà không yêu cầu camera thật.",
     command=("run_tests.py", "--skip-camera-check"),
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Chay smoke-check an toan cho cac entrypoint chinh cua repo.")
+    parser = argparse.ArgumentParser(description="Chạy smoke-check an toàn cho các entrypoint chính của repo.")
     parser.add_argument(
         "--include-tests",
         action="store_true",
-        help="Chay them run_tests.py --skip-camera-check o cuoi chuoi smoke-check.",
+        help="Chạy thêm run_tests.py --skip-camera-check ở cuối chuỗi smoke-check.",
     )
     parser.add_argument(
         "--stop-on-fail",
         action="store_true",
-        help="Dung ngay khi gap mot check fail thay vi di het ca danh sach.",
+        help="Dừng ngay khi gặp một check fail thay vì đi hết cả danh sách.",
     )
     parser.add_argument(
         "--ci-safe",
         action="store_true",
-        help="Chi chay nhung smoke-check nhe, phu hop voi moi truong CI khong co camera/dataset day du.",
+        help="Chỉ chạy những smoke-check nhẹ, phù hợp với môi trường CI không có camera/dataset đầy đủ.",
     )
     return parser
 

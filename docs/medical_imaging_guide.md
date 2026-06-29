@@ -1,18 +1,18 @@
-# Huong Dan Luong Y Duoc
+# Hướng Dẫn Luồng Y Dược
 
-Tai lieu nay giai thich toan bo nhanh `medical` trong OncoVision: du lieu nao dang duoc quan ly, cac lenh CLI de lam gi, output tao ra nam o dau, va cach kiem tra do san sang cua pipeline.
+Tài liệu này giải thích toàn bộ nhánh `medical` trong OncoVision: dữ liệu nào đang được quản lý, các lệnh CLI để làm gì, output tạo ra nằm ở đâu, và cách kiểm tra độ sẵn sàng của pipeline.
 
-## 1. Muc Tieu Cua Nhanh Medical
+## 1. Mục Tiêu Của Nhánh Medical
 
-Nhanh `medical` phuc vu cac bai toan:
+Nhánh `medical` phục vụ các bài toán:
 
-- quan ly dataset skin lesion,
-- quan ly danh sach nguon du lieu ung thu,
-- tai va xac minh du lieu TCIA,
-- theo doi model medical va fallback model,
-- sinh report, output, va ho tro chat UI / phan tich anh.
+- quản lý dataset skin lesion,
+- quản lý danh sách nguồn dữ liệu ung thư,
+- tải và xác minh dữ liệu TCIA,
+- theo dõi model medical và fallback model,
+- sinh report, output, và hỗ trợ chat UI / phân tích ảnh.
 
-## 2. Thu Muc Du Lieu Chinh
+## 2. Thư Mục Dữ Liệu Chính
 
 ```text
 dataset/medical/
@@ -27,150 +27,150 @@ output/medical/
   medical_cases.db
 ```
 
-### Y nghia tung nhom
+### Ý nghĩa từng nhóm
 
-| Thu muc | Vai tro |
+| Thư mục | Vai trò |
 |---|---|
-| `dataset/medical/skin_lesion/` | Dataset noi bo cho luong da lieu / skin lesion |
-| `dataset/medical/tcia/` | Du lieu va collection lay tu TCIA |
-| `output/medical/reports/` | Bao cao JSON, text, hoac report output |
-| `output/medical/normalized_images/` | Anh da chuan hoa truoc / sau pipeline |
-| `output/medical/processed_images/` | Anh da ve overlay, ket qua trung gian |
-| `output/medical/exports/` | Goi export, zip, hoac artifact tong hop |
-| `output/medical/medical_cases.db` | Co so du lieu nho luu case metadata |
+| `dataset/medical/skin_lesion/` | Dataset nội bộ cho luồng da liễu / skin lesion |
+| `dataset/medical/tcia/` | Dữ liệu và collection lấy từ TCIA |
+| `output/medical/reports/` | Báo cáo JSON, text, hoặc report output |
+| `output/medical/normalized_images/` | Ảnh đã chuẩn hóa trước / sau pipeline |
+| `output/medical/processed_images/` | Ảnh đã vẽ overlay, kết quả trung gian |
+| `output/medical/exports/` | Gói export, zip, hoặc artifact tổng hợp |
+| `output/medical/medical_cases.db` | Cơ sở dữ liệu nhỏ lưu case metadata |
 
-## 3. Entrypoint Lien Quan
+## 3. Entrypoint Liên Quan
 
-| File | Vai tro |
+| File | Vai trò |
 |---|---|
-| `run_medical.py` | CLI chinh cho luong medical |
-| `run_chat.py` | Chat UI co su dung trang thai medical |
-| `run_doctor.py` | Hien thong tin tong quan medical model, dataset, output |
-| `run_smoke.py` | Co the goi mot so preflight medical trong luong day du |
+| `run_medical.py` | CLI chính cho luồng medical |
+| `run_chat.py` | Chat UI có sử dụng trạng thái medical |
+| `run_doctor.py` | Hiện thông tin tổng quan medical model, dataset, output |
+| `run_smoke.py` | Có thể gọi một số preflight medical trong luồng đầy đủ |
 
-## 4. Cac Lenh Quan Trong Nhieu Nhat
+## 4. Các Lệnh Quan Trọng Nhiều Nhất
 
-### Khoi tao dataset
+### Khởi tạo dataset
 
 ```powershell
 python run_medical.py init-dataset
 ```
 
-Dung khi:
+Dùng khi:
 
-- may moi chua co khung thu muc medical,
-- can dong bo lai layout dataset chuan,
-- muon bat dau tu pipeline y duoc truoc khi import/tai data.
+- máy mới chưa có khung thư mục medical,
+- cần đồng bộ lại layout dataset chuẩn,
+- muốn bắt đầu từ pipeline y dược trước khi import/tải data.
 
-### Xem trang thai tong quat
+### Xem trạng thái tổng quát
 
 ```powershell
 python run_medical.py status
 ```
 
-Lenh nay cho biet:
+Lệnh này cho biết:
 
-- model config dang tro vao dau,
-- model runtime da resolve ra file nao,
-- fallback model co bat hay khong,
+- model config đang trỏ vào đâu,
+- model runtime đã resolve ra file nào,
+- fallback model có bật hay không,
 - dataset root,
-- so anh raw/train/val/test,
-- so report / overlay / export / case db.
+- số ảnh raw/train/val/test,
+- số report / overlay / export / case db.
 
-### Xem do san sang de train / van hanh
+### Xem độ sẵn sàng để train / vận hành
 
 ```powershell
 python run_medical.py ready
 ```
 
-Dung de tra loi nhanh:
+Dùng để trả lời nhanh:
 
-- dataset da init chua,
-- raw dataset da co chua,
-- processed dataset da san sang chua,
-- model medical da san sang chua,
-- luong full medical da du dieu kien chua.
+- dataset đã init chưa,
+- raw dataset đã có chưa,
+- processed dataset đã sẵn sàng chưa,
+- model medical đã sẵn sàng chưa,
+- luồng full medical đã đủ điều kiện chưa.
 
-### Xem nguon du lieu / cancer targets
+### Xem nguồn dữ liệu / cancer targets
 
 ```powershell
 python run_medical.py sources
 python run_medical.py cancer
 ```
 
-Hai lenh nay giup:
+Hai lệnh này giúp:
 
-- biet repo dang theo doi nhung cancer nao,
-- biet tung nguon du lieu dang o trang thai nao,
-- biet da co du lieu local chua.
+- biết repo đang theo dõi những cancer nào,
+- biết từng nguồn dữ liệu đang ở trạng thái nào,
+- biết đã có dữ liệu local chưa.
 
 ## 5. Workflow TCIA
 
-### Chay thuoc tinh toan truoc khi tai that
+### Chạy thuộc tính toán trước khi tải thật
 
 ```powershell
 python run_medical.py tcia-download --dry-run
 ```
 
-Nen chay truoc de:
+Nên chạy trước để:
 
-- xem ke hoach download,
-- kiem tra collection file,
-- tranh mo full download khi chua chac chan layout dung.
+- xem kế hoạch download,
+- kiểm tra collection file,
+- tránh mở full download khi chưa chắc chắn layout đúng.
 
-### Tai du lieu theo file collection
+### Tải dữ liệu theo file collection
 
-Vi du:
+Ví dụ:
 
 ```powershell
 python run_medical.py tcia-download --collections-file training/tcia_collections_5.json
 ```
 
-### Xac minh sau khi tai
+### Xác minh sau khi tải
 
 ```powershell
 python run_medical.py verify-tcia --collections-file training/tcia_collections_5.json
 ```
 
-### Xem log mot collection
+### Xem log một collection
 
 ```powershell
 python run_medical.py tcia-log --collection "CBIS-DDSM / TCGA-BRCA"
 ```
 
-## 6. Moi Quan He Giua Chat UI Va Medical
+## 6. Mối Quan Hệ Giữa Chat UI Và Medical
 
-`run_chat.py --check-only` khong chi check giao dien, ma con kiem:
+`run_chat.py --check-only` không chỉ check giao diện, mà còn kiểm:
 
-- module bat buoc,
-- icon giao dien,
-- model medical co san sang khong,
+- module bắt buộc,
+- icon giao diện,
+- model medical có sẵn sàng không,
 - output / capture directories.
 
-Vi vay, neu chat UI bao chua san sang, kha nang cao la luong medical van con thieu:
+Vì vậy, nếu chat UI báo chưa sẵn sàng, khả năng cao là luồng medical vẫn còn thiếu:
 
 - model,
 - output directory,
-- hoac data/chinh sach fallback.
+- hoặc data/chính sách fallback.
 
-## 7. Cac Module Chinh Trong Thu Muc `medical/`
+## 7. Các Module Chính Trong Thư Mục `medical/`
 
-| File | Vai tro |
+| File | Vai trò |
 |---|---|
-| `dataset.py` | Tao / dam bao cau truc dataset medical |
-| `pipeline.py` | Pipeline xu ly va phan tich anh y khoa |
-| `system_status.py` | Tong hop trang thai model, data, output, DB |
-| `model_policy.py` | Chon model runtime va fallback model |
-| `storage.py` | Lam viec voi `medical_cases.db` |
-| `reporting.py` | Tao report va artifact |
-| `status_helpers.py` | Ham dem file, tong hop metric nho |
-| `cancer_catalog.py` | Danh sach cancer labels va target |
-| `cancer_dataset_registry.py` | Dang ky nguon du lieu va metadata nguon |
-| `chat_service.py` | Logic phuc vu hoi dap / thao tac medical cho chat UI |
+| `dataset.py` | Tạo / đảm bảo cấu trúc dataset medical |
+| `pipeline.py` | Pipeline xử lý và phân tích ảnh y khoa |
+| `system_status.py` | Tổng hợp trạng thái model, data, output, DB |
+| `model_policy.py` | Chọn model runtime và fallback model |
+| `storage.py` | Làm việc với `medical_cases.db` |
+| `reporting.py` | Tạo report và artifact |
+| `status_helpers.py` | Hàm đếm file, tổng hợp metric nhỏ |
+| `cancer_catalog.py` | Danh sách cancer labels và target |
+| `cancer_dataset_registry.py` | Đăng ký nguồn dữ liệu và metadata nguồn |
+| `chat_service.py` | Logic phục vụ hỏi đáp / thao tác medical cho chat UI |
 
-## 8. Quy Trinh Van Hanh Khuyen Nghi
+## 8. Quy Trình Vận Hành Khuyến Nghị
 
-### A. Khoi tao mot may moi
+### A. Khởi tạo một máy mới
 
 ```powershell
 python run_medical.py init-dataset
@@ -179,7 +179,7 @@ python run_doctor.py --skip-camera-check
 python run_chat.py --check-only
 ```
 
-### B. Chuan bi TCIA
+### B. Chuẩn bị TCIA
 
 ```powershell
 python run_medical.py sources
@@ -188,7 +188,7 @@ python run_medical.py tcia-download --collections-file training/tcia_collections
 python run_medical.py verify-tcia --collections-file training/tcia_collections_5.json
 ```
 
-### C. Kiem tra kha nang dua vao su dung
+### C. Kiểm tra khả năng đưa vào sử dụng
 
 ```powershell
 python run_medical.py ready
@@ -196,32 +196,32 @@ python run_medical.py status
 python run_chat.py --check-only
 ```
 
-## 9. Output Va Don Dep
+## 9. Output Và Dọn Dẹp
 
-Neu output chat hoac medical phat sinh qua nhieu:
+Nếu output chat hoặc medical phát sinh quá nhiều:
 
 ```powershell
 python run_chat.py --cleanup-output --older-than-days 30
 ```
 
-Lenh nay giup:
+Lệnh này giúp:
 
-- xoa file output cu,
-- giai phong dung luong,
-- giu workspace sach de debug va CI de theo doi hon.
+- xóa file output cũ,
+- giải phóng dung lượng,
+- giữ workspace sạch để debug và CI dễ theo dõi hơn.
 
-## 10. Luu Y Nghiep Vu
+## 10. Lưu Ý Nghiệp Vụ
 
-- Repo nay ho tro sang loc, nghien cuu, va van hanh ky thuat; khong thay the danh gia y khoa chuyen mon.
-- Neu dung anh that cua benh nhan, can co quy trinh an danh va kiem soat truy cap ro rang.
-- Khong nen xem `model_ready=True` la bang chung cho do chinh xac lam sang; do chi la tin hieu cho thay pipeline co the van hanh.
+- Repo này hỗ trợ sàng lọc, nghiên cứu, và vận hành kỹ thuật; không thay thế đánh giá y khoa chuyên môn.
+- Nếu dùng ảnh thật của bệnh nhân, cần có quy trình ẩn danh và kiểm soát truy cập rõ ràng.
+- Không nên xem `model_ready=True` là bằng chứng cho độ chính xác lâm sàng; đó chỉ là tín hiệu cho thấy pipeline có thể vận hành.
 
-## 11. Khi Nao Nen Debug Module Nao
+## 11. Khi Nào Nên Debug Module Nào
 
-| Trieu chung | Di debug dau |
+| Triệu chứng | Đi debug đâu |
 |---|---|
 | `run_chat.py --check-only` fail | `utils/entrypoint_checks.py`, `medical/system_status.py` |
-| `status` bao model chua san sang | `medical/model_policy.py`, `models/` |
-| Counts raw/train/val khong dung | `medical/training.py`, `medical/status_helpers.py` |
+| `status` báo model chưa sẵn sàng | `medical/model_policy.py`, `models/` |
+| Counts raw/train/val không đúng | `medical/training.py`, `medical/status_helpers.py` |
 | TCIA verify fail | `training/tcia_downloader.py`, `training/verify_tcia_downloads.py` |
-| Bao cao / export khong sinh | `medical/reporting.py`, `medical/output_management.py` |
+| Báo cáo / export không sinh | `medical/reporting.py`, `medical/output_management.py` |

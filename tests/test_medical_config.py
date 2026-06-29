@@ -56,4 +56,4 @@ class MedicalConfigTests(unittest.TestCase):
         issues = validate_medical_analyzer_config(broken)
         self.assertTrue(any("image_size" in item for item in issues))
         self.assertTrue(any("conf_threshold" in item for item in issues))
-        self.assertTrue(any("nguong nguy co" in item for item in issues))
+        self.assertTrue(any("ngưỡng nguy cơ" in item for item in issues))

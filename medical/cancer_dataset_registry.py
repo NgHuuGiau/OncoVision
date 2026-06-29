@@ -36,7 +36,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA NSCLC-Radiomics",
         status="source_confirmed",
         official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo collection lung pho bien tren TCIA; du lieu DICOM CT/PET/MRI. TCGA-LUAD la collection dung rieng.",
+        notes="Mapping theo collection phổi phổ biến trên TCIA; dữ liệu DICOM CT/PET/MRI. TCGA-LUAD là collection dùng riêng.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_colorectal",

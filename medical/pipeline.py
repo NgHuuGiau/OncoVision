@@ -92,15 +92,15 @@ def validate_medical_model_path(config: MedicalImageAnalyzerConfig) -> Path:
 def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list[str]:
     issues: list[str] = []
     if config.image_size <= 0:
-        issues.append("image_size phai lon hon 0.")
+        issues.append("image_size phải lớn hơn 0.")
     if not 0.0 < config.conf_threshold < 1.0:
-        issues.append("conf_threshold phai nam trong khoang (0, 1).")
+        issues.append("conf_threshold phải nằm trong khoảng (0, 1).")
     if not 0.0 < config.classify_medium_risk_threshold <= config.classify_high_risk_threshold <= 1.0:
-        issues.append("nguong nguy co khong hop le.")
+        issues.append("ngưỡng nguy cơ không hợp lệ.")
     if not config.model_path:
-        issues.append("model_path khong duoc de trong.")
+        issues.append("model_path không được để trống.")
     if config.allow_fallback_model and config.fallback_model_path is None:
-        issues.append("allow_fallback_model dang bat nhung fallback_model_path bi thieu.")
+        issues.append("allow_fallback_model đang bật nhưng fallback_model_path bị thiếu.")
     return issues
 
 
@@ -114,7 +114,7 @@ class MedicalImageAnalyzer:
         normalized_path = normalize_uploaded_image(image_path, self.config.processed_dir, image_size=self.config.image_size)
         image = cv2.imread(str(normalized_path))
         if image is None:
-            raise RuntimeError(f"Khong doc duoc anh: {normalized_path}")
+            raise RuntimeError(f"Không đọc được ảnh: {normalized_path}")
         quality_warnings = self._evaluate_image_quality(image)
         detections = self._detect_findings(image)
         risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(detections)
@@ -162,13 +162,13 @@ class MedicalImageAnalyzer:
         brightness = float(np.mean(gray))
         height, width = gray.shape[:2]
         if min(height, width) < 256:
-            warnings.append("Anh co do phan giai thap, ket qua sang loc co the kem on dinh.")
+            warnings.append("Ảnh có độ phân giải thấp, kết quả sàng lọc có thể kém ổn định.")
         if blur_score < 45:
-            warnings.append("Anh co dau hieu mo, nen chup lai ro hon va lay net vao vung ton thuong.")
+            warnings.append("Ảnh có dấu hiệu mờ, nên chụp lại rõ hơn và lấy nét vào vùng tổn thương.")
         if brightness < 45:
-            warnings.append("Anh qua toi, nen bo sung anh sang deu truoc khi phan tich.")
+            warnings.append("Ảnh quá tối, nên bổ sung ánh sáng đều trước khi phân tích.")
         if brightness > 220:
-            warnings.append("Anh qua sang, co nguy co mat chi tiet ton thuong.")
+            warnings.append("Ảnh quá sáng, có nguy cơ mất chi tiết tổn thương.")
         return warnings
 
     def _detect_findings(self, image: np.ndarray) -> list[DetectionFinding]:
@@ -200,7 +200,7 @@ class MedicalImageAnalyzer:
         model_path = validate_medical_model_path(self.config)
         issues = validate_medical_analyzer_config(self.config)
         if issues:
-            raise ValueError("Cau hinh medical khong hop le: " + "; ".join(issues))
+            raise ValueError("Cấu hình medical không hợp lệ: " + "; ".join(issues))
         self.config = self.config.with_model_path(model_path)
         return model_path
 
@@ -214,7 +214,7 @@ class MedicalImageAnalyzer:
             return (
                 "low",
                 False,
-                "Khong ghi nhan vung ton thuong ro rang tren anh nay. Neu benh nhan co trieu chung hoac ton thuong ton tai, van nen kham chuyen khoa.",
+                "Không ghi nhận vùng tổn thương rõ ràng trên ảnh này. Nếu bệnh nhân có triệu chứng hoặc tổn thương tồn tại, vẫn nên khám chuyên khoa.",
                 0.0,
             )
         average_confidence = sum(item.confidence for item in detections) / len(detections)
@@ -223,20 +223,20 @@ class MedicalImageAnalyzer:
             return (
                 "high",
                 True,
-                "Phat hien vung ton thuong co nguy co cao. Nen chuyen benh nhan den bac si da lieu/ung buou de danh gia tiep va sinh thiet neu can.",
+                "Phát hiện vùng tổn thương có nguy cơ cao. Nên chuyển bệnh nhân đến bác sĩ da liễu/ung bướu để đánh giá tiếp và sinh thiết nếu cần.",
                 average_confidence,
             )
         if max_confidence >= self.config.classify_medium_risk_threshold:
             return (
                 "medium",
                 True,
-                "Phat hien vung ton thuong co nguy co trung binh. Nen tai kham som va doi chieu voi kham lam sang chuyen khoa.",
+                "Phát hiện vùng tổn thương có nguy cơ trung bình. Nên tái khám sớm và đối chiếu với khám lâm sàng chuyên khoa.",
                 average_confidence,
             )
         return (
             "low",
             False,
-            "Co mot vai vung ton thuong nguy co thap. Nen theo doi va kham chuyen khoa neu ton thuong thay doi kich thuoc, mau sac hoac hinh dang.",
+            "Có một vài vùng tổn thương nguy cơ thấp. Nên theo dõi và khám chuyên khoa nếu tổn thương thay đổi kích thước, màu sắc hoặc hình dạng.",
             average_confidence,
         )
 

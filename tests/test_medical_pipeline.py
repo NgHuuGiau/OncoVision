@@ -45,7 +45,7 @@ class _FakeDetector:
 
 class MedicalPipelineTests(unittest.TestCase):
     def test_analyze_image_generates_overlay_and_reports(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
             image_path = Path(temp_dir) / "input.jpg"
             model_path = Path(temp_dir) / "medical_model.pt"
             cv2.imwrite(str(image_path), np.full((120, 160, 3), 200, dtype=np.uint8))
@@ -89,7 +89,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(risk_level, "low")
         self.assertFalse(suspected_malignant)
         self.assertEqual(average_confidence, 0.0)
-        self.assertIn("Khong ghi nhan", recommendation)
+        self.assertIn("Không ghi nhận", recommendation)
 
     def test_classify_findings_returns_medium_for_mid_confidence(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -109,7 +109,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(risk_level, "medium")
         self.assertTrue(suspected_malignant)
         self.assertAlmostEqual(average_confidence, 0.6)
-        self.assertIn("trung binh", recommendation)
+        self.assertIn("trung bình", recommendation)
 
     def test_evaluate_image_quality_returns_warning_for_dark_image(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -126,10 +126,10 @@ class MedicalPipelineTests(unittest.TestCase):
         warnings = analyzer._evaluate_image_quality(np.zeros((128, 128, 3), dtype=np.uint8))
 
         self.assertTrue(warnings)
-        self.assertTrue(any("qua toi" in warning for warning in warnings))
+        self.assertTrue(any("quá tối" in warning for warning in warnings))
 
     def test_validate_medical_model_path_rejects_generic_pretrained_model_by_default(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
             pretrained_dir = Path(temp_dir) / "models" / "pretrained"
             pretrained_dir.mkdir(parents=True, exist_ok=True)
             generic_model = pretrained_dir / "yolo11n.pt"
@@ -146,10 +146,10 @@ class MedicalPipelineTests(unittest.TestCase):
                 with self.assertRaises(FileNotFoundError) as raised:
                     validate_medical_model_path(config)
 
-        self.assertIn("YOLO tong quat", str(raised.exception))
+        self.assertIn("YOLO tổng quát", str(raised.exception))
 
     def test_validate_medical_model_path_allows_explicit_fallback_mode(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
             pretrained_dir = Path(temp_dir) / "models" / "pretrained"
             pretrained_dir.mkdir(parents=True, exist_ok=True)
             fallback_model = pretrained_dir / "yolo11n.pt"

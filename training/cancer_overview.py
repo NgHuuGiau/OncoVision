@@ -34,13 +34,13 @@ def main() -> None:
     print(section("NGUON", GREEN))
     for item in overview["sources"]:
         print(row(item["source_name"], item["cancer_type"], GREEN, bounded=False))
-        print(row("Trang thai", item["status"], CYAN, bounded=False))
+        print(row("Trạng thái", item["status"], CYAN, bounded=False))
         print(row("Ghi chu", item["notes"], CYAN, bounded=False))
     print(line(rule("-"), CYAN))
     print(section("KE HOACH TAI", GREEN))
     for item in overview["download_plan"]["planned_downloads"]:
         print(row(item["cancer_name"], item["primary_source"], GREEN if item["status"] == "download_planned" else CYAN, bounded=False))
-        print(row("Trang thai", item["status"], CYAN, bounded=False))
+        print(row("Trạng thái", item["status"], CYAN, bounded=False))
     print(line(rule("-"), CYAN))
     print(section("KET QUA", GREEN))
     print(row("Overview", str(OUTPUT_PATH), GREEN, bounded=False))

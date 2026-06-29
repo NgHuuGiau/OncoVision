@@ -47,7 +47,7 @@ class VideoRecorder:
         if not self.writer.isOpened():
             self.writer.release()
             self.writer = None
-            raise RuntimeError(f"Khong tao duoc file video: {self.output_path}")
+            raise RuntimeError(f"Không tạo được file video: {self.output_path}")
         return RecorderStatus(is_recording=True, path=self.output_path)
 
     def write(self, frame: np.ndarray) -> None:

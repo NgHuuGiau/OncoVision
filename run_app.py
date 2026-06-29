@@ -13,11 +13,11 @@ from utils.console_ui import BootProgress, print_runtime_dashboard
 
 
 def parse_args() -> argparse.Namespace:
-    parser = build_camera_arg_parser("Chay OncoVision thoi gian thuc voi camera desktop.")
+    parser = build_camera_arg_parser("Chạy OncoVision thời gian thực với camera desktop.")
     parser.add_argument(
         "--advisor-only",
         action="store_true",
-        help="Chi in khuyen nghi runtime, khong mo camera.",
+        help="Chỉ in khuyến nghị runtime, không mở camera.",
     )
     return parser.parse_args()
 
@@ -27,6 +27,12 @@ def resolve_run_app_start_bundle(**kwargs):
         **kwargs,
         prompt_runtime_mode_fn=prompt_runtime_mode,
     )
+
+
+def run_camera_session(*, runtime, camera_index: int) -> None:
+    from core.camera_runner import run_camera_session as _run_camera_session
+
+    _run_camera_session(runtime=runtime, camera_index=camera_index)
 
 
 def run_runtime_advisor(print_fn=print) -> int:
@@ -45,7 +51,6 @@ def main() -> int:
     args = parse_args()
     if getattr(args, "advisor_only", False):
         return run_runtime_advisor()
-    from core.camera_runner import run_camera_session
 
     start_options = resolve_run_app_start_bundle(
         requested_mode=args.mode,

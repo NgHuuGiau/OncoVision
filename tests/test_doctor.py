@@ -11,7 +11,7 @@ import run_doctor
 
 class DoctorTests(unittest.TestCase):
     def test_present_and_missing_models_reports_expected_values(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
             model_dir = Path(temp_dir)
             (model_dir / "yolo11n.pt").write_text("n", encoding="utf-8")
             (model_dir / "yolo11s.pt").write_text("s", encoding="utf-8")
@@ -177,8 +177,8 @@ class DoctorTests(unittest.TestCase):
         run_doctor.main()
 
         output = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
-        self.assertIn("CAU HINH", output)
-        self.assertIn("Can kiem tra", output)
+        self.assertIn("CẤU HÌNH", output)
+        self.assertIn("Cần kiểm tra", output)
         self.assertIn("conf_threshold", output)
         self.assertIn("models", output)
 

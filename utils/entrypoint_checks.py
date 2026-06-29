@@ -75,7 +75,7 @@ def runtime_config_issues() -> list[str]:
 
     models = settings.get("models")
     if not isinstance(models, dict) or not models:
-        issues.append("config/settings.yaml thieu hoac sai muc `models`.")
+        issues.append("config/settings.yaml thiếu hoặc sai mục `models`.")
     else:
         required_modes = {"high", "medium", "low"}
         missing_modes = sorted(required_modes - set(models))
@@ -86,14 +86,14 @@ def runtime_config_issues() -> list[str]:
                 issues.append(f"Mode `{mode_name}` phai la mapping.")
                 continue
             if "model" not in mode_config:
-                issues.append(f"Mode `{mode_name}` thieu truong `model`.")
+                issues.append(f"Mode `{mode_name}` thiếu trường `model`.")
             if "imgsz" not in mode_config:
-                issues.append(f"Mode `{mode_name}` thieu truong `imgsz`.")
+                issues.append(f"Mode `{mode_name}` thiếu trường `imgsz`.")
 
     preferred_models = model_config.get("preferred_models")
     if not isinstance(preferred_models, dict):
-        issues.append("config/model_config.yaml thieu muc `preferred_models`.")
+        issues.append("config/model_config.yaml thiếu mục `preferred_models`.")
     priority_order = model_config.get("priority_order")
     if not isinstance(priority_order, list) or not priority_order:
-        issues.append("config/model_config.yaml thieu muc `priority_order`.")
+        issues.append("config/model_config.yaml thiếu mục `priority_order`.")
     return issues

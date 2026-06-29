@@ -18,7 +18,7 @@ class BootProgressTests(unittest.TestCase):
         rendered = fake_stdout.getvalue()
         self.assertIn("YOLO Camera Realtime", rendered)
         self.assertIn("Dang kiem tra CUDA", rendered)
-        self.assertIn("Muc san sang", rendered)
+        self.assertIn("Mức sẵn sàng", rendered)
         self.assertIn("0 [", rendered)
 
     def test_disabled_progress_still_tracks_latest_label_and_percent(self) -> None:

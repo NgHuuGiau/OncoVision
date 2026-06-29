@@ -1,96 +1,96 @@
-# Huong Dan Runtime Advisor
+# Hướng Dẫn Runtime Advisor
 
-Tai lieu nay giai thich cong cu `run_app.py --advisor-only`: no lam gi, doc ket qua ra sao, va dung cong cu nay nhu the nao de chon runtime mode phu hop truoc khi mo camera that.
+Tài liệu này giải thích công cụ `run_app.py --advisor-only`: nó làm gì, đọc kết quả ra sao, và dùng công cụ này như thế nào để chọn runtime mode phù hợp trước khi mở camera thật.
 
-## 1. Runtime Advisor La Gi
+## 1. Runtime Advisor Là Gì
 
-`run_app.py --advisor-only` la che do:
+`run_app.py --advisor-only` là chế độ:
 
-- khong mo webcam,
-- khong chay detection realtime,
-- khong mo giao dien camera,
-- chi phan tich he thong va dua ra goi y runtime.
+- không mở webcam,
+- không chạy detection realtime,
+- không mở giao diện camera,
+- chỉ phân tích hệ thống và đưa ra gợi ý runtime.
 
-Lenh:
+Lệnh:
 
 ```powershell
 python run_app.py --advisor-only
 ```
 
-## 2. Muc Tieu Cua Cong Cu
+## 2. Mục Tiêu Của Công Cụ
 
-Cong cu nay giup tra loi 4 cau hoi:
+Công cụ này giúp trả lời 4 câu hỏi:
 
-1. may hien tai dang manh den dau,
-2. co GPU / CUDA / torch san sang hay khong,
-3. nen uu tien model nao,
-4. nen bat dau voi `high`, `medium`, `low`, hay `auto`.
+1. máy hiện tại đang mạnh đến đâu,
+2. có GPU / CUDA / torch sẵn sàng hay không,
+3. nên ưu tiên model nào,
+4. nên bắt đầu với `high`, `medium`, `low`, hay `auto`.
 
-## 3. Noi Dung Dau Ra Thuong Gap
+## 3. Nội Dung Đầu Ra Thường Gặp
 
-Runtime advisor thuong hien:
+Runtime advisor thường hiện:
 
 - CPU, RAM, GPU, VRAM
 - torch version
 - CUDA build
-- danh sach model local dang co
-- mode runtime du kien
-- `imgsz`, `max_det`, `device`, model de xuat
+- danh sách model local đang có
+- mode runtime dự kiến
+- `imgsz`, `max_det`, `device`, model đề xuất
 
-## 4. Y Nghia Tung Mode
+## 4. Ý Nghĩa Từng Mode
 
 ### `high`
 
-Phu hop khi:
+Phù hợp khi:
 
-- may co GPU tot,
-- uu tien do chinh xac,
-- co the chap nhan tai cao hon.
+- máy có GPU tốt,
+- ưu tiên độ chính xác,
+- có thể chấp nhận tải cao hơn.
 
 ### `medium`
 
-Phu hop khi:
+Phù hợp khi:
 
-- muon can bang FPS va do chinh xac,
-- muon bat dau voi lua chon an toan,
-- day la mode hay hop voi da so may dev.
+- muốn cân bằng FPS và độ chính xác,
+- muốn bắt đầu với lựa chọn an toàn,
+- đây là mode hay hợp với đa số máy dev.
 
 ### `low`
 
-Phu hop khi:
+Phù hợp khi:
 
-- may yeu,
-- dang chay CPU,
-- webcam / he thong khong on dinh,
-- can uu tien toc do va do ben.
+- máy yếu,
+- đang chạy CPU,
+- webcam / hệ thống không ổn định,
+- cần ưu tiên tốc độ và độ bền.
 
 ### `auto`
 
-Khong phai mode co dinh, ma la co che chon mode theo may dang dung. Thuong advisor se dua ra de xuat tren co so:
+Không phải mode cố định, mà là cơ chế chọn mode theo máy đang dùng. Thường advisor sẽ đưa ra đề xuất trên cơ sở:
 
-- co CUDA hay khong,
-- VRAM nhieu hay it,
-- model nao san co trong `models/`.
+- có CUDA hay không,
+- VRAM nhiều hay ít,
+- model nào sẵn có trong `models/`.
 
-## 5. Cach Doc Ket Qua
+## 5. Cách Đọc Kết Quả
 
-Vi du neu advisor bao:
+Ví dụ nếu advisor báo:
 
 ```text
 medium: model=yolo11s.pt, device=cuda:0, imgsz=512, max_det=120
 ```
 
-Ban co the hieu:
+Bạn có thể hiểu:
 
-- mode khoi dong hop ly la `medium`,
-- model uu tien la `yolo11s.pt`,
-- se chay bang GPU `cuda:0`,
-- kich thuoc anh input 512,
-- gioi han detection moi frame la 120.
+- mode khởi động hợp lý là `medium`,
+- model ưu tiên là `yolo11s.pt`,
+- sẽ chạy bằng GPU `cuda:0`,
+- kích thước ảnh input 512,
+- giới hạn detection mỗi frame là 120.
 
-## 6. Cach Dung Cung Cac Lenh Khac
+## 6. Cách Dùng Cùng Các Lệnh Khác
 
-Quy trinh khuyen nghi:
+Quy trình khuyến nghị:
 
 ```powershell
 python run_app.py --advisor-only
@@ -98,71 +98,71 @@ python run_doctor.py --skip-camera-check
 python run_app.py --mode medium
 ```
 
-Neu da co model custom:
+Nếu đã có model custom:
 
 ```powershell
 python run_app.py --advisor-only
 python run_app.py --model models/trained/best.pt --mode medium
 ```
 
-## 7. Lien Quan Toi Cac Module Khac
+## 7. Liên Quan Tới Các Module Khác
 
-Runtime advisor phu thuoc nhieu vao:
+Runtime advisor phụ thuộc nhiều vào:
 
 - `core/hardware_info.py`
 - `core/runtime_advisor.py`
 - `app/camera_runtime/bootstrap.py`
 - `config/settings.yaml`
 
-Neu goi y khong hop ly, day la nhom file nen debug dau tien.
+Nếu gợi ý không hợp lý, đây là nhóm file nên debug đầu tiên.
 
-## 8. Khi Nao Nen Chay Runtime Advisor
+## 8. Khi Nào Nên Chạy Runtime Advisor
 
-Nen chay trong cac truong hop:
+Nên chạy trong các trường hợp:
 
-- may moi vua cai repo,
-- vua thay GPU / driver / torch,
-- vua doi model local,
-- camera realtime dang lag,
-- muon so sanh giua `medium` va `low`,
-- truoc khi demo tren may la.
+- máy mới vừa cài repo,
+- vừa thay GPU / driver / torch,
+- vừa đổi model local,
+- camera realtime đang lag,
+- muốn so sánh giữa `medium` và `low`,
+- trước khi demo trên máy lạ.
 
-## 9. Van De Thuong Gap
+## 9. Vấn Đề Thường Gặp
 
-### Advisor bao CUDA nhung runtime van cham
+### Advisor báo CUDA nhưng runtime vẫn chậm
 
-Ly do co the la:
+Lý do có thể là:
 
-- model qua nang,
-- `imgsz` qua cao,
-- GPU dang bi app khac chiem,
-- webcam output qua lon.
+- model quá nặng,
+- `imgsz` quá cao,
+- GPU đang bị app khác chiếm,
+- webcam output quá lớn.
 
-Thu:
+Thử:
 
 ```powershell
 python run_app.py --mode low
 python run_app.py --mode medium
 ```
 
-### Advisor thay model local nhung ket qua nhan dien kem
+### Advisor thấy model local nhưng kết quả nhận diện kém
 
-Can tach ro:
+Cần tách rõ:
 
-- advisor chi goi y mode/runtime,
-- khong danh gia chat luong nghiep vu cua model.
+- advisor chỉ gợi ý mode/runtime,
+- không đánh giá chất lượng nghiệp vụ của model.
 
-Neu muon model tot hon, can xem tiep:
+Nếu muốn model tốt hơn, cần xem tiếp:
 
 - `training_guide.md`
 - `models/trained/best.pt`
-- dataset object detection thuc te.
+- dataset object detection thực tế.
 
-## 10. Muc Tieu Khi Su Dung Dung Cach
+## 10. Mục Tiêu Khi Sử Dụng Đúng Cách
 
-Runtime advisor giup team:
+Runtime advisor giúp team:
 
-- mo camera voi cau hinh hop ly hon,
-- giam bug do chon sai mode,
-- de huong dan may moi,
-- de debug van de nang / lag / FPS thap mot cach co he thong.
+- mở camera với cấu hình hợp lý hơn,
+- giảm bug do chọn sai mode,
+- dễ hướng dẫn máy mới,
+- dễ debug vấn đề nặng / lag / FPS thấp một cách có hệ thống.

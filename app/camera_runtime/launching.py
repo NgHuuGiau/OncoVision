@@ -4,12 +4,12 @@ from utils.console_ui import BootProgress
 
 
 CAMERA_BOOT_STEPS = (
-    (16, "Dang nhan cau hinh khoi dong"),
-    (42, "Dang kiem tra CPU / GPU / CUDA"),
-    (68, "Dang chon model va runtime phu hop"),
-    (88, "Dang chuan bi mo camera"),
+    (16, "Đang nhận cấu hình khởi động"),
+    (42, "Đang kiểm tra CPU / GPU / CUDA"),
+    (68, "Đang chọn model và runtime phù hợp"),
+    (88, "Đang chuẩn bị mở camera"),
 )
-CAMERA_BOOT_FINISH_MESSAGE = "San sang mo camera"
+CAMERA_BOOT_FINISH_MESSAGE = "Sẵn sàng mở camera"
 
 
 def run_camera_launch_flow(

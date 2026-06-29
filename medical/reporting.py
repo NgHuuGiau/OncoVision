@@ -60,8 +60,8 @@ def _markdown_report(payload: dict[str, Any]) -> str:
     quality_warnings = payload.get("quality_warnings", [])
     detection_lines = "\n".join(
         f"- {item['label']} | conf={item['confidence']:.2f} | bbox={item['bbox']}" for item in detections
-    ) or "- Khong co vung nghi ngo nao duoc ghi nhan."
-    quality_lines = "\n".join(f"- {warning}" for warning in quality_warnings) or "- Khong co canh bao chat luong anh."
+    ) or "- Không có vùng nghi ngờ nào được ghi nhận."
+    quality_lines = "\n".join(f"- {warning}" for warning in quality_warnings) or "- Không có cảnh báo chất lượng ảnh."
     supported_targets = ", ".join(supported_cancer_labels())
     return (
         "# Medical Imaging Case Report\n\n"

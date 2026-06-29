@@ -170,7 +170,7 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, yolo_cls=N
     save_dir = Path(getattr(results, "save_dir", kwargs["project"]))
     best_weight = save_dir / "weights" / "best.pt"
     if not best_weight.exists():
-        raise FileNotFoundError(f"Khong tim thay best.pt sau khi train tai {best_weight}")
+        raise FileNotFoundError(f"Không tìm thấy best.pt sau khi train tại {best_weight}")
     paths.trained_model_path.parent.mkdir(parents=True, exist_ok=True)
     import shutil
 

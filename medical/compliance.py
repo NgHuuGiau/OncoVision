@@ -7,7 +7,7 @@ MEDICAL_DISCLAIMER = dedent(
     """
     Canh bao y khoa:
     He thong nay chi ho tro sang loc va nghien cuu hinh anh y khoa.
-    Ket qua phan tich tu dong khong duoc dung de tu chan doan, ke don hoac thay the y kien bac si.
+    Kết quả phân tích tự động không được dùng để tự chẩn đoán, kê đơn hoặc thay thế ý kiến bác sĩ.
     Moi truong hop nghi ngo ung thu can duoc danh gia boi bac si chuyen khoa va xet nghiem bo sung.
     """
 ).strip()

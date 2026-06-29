@@ -8,8 +8,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from utils.file_utils import ensure_project_directories
 from utils.entrypoint_common import run_entrypoint
+from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -38,7 +38,7 @@ MENU_OPTIONS: dict[str, MenuOption] = {
     "2": MenuOption("run_chat.py", "Chat y dược", "Mở giao diện chat và phân tích ảnh y khoa.", "CHẠY", GREEN),
     "3": MenuOption("run_medical.py", "Y dược", "Dataset, TCIA, train, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
     "4": MenuOption("run_train.py", "Huấn luyện", "Chuẩn bị dữ liệu, train, đánh giá và xuất model.", "HUẤN LUYỆN", CYAN),
-    "5": MenuOption("run_smoke.py", "Kiểm tra tổng hợp", "Chạy smoke check; dùng submenu y dược để xem dataset/TCIA chi tiết.", "KIỂM TRA", YELLOW),
+    "5": MenuOption("", "Kiểm tra", "Mở submenu Doctor, Test và Smoke để menu chính gọn hơn.", "KIỂM TRA", YELLOW),
     "6": MenuOption("run_chat.py", "Dọn output", "Xóa nhanh output chat và medical cũ.", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED),
 }
@@ -62,6 +62,17 @@ MEDICAL_OPTIONS: dict[str, MenuOption] = {
 }
 MEDICAL_PRIMARY_KEYS = tuple(key for key in MEDICAL_OPTIONS if key != "0")
 MEDICAL_PROMPT = f"Chọn tác vụ y dược [{ '/'.join(('0', *MEDICAL_PRIMARY_KEYS)) }]: "
+CHECK_BACK_TEXT = "Quay lại menu chính."
+
+CHECK_OPTIONS: dict[str, MenuOption] = {
+    "1": MenuOption("run_doctor.py", "Doctor", "Rà soát tổng thể môi trường, model và dataset mà không cần webcam thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
+    "2": MenuOption("run_tests.py", "Test", "Chạy dashboard unit test và regression mà không yêu cầu camera thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
+    "3": MenuOption("run_smoke.py", "Smoke", "Chạy smoke check qua các entrypoint chính để check nhanh toàn luồng.", "KIỂM TRA", YELLOW),
+    "4": MenuOption("run_smoke.py", "Smoke + tests", "Chạy smoke check và nối thêm run_tests để rà soát sau cùng.", "KIỂM TRA", YELLOW, ("--include-tests",)),
+    "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
+}
+CHECK_PRIMARY_KEYS = tuple(key for key in CHECK_OPTIONS if key != "0")
+CHECK_PROMPT = f"Chọn tác vụ kiểm tra [{ '/'.join(('0', *CHECK_PRIMARY_KEYS)) }]: "
 
 
 def _configure_terminal_encoding() -> None:
@@ -133,6 +144,10 @@ def _render_menu(print_fn=print) -> None:
 
 def _render_medical_menu(print_fn=print) -> None:
     _render_options(MEDICAL_OPTIONS, MEDICAL_PRIMARY_KEYS, "OncoVision : MEDICAL MENU", print_fn=print_fn)
+
+
+def _render_check_menu(print_fn=print) -> None:
+    _render_options(CHECK_OPTIONS, CHECK_PRIMARY_KEYS, "OncoVision : MENU KIỂM TRA", print_fn=print_fn)
 
 
 def _clear_terminal() -> None:
@@ -208,6 +223,29 @@ def _run_medical_menu(input_fn=input, print_fn=print, run_script_fn=_run_script,
         )
 
 
+def _run_check_menu(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> None:
+    while True:
+        _render_check_menu(print_fn=print_fn)
+        choice = input_fn(CHECK_PROMPT).strip()
+        if choice == "0":
+            print_fn(f"{YELLOW}{CHECK_BACK_TEXT}{RESET}")
+            return
+        if not choice:
+            continue
+        option = CHECK_OPTIONS.get(choice)
+        if option is None:
+            print_fn(f"{RED}{TESTED_INVALID_TEXT}{RESET}")
+            continue
+        _run_selected_option(
+            option,
+            args=option.args,
+            print_fn=print_fn,
+            run_script_fn=run_script_fn,
+            clear_terminal_fn=clear_terminal_fn,
+            back_text="Quay lại menu kiểm tra.",
+        )
+
+
 def _run_menu_choice(
     choice: str,
     *,
@@ -223,6 +261,15 @@ def _run_menu_choice(
     if choice == "3":
         clear_terminal_fn()
         _run_medical_menu(
+            input_fn=input_fn,
+            print_fn=print_fn,
+            run_script_fn=run_script_fn,
+            clear_terminal_fn=clear_terminal_fn,
+        )
+        return True
+    if choice == "5":
+        clear_terminal_fn()
+        _run_check_menu(
             input_fn=input_fn,
             print_fn=print_fn,
             run_script_fn=run_script_fn,
@@ -263,4 +310,3 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
 
 if __name__ == "__main__":
     raise SystemExit(run_entrypoint(main))
-

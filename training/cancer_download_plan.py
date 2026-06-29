@@ -57,13 +57,13 @@ def main() -> None:
     print(section("Uu tien tai ngay", GREEN))
     for item in plan["priority_downloads"]:
         print(row(item["cancer_name"], item["primary_source"], GREEN, bounded=False))
-        print(row("Trang thai", item["status"], CYAN, bounded=False))
+        print(row("Trạng thái", item["status"], CYAN, bounded=False))
         print(row("Ghi chu", item["note"], CYAN, bounded=False))
     print(line(rule("-"), CYAN))
     print(section("CO THE TAI TIEP", GREEN))
     for item in plan["planned_downloads"]:
         print(row(item["cancer_name"], item["primary_source"], GREEN if item["status"] == "download_planned" else CYAN, bounded=False))
-        print(row("Trang thai", item["status"], CYAN, bounded=False))
+        print(row("Trạng thái", item["status"], CYAN, bounded=False))
         print(row("Ghi chu", item["note"], CYAN, bounded=False))
     print(line(rule("-"), CYAN))
     print(section("KET QUA", GREEN))

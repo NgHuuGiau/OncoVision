@@ -18,9 +18,9 @@ def resolve_medical_runtime_model_path(config: Any) -> Path:
     if resolved_model_path.exists():
         if not config.allow_fallback_model and is_generic_pretrained_model(resolved_model_path):
             raise FileNotFoundError(
-                "Model medical hien tai dang tro vao model YOLO tong quat. "
-                "Hay train model chuyen dung va cap nhat config/medical_settings.yaml. "
-                "Chi bat allow_fallback_model khi ban chap nhan day la che do nghien cuu."
+                "Model medical hiện tại đang trỏ vào model YOLO tổng quát. "
+                "Hãy train model chuyên dụng và cập nhật config/medical_settings.yaml. "
+                "Chỉ bật allow_fallback_model khi bạn chấp nhận đây là chế độ nghiên cứu."
             )
         return resolved_model_path
 
@@ -30,8 +30,8 @@ def resolve_medical_runtime_model_path(config: Any) -> Path:
             return fallback_model_path
 
     raise FileNotFoundError(
-        f"Chua tim thay model y duoc chuyen dung tai {resolved_model_path}. "
-        "Hay huan luyen bang run_medical.py train-all hoac cap nhat config/medical_settings.yaml."
+        f"Chưa tìm thấy model y dược chuyên dụng tại {resolved_model_path}. "
+        "Hãy huấn luyện bằng run_medical.py train-all hoặc cập nhật config/medical_settings.yaml."
     )
 
 
