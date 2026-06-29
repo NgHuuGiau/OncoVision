@@ -30,91 +30,49 @@ jobs:
 
       - name: Install dependencies
         run: |
-          set +e
-          {
-            echo "Installing Python dependencies..."
-            python -m pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install ruff mypy
-          } > ci-logs/01-install-dependencies.txt 2>&1
-          status=$?
-          echo "$status" > ci-logs/01-install-dependencies.exitcode
-          if [ "$status" -ne 0 ]; then touch ci-logs/01-install-dependencies.failed; fi
-          exit 0
+          python -m pip install --upgrade pip 2>&1 | tee ci-logs/01-install-pip.txt
+          pip install -r requirements.txt 2>&1 | tee ci-logs/02-install-requirements.txt
+          pip install ruff mypy 2>&1 | tee ci-logs/03-install-tools.txt
 
       - name: Lint with Ruff
         run: |
-          set +e
-          ruff check . --line-length 140 --target-version py310 > ci-logs/02-ruff-lint.txt 2>&1
-          status=$?
-          echo "$status" > ci-logs/02-ruff-lint.exitcode
-          if [ "$status" -ne 0 ]; then touch ci-logs/02-ruff-lint.failed; fi
-          exit 0
+          ruff check . --line-length 140 --target-version py310 2>&1 | tee ci-logs/04-ruff-lint.txt
 
       - name: Type check with mypy
         run: |
           set +e
-          mypy . > ci-logs/03-mypy-type-check.txt 2>&1
-          status=$?
-          echo "$status" > ci-logs/03-mypy-type-check.exitcode
-          if [ "$status" -ne 0 ]; then touch ci-logs/03-mypy-type-check.failed; fi
+          mypy . 2>&1 | tee ci-logs/05-mypy-type-check.txt || echo "MyPy completed with issues"
           exit 0
 
       - name: Verify entrypoint help
         run: |
-          set +e
           if [ -f scripts/verify_entrypoints_help.py ]; then
-            python scripts/verify_entrypoints_help.py > ci-logs/04-verify-entrypoints-help.txt 2>&1
+            python scripts/verify_entrypoints_help.py 2>&1 | tee ci-logs/06-verify-entrypoints-help.txt
           else
-            echo "Skipped: scripts/verify_entrypoints_help.py not found" > ci-logs/04-verify-entrypoints-help.txt
+            echo "Skipped: scripts/verify_entrypoints_help.py not found" | tee ci-logs/06-verify-entrypoints-help.txt
           fi
-          status=$?
-          echo "$status" > ci-logs/04-verify-entrypoints-help.exitcode
-          if [ "$status" -ne 0 ]; then touch ci-logs/04-verify-entrypoints-help.failed; fi
-          exit 0
 
       - name: Smoke check
         run: |
-          set +e
           if [ -f run_smoke.py ]; then
-            python run_smoke.py > ci-logs/05-smoke-check.txt 2>&1
+            python run_smoke.py 2>&1 | tee ci-logs/07-smoke-check.txt
           else
-            echo "Skipped: run_smoke.py not found" > ci-logs/05-smoke-check.txt
+            echo "Skipped: run_smoke.py not found" | tee ci-logs/07-smoke-check.txt
           fi
-          status=$?
-          echo "$status" > ci-logs/05-smoke-check.exitcode
-          if [ "$status" -ne 0 ]; then touch ci-logs/05-smoke-check.failed; fi
-          exit 0
 
       - name: Run unit tests
         run: |
-          set +e
-          python -m unittest discover -v > ci-logs/06-unit-tests.txt 2>&1
-          status=$?
-          echo "$status" > ci-logs/06-unit-tests.exitcode
-          if [ "$status" -ne 0 ]; then touch ci-logs/06-unit-tests.failed; fi
-          exit 0
+          python -m unittest discover -v 2>&1 | tee ci-logs/08-unit-tests.txt
 
       - name: Create CI summary
         if: always()
         run: |
-          {
-            echo "# CI Test Summary"
-            echo ""
-            echo "| Step | Log file | Result |"
-            echo "|---|---|---|"
-            for log in ci-logs/*.txt; do
-              base=$(basename "$log" .txt)
-              if [ -f "ci-logs/$base.failed" ]; then
-                result="FAILED"
-              elif [ -f "ci-logs/$base.exitcode" ] || [ "$base" = "00-start" ]; then
-                result="PASSED"
-              else
-                result="CREATED"
-              fi
-              echo "| $base | $(basename "$log") | $result |"
-            done
-          } > ci-logs/00-ci-summary.txt
+          echo "# CI Test Summary" > ci-logs/00-ci-summary.txt
+          echo "" >> ci-logs/00-ci-summary.txt
+          echo "Xem loi truc tiep o step mau do trong tab Actions. File log cung duoc upload o artifact ben duoi." >> ci-logs/00-ci-summary.txt
+          echo "" >> ci-logs/00-ci-summary.txt
+          echo "## Log files" >> ci-logs/00-ci-summary.txt
+          ls -la ci-logs >> ci-logs/00-ci-summary.txt || true
 
           cat ci-logs/00-ci-summary.txt
           cat ci-logs/00-ci-summary.txt >> "$GITHUB_STEP_SUMMARY"
@@ -126,13 +84,4 @@ jobs:
           name: ci-test-logs-${{ github.sha }}
           path: ci-logs
           retention-days: 7
-          if-no-files-found: error
-
-      - name: Fail workflow if any check failed
-        if: always()
-        run: |
-          if ls ci-logs/*.failed >/dev/null 2>&1; then
-            echo "One or more CI checks failed. Download artifact 'ci-test-logs-${{ github.sha }}' to view .txt logs."
-            exit 1
-          fi
-          echo "All CI checks passed."
+          if-no-files-found: warn

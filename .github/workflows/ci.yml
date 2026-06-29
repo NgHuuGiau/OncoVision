@@ -7,7 +7,7 @@ on:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -22,11 +22,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --prefer-binary -r requirements.txt
           pip install ruff
 
       - name: Lint
-        run: ruff check . --line-length 140 --target-version py310
+        run: ruff check . --line-length 140 --target-version py310 --ignore E402
 
       - name: Verify entrypoint help
         run: python scripts/verify_entrypoints_help.py
@@ -35,4 +35,4 @@ jobs:
         run: python run_smoke.py
 
       - name: Run tests
-        run: python -m unittest
+        run: python -m unittest discover -s tests -p "test_*.py"

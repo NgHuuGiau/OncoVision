@@ -106,7 +106,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
     from app.chat_ui.content import translate
     from app.chat_ui.theme_styles import DARK_STYLESHEET, LIGHT_STYLESHEET
-    from app.chat_ui.icons import themed_icon, themed_pixmap
+    from app.chat_ui.icons import themed_icon
     from app.chat_ui.theme_flow import (
         apply_dark_theme as apply_dark_theme_flow,
         apply_light_theme as apply_light_theme_flow,
@@ -126,11 +126,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
     from app.chat_ui.widgets import (
         ChatBubble,
-        HistoryItemWidget,
-        MessageInput,
     )
     from app.chat_ui.message_flow import (
-        add_pending_image_attachment,
         clear_pending_image_previews,
         handle_camera_capture as handle_camera_capture_flow,
         handle_dropped_image as handle_dropped_image_flow,
@@ -148,7 +145,6 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         refresh_history as refresh_history_flow,
         select_conversation as select_conversation_flow,
         show_history_context_menu as show_history_context_menu_flow,
-        start_new_chat as start_new_chat_flow,
         toggle_sidebar as toggle_sidebar_flow,
         update_sidebar_ui as update_sidebar_ui_flow,
     )

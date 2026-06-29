@@ -7,8 +7,6 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from medical.system_status import get_medical_system_status, recommended_medical_commands
-from medical.training import medical_training_paths
-from training.train_model import RAW_IMAGES_DIR as OBJECT_RAW_IMAGES_DIR, RAW_LABELS_DIR as OBJECT_RAW_LABELS_DIR
 
 
 class MedicalSystemStatusTests(unittest.TestCase):
