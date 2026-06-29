@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import sys
 
-from app.chat_ui import build_chat_arg_parser, launch_chat_app
 from app.chat_ui.output_management import cleanup_chat_outputs
 from medical.output_management import cleanup_medical_outputs
 from utils.entrypoint_common import run_entrypoint
@@ -44,6 +43,8 @@ def run_chat_preflight(print_fn=print, auto_fix_icons: bool = False) -> int:
 
 
 def main() -> int:
+    from app.chat_ui.cli import build_chat_arg_parser
+
     parser = build_chat_arg_parser("OncoVision Chat AI")
     parser.add_argument(
         "--check-only",
@@ -83,6 +84,8 @@ def main() -> int:
         output.write(f"Dung lượng giải phóng: {medical_summary.freed_bytes} bytes\n")
         sys.stdout.write(output.getvalue())
         return 0
+    from app.chat_ui.window import launch_chat_app
+
     return launch_chat_app(
         window_title="OncoVision Chat AI",
         camera_index=args.camera_index,

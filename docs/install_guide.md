@@ -1,101 +1,215 @@
-# Hướng Dẫn Cài Đặt
+# Huong Dan Cai Dat
 
-Tài liệu này mô tả cách cài OncoVision trên Windows và cách kiểm tra môi trường trước khi chạy camera hoặc training.
+Tai lieu nay huong dan cai dat OncoVision tren Windows, khoi tao thu muc du an, va kiem tra moi truong truoc khi dua vao su dung.
 
-## Yêu cầu hệ thống
+## 1. Yeu Cau He Thong
 
-- Windows 10 hoặc Windows 11
-- Python 3.10 trở lên
-- Webcam nếu muốn chạy camera realtime
-- GPU NVIDIA là tùy chọn, nhưng nên có nếu muốn tăng tốc inference và training
+### Bat buoc
 
-## Tạo môi trường ảo
+- Windows 10 hoac Windows 11
+- Python 3.10 tro len
+- Quyen tao virtual environment
+- Quyen ghi trong thu muc du an
+
+### Khuyen nghi
+
+- GPU NVIDIA neu muon toi uu train va inference
+- Webcam neu muon chay `run_app.py`
+- Windows Terminal hoac PowerShell 7 de hien thi Unicode tot hon
+
+## 2. Tao Moi Truong Ao
 
 ```powershell
-cd D:\YOLO
+cd D:\OncoVision
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Nếu PowerShell chặn script:
+Neu bi chan script trong PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-## Chuẩn bị thư mục dự án
+## 3. Khoi Tao Thu Muc Du An
+
+Lan chay dau tien nen dung:
 
 ```powershell
-.\.venv\Scripts\python run_menu.py
+python run_menu.py
 ```
 
-Mở menu một lần là hệ thống sẽ tự tạo đủ cây thư mục cần thiết.
+Lenh nay giup tao va dong bo cac nhom thu muc nhu:
 
-## Kiểm tra cài đặt
-
-```powershell
-.\.venv\Scripts\python run_doctor.py
+```text
+dataset/
+models/
+output/
+runs/
 ```
 
-Nếu muốn bỏ qua camera:
+Sau do cac luong `medical`, `training`, `chat`, `camera` se tu bo sung nhung thu muc con can thiet.
+
+## 4. Kiem Tra Sau Cai Dat
+
+### Kiem tra tong quat an toan
 
 ```powershell
-.\.venv\Scripts\python run_doctor.py --skip-camera-check
+python run_doctor.py --skip-camera-check
 ```
 
-## Kiểm tra nhanh
+Muc dich:
+
+- kiem tra dependency quan trong,
+- kiem tra model,
+- kiem tra dataset,
+- kiem tra output directories,
+- khong yeu cau webcam that.
+
+### Kiem tra chuoi entrypoint
 
 ```powershell
-.\.venv\Scripts\python run_tests.py
-.\.venv\Scripts\python run_smoke.py
+python run_smoke.py
 ```
 
-## Chạy thử từng công cụ
-
-### Menu tổng
+Neu dang chay trong CI hoac muon check nhe:
 
 ```powershell
-.\.venv\Scripts\python run_menu.py
+python run_smoke.py --ci-safe --stop-on-fail
+```
+
+### Kiem tra unit test
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+## 5. Chay Thu Tung Chuc Nang
+
+### Menu tong
+
+```powershell
+python run_menu.py
+```
+
+### Runtime advisor
+
+```powershell
+python run_app.py --advisor-only
 ```
 
 ### Camera realtime
 
 ```powershell
-.\.venv\Scripts\python run_app.py
-.\.venv\Scripts\python run_app.py --mode medium --camera-index 0
-.\.venv\Scripts\python run_app.py --model models/trained/best.pt
-.\.venv\Scripts\python run_app.py --advisor-only
+python run_app.py
+python run_app.py --mode medium --camera-index 0
+python run_app.py --model models/trained/best.pt
 ```
 
 ### Chat UI
 
 ```powershell
-.\.venv\Scripts\python run_chat.py
-.\.venv\Scripts\python run_chat.py --check-only
+python run_chat.py --check-only
+python run_chat.py
 ```
 
 ### Training
 
 ```powershell
-.\.venv\Scripts\python run_train.py
-.\.venv\Scripts\python run_train.py --check-only
+python run_train.py --check-only
+python run_train.py
 ```
 
-## Xử lý lỗi thường gặp
-
-- Camera không mở được: thử `--camera-index 1` hoặc `2`
-- Thiếu model local: kiểm tra `models/pretrained/`
-- Lỗi CUDA: kiểm tra driver NVIDIA và bản PyTorch
-- Terminal hiển thị lỗi font: ưu tiên Windows Terminal hoặc PowerShell 7
-
-## Kiểm tra cuối sau khi cài đặt
+### Medical CLI
 
 ```powershell
-.\.venv\Scripts\python run_doctor.py --skip-camera-check
-.\.venv\Scripts\python run_smoke.py
-.\.venv\Scripts\python run_menu.py
+python run_medical.py status
+python run_medical.py ready
+python run_medical.py sources
 ```
 
-Nếu ba bước trên chạy ổn, môi trường đã sẵn sàng.
+## 6. Cau Truc Dependency
+
+Repo hien co ba nhom dependency de de van hanh:
+
+| File | Muc dich |
+|---|---|
+| `requirements.txt` | Bo dependency day du cho runtime chinh |
+| `requirements-ci.txt` | Dependency toi thieu de chay workflow CI |
+| `requirements-dev.txt` | Runtime day du + cong cu phat trien nhu `ruff`, `mypy` |
+
+## 7. Xu Ly Loi Thuong Gap
+
+### Khong mo duoc camera
+
+Thu:
+
+```powershell
+python run_app.py --mode low --camera-index 1
+```
+
+Neu van loi:
+
+- kiem tra app khac co dang giu webcam khong,
+- chay `run_doctor.py --skip-camera-check` de xem canh bao he thong,
+- doi `camera-index` sang `0`, `1`, `2`.
+
+### Thieu model
+
+Kiem tra:
+
+```text
+models/pretrained/
+models/trained/
+```
+
+Neu can object detection pretrained model, xem cac script trong `training/download_models.py`.
+
+### Loi CUDA hoac torch
+
+Kiem tra:
+
+```powershell
+python run_app.py --advisor-only
+python run_doctor.py --skip-camera-check
+```
+
+Hai lenh nay se cho biet:
+
+- GPU co duoc nhan khong,
+- CUDA co san sang khong,
+- torch dang build theo CPU hay CUDA.
+
+### Giao dien chat chua san sang
+
+Dung:
+
+```powershell
+python run_chat.py --check-only --auto-fix-icons
+```
+
+Lenh nay giup:
+
+- check icon,
+- check module bat buoc,
+- check medical model status,
+- tu tao icon neu dang thieu.
+
+## 8. Checklist Sau Khi Cai Dat Xong
+
+Moi truong co the xem la san sang khi cac muc sau deu on:
+
+1. `python run_doctor.py --skip-camera-check` chay xong khong co loi nghiem trong.
+2. `python run_smoke.py` hoac `python run_smoke.py --ci-safe` pass.
+3. `python run_app.py --advisor-only` in duoc khuyen nghi runtime.
+4. `python run_chat.py --check-only` bao trang thai san sang.
+5. `python run_train.py --check-only` khong bi fail do thieu dependency.
+
+## 9. Khuyen Nghi Cho Team
+
+- Khong chay thang training hoac camera tren may moi ma chua chay doctor/smoke.
+- Neu chi muon review code tren CI, uu tien `requirements-ci.txt`.
+- Neu debug local feature day du, dung `requirements.txt` hoac `requirements-dev.txt`.

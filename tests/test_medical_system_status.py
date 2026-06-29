@@ -10,6 +10,73 @@ from medical.system_status import get_medical_system_status, recommended_medical
 
 
 class MedicalSystemStatusTests(unittest.TestCase):
+    def test_get_medical_system_status_returns_zero_cases_when_db_is_unavailable(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            root = Path(temp_dir)
+            dataset_root = root / "dataset" / "medical"
+            reports_dir = root / "output" / "medical" / "reports"
+            normalized_dir = root / "output" / "medical" / "normalized_images"
+            overlay_dir = root / "output" / "medical" / "processed_images"
+            exports_dir = root / "output" / "medical" / "exports"
+            for directory in (
+                dataset_root / "raw" / "images",
+                dataset_root / "raw" / "labels",
+                dataset_root / "processed" / "images" / "train",
+                dataset_root / "processed" / "images" / "val",
+                dataset_root / "processed" / "images" / "test",
+                reports_dir,
+                normalized_dir,
+                overlay_dir,
+                exports_dir,
+            ):
+                directory.mkdir(parents=True, exist_ok=True)
+            (dataset_root / "data.yaml").write_text("path: .", encoding="utf-8")
+            model_path = root / "models" / "trained" / "skin.pt"
+            model_path.parent.mkdir(parents=True, exist_ok=True)
+            model_path.write_text("weights", encoding="utf-8")
+
+            with patch(
+                "medical.system_status.build_default_medical_analyzer_config",
+                return_value=type(
+                    "MedicalConfig",
+                    (),
+                    {
+                        "model_path": model_path,
+                        "working_dir": root / "output" / "medical",
+                        "reports_dir": reports_dir,
+                        "processed_dir": normalized_dir,
+                        "overlay_dir": overlay_dir,
+                        "fallback_model_path": None,
+                        "allow_fallback_model": False,
+                    },
+                )(),
+            ), patch(
+                "medical.system_status.medical_training_paths",
+                return_value=type(
+                    "MedicalTrainingPaths",
+                    (),
+                    {
+                        "dataset_root": dataset_root,
+                        "data_yaml_path": dataset_root / "data.yaml",
+                        "raw_images_dir": dataset_root / "raw" / "images",
+                        "raw_labels_dir": dataset_root / "raw" / "labels",
+                        "processed_images_dir": dataset_root / "processed" / "images",
+                    },
+                )(),
+            ), patch(
+                "medical.system_status.medical_output_directories",
+                return_value=[reports_dir, normalized_dir, overlay_dir, exports_dir],
+            ), patch(
+                "medical.system_status.resolve_medical_runtime_model_path",
+                return_value=model_path,
+            ), patch(
+                "medical.system_status.sqlite3.connect",
+                side_effect=sqlite3.OperationalError("db unavailable"),
+            ):
+                status = get_medical_system_status()
+
+        self.assertEqual(status.case_count, 0)
+
     def test_get_medical_system_status_counts_outputs_and_cases(self) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             root = Path(temp_dir)

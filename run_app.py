@@ -5,7 +5,6 @@ import argparse
 from app.camera_runtime.cli import build_camera_arg_parser
 from app.camera_runtime.bootstrap import resolve_start_bundle
 from app.camera_runtime.launching import run_camera_launch_flow
-from core.camera_runner import run_camera_session
 from core.hardware_info import detect_hardware
 from core.runtime_prompt import prompt_runtime_mode
 from core.runtime_advisor import build_recommendations
@@ -46,6 +45,8 @@ def main() -> int:
     args = parse_args()
     if getattr(args, "advisor_only", False):
         return run_runtime_advisor()
+    from core.camera_runner import run_camera_session
+
     start_options = resolve_run_app_start_bundle(
         requested_mode=args.mode,
         requested_model=args.model,

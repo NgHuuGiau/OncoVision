@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 import wave
+
+logger = logging.getLogger(__name__)
 
 
 def build_voice_worker_class(
@@ -80,18 +83,19 @@ def build_voice_worker_class(
                 else:
                     self.result_ready.emit("")
             except Exception:
+                logger.exception("Voice worker failed while recording or transcribing audio.")
                 self.error.emit()
             finally:
                 try:
                     audio.terminate()
                 except Exception:
-                    pass
+                    logger.debug("Failed to terminate PyAudio cleanly.", exc_info=True)
                 self.finished.emit()
                 if tmp_path:
                     try:
                         os.unlink(tmp_path)
                     except Exception:
-                        pass
+                        logger.debug("Failed to remove temporary voice file: %s", tmp_path, exc_info=True)
 
         def stop(self):
             self.is_running = False

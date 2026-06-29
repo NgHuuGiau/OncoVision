@@ -19,6 +19,7 @@ class SmokeCheck:
     description: str
     command: tuple[str, ...]
     warning_exit_codes: tuple[int, ...] = ()
+    ci_safe: bool = True
 
 
 BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
@@ -33,6 +34,7 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
         title="Doctor scan",
         description="Ra soat tong the phan cung, model va du lieu ma khong can webcam that.",
         command=("run_doctor.py", "--skip-camera-check"),
+        ci_safe=False,
     ),
     SmokeCheck(
         key="chat-preflight",
@@ -40,6 +42,7 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
         description="Kiem tra dep bat buoc, icon va do san sang cua luong chat/medical.",
         command=("run_chat.py", "--check-only", "--auto-fix-icons"),
         warning_exit_codes=(2,),
+        ci_safe=False,
     ),
     SmokeCheck(
         key="training-preflight",
@@ -52,6 +55,7 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
         title="Medical status",
         description="Kiem tra nhanh model, dataset va output cua nhanh medical.",
         command=("run_medical.py", "status"),
+        ci_safe=False,
     ),
 )
 
@@ -75,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Dung ngay khi gap mot check fail thay vi di het ca danh sach.",
     )
+    parser.add_argument(
+        "--ci-safe",
+        action="store_true",
+        help="Chi chay nhung smoke-check nhe, phu hop voi moi truong CI khong co camera/dataset day du.",
+    )
     return parser
 
 
@@ -82,8 +91,8 @@ def parse_args() -> argparse.Namespace:
     return build_parser().parse_args()
 
 
-def select_checks(*, include_tests: bool = False) -> tuple[SmokeCheck, ...]:
-    checks = list(BASE_SMOKE_CHECKS)
+def select_checks(*, include_tests: bool = False, ci_safe: bool = False) -> tuple[SmokeCheck, ...]:
+    checks = [check for check in BASE_SMOKE_CHECKS if not ci_safe or check.ci_safe]
     if include_tests:
         checks.append(TEST_SUITE_CHECK)
     return tuple(checks)
@@ -142,7 +151,7 @@ def execute_checks(
 
 def main() -> int:
     args = parse_args()
-    checks = select_checks(include_tests=args.include_tests)
+    checks = select_checks(include_tests=args.include_tests, ci_safe=args.ci_safe)
     return execute_checks(checks, stop_on_fail=args.stop_on_fail)
 
 

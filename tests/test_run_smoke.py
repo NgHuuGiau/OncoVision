@@ -14,6 +14,20 @@ class RunSmokeTests(unittest.TestCase):
 
         self.assertEqual(checks[-1].key, "test-suite")
 
+    def test_select_checks_ci_safe_filters_out_heavy_checks(self) -> None:
+        checks = run_smoke.select_checks(ci_safe=True)
+
+        self.assertTrue(all(check.ci_safe for check in checks))
+        self.assertNotIn("doctor", [check.key for check in checks])
+        self.assertNotIn("medical-status", [check.key for check in checks])
+
+    def test_select_checks_ci_safe_filters_out_heavy_checks(self) -> None:
+        checks = run_smoke.select_checks(ci_safe=True)
+
+        self.assertTrue(all(check.ci_safe for check in checks))
+        self.assertNotIn("doctor", [check.key for check in checks])
+        self.assertNotIn("medical-status", [check.key for check in checks])
+
     def test_execute_checks_treats_warning_exit_codes_as_nonfatal(self) -> None:
         checks = (
             run_smoke.SmokeCheck(
@@ -53,7 +67,7 @@ class RunSmokeTests(unittest.TestCase):
         parse_args_mock,
         execute_checks_mock,
     ) -> None:
-        parse_args_mock.return_value = SimpleNamespace(include_tests=True, stop_on_fail=True)
+        parse_args_mock.return_value = SimpleNamespace(include_tests=True, stop_on_fail=True, ci_safe=False)
         execute_checks_mock.return_value = 7
 
         result = run_smoke.main()
@@ -62,6 +76,36 @@ class RunSmokeTests(unittest.TestCase):
         checks = execute_checks_mock.call_args.args[0]
         self.assertEqual(checks[-1].key, "test-suite")
         self.assertTrue(execute_checks_mock.call_args.kwargs["stop_on_fail"])
+
+    @patch("run_smoke.execute_checks")
+    @patch("run_smoke.parse_args")
+    def test_main_passes_ci_safe_to_check_selector(
+        self,
+        parse_args_mock,
+        execute_checks_mock,
+    ) -> None:
+        parse_args_mock.return_value = SimpleNamespace(include_tests=False, stop_on_fail=False, ci_safe=True)
+        execute_checks_mock.return_value = 0
+
+        run_smoke.main()
+
+        checks = execute_checks_mock.call_args.args[0]
+        self.assertTrue(all(check.ci_safe for check in checks))
+
+    @patch("run_smoke.execute_checks")
+    @patch("run_smoke.parse_args")
+    def test_main_passes_ci_safe_to_check_selector(
+        self,
+        parse_args_mock,
+        execute_checks_mock,
+    ) -> None:
+        parse_args_mock.return_value = SimpleNamespace(include_tests=False, stop_on_fail=False, ci_safe=True)
+        execute_checks_mock.return_value = 0
+
+        run_smoke.main()
+
+        checks = execute_checks_mock.call_args.args[0]
+        self.assertTrue(all(check.ci_safe for check in checks))
 
 
 if __name__ == "__main__":

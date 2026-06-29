@@ -1,11 +1,24 @@
-"""Core runtime package."""
+from __future__ import annotations
 
-from core.camera_runner import CameraDetector, CameraStream, DetectionRecord, run_camera_preview_session, run_camera_session
+from importlib import import_module
 
-__all__ = [
-    "CameraDetector",
-    "CameraStream",
-    "DetectionRecord",
-    "run_camera_preview_session",
-    "run_camera_session",
-]
+
+_EXPORTS = {
+    "CameraDetector": ("core.camera_runner", "CameraDetector"),
+    "CameraStream": ("core.camera_runner", "CameraStream"),
+    "DetectionRecord": ("core.camera_runner", "DetectionRecord"),
+    "run_camera_preview_session": ("core.camera_runner", "run_camera_preview_session"),
+    "run_camera_session": ("core.camera_runner", "run_camera_session"),
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str):
+    if name not in _EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr_name = _EXPORTS[name]
+    module = import_module(module_name)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value
