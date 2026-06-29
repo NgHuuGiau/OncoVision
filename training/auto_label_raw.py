@@ -30,8 +30,8 @@ from utils.logger import get_logger
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
 logger = get_logger(__name__)
-RAW_IMAGES_DIR = Path("dataset/raw/images")
-RAW_LABELS_DIR = Path("dataset/raw/labels")
+RAW_IMAGES_DIR = Path("dataset/object_detection/raw/images")
+RAW_LABELS_DIR = Path("dataset/object_detection/raw/labels")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
 
@@ -155,7 +155,7 @@ def auto_label_raw_images(*, overwrite: bool = False, conf: float = 0.25, device
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Auto generate YOLO labels for dataset/raw/images using existing model")
+    parser = argparse.ArgumentParser(description="Auto generate YOLO labels for dataset/object_detection/raw/images using existing model")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing label .txt files")
     parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold for detection")
     parser.add_argument("--device", default="cpu", help="Inference device, e.g. cpu or cuda:0")
@@ -178,7 +178,7 @@ def main() -> None:
 
     if report["images"] == 0:
         print(section("RESULT", YELLOW))
-        print(row("Reason cannot run", "No images in dataset/raw/images", YELLOW, bounded=False))
+        print(row("Reason cannot run", "No images in dataset/object_detection/raw/images", YELLOW, bounded=False))
         print(line(rule("-"), CYAN))
         print(section("NEXT COMMANDS", CYAN))
         print(command_row(1, r".\.venv\Scripts\python training\prepare_dataset.py"))

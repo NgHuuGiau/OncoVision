@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+from medical.model_policy import resolve_medical_base_model, resolve_medical_runtime_model_path
 from training.common import require_yolo
 from training.dataset_ops import (
     DEFAULT_SEED,
@@ -15,7 +17,6 @@ from training.dataset_ops import (
     reset_processed_dirs,
     split_items,
 )
-from training.model_paths import resolve_model_source
 from utils.file_utils import load_yaml, save_yaml
 
 
@@ -58,7 +59,7 @@ def load_medical_settings() -> dict[str, Any]:
 
 def medical_training_paths() -> MedicalTrainingPaths:
     settings = load_medical_settings()
-    dataset_root = Path(settings.get("dataset_root", "dataset/medical_skin_lesion"))
+    dataset_root = Path(settings.get("dataset_root", "dataset/medical/skin_lesion"))
     disease_name = str(settings.get("disease_name", "skin_cancer_screening"))
     trained_model = Path(f"models/trained/{disease_name}_best.pt")
     return MedicalTrainingPaths(
@@ -164,8 +165,8 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, yolo_cls=N
     settings = load_medical_settings()
     kwargs = _medical_training_kwargs(paths, settings)
     yolo_cls = yolo_cls or _require_yolo()
-    base_model = str(settings.get("base_model", settings.get("fallback_model", "yolo11n.pt")))
-    results = yolo_cls(str(resolve_model_source(base_model))).train(model=base_model, **kwargs)
+    base_model_path = resolve_medical_base_model(settings)
+    results = yolo_cls(str(base_model_path)).train(model=base_model_path.name, **kwargs)
     save_dir = Path(getattr(results, "save_dir", kwargs["project"]))
     best_weight = save_dir / "weights" / "best.pt"
     if not best_weight.exists():
@@ -183,11 +184,14 @@ def validate_medical_model(paths: MedicalTrainingPaths | None = None, *, yolo_cl
     settings = load_medical_settings()
     yolo_cls = yolo_cls or _require_yolo()
     model_path = Path(settings.get("model", paths.trained_model_path))
-    if not model_path.exists():
-        model_path = paths.trained_model_path
-    if not model_path.exists():
-        raise FileNotFoundError("Chua co medical model da train de validate.")
-    return yolo_cls(str(resolve_model_source(model_path))).val(
+    fallback_model_path = Path(settings["fallback_model"]) if settings.get("fallback_model") else None
+    config = SimpleNamespace(
+        model_path=model_path if model_path.exists() else paths.trained_model_path,
+        fallback_model_path=fallback_model_path,
+        allow_fallback_model=bool(settings.get("allow_fallback_model", False)),
+    )
+    resolved_model_path = resolve_medical_runtime_model_path(config)
+    return yolo_cls(str(resolved_model_path)).val(
         data=str(paths.data_yaml_path.resolve()),
         project=str(paths.val_runs_dir.resolve()),
         name=str(settings.get("validation_name", "medical_validation")),

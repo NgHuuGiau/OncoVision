@@ -1,4 +1,4 @@
-path: ../dataset/processed
+path: ../dataset/object_detection
 train: images/train
 val: images/val
 test: images/test

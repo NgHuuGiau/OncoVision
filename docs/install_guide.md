@@ -1,13 +1,13 @@
 # Hướng Dẫn Cài Đặt
 
-Tài liệu này mô tả cách cài đặt OncoVision trên Windows và cách kiểm tra môi trường trước khi chạy camera hoặc training.
+Tài liệu này mô tả cách cài OncoVision trên Windows và cách kiểm tra môi trường trước khi chạy camera hoặc training.
 
 ## Yêu cầu hệ thống
 
 - Windows 10 hoặc Windows 11
 - Python 3.10 trở lên
 - Webcam nếu muốn chạy camera realtime
-- GPU NVIDIA là tùy chọn nhưng nên có nếu muốn tăng tốc inference và training
+- GPU NVIDIA là tùy chọn, nhưng nên có nếu muốn tăng tốc inference và training
 
 ## Tạo môi trường ảo
 
@@ -28,9 +28,10 @@ Set-ExecutionPolicy -Scope Process Bypass
 ## Chuẩn bị thư mục dự án
 
 ```powershell
-.\.venv\Scripts\python training\prepare_dataset.py
-.\.venv\Scripts\python training\download_models.py
+.\.venv\Scripts\python run_menu.py
 ```
+
+Mở menu một lần là hệ thống sẽ tự tạo đủ cây thư mục cần thiết.
 
 ## Kiểm tra cài đặt
 
@@ -47,7 +48,7 @@ Nếu muốn bỏ qua camera:
 ## Kiểm tra nhanh
 
 ```powershell
-.\.venv\Scripts\python run_tests.py --skip-camera-check
+.\.venv\Scripts\python run_tests.py
 .\.venv\Scripts\python run_smoke.py
 ```
 

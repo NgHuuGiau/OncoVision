@@ -96,7 +96,7 @@ class RuntimeConfig:
 
 
 def _camera_preset(settings: dict) -> dict:
-    return settings.get("display_camera", settings["camera"])
+    return settings.get("display_camera") or settings.get("camera") or {}
 
 
 def _as_bool(value, default: bool) -> bool:
@@ -123,7 +123,8 @@ def _camera_flag(camera: dict, settings: dict, key: str, default: bool = True) -
 
 def build_candidates(model_name: str, settings: dict) -> list[str]:
     backup_key, *fallbacks = MODEL_BACKUPS.get(model_name, (None, DEFAULT_MODEL_FALLBACK))
-    backup_model = settings.get("stable_backup", {}).get(backup_key) if backup_key else None
+    stable_backup = settings.get("stable_backup", {})
+    backup_model = stable_backup.get(backup_key) if backup_key else None
     return list(dict.fromkeys([model_name, *(item for item in [backup_model, *fallbacks] if item)]))
 
 
@@ -285,8 +286,14 @@ def _build_fallback_chain(profile_name: str, settings: dict, primary_model_name:
         primary_index = MODEL_DEGRADE_ORDER.index(primary_model_name)
     except ValueError:
         primary_index = 0
-    fallbacks = [settings["models"][name] for name in fallback_keys]
-    return [item for item in fallbacks if MODEL_DEGRADE_ORDER.index(item["model"]) >= primary_index]
+    models = settings.get("models", {})
+    fallbacks = [models[name] for name in fallback_keys if name in models]
+    return [
+        item
+        for item in fallbacks
+        if item.get("model") in MODEL_DEGRADE_ORDER
+        and MODEL_DEGRADE_ORDER.index(item["model"]) >= primary_index
+    ]
 
 
 def load_settings() -> dict:
@@ -296,9 +303,14 @@ def load_settings() -> dict:
 def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
     settings = load_settings()
     inference = settings.get("inference", {})
+    models = settings.get("models", {})
+    if not models:
+        raise KeyError("config/settings.yaml thieu muc `models`.")
     requested_profile_name = _requested_profile_name(mode)
     requested_device, model_name, imgsz, max_det, profile_name = _mode_profile(mode, hardware, settings)
-    requested_profile = settings["models"].get(requested_profile_name, settings["models"]["low"]) if requested_profile_name != "auto" else None
+    requested_profile = models.get(requested_profile_name, models.get("low")) if requested_profile_name != "auto" else None
+    if requested_profile is None and requested_profile_name != "auto":
+        requested_profile = models.get("low")
     camera = _camera_preset(settings)
     resolved_device = _resolved_device(requested_device, hardware)
     return RuntimeConfig(
@@ -312,7 +324,7 @@ def select_runtime_config(mode: str, hardware: HardwareInfo) -> RuntimeConfig:
         candidate_models=build_candidates(model_name, settings),
         requested_imgsz=int(requested_profile["imgsz"]) if requested_profile else 0,
         imgsz=imgsz,
-        conf=float(inference["confidence"]),
+        conf=float(inference.get("confidence", 0.35)),
         max_det=int(max_det),
         use_half=bool(inference.get("use_half_for_cuda", False)) and resolved_device.startswith("cuda"),
         camera_width=int(camera["width"]),

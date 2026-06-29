@@ -142,7 +142,7 @@ class MedicalPipelineTests(unittest.TestCase):
                 overlay_dir=Path(temp_dir) / "overlay",
             )
 
-            with patch("medical.pipeline.PRETRAINED_MODELS_DIR", pretrained_dir):
+            with patch("medical.model_policy.PRETRAINED_MODELS_DIR", pretrained_dir):
                 with self.assertRaises(FileNotFoundError) as raised:
                     validate_medical_model_path(config)
 
@@ -164,7 +164,7 @@ class MedicalPipelineTests(unittest.TestCase):
                 allow_fallback_model=True,
             )
 
-            with patch("medical.pipeline.PRETRAINED_MODELS_DIR", pretrained_dir):
+            with patch("medical.model_policy.PRETRAINED_MODELS_DIR", pretrained_dir):
                 resolved = validate_medical_model_path(config)
 
         self.assertEqual(resolved, fallback_model)

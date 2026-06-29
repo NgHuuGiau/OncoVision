@@ -7,6 +7,8 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from medical.system_status import get_medical_system_status, recommended_medical_commands
+from medical.training import medical_training_paths
+from training.train_model import RAW_IMAGES_DIR as OBJECT_RAW_IMAGES_DIR, RAW_LABELS_DIR as OBJECT_RAW_LABELS_DIR
 
 
 class MedicalSystemStatusTests(unittest.TestCase):
@@ -73,7 +75,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
                 "medical.system_status.medical_output_directories",
                 return_value=[reports_dir, normalized_dir, overlay_dir, exports_dir],
             ), patch(
-                "medical.system_status.validate_medical_model_path",
+                "medical.system_status.resolve_medical_runtime_model_path",
                 return_value=model_path,
             ):
                 status = get_medical_system_status()
@@ -109,3 +111,120 @@ class MedicalSystemStatusTests(unittest.TestCase):
         self.assertEqual(commands[0], "python run_medical.py init-dataset")
         self.assertIn("python run_medical.py audit-dataset", commands)
         self.assertIn("python run_medical.py train-all", commands)
+
+    def test_get_medical_system_status_includes_screening_targets(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            root = Path(temp_dir)
+            dataset_root = root / "dataset" / "medical"
+            reports_dir = root / "output" / "medical" / "reports"
+            normalized_dir = root / "output" / "medical" / "normalized_images"
+            overlay_dir = root / "output" / "medical" / "processed_images"
+            exports_dir = root / "output" / "medical" / "exports"
+            for directory in (dataset_root / "raw" / "images", dataset_root / "raw" / "labels", dataset_root / "processed" / "images" / "train", dataset_root / "processed" / "images" / "val", dataset_root / "processed" / "images" / "test", reports_dir, normalized_dir, overlay_dir, exports_dir):
+                directory.mkdir(parents=True, exist_ok=True)
+            (dataset_root / "data.yaml").write_text("path: .", encoding="utf-8")
+            model_path = root / "models" / "trained" / "skin.pt"
+            model_path.parent.mkdir(parents=True, exist_ok=True)
+            model_path.write_text("weights", encoding="utf-8")
+
+            with patch(
+                "medical.system_status.build_default_medical_analyzer_config",
+                return_value=type(
+                    "MedicalConfig",
+                    (),
+                    {
+                        "model_path": model_path,
+                        "working_dir": root / "output" / "medical",
+                        "reports_dir": reports_dir,
+                        "processed_dir": normalized_dir,
+                        "overlay_dir": overlay_dir,
+                        "fallback_model_path": None,
+                        "allow_fallback_model": False,
+                    },
+                )(),
+            ), patch(
+                "medical.system_status.medical_training_paths",
+                return_value=type(
+                    "MedicalTrainingPaths",
+                    (),
+                    {
+                        "dataset_root": dataset_root,
+                        "data_yaml_path": dataset_root / "data.yaml",
+                        "raw_images_dir": dataset_root / "raw" / "images",
+                        "raw_labels_dir": dataset_root / "raw" / "labels",
+                        "processed_images_dir": dataset_root / "processed" / "images",
+                    },
+                )(),
+            ), patch(
+                "medical.system_status.medical_output_directories",
+                return_value=[reports_dir, normalized_dir, overlay_dir, exports_dir],
+            ), patch(
+                "medical.system_status.resolve_medical_runtime_model_path",
+                return_value=model_path,
+            ):
+                status = get_medical_system_status()
+
+        self.assertTrue(status.screening_targets)
+        self.assertIn(("Ung thu da", True), status.screening_targets)
+
+    def test_dataset_counts_are_separated_between_medical_and_object_detection(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            root = Path(temp_dir)
+            medical_root = root / "dataset" / "medical" / "skin_lesion"
+            object_root = root / "dataset" / "object_detection"
+            for directory in (
+                medical_root / "raw" / "images",
+                medical_root / "raw" / "labels",
+                medical_root / "processed" / "images" / "train",
+                medical_root / "processed" / "images" / "val",
+                medical_root / "processed" / "images" / "test",
+                object_root / "raw" / "images",
+                object_root / "raw" / "labels",
+                object_root / "processed" / "images" / "train",
+                object_root / "processed" / "images" / "val",
+            ):
+                directory.mkdir(parents=True, exist_ok=True)
+            (medical_root / "data.yaml").write_text("path: .", encoding="utf-8")
+            (medical_root / "raw" / "images" / "skin.jpg").write_text("skin", encoding="utf-8")
+            (medical_root / "raw" / "labels" / "skin.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+            (object_root / "raw" / "images" / "box.jpg").write_text("box", encoding="utf-8")
+            (object_root / "raw" / "labels" / "box.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+
+            with patch("medical.system_status.medical_training_paths") as training_paths_mock, patch(
+                "medical.system_status.build_default_medical_analyzer_config"
+            ) as config_mock, patch(
+                "medical.system_status.medical_output_directories", return_value=[root / "output" / "medical" / "reports", root / "output" / "medical" / "normalized_images", root / "output" / "medical" / "processed_images", root / "output" / "medical" / "exports"]
+            ), patch("medical.system_status.resolve_medical_runtime_model_path", return_value=root / "models" / "trained" / "skin.pt"):
+                training_paths_mock.return_value = type(
+                    "TrainingPaths",
+                    (),
+                    {
+                        "dataset_root": medical_root,
+                        "data_yaml_path": medical_root / "data.yaml",
+                        "raw_images_dir": medical_root / "raw" / "images",
+                        "raw_labels_dir": medical_root / "raw" / "labels",
+                        "processed_images_dir": medical_root / "processed" / "images",
+                    },
+                )()
+                config_mock.return_value = type(
+                    "MedicalConfig",
+                    (),
+                    {
+                        "model_path": root / "models" / "trained" / "skin.pt",
+                        "working_dir": root / "output" / "medical",
+                        "reports_dir": root / "output" / "medical" / "reports",
+                        "processed_dir": root / "output" / "medical" / "normalized_images",
+                        "overlay_dir": root / "output" / "medical" / "processed_images",
+                        "fallback_model_path": None,
+                        "allow_fallback_model": False,
+                    },
+                )()
+                status = get_medical_system_status()
+
+            object_images = sum(1 for _ in (object_root / "raw" / "images").glob("*") if _.is_file())
+            object_labels = sum(1 for _ in (object_root / "raw" / "labels").glob("*") if _.is_file())
+
+        self.assertEqual(status.raw_images, 1)
+        self.assertEqual(status.raw_labels, 1)
+        self.assertEqual(object_images, 1)
+        self.assertEqual(object_labels, 1)

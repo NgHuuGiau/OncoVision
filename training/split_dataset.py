@@ -22,12 +22,13 @@ from training.dataset_ops import (
 )
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 from utils.file_utils import ensure_project_directories
+from utils.terminal_encoding import ensure_utf8_console
 
 
-RAW_IMAGES_DIR = Path("dataset/raw/images")
-RAW_LABELS_DIR = Path("dataset/raw/labels")
-PROCESSED_IMAGES_DIR = Path("dataset/processed/images")
-PROCESSED_LABELS_DIR = Path("dataset/processed/labels")
+RAW_IMAGES_DIR = Path("dataset/object_detection/raw/images")
+RAW_LABELS_DIR = Path("dataset/object_detection/raw/labels")
+PROCESSED_IMAGES_DIR = Path("dataset/object_detection/processed/images")
+PROCESSED_LABELS_DIR = Path("dataset/object_detection/processed/labels")
 SPLITS = DEFAULT_SPLITS
 SEED = DEFAULT_SEED
 INVALID_YOLO_LABEL_REASON = "Định dạng YOLO không hợp lệ"
@@ -59,10 +60,13 @@ class RawDatasetAudit:
         return getattr(self, "eligible_pairs" if key == "eligible" else key)
 
 
-def audit_raw_dataset() -> RawDatasetAudit:
+def audit_raw_dataset(
+    raw_images_dir: str | Path = RAW_IMAGES_DIR,
+    raw_labels_dir: str | Path = RAW_LABELS_DIR,
+) -> RawDatasetAudit:
     ensure_project_directories()
-    images = iter_matching_files(RAW_IMAGES_DIR, suffixes=IMAGE_EXTENSIONS)
-    labels = iter_matching_files(RAW_LABELS_DIR, suffixes={".txt"})
+    images = iter_matching_files(Path(raw_images_dir), suffixes=IMAGE_EXTENSIONS)
+    labels = iter_matching_files(Path(raw_labels_dir), suffixes={".txt"})
     label_by_stem = {path.stem: path for path in labels}
     image_stems = {path.stem for path in images}
 
@@ -118,6 +122,7 @@ def _copy_split(split_name: str, items: list[tuple[Path, Path]]) -> None:
 
 
 def main() -> None:
+    ensure_utf8_console()
     ensure_project_directories()
     report = audit_raw_dataset()
     total_images = report.raw_image_count
@@ -127,11 +132,11 @@ def main() -> None:
         for item in header("YOLO DATASET :: KHÔNG CÓ DỮ LIỆU ĐỂ SPLIT", color=RED):
             print(item)
         print(section("LÝ DO", RED))
-        print(row("Lý do không chạy", "Không có ảnh trong dataset/raw/images", RED))
+        print(row("Lý do không chạy", "Không có ảnh trong dataset/object_detection/raw/images", RED))
         print(line(rule("-"), CYAN))
         print(section("CẦN LÀM", GREEN))
-        print(row("Bước 1", "Bỏ ảnh vào dataset/raw/images", YELLOW))
-        print(row("Bước 2", "Bỏ label vào dataset/raw/labels", YELLOW))
+        print(row("Bước 1", "Bỏ ảnh vào dataset/object_detection/raw/images", YELLOW))
+        print(row("Bước 2", "Bỏ label vào dataset/object_detection/raw/labels", YELLOW))
         print(row("Bước 3", "Chạy training/validate_dataset.py", YELLOW))
         print(row("Bước 4", "Chạy lại training/split_dataset.py", GREEN))
         print(line(rule("-"), CYAN))

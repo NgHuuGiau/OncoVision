@@ -1,0 +1,36 @@
+{
+  "collections": [
+    {
+      "collection_name": "CBIS-DDSM",
+      "cancer_type": "ung_thu_vu"
+    },
+    {
+      "collection_name": "TCGA-BRCA",
+      "cancer_type": "ung_thu_vu"
+    },
+    {
+      "collection_name": "NSCLC-Radiomics",
+      "cancer_type": "ung_thu_phoi"
+    },
+    {
+      "collection_name": "TCGA-LUAD",
+      "cancer_type": "ung_thu_phoi"
+    },
+    {
+      "collection_name": "TCGA-COAD",
+      "cancer_type": "ung_thu_dai_truc_trang"
+    },
+    {
+      "collection_name": "TCGA-READ",
+      "cancer_type": "ung_thu_dai_truc_trang"
+    },
+    {
+      "collection_name": "TCGA-LIHC",
+      "cancer_type": "ung_thu_gan"
+    },
+    {
+      "collection_name": "TCGA-STAD",
+      "cancer_type": "ung_thu_da_day"
+    }
+  ]
+}

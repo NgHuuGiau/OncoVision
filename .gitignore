@@ -40,23 +40,25 @@ output/
 runs/
 
 # Dataset generated locally
-dataset/raw/
-dataset/processed/
-dataset/sample/
-dataset/medical_skin_lesion/
-dataset/medical_skin_lesion/raw/
-dataset/medical_skin_lesion/processed/
-dataset/medical_skin_lesion/downloads/
-dataset/medical_skin_lesion/reports/
-dataset/medical_skin_lesion/metadata/isic2016_part3b_import.csv
+dataset/**
+!dataset/**/.gitkeep
+!dataset/**/README.md
 
 # Local model files
-models/pretrained/
-models/trained/
-models/exported/
+models/pretrained/**
+models/trained/**
+models/exported/**
+!models/**/.gitkeep
 
 # Generated config
 training/.generated_data.yaml
 
 # Medical runtime artifacts
 output/medical/
+
+# Generated helper files
+training/.generated_data.yaml
+dataset/cancer_download_plan.json
+dataset/medical/tcia/**
+!dataset/medical/tcia/**/.gitkeep
+!dataset/medical/tcia/**/README.md

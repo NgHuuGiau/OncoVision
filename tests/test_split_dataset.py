@@ -16,11 +16,11 @@ class SplitDatasetTests(unittest.TestCase):
             try:
                 os.chdir(temp_dir)
                 ensure_project_directories()
-                Path("dataset/raw/images/a.jpg").write_text("img", encoding="utf-8")
-                Path("dataset/raw/images/b.jpg").write_text("img", encoding="utf-8")
-                Path("dataset/raw/labels/a.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
-                Path("dataset/raw/labels/b.txt").write_text("0 10 0.5 0.2 0.2\n", encoding="utf-8")
-                Path("dataset/raw/labels/c.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+                Path("dataset/object_detection/raw/images/a.jpg").write_text("img", encoding="utf-8")
+                Path("dataset/object_detection/raw/images/b.jpg").write_text("img", encoding="utf-8")
+                Path("dataset/object_detection/raw/labels/a.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+                Path("dataset/object_detection/raw/labels/b.txt").write_text("0 10 0.5 0.2 0.2\n", encoding="utf-8")
+                Path("dataset/object_detection/raw/labels/c.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
 
                 audit = split_dataset.audit_raw_dataset()
 
@@ -37,21 +37,21 @@ class SplitDatasetTests(unittest.TestCase):
             try:
                 os.chdir(temp_dir)
                 ensure_project_directories()
-                Path("dataset/raw/images/a.jpg").write_text("img-a", encoding="utf-8")
-                Path("dataset/raw/images/b.jpg").write_text("img-b", encoding="utf-8")
-                Path("dataset/raw/images/c.jpg").write_text("img-c", encoding="utf-8")
-                Path("dataset/raw/labels/a.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
-                Path("dataset/raw/labels/b.txt").write_text("\n", encoding="utf-8")
-                Path("dataset/raw/labels/c.txt").write_text("invalid line\n", encoding="utf-8")
-                Path("dataset/processed/images/train/stale.jpg").write_text("stale", encoding="utf-8")
+                Path("dataset/object_detection/raw/images/a.jpg").write_text("img-a", encoding="utf-8")
+                Path("dataset/object_detection/raw/images/b.jpg").write_text("img-b", encoding="utf-8")
+                Path("dataset/object_detection/raw/images/c.jpg").write_text("img-c", encoding="utf-8")
+                Path("dataset/object_detection/raw/labels/a.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+                Path("dataset/object_detection/raw/labels/b.txt").write_text("\n", encoding="utf-8")
+                Path("dataset/object_detection/raw/labels/c.txt").write_text("invalid line\n", encoding="utf-8")
+                Path("dataset/object_detection/processed/images/train/stale.jpg").write_text("stale", encoding="utf-8")
 
                 split_dataset.main()
 
-                copied_images = sorted(path.name for path in Path("dataset/processed/images").rglob("*") if path.is_file())
-                copied_labels = sorted(path.name for path in Path("dataset/processed/labels").rglob("*") if path.is_file())
+                copied_images = sorted(path.name for path in Path("dataset/object_detection/processed/images").rglob("*") if path.is_file())
+                copied_labels = sorted(path.name for path in Path("dataset/object_detection/processed/labels").rglob("*") if path.is_file())
                 self.assertEqual(copied_images, ["a.jpg", "b.jpg"])
                 self.assertEqual(copied_labels, ["a.txt", "b.txt"])
-                self.assertFalse(Path("dataset/processed/images/train/stale.jpg").exists())
+                self.assertFalse(Path("dataset/object_detection/processed/images/train/stale.jpg").exists())
             finally:
                 os.chdir(previous_cwd)
 

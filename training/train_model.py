@@ -23,14 +23,15 @@ except ModuleNotFoundError:
 
 from utils.file_utils import ensure_project_directories, load_yaml
 from utils.logger import get_logger
+from utils.terminal_encoding import ensure_utf8_console
 
 logger = get_logger(__name__)
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
-PROCESSED_TRAIN_DIR = Path("dataset/processed/images/train")
-PROCESSED_VAL_DIR = Path("dataset/processed/images/val")
-RAW_IMAGES_DIR = Path("dataset/raw/images")
-RAW_LABELS_DIR = Path("dataset/raw/labels")
+PROCESSED_TRAIN_DIR = Path("dataset/object_detection/processed/images/train")
+PROCESSED_VAL_DIR = Path("dataset/object_detection/processed/images/val")
+RAW_IMAGES_DIR = Path("dataset/object_detection/raw/images")
+RAW_LABELS_DIR = Path("dataset/object_detection/raw/labels")
 
 
 def _require_yolo():
@@ -60,13 +61,13 @@ def _apply_fallback_training_config(config: dict) -> dict:
 
 def _ensure_training_dataset_ready() -> None:
     required_dirs = (
-        (PROCESSED_TRAIN_DIR, "dataset/processed/images/train"),
-        (PROCESSED_VAL_DIR, "dataset/processed/images/val"),
+        (PROCESSED_TRAIN_DIR, "dataset/object_detection/processed/images/train"),
+        (PROCESSED_VAL_DIR, "dataset/object_detection/processed/images/val"),
     )
     for directory, label in required_dirs:
         if not directory.exists() or not any(directory.iterdir()):
             raise FileNotFoundError(
-                f"Chưa có ảnh trong {label}. Hãy bỏ dữ liệu vào dataset/raw và chạy training/split_dataset.py trước."
+                f"Chưa có ảnh trong {label}. Hãy bỏ dữ liệu vào dataset/object_detection/raw và chạy training/split_dataset.py trước."
             )
 
 
@@ -119,7 +120,7 @@ def _print_dataset_ready_help(error: FileNotFoundError) -> None:
             ("Bước 4", "Chạy training/split_dataset.py", YELLOW),
             ("Bước 5", "Chạy lại run_train.py", GREEN),
         ],
-        meaning="Đọc dataset đã split trong dataset/processed và bắt đầu huấn luyện.",
+        meaning="Đọc dataset đã split trong dataset/object_detection/processed và bắt đầu huấn luyện.",
         commands=[
             r".\.venv\Scripts\python training\validate_dataset.py",
             r".\.venv\Scripts\python training\split_dataset.py",
@@ -129,6 +130,7 @@ def _print_dataset_ready_help(error: FileNotFoundError) -> None:
 
 
 def main() -> None:
+    ensure_utf8_console()
     ensure_project_directories()
     _auto_prepare_training_dataset()
     try:

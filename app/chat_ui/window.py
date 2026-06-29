@@ -386,10 +386,10 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.history_list = QListWidget()
             self.history_list.setFrameShape(QFrame.NoFrame)
             self.history_list.setSpacing(8)
-            self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # áº¨n thanh cuá»™n dá»c
-            self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # áº¨n thanh cuá»™n ngang
-            self.history_list.setContextMenuPolicy(Qt.CustomContextMenu) # KĂ­ch hoáº¡t menu ngá»¯ cáº£nh
-            self.history_list.customContextMenuRequested.connect(self.show_history_context_menu) # Káº¿t ná»‘i sá»± kiá»‡n chuá»™t pháº£i
+            self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Ẩn thanh cuộn dọc
+            self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Ẩn thanh cuộn ngang
+            self.history_list.setContextMenuPolicy(Qt.CustomContextMenu)  # Kích hoạt menu ngữ cảnh
+            self.history_list.customContextMenuRequested.connect(self.show_history_context_menu)  # Kết nối sự kiện chuột phải
             self.history_list.currentRowChanged.connect(self.select_conversation)
             history_panel_layout.addWidget(self.history_list)
             sidebar_layout.addWidget(self.history_panel)
@@ -747,7 +747,17 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def generate_system_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
             source = attach_kind or "chat"
             if source in {"image", "camera"} and attach_path:
-                self.add_message(ChatMessage(sender="assistant", text=f"Đã nhận ảnh: {Path(attach_path).name}", attachment_path=attach_path, attachment_kind=source))
+                self.add_message(
+                    ChatMessage(
+                        sender="assistant",
+                        text=(
+                            f"Đã nhận {source} để phân tích: {Path(attach_path).name}. "
+                            "Hệ thống sẽ hiển thị ảnh gốc, ảnh đã xử lý và nhãn dự đoán ngay bên dưới."
+                        ),
+                        attachment_path=attach_path,
+                        attachment_kind=source,
+                    )
+                )
             elif source == "chat":
                 self.add_message(ChatMessage(sender="assistant", text=self.build_system_reply(text=prompt, source=source)))
             else:

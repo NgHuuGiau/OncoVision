@@ -14,15 +14,10 @@ from training.train_model import (
 from utils.entrypoint_checks import module_available
 from utils.file_utils import ensure_project_directories, load_yaml
 from utils.entrypoint_common import run_entrypoint
+from utils.path_counts import count_files as _count_files
 
 
 TRAIN_CONFIG_PATH = Path("training/train_config.yaml")
-
-
-def _count_files(path: Path) -> int:
-    if not path.exists():
-        return 0
-    return sum(1 for item in path.iterdir() if item.is_file())
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from medical.output_management import medical_output_directories
-from medical.pipeline import build_default_medical_analyzer_config, validate_medical_model_path
+from medical.cancer_catalog import list_common_cancer_targets, supported_cancer_labels
+from medical.model_policy import resolve_medical_runtime_model_path
+from medical.pipeline import build_default_medical_analyzer_config
+from medical.status_helpers import count_files
 from medical.training import medical_training_paths
 
 
@@ -30,6 +33,8 @@ class MedicalSystemStatus:
     export_files: int
     case_db_path: Path
     case_count: int
+    screening_targets: tuple[tuple[str, bool], ...]
+    analyzed_cancers: tuple[str, ...]
 
     @property
     def dataset_initialized(self) -> bool:
@@ -42,12 +47,6 @@ class MedicalSystemStatus:
     @property
     def processed_dataset_ready(self) -> bool:
         return self.train_images > 0 and self.val_images > 0
-
-
-def _count_files(path: Path) -> int:
-    if not path.exists():
-        return 0
-    return sum(1 for item in path.iterdir() if item.is_file())
 
 
 def _count_cases(case_db_path: Path) -> int:
@@ -68,7 +67,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
     case_db_path = config.working_dir / "medical_cases.db"
 
     try:
-        resolved_model_path = validate_medical_model_path(config)
+        resolved_model_path = resolve_medical_runtime_model_path(config)
         using_fallback_model = resolved_model_path.resolve(strict=False) != config.model_path.resolve(strict=False)
         model_ready = True
         if using_fallback_model:
@@ -90,17 +89,19 @@ def get_medical_system_status() -> MedicalSystemStatus:
         model_message=model_message,
         dataset_root=training_paths.dataset_root,
         data_yaml_path=training_paths.data_yaml_path,
-        raw_images=_count_files(training_paths.raw_images_dir),
-        raw_labels=_count_files(training_paths.raw_labels_dir),
-        train_images=_count_files(training_paths.processed_images_dir / "train"),
-        val_images=_count_files(training_paths.processed_images_dir / "val"),
-        test_images=_count_files(training_paths.processed_images_dir / "test"),
-        report_files=_count_files(report_dir),
-        normalized_files=_count_files(normalized_dir),
-        overlay_files=_count_files(overlay_dir),
-        export_files=_count_files(export_dir),
+        raw_images=count_files(training_paths.raw_images_dir),
+        raw_labels=count_files(training_paths.raw_labels_dir),
+        train_images=count_files(training_paths.processed_images_dir / "train"),
+        val_images=count_files(training_paths.processed_images_dir / "val"),
+        test_images=count_files(training_paths.processed_images_dir / "test"),
+        report_files=count_files(report_dir),
+        normalized_files=count_files(normalized_dir),
+        overlay_files=count_files(overlay_dir),
+        export_files=count_files(export_dir),
         case_db_path=case_db_path,
         case_count=_count_cases(case_db_path),
+        screening_targets=tuple((target.label, target.model_ready) for target in list_common_cancer_targets()),
+        analyzed_cancers=tuple(supported_cancer_labels()),
     )
 
 

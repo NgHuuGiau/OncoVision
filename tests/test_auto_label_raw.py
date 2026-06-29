@@ -34,8 +34,8 @@ class AutoLabelRawTests(unittest.TestCase):
     def test_auto_label_raw_images_generates_txt_files(self, require_yolo_mock, _model_path_mock) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             root = Path(temp_dir)
-            image_dir = root / "dataset/raw/images"
-            label_dir = root / "dataset/raw/labels"
+            image_dir = root / "dataset/object_detection/raw/images"
+            label_dir = root / "dataset/object_detection/raw/labels"
             image_dir.mkdir(parents=True, exist_ok=True)
             label_dir.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (100, 80), color="white").save(image_dir / "sample.jpg")
@@ -66,8 +66,8 @@ class AutoLabelRawTests(unittest.TestCase):
     def test_auto_label_raw_images_reports_images_with_no_detection(self, require_yolo_mock, _model_path_mock) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             root = Path(temp_dir)
-            image_dir = root / "dataset/raw/images"
-            label_dir = root / "dataset/raw/labels"
+            image_dir = root / "dataset/object_detection/raw/images"
+            label_dir = root / "dataset/object_detection/raw/labels"
             image_dir.mkdir(parents=True, exist_ok=True)
             label_dir.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (64, 64), color="white").save(image_dir / "empty.jpg")

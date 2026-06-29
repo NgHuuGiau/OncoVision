@@ -9,7 +9,10 @@ from medical.reporting import build_artifact_stamp
 from utils.file_utils import save_yaml
 
 
-MEDICAL_DATASET_ROOT = Path("dataset/medical_skin_lesion")
+MEDICAL_DATASET_ROOT = Path("dataset/medical/skin_lesion")
+MEDICAL_CANCER_DATASET_ROOT = Path("dataset/medical_cancer")
+MEDICAL_ROOT = Path("dataset/medical")
+OBJECT_DETECTION_ROOT = Path("dataset/object_detection")
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,59 @@ def create_default_skin_cancer_dataset_config(dataset_root: str | Path = MEDICAL
     )
 
 
+def create_default_medical_cancer_dataset_config(dataset_root: str | Path = MEDICAL_CANCER_DATASET_ROOT) -> MedicalDatasetConfig:
+    root = Path(dataset_root)
+    return MedicalDatasetConfig(
+        disease_name="medical_cancer_screening",
+        dataset_root=root,
+        raw_images_dir=root / "raw" / "images",
+        raw_labels_dir=root / "raw" / "labels",
+        processed_images_dir=root / "processed" / "images",
+        processed_labels_dir=root / "processed" / "labels",
+        metadata_dir=root / "metadata",
+        reports_dir=root / "reports",
+        data_yaml_path=root / "data.yaml",
+        image_size=640,
+        class_names={0: "lesion"},
+    )
+
+
+def create_default_medical_dataset_config(dataset_root: str | Path = MEDICAL_ROOT) -> MedicalDatasetConfig:
+    root = Path(dataset_root)
+    return MedicalDatasetConfig(
+        disease_name="medical_ai",
+        dataset_root=root,
+        raw_images_dir=root / "raw" / "images",
+        raw_labels_dir=root / "raw" / "labels",
+        processed_images_dir=root / "processed" / "images",
+        processed_labels_dir=root / "processed" / "labels",
+        metadata_dir=root / "metadata",
+        reports_dir=root / "reports",
+        data_yaml_path=root / "data.yaml",
+        image_size=640,
+        class_names={0: "lesion"},
+    )
+
+
+def create_default_object_detection_dataset_config(
+    dataset_root: str | Path = OBJECT_DETECTION_ROOT,
+) -> MedicalDatasetConfig:
+    root = Path(dataset_root)
+    return MedicalDatasetConfig(
+        disease_name="object_detection",
+        dataset_root=root,
+        raw_images_dir=root / "raw" / "images",
+        raw_labels_dir=root / "raw" / "labels",
+        processed_images_dir=root / "processed" / "images",
+        processed_labels_dir=root / "processed" / "labels",
+        metadata_dir=root / "metadata",
+        reports_dir=root / "reports",
+        data_yaml_path=root / "data.yaml",
+        image_size=640,
+        class_names={0: "object"},
+    )
+
+
 def ensure_medical_dataset_structure(config: MedicalDatasetConfig | None = None) -> MedicalDatasetSummary:
     config = config or create_default_skin_cancer_dataset_config()
     created_dirs = [
@@ -82,6 +138,21 @@ def ensure_medical_dataset_structure(config: MedicalDatasetConfig | None = None)
         created_directories=created_dirs,
         data_yaml_path=config.data_yaml_path,
     )
+
+
+def ensure_medical_cancer_dataset_structure(config: MedicalDatasetConfig | None = None) -> MedicalDatasetSummary:
+    config = config or create_default_medical_cancer_dataset_config()
+    return ensure_medical_dataset_structure(config)
+
+
+def ensure_medical_dataset_root_structure(config: MedicalDatasetConfig | None = None) -> MedicalDatasetSummary:
+    config = config or create_default_medical_dataset_config()
+    return ensure_medical_dataset_structure(config)
+
+
+def ensure_object_detection_dataset_structure(config: MedicalDatasetConfig | None = None) -> MedicalDatasetSummary:
+    config = config or create_default_object_detection_dataset_config()
+    return ensure_medical_dataset_structure(config)
 
 
 def normalize_uploaded_image(

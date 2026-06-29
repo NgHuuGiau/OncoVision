@@ -1,6 +1,6 @@
 # Hướng Dẫn Training
 
-Tài liệu này mô tả đầy đủ luồng chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model custom trong dự án.
+Tài liệu này mô tả đầy đủ luồng chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model custom.
 
 ## Công nghệ dùng trong training
 
@@ -16,8 +16,8 @@ Tài liệu này mô tả đầy đủ luồng chuẩn bị dữ liệu, huấn 
 
 Pipeline training sử dụng trực tiếp:
 
-- `dataset/raw/images`
-- `dataset/raw/labels`
+- `dataset/object_detection/raw/images`
+- `dataset/object_detection/raw/labels`
 
 Mỗi ảnh trong `images` nên có file `.txt` tương ứng trong `labels`.
 
@@ -39,8 +39,8 @@ Trong đó:
 File `training/data.yaml` định nghĩa mapping class của dự án.
 Nếu bạn muốn train class riêng, hãy cập nhật đồng thời:
 
-- ảnh trong `dataset/raw/`
-- label trong `dataset/raw/`
+- ảnh trong `dataset/object_detection/raw/`
+- label trong `dataset/object_detection/raw/`
 - mapping class trong `training/data.yaml`
 
 ## Luồng training khuyến nghị
@@ -70,7 +70,7 @@ python training\export_model.py
 ### `training/split_dataset.py`
 
 - chia dữ liệu thành `train`, `val`, `test`
-- ghi kết quả vào `dataset/processed/`
+- ghi kết quả vào `dataset/object_detection/processed/`
 
 ### `run_train.py`
 

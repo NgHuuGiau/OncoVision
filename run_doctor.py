@@ -9,19 +9,27 @@ from core.hardware_info import detect_hardware
 from core.model_catalog import YOLO11_MODELS_ASC
 from core.runtime_advisor import select_runtime_config_optimized
 from medical.system_status import MedicalSystemStatus, get_medical_system_status, recommended_medical_commands
+from medical.dataset import create_default_skin_cancer_dataset_config
+from utils.entrypoint_checks import medical_config_issues, runtime_config_issues
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 from utils.entrypoint_common import run_entrypoint
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
 from utils.file_utils import ensure_project_directories
+from utils.path_counts import count_files
 
 
 YOLO11_MODELS = YOLO11_MODELS_ASC
 PRETRAINED_DIR = Path("models/pretrained")
-RAW_IMAGES_DIR = Path("dataset/raw/images")
-RAW_LABELS_DIR = Path("dataset/raw/labels")
-PROCESSED_TRAIN_DIR = Path("dataset/processed/images/train")
-PROCESSED_VAL_DIR = Path("dataset/processed/images/val")
+RAW_IMAGES_DIR = Path("dataset/object_detection/raw/images")
+RAW_LABELS_DIR = Path("dataset/object_detection/raw/labels")
+PROCESSED_TRAIN_DIR = Path("dataset/object_detection/processed/images/train")
+PROCESSED_VAL_DIR = Path("dataset/object_detection/processed/images/val")
+MEDICAL_SKIN_ROOT = create_default_skin_cancer_dataset_config().dataset_root
+MEDICAL_SKIN_RAW_IMAGES_DIR = MEDICAL_SKIN_ROOT / "raw" / "images"
+MEDICAL_SKIN_RAW_LABELS_DIR = MEDICAL_SKIN_ROOT / "raw" / "labels"
+MEDICAL_SKIN_PROCESSED_TRAIN_DIR = MEDICAL_SKIN_ROOT / "processed" / "images" / "train"
+MEDICAL_SKIN_PROCESSED_VAL_DIR = MEDICAL_SKIN_ROOT / "processed" / "images" / "val"
 ICONS_DIR = Path("assets/icons")
 ICON_WARNING_THRESHOLD = 10
 ICON_AUTOFIX_THRESHOLD = 5
@@ -44,13 +52,20 @@ class CameraProbeResult:
 
 
 def _count_files(path: Path) -> int:
-    if not path.exists():
-        return 0
-    return sum(1 for item in path.iterdir() if item.is_file())
+    return count_files(path)
 
 
 def _count_project_files(*paths: Path) -> tuple[int, ...]:
     return tuple(_count_files(path) for path in paths)
+
+
+def _medical_skin_counts() -> tuple[int, int, int, int]:
+    return _count_project_files(
+        MEDICAL_SKIN_RAW_IMAGES_DIR,
+        MEDICAL_SKIN_RAW_LABELS_DIR,
+        MEDICAL_SKIN_PROCESSED_TRAIN_DIR,
+        MEDICAL_SKIN_PROCESSED_VAL_DIR,
+    )
 
 
 def _present_and_missing_models(model_dir: Path = PRETRAINED_DIR) -> tuple[list[str], list[str]]:
@@ -163,6 +178,23 @@ def _print_medical_status(status: MedicalSystemStatus) -> None:
             bounded=False,
         )
     )
+    if status.screening_targets:
+        ready_targets = ", ".join(label for label, ready in status.screening_targets if ready) or "khong co"
+        missing_targets = ", ".join(label for label, ready in status.screening_targets if not ready) or "khong co"
+        print(row("Target da san sang", ready_targets, GREEN, bounded=False))
+        print(row("Target can mo rong", missing_targets, YELLOW, bounded=False))
+
+
+def _print_config_health() -> None:
+    issues = runtime_config_issues() + medical_config_issues()
+    print(line(rule("-"), CYAN))
+    print(section("CAU HINH", GREEN if not issues else YELLOW))
+    if not issues:
+        print(row("Runtime config", "Hop le", GREEN, bounded=False))
+    else:
+        print(row("Runtime config", "Can kiem tra", YELLOW, bounded=False))
+        for issue in issues:
+            print(row("Van de", issue, RED, bounded=False))
 
 
 def _print_recommended_commands(
@@ -180,7 +212,7 @@ def _print_recommended_commands(
     if missing_models:
         commands.append("python training\\download_models.py")
     if icon_count < ICON_WARNING_THRESHOLD:
-        commands.append("python tools\\download_icons.py")
+        commands.append("python run_doctor.py --fix")
     if not dataset_ok:
         commands.append("python training\\prepare_dataset.py")
     elif not split_ok:
@@ -214,6 +246,7 @@ def main() -> None:
         chat_capture_dir,
     )
     medical_status = get_medical_system_status()
+    med_raw_images, med_raw_labels, med_train_images, med_val_images = _medical_skin_counts()
     camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
     recommendations = _runtime_recommendations(hardware)
 
@@ -251,13 +284,18 @@ def main() -> None:
     print(line(rule("-"), CYAN))
     dataset_ok = raw_images > 0 and raw_labels > 0
     split_ok = train_images > 0 and val_images > 0
-    print(section("DU LIEU", GREEN if dataset_ok else YELLOW))
-    print(row("Raw images", f"{RAW_IMAGES_DIR} ({raw_images} file)", GREEN if raw_images else RED, bounded=False))
-    print(row("Raw labels", f"{RAW_LABELS_DIR} ({raw_labels} file)", GREEN if raw_labels else RED, bounded=False))
-    print(row("Train split", f"{PROCESSED_TRAIN_DIR} ({train_images} file)", GREEN if train_images else YELLOW, bounded=False))
-    print(row("Val split", f"{PROCESSED_VAL_DIR} ({val_images} file)", GREEN if val_images else YELLOW, bounded=False))
+    print(section("DU LIEU", GREEN if dataset_ok or med_raw_images > 0 else YELLOW))
+    print(row("Vat the raw images", f"{RAW_IMAGES_DIR} ({raw_images} file)", GREEN if raw_images else RED, bounded=False))
+    print(row("Vat the raw labels", f"{RAW_LABELS_DIR} ({raw_labels} file)", GREEN if raw_labels else RED, bounded=False))
+    print(row("Vat the train split", f"{PROCESSED_TRAIN_DIR} ({train_images} file)", GREEN if train_images else YELLOW, bounded=False))
+    print(row("Vat the val split", f"{PROCESSED_VAL_DIR} ({val_images} file)", GREEN if val_images else YELLOW, bounded=False))
+    print(row("Y duoc raw images", f"{MEDICAL_SKIN_RAW_IMAGES_DIR} ({med_raw_images} file)", GREEN if med_raw_images else RED, bounded=False))
+    print(row("Y duoc raw labels", f"{MEDICAL_SKIN_RAW_LABELS_DIR} ({med_raw_labels} file)", GREEN if med_raw_labels else RED, bounded=False))
+    print(row("Y duoc train split", f"{MEDICAL_SKIN_PROCESSED_TRAIN_DIR} ({med_train_images} file)", GREEN if med_train_images else YELLOW, bounded=False))
+    print(row("Y duoc val split", f"{MEDICAL_SKIN_PROCESSED_VAL_DIR} ({med_val_images} file)", GREEN if med_val_images else YELLOW, bounded=False))
 
     _print_medical_status(medical_status)
+    _print_config_health()
 
     print(line(rule("-"), CYAN))
     print(section("OUTPUT", GREEN))
@@ -277,12 +315,12 @@ def main() -> None:
         print(row("Camera", camera_probe.detail.replace("Ly do khong chay   ", ""), YELLOW, bounded=False))
 
     if not dataset_ok:
-        print(row("Dataset", "Chua co du lieu raw de train.", YELLOW, bounded=False))
+        print(row("Dataset", "Chua co du lieu raw cho luong vat the.", YELLOW, bounded=False))
     elif not split_ok:
-        print(row("Dataset", "Da co raw nhung chua split train/val.", YELLOW, bounded=False))
+        print(row("Dataset", "Da co raw vat the nhung chua split train/val.", YELLOW, bounded=False))
     else:
-        print(row("Dataset", "Du lieu train/val da san sang.", GREEN, bounded=False))
-    print(row("Medical", medical_status.model_message, _medical_status_color(medical_status), bounded=False))
+        print(row("Dataset", "Du lieu train/val vat the da san sang.", GREEN, bounded=False))
+    print(row("Medical", f"{medical_status.model_message} | raw={med_raw_images}/{med_raw_labels}", _medical_status_color(medical_status), bounded=False))
 
     _print_recommended_commands(
         missing_models=missing_models,

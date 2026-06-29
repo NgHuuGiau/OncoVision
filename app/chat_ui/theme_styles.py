@@ -159,8 +159,8 @@ _BASE_SHARED = """
         border-radius: 24px;
     }}
     QFrame#SearchBox {{
-        background: {search_bg};
-        border: 1px solid {search_border};
+        background: {footer_button_bg};
+        border: 1px solid {footer_button_border};
         border-radius: 16px;
     }}
     QFrame#SidebarCompactSearchButton {{
@@ -285,14 +285,14 @@ _BASE_SHARED = """
         background: {button_hover};
     }}
     QPushButton#SidebarPrimaryButton {{
-        min-height: 52px;
-        padding-left: 14px;
+        min-height: 40px;
+        border-radius: 14px;
+        background: {footer_button_bg};
+        border: 1px solid {footer_button_border};
+        padding: 0 12px;
         font-size: 14px;
-        font-weight: 700;
-        border: none;
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563ff, stop:0.55 #8b5cf6, stop:1 #c026d3);
-        color: #ffffff;
-        border-radius: 16px;
+        font-weight: 600;
+        qproperty-iconSize: 18px 18px;
     }}
     QPushButton#TopActionButton,
     QPushButton#SidebarAppButton,
@@ -319,8 +319,17 @@ _BASE_SHARED = """
     QPushButton#SidebarCompactButton:hover,
     QPushButton#SidebarCompactSearchButton:hover,
     QFrame#SearchBox:hover,
+    QPushButton#SidebarFooterButton:hover,
     QPushButton#SidebarAppButton:hover {{
         background: {sidebar_hover};
+    }}
+    QPushButton#SidebarPrimaryButton:pressed,
+    QPushButton#SidebarCompactButton:pressed,
+    QPushButton#SidebarCompactSearchButton:pressed,
+    QPushButton#SidebarFooterButton:pressed,
+    QPushButton#SidebarAppButton:pressed {{
+        background: {history_selected_bg};
+        border: 1px solid {history_selected_border};
     }}
     QFrame#SidebarCompactSearchButton:hover {{
         background: {sidebar_hover};
@@ -383,9 +392,6 @@ _BASE_SHARED = """
         font-size: 14px;
         font-weight: 600;
         qproperty-iconSize: 18px 18px;
-    }}
-    QPushButton#SidebarFooterButton:hover {{
-        background: {footer_button_hover};
     }}
     QPushButton#SidebarToggleButton,
     QPushButton#SettingsCloseButton {{

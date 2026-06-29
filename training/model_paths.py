@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.model_catalog import is_allowed_model_reference, is_supported_pretrained_model
 from utils.file_utils import load_yaml, save_yaml
 
 
@@ -13,11 +14,17 @@ GENERATED_DATA_CONFIG_PATH = Path("training/.generated_data.yaml")
 
 def resolve_model_source(model_name: str | Path) -> Path:
     model_path = Path(model_name)
+    if not is_allowed_model_reference(model_path):
+        raise ValueError(
+            f"Unsupported model reference: {model_path}. "
+            "Only YOLO11 pretrained models (yolo11n/s/m/l/x.pt) and models/trained/*.pt are allowed."
+        )
     if model_path.exists():
         return model_path
-    pretrained_path = PRETRAINED_MODELS_DIR / model_path.name
-    if pretrained_path.exists():
-        return pretrained_path
+    if is_supported_pretrained_model(model_path.name):
+        pretrained_path = PRETRAINED_MODELS_DIR / model_path.name
+        if pretrained_path.exists():
+            return pretrained_path
     return model_path
 
 

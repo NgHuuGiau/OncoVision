@@ -19,8 +19,8 @@ class PrepareDatasetTests(unittest.TestCase):
                 output = io.StringIO()
                 with redirect_stdout(output):
                     prepare_dataset.main()
-                self.assertTrue(Path("dataset/raw/images").exists())
-                self.assertTrue(Path("dataset/raw/labels").exists())
+                self.assertTrue(Path("dataset/object_detection/raw/images").exists())
+                self.assertTrue(Path("dataset/object_detection/raw/labels").exists())
                 self.assertIn("Đã tạo sẵn các thư mục dataset.", output.getvalue())
             finally:
                 os.chdir(previous_cwd)

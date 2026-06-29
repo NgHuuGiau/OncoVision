@@ -8,6 +8,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from utils.file_utils import ensure_project_directories
+from utils.entrypoint_common import run_entrypoint
 from utils.terminal_encoding import ensure_utf8_console
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -32,14 +34,12 @@ class MenuOption:
 
 
 MENU_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_app.py", "Camera thời gian thực", "Mở camera thời gian thực, chạy model và hiển thị FPS cùng khung phát hiện.", "CHẠY CHÍNH", GREEN),
-    "2": MenuOption("run_chat.py", "Chat y dược", "Mở giao diện chat để tải ảnh y khoa lên phân tích và xem kết quả.", "CHẠY CHÍNH", GREEN),
-    "3": MenuOption("run_tests.py", "Kiểm thử", "Chạy toàn bộ unit test và các kiểm tra hồi quy chính.", "KIỂM TRA", YELLOW),
-    "4": MenuOption("run_doctor.py", "Doctor", "Rà soát phần cứng, model, camera, dữ liệu và gợi ý runtime.", "KIỂM TRA", YELLOW),
-    "5": MenuOption("run_train.py", "Huấn luyện chung", "Chuẩn bị dữ liệu, huấn luyện, đánh giá và xuất model tổng quát.", "HUẤN LUYỆN", CYAN),
-    "6": MenuOption("run_medical.py", "Medical menu", "Mở menu y dược: dataset, train, validate, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
-    "7": MenuOption("run_chat.py", "Dọn output", "Xóa nhanh file output chat và medical cũ (camera capture, report, ảnh xử lý).", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
-    "8": MenuOption("run_smoke.py", "Smoke check", "Chạy chuỗi kiểm tra an toàn cho các entrypoint chính.", "KIỂM TRA", YELLOW),
+    "1": MenuOption("run_app.py", "Camera", "Mở camera thời gian thực, chạy model và hiển thị kết quả.", "CHẠY", GREEN),
+    "2": MenuOption("run_chat.py", "Chat y dược", "Mở giao diện chat và phân tích ảnh y khoa.", "CHẠY", GREEN),
+    "3": MenuOption("run_medical.py", "Y dược", "Dataset, TCIA, train, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
+    "4": MenuOption("run_train.py", "Huấn luyện", "Chuẩn bị dữ liệu, train, đánh giá và xuất model.", "HUẤN LUYỆN", CYAN),
+    "5": MenuOption("run_smoke.py", "Kiểm tra tổng hợp", "Chạy smoke check; dùng submenu y dược để xem dataset/TCIA chi tiết.", "KIỂM TRA", YELLOW),
+    "6": MenuOption("run_chat.py", "Dọn output", "Xóa nhanh output chat và medical cũ.", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED),
 }
 
@@ -51,17 +51,17 @@ MENU_PROMPT = f"Chọn tác vụ [{ '/'.join(('0', *PRIMARY_KEYS)) }]: "
 MEDICAL_BACK_TEXT = "Quay lại menu chính."
 
 MEDICAL_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_medical.py", "Khởi tạo dataset", "Tạo cấu trúc dataset y dược mặc định.", "DATASET", GREEN, ("init-dataset",)),
-    "2": MenuOption("run_medical.py", "Kiểm tra dataset", "Rà soát raw images/raw labels cho pipeline medical.", "DATASET", GREEN, ("audit-dataset",)),
-    "3": MenuOption("run_medical.py", "Chia train val test", "Chia dataset medical từ raw sang processed.", "DATASET", GREEN, ("split-dataset",)),
-    "4": MenuOption("run_medical.py", "Huấn luyện toàn bộ", "Chạy split, train, validate cho model y dược.", "HUẤN LUYỆN", CYAN, ("train-all",)),
-    "5": MenuOption("run_medical.py", "Xem lịch sử ca", "Hiển thị các ca bệnh đã phân tích gần đây.", "KẾT QUẢ", YELLOW, ("history",)),
+    "1": MenuOption("run_medical.py", "Báo cáo nhanh", "Tóm tắt dataset, TCIA, model và mức sẵn sàng train.", "KIỂM TRA", GREEN, ("report",)),
+    "2": MenuOption("run_medical.py", "Tải TCIA", "Tải thêm dữ liệu mở TCIA tới mục tiêu 25.000 ảnh.", "DATASET", GREEN, ("tcia-download",)),
+    "3": MenuOption("run_medical.py", "Khởi tạo dataset", "Tạo cấu trúc `dataset/medical/skin_lesion`.", "DATASET", GREEN, ("init-dataset",)),
+    "4": MenuOption("run_medical.py", "Chia dữ liệu", "Chia raw sang train/val/test.", "DATASET", GREEN, ("split-dataset",)),
+    "5": MenuOption("run_medical.py", "Huấn luyện", "Chạy split, train và validate model y dược.", "HUẤN LUYỆN", CYAN, ("train-all",)),
     "6": MenuOption("run_medical.py", "Phân tích ảnh", "Phân tích một ảnh y khoa với mã bệnh nhân nhập tay.", "KẾT QUẢ", YELLOW),
-    "7": MenuOption("run_medical.py", "Medical status", "Kiểm tra nhanh model, dataset, case database và output medical.", "BẢO TRÌ", YELLOW, ("status",)),
+    "7": MenuOption("run_medical.py", "Lịch sử ca", "Hiển thị các ca bệnh đã phân tích gần đây.", "KẾT QUẢ", YELLOW, ("history",)),
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
 }
 MEDICAL_PRIMARY_KEYS = tuple(key for key in MEDICAL_OPTIONS if key != "0")
-MEDICAL_PROMPT = f"Chọn tác vụ medical [{ '/'.join(('0', *MEDICAL_PRIMARY_KEYS)) }]: "
+MEDICAL_PROMPT = f"Chọn tác vụ y dược [{ '/'.join(('0', *MEDICAL_PRIMARY_KEYS)) }]: "
 
 
 def _configure_terminal_encoding() -> None:
@@ -149,7 +149,7 @@ def _resolve_medical_args(option: MenuOption, input_fn=input, print_fn=print) ->
         return option.args
     image_path = input_fn("Nhập đường dẫn ảnh y khoa: ").strip()
     if not image_path:
-        print_fn(f"{RED}Chưa nhập đường dẫn ảnh. Quay lại menu medical.{RESET}")
+        print_fn(f"{RED}Chưa nhập đường dẫn ảnh. Quay lại menu y dược.{RESET}")
         return None
     patient_code = input_fn("Nhập mã bệnh nhân: ").strip() or "BN001"
     return ("analyze", "--image", image_path, "--patient-code", patient_code)
@@ -220,7 +220,7 @@ def _run_menu_choice(
     if option is None:
         print_fn(f"{RED}{TESTED_INVALID_TEXT}{RESET}")
         return False
-    if choice == "6":
+    if choice == "3":
         clear_terminal_fn()
         _run_medical_menu(
             input_fn=input_fn,
@@ -241,6 +241,7 @@ def _run_menu_choice(
 
 def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> int:
     _configure_terminal_encoding()
+    ensure_project_directories()
     try:
         while True:
             _render_menu(print_fn=print_fn)
@@ -261,4 +262,5 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_entrypoint(main))
+

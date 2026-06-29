@@ -1,6 +1,6 @@
 medical:
   disease_name: skin_cancer_screening
-  dataset_root: dataset/medical_skin_lesion
+  dataset_root: dataset/medical/skin_lesion
   model: models\trained\skin_cancer_screening_best.pt
   base_model: yolo11n.pt
   fallback_model: yolo11n.pt

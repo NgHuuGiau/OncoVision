@@ -30,6 +30,19 @@ def _report(
 class ValidateDatasetTests(unittest.TestCase):
     @patch("builtins.print")
     @patch("training.validate_dataset.audit_raw_dataset")
+    def test_main_uses_dataset_root_raw_dirs(self, audit_mock, print_mock) -> None:
+        audit_mock.return_value = _report(raw_image_count=1, eligible=[(Path("a.jpg"), Path("a.txt"))])
+
+        with patch("sys.argv", ["validate_dataset.py", "--dataset-root", "dataset/medical/skin_lesion"]):
+            validate_dataset.main()
+
+        audit_mock.assert_called_once_with(
+            raw_images_dir=Path("dataset/medical/skin_lesion/raw/images"),
+            raw_labels_dir=Path("dataset/medical/skin_lesion/raw/labels"),
+        )
+
+    @patch("builtins.print")
+    @patch("training.validate_dataset.audit_raw_dataset")
     def test_main_exits_with_guidance_when_no_raw_images(self, audit_mock, print_mock) -> None:
         audit_mock.return_value = _report(raw_image_count=0)
 
@@ -46,8 +59,8 @@ class ValidateDatasetTests(unittest.TestCase):
     def test_main_exits_when_missing_or_invalid_labels_exist(self, audit_mock, print_mock) -> None:
         audit_mock.return_value = _report(
             raw_image_count=3,
-            missing_labels=[Path("dataset/raw/images/a.jpg")],
-            invalid_labels=[(Path("dataset/raw/labels/b.txt"), "bad format")],
+            missing_labels=[Path("dataset/object_detection/raw/images/a.jpg")],
+            invalid_labels=[(Path("dataset/object_detection/raw/labels/b.txt"), "bad format")],
         )
 
         with self.assertRaises(SystemExit) as context:

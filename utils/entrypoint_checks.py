@@ -4,6 +4,12 @@ import importlib.util
 from pathlib import Path
 
 from medical.system_status import get_medical_system_status
+from medical.pipeline import build_default_medical_analyzer_config, validate_medical_analyzer_config
+from utils.file_utils import load_yaml, yaml_file_issues
+
+
+SETTINGS_PATH = Path("config/settings.yaml")
+MODEL_CONFIG_PATH = Path("config/model_config.yaml")
 from utils.file_utils import ensure_project_directories
 
 
@@ -35,3 +41,59 @@ def chat_preflight_status() -> tuple[dict[str, bool], int, bool, str, Path]:
     }
     icons_count = count_files(Path("assets/icons"), suffix=".svg")
     return required_modules, icons_count, medical_status.model_ready, medical_status.model_message, capture_dir
+
+
+def medical_config_issues() -> list[str]:
+    try:
+        config = build_default_medical_analyzer_config()
+    except Exception as exc:
+        return [str(exc)]
+    return validate_medical_analyzer_config(config)
+
+
+def runtime_config_issues() -> list[str]:
+    issues: list[str] = []
+    issues.extend(
+        yaml_file_issues(
+            SETTINGS_PATH,
+            required_keys=("models", "inference", "camera"),
+            label="config/settings.yaml",
+        )
+    )
+    issues.extend(
+        yaml_file_issues(
+            MODEL_CONFIG_PATH,
+            required_keys=("preferred_models", "priority_order"),
+            label="config/model_config.yaml",
+        )
+    )
+
+    settings = load_yaml(SETTINGS_PATH)
+    model_config = load_yaml(MODEL_CONFIG_PATH)
+    if not isinstance(settings, dict) or not isinstance(model_config, dict):
+        return issues
+
+    models = settings.get("models")
+    if not isinstance(models, dict) or not models:
+        issues.append("config/settings.yaml thieu hoac sai muc `models`.")
+    else:
+        required_modes = {"high", "medium", "low"}
+        missing_modes = sorted(required_modes - set(models))
+        if missing_modes:
+            issues.append("Thiếu cac mode: " + ", ".join(missing_modes))
+        for mode_name, mode_config in models.items():
+            if not isinstance(mode_config, dict):
+                issues.append(f"Mode `{mode_name}` phai la mapping.")
+                continue
+            if "model" not in mode_config:
+                issues.append(f"Mode `{mode_name}` thieu truong `model`.")
+            if "imgsz" not in mode_config:
+                issues.append(f"Mode `{mode_name}` thieu truong `imgsz`.")
+
+    preferred_models = model_config.get("preferred_models")
+    if not isinstance(preferred_models, dict):
+        issues.append("config/model_config.yaml thieu muc `preferred_models`.")
+    priority_order = model_config.get("priority_order")
+    if not isinstance(priority_order, list) or not priority_order:
+        issues.append("config/model_config.yaml thieu muc `priority_order`.")
+    return issues

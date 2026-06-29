@@ -9,9 +9,14 @@ from training import model_paths
 
 
 class ModelPathsTests(unittest.TestCase):
+    def test_resolve_model_source_rejects_unsupported_pretrained_model(self) -> None:
+        with self.assertRaises(ValueError):
+            model_paths.resolve_model_source("unsupported-model.pt")
+
     def test_resolve_model_source_prefers_existing_explicit_path(self) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
-            model_file = Path(temp_dir) / "custom.pt"
+            model_file = Path(temp_dir) / "models" / "trained" / "custom.pt"
+            model_file.parent.mkdir(parents=True, exist_ok=True)
             model_file.write_text("model", encoding="utf-8")
 
             resolved = model_paths.resolve_model_source(model_file)
@@ -59,7 +64,7 @@ class ModelPathsTests(unittest.TestCase):
     @patch("training.model_paths.save_yaml")
     @patch("training.model_paths.load_yaml")
     def test_resolve_data_config_path_normalizes_dataset_root(self, load_yaml_mock, save_yaml_mock) -> None:
-        load_yaml_mock.return_value = {"path": "../dataset/processed", "train": "images/train", "val": "images/val"}
+        load_yaml_mock.return_value = {"path": "../dataset/object_detection", "train": "images/train", "val": "images/val"}
 
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             config_path = Path(temp_dir) / "data.yaml"
@@ -71,7 +76,7 @@ class ModelPathsTests(unittest.TestCase):
 
         self.assertEqual(resolved, generated_path)
         saved_payload = save_yaml_mock.call_args.args[1]
-        self.assertEqual(Path(saved_payload["path"]), config_path.parent.joinpath("../dataset/processed").resolve())
+        self.assertEqual(Path(saved_payload["path"]), config_path.parent.joinpath("../dataset/object_detection").resolve())
 
 
 if __name__ == "__main__":

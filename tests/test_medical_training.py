@@ -78,8 +78,8 @@ class MedicalTrainingTests(unittest.TestCase):
             self.assertTrue((paths.processed_labels_dir / "test").exists())
 
     @patch("medical.training.sync_medical_model_config")
-    @patch("medical.training.resolve_model_source", side_effect=lambda path: Path(path))
-    def test_train_medical_model_copies_best_weight(self, _resolve_model_mock, sync_mock) -> None:
+    @patch("medical.training.resolve_medical_base_model", return_value=Path("yolo11n.pt"))
+    def test_train_medical_model_copies_best_weight(self, _resolve_base_model_mock, sync_mock) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             paths = self._paths(Path(temp_dir))
             paths.train_runs_dir.mkdir(parents=True, exist_ok=True)
@@ -97,8 +97,8 @@ class MedicalTrainingTests(unittest.TestCase):
             self.assertEqual(model_path.read_text(encoding="utf-8"), "weight")
             sync_mock.assert_called_once()
 
-    @patch("medical.training.resolve_model_source", side_effect=lambda path: Path(path))
-    def test_validate_medical_model_uses_current_model_path(self, _resolve_model_mock) -> None:
+    @patch("medical.training.resolve_medical_runtime_model_path", side_effect=lambda config: Path(config.model_path))
+    def test_validate_medical_model_uses_current_model_path(self, _resolve_runtime_model_mock) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             paths = self._paths(Path(temp_dir))
             paths.trained_model_path.parent.mkdir(parents=True, exist_ok=True)

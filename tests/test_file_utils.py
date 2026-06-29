@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from utils.file_utils import ensure_project_directories, load_yaml, load_yaml_cached, save_yaml
+from utils.file_utils import ensure_project_directories, load_yaml, load_yaml_cached, save_yaml, yaml_file_issues, yaml_mapping_issues
 
 
 class FileUtilsTests(unittest.TestCase):
@@ -23,7 +23,6 @@ class FileUtilsTests(unittest.TestCase):
     def test_ensure_project_directories_creates_all_configured_paths(self) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
             project_dirs = (
-                Path(temp_dir) / "dataset/raw/images",
                 Path(temp_dir) / "models/pretrained",
                 Path(temp_dir) / "output/captures",
                 Path(temp_dir) / "output/recordings",
@@ -54,3 +53,15 @@ class FileUtilsTests(unittest.TestCase):
         self.assertEqual(first, {"mode": "initial"})
         self.assertEqual(second, {"mode": "initial"})
         self.assertEqual(third, {"mode": "saved"})
+
+    def test_yaml_mapping_issues_reports_missing_keys(self) -> None:
+        issues = yaml_mapping_issues({"camera": {}}, required_keys=("models", "camera"), label="settings")
+        self.assertIn("settings thieu truong `models`.", issues)
+        self.assertNotIn("settings thieu truong `camera`.", issues)
+
+    def test_yaml_file_issues_reports_invalid_yaml(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            yaml_path = Path(temp_dir) / "bad.yaml"
+            yaml_path.write_text("models: [", encoding="utf-8")
+            issues = yaml_file_issues(yaml_path, required_keys=("models",), label="bad.yaml")
+        self.assertTrue(any("Khong doc duoc bad.yaml" in item for item in issues))

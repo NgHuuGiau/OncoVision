@@ -1,6 +1,6 @@
 # Hướng Dẫn Runtime Tool
 
-`run_app.py --advisor-only` là công cụ giúp bạn hiểu máy hiện tại nên chạy cấu hình nào trước khi mở camera thật.
+`run_app.py --advisor-only` là công cụ giúp bạn biết máy hiện tại nên chạy cấu hình nào trước khi mở camera thật.
 Chế độ này không mở webcam, không chạy inference và không huấn luyện model.
 
 ## Mục đích

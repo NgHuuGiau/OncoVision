@@ -1,130 +1,63 @@
-# 🧬 OncoVision
+# OncoVision
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
-![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO-111111?style=for-the-badge&logo=github&logoColor=white)
-![OpenCV](https://img.shields.io/badge/OpenCV-Image%20Processing-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)
-![PySide6](https://img.shields.io/badge/PySide6-Desktop%20UI-41CD52?style=for-the-badge&logo=qt&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D4?style=for-the-badge&logo=windows&logoColor=white)
+OncoVision hiện có 2 luồng chính:
 
-**Tiếng Việt** | [English](README_EN.md)
+- `Y dược`: phân tích ảnh y khoa, skin lesion và dữ liệu TCIA
+- `Vật thể`: huấn luyện và kiểm tra YOLO cho bài toán nhận diện vật thể
 
-OncoVision là hệ thống phân tích hình ảnh y khoa thời gian thực dựa trên YOLO, kết hợp camera realtime, chat hỗ trợ phân tích ảnh, kiểm tra sức khỏe hệ thống, và luồng huấn luyện model nội bộ.
+## Khi chạy `run_menu.py`
 
-## Tổng quan
+Menu sẽ tự tạo đủ cây thư mục chuẩn:
 
-OncoVision được thiết kế cho các tình huống cần:
+- `dataset/`
+- `models/`
+- `output/`
+- `runs/`
 
-- Camera realtime để nhận diện nhanh
-- Chat UI để phân tích ảnh y khoa
-- Medical workflow cho dataset, train, validate, history và export
-- Runtime advisor để chọn cấu hình phù hợp với máy
-- Smoke test và doctor scan để kiểm tra hệ thống trước khi chạy thật
+Từ đó, hệ thống sẽ bổ sung thêm các thư mục con cần thiết cho từng luồng.
 
-## Tính năng nổi bật
+## Luồng Y dược
 
-- Camera realtime với runtime advisor
-- Chat UI tích hợp phân tích ảnh y khoa
-- Medical CLI riêng cho dataset, train và history
-- Bộ công cụ kiểm tra hệ thống an toàn
-- GitHub Actions workflow lưu log `.txt` khi CI chạy
+Khung dữ liệu chuẩn:
 
-## Công nghệ sử dụng
+- `dataset/medical/skin_lesion`
+- `dataset/medical/tcia`
 
-| Nhóm | Công nghệ | Vai trò |
-|---|---|---|
-| Ngôn ngữ | Python 3.10+ | Ngôn ngữ chính của toàn bộ dự án |
-| Deep learning | PyTorch, Ultralytics YOLO | Suy luận và huấn luyện model |
-| Xử lý ảnh | OpenCV, Pillow, NumPy | Đọc, biến đổi và hiển thị ảnh |
-| Tiện ích | PyYAML, tqdm, psutil, GPUtil | Cấu hình, progress, theo dõi tài nguyên |
-| Giao diện | PySide6 | UI desktop và chat UI |
-| Âm thanh | faster-whisper, pyaudio | Hỗ trợ luồng voice/audio nếu bật |
-| Lưu trữ | SQLite | Lưu lịch sử ca y khoa và report |
-
-## Nền tảng hỗ trợ
-
-- Windows 10/11
-- PowerShell / Windows Terminal
-- Webcam nếu muốn chạy camera realtime
-- GPU NVIDIA là tùy chọn, nhưng giúp inference và training nhanh hơn
-
-## Bắt đầu nhanh
+Lệnh chính:
 
 ```powershell
-python run_menu.py
+python run_medical.py init-dataset
+python run_medical.py status
+python run_medical.py ready
+python run_medical.py sources
+python run_medical.py cancer
+python run_medical.py tcia-download --dry-run
+python run_medical.py verify-tcia
+python run_medical.py tcia-log --collection "CBIS-DDSM / TCGA-BRCA"
 ```
 
-Hoặc chạy trực tiếp:
+## Luồng Vật thể
+
+Khung dữ liệu chuẩn:
+
+- `dataset/object_detection/raw`
+- `dataset/object_detection/processed`
+
+Lệnh chính:
 
 ```powershell
-python run_app.py
-python run_chat.py
-python run_doctor.py
-python run_train.py
-python run_medical.py
-python run_smoke.py
+python run_medical.py audit-dataset
+python run_medical.py split-dataset
+python run_medical.py train
+python run_medical.py validate
+python run_medical.py train-all
 ```
 
-## Cấu trúc dự án
+## Checklist sẵn sàng train
 
-```text
-OncoVision/
-├── run_*.py          Entry points chính
-├── app/              Camera runtime và chat UI
-├── core/             Runtime, model, camera pipeline
-├── medical/          Luồng phân tích ảnh y khoa
-├── training/         Chuẩn bị dữ liệu, train, validate, export
-├── utils/            Icon, file, terminal, helper
-├── config/           Cấu hình model và runtime
-├── docs/             Tài liệu hướng dẫn
-└── tests/            Unit tests và regression checks
-```
+- Có ảnh và nhãn hợp lệ trong `dataset/object_detection/raw`
+- Đã split ra `train / val / test`
+- Model local hoặc fallback model tồn tại
+- `run_medical.py ready` báo `ready_for_train_skin=True`
+- Nếu cần y dược mở rộng, TCIA đã được tải đủ theo mục tiêu
 
-## Thành phần chính
-
-- `run_menu.py` - menu trung tâm
-- `run_app.py` - camera realtime
-- `run_chat.py` - chat UI và phân tích ảnh
-- `run_doctor.py` - kiểm tra sức khỏe hệ thống
-- `run_train.py` - huấn luyện model
-- `run_medical.py` - CLI cho workflow medical
-- `run_smoke.py` - smoke test an toàn
-
-## Tài liệu
-
-- [Tổng quan dự án](docs/project_overview.md)
-- [Hướng dẫn cài đặt](docs/install_guide.md)
-- [Lệnh nhanh](docs/quick_commands.md)
-- [Hướng dẫn runtime](docs/runtime_tool_guide.md)
-- [Hướng dẫn training](docs/training_guide.md)
-- [Hướng dẫn medical imaging](docs/medical_imaging_guide.md)
-
-## Hỗ trợ chính
-
-- Runtime advisor để chọn mode phù hợp với máy
-- Doctor scan để kiểm tra hệ thống trước khi chạy thật
-- Smoke check để test an toàn các entrypoint chính
-- Unit tests để kiểm tra logic lõi
-- Workflow GitHub Actions để lưu log chi tiết
-
-## Thông số kỹ thuật
-
-| Thông số | Giá trị |
-|---|---|
-| Hỗ trợ Python | 3.10+ |
-| Loại inference | YOLO realtime |
-| Giao diện | Desktop chat UI |
-| Lưu trữ | SQLite |
-| Kiểm thử | `unittest`, smoke checks |
-| CI | GitHub Actions |
-
-## Yêu cầu
-
-- Windows 10/11
-- Python 3.10+
-- Webcam nếu muốn dùng camera realtime
-- GPU NVIDIA là tùy chọn
-
-## Giấy phép
-
-MIT

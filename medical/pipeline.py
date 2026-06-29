@@ -7,11 +7,11 @@ from typing import Any, Protocol
 import cv2
 import numpy as np
 
-from core.model_catalog import YOLO11_MODELS_ASC
 from medical.compliance import build_medical_disclaimer
 from medical.dataset import normalize_uploaded_image
+from medical.model_policy import resolve_medical_runtime_model_path
 from medical.reporting import build_artifact_stamp, write_case_report
-from training.model_paths import PRETRAINED_MODELS_DIR, resolve_model_source
+from training.model_paths import resolve_model_source
 from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
 
@@ -67,6 +67,8 @@ class MedicalAnalysisResult:
 
 def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     settings = load_yaml("config/medical_settings.yaml").get("medical", {})
+    if not isinstance(settings, dict):
+        settings = {}
     configured_model = Path(settings.get("model", "models/trained/best.pt"))
     return MedicalImageAnalyzerConfig(
         model_path=resolve_model_source(configured_model),
@@ -83,32 +85,23 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     )
 
 
-def _is_generic_pretrained_model(model_path: Path) -> bool:
-    resolved_model = model_path.resolve(strict=False)
-    pretrained_root = PRETRAINED_MODELS_DIR.resolve(strict=False)
-    return resolved_model.name in YOLO11_MODELS_ASC and pretrained_root in resolved_model.parents
-
-
 def validate_medical_model_path(config: MedicalImageAnalyzerConfig) -> Path:
-    resolved_model_path = Path(resolve_model_source(config.model_path))
-    if resolved_model_path.exists():
-        if not config.allow_fallback_model and _is_generic_pretrained_model(resolved_model_path):
-            raise FileNotFoundError(
-                "Model medical hien tai dang tro vao model YOLO tong quat. "
-                "Hay train model chuyen dung va cap nhat config/medical_settings.yaml. "
-                "Chi bat allow_fallback_model khi ban chap nhan day la che do nghien cuu."
-            )
-        return resolved_model_path
+    return resolve_medical_runtime_model_path(config)
 
-    if config.allow_fallback_model and config.fallback_model_path is not None:
-        fallback_model_path = Path(resolve_model_source(config.fallback_model_path))
-        if fallback_model_path.exists():
-            return fallback_model_path
 
-    raise FileNotFoundError(
-        f"Chua tim thay model y duoc chuyen dung tai {resolved_model_path}. "
-        "Hay huan luyen bang run_medical.py train-all hoac cap nhat config/medical_settings.yaml."
-    )
+def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list[str]:
+    issues: list[str] = []
+    if config.image_size <= 0:
+        issues.append("image_size phai lon hon 0.")
+    if not 0.0 < config.conf_threshold < 1.0:
+        issues.append("conf_threshold phai nam trong khoang (0, 1).")
+    if not 0.0 < config.classify_medium_risk_threshold <= config.classify_high_risk_threshold <= 1.0:
+        issues.append("nguong nguy co khong hop le.")
+    if not config.model_path:
+        issues.append("model_path khong duoc de trong.")
+    if config.allow_fallback_model and config.fallback_model_path is None:
+        issues.append("allow_fallback_model dang bat nhung fallback_model_path bi thieu.")
+    return issues
 
 
 class MedicalImageAnalyzer:
@@ -205,6 +198,9 @@ class MedicalImageAnalyzer:
 
     def ensure_ready(self) -> Path:
         model_path = validate_medical_model_path(self.config)
+        issues = validate_medical_analyzer_config(self.config)
+        if issues:
+            raise ValueError("Cau hinh medical khong hop le: " + "; ".join(issues))
         self.config = self.config.with_model_path(model_path)
         return model_path
 

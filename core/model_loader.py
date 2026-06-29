@@ -5,6 +5,7 @@ import importlib
 from pathlib import Path
 from typing import Any, Tuple
 
+from core.model_catalog import is_allowed_model_reference, is_supported_pretrained_model
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
 
@@ -37,6 +38,9 @@ def _require_yolo() -> Any:
 
 
 def _candidate_paths(model_name: str) -> list[str]:
+    if not is_allowed_model_reference(model_name):
+        logger.warning("Rejected unsupported model reference: %s", model_name)
+        return []
     trained_path = Path("models/trained/best.pt")
     pretrained_path = Path("models/pretrained") / model_name
     local_root_path = Path(model_name)
@@ -44,9 +48,12 @@ def _candidate_paths(model_name: str) -> list[str]:
     normalized_model_name = str(model_name).replace("\\", "/")
     explicit_trained_best = normalized_model_name == "models/trained/best.pt"
     path_map = {
-        f"models/pretrained/{model_name}": pretrained_path,
-        model_name: local_root_path,
+        f"models/pretrained/{Path(model_name).name}": pretrained_path,
     }
+    if normalized_model_name.startswith("models/trained/"):
+        path_map[normalized_model_name] = local_root_path
+    elif is_supported_pretrained_model(model_name):
+        path_map[model_name] = local_root_path
     if explicit_trained_best:
         path_map["models/trained/best.pt"] = trained_path
     candidates: list[str] = []

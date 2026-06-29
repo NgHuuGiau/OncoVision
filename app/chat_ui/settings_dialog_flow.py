@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from app.chat_ui.content import translate
 
@@ -25,6 +25,7 @@ class SettingsDialog(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.resize(1120, 780)
         self.theme_buttons: dict[str, QPushButton] = {}
+        self.language_buttons: dict[str, QPushButton] = {}
         self.language_options = [
             ("vi", "Tiếng Việt"),
             ("en", "English"),
@@ -145,11 +146,16 @@ class SettingsDialog(QDialog):
         language_row.addWidget(self.language_label, 1)
         language_card_layout.addLayout(language_row)
 
-        self.language_combo = QComboBox()
-        self.language_combo.setObjectName("SettingsCombo")
-        self.language_combo.setMinimumHeight(52)
-        self.language_combo.currentIndexChanged.connect(self.on_language_changed)
-        language_card_layout.addWidget(self.language_combo)
+        language_options = QHBoxLayout()
+        language_options.setSpacing(12)
+        for key, _label in self.language_options:
+            button = QPushButton()
+            button.setObjectName("ThemeChoiceButton")
+            button.setMinimumHeight(48)
+            button.clicked.connect(lambda _checked=False, code=key: self.set_language(code))
+            self.language_buttons[key] = button
+            language_options.addWidget(button)
+        language_card_layout.addLayout(language_options)
         content_layout.addWidget(self.language_card)
 
         content_layout.addStretch(1)
@@ -162,12 +168,11 @@ class SettingsDialog(QDialog):
         self.window.apply_theme()
         self.refresh_theme_buttons()
 
-    def on_language_changed(self, index: int) -> None:
-        if 0 <= index < len(self.language_options):
-            self.window.language = self.language_options[index][0]
-            self.window.db.set_setting("language", self.window.language)
-            self.window.retranslate_ui()
-            self.retranslate_dialog()
+    def set_language(self, language_code: str) -> None:
+        self.window.language = language_code
+        self.window.db.set_setting("language", self.window.language)
+        self.window.retranslate_ui()
+        self.retranslate_dialog()
 
     def retranslate_dialog(self) -> None:
         language = self.window.language
@@ -180,11 +185,8 @@ class SettingsDialog(QDialog):
         self.theme_buttons["light"].setText(f"\u263c  {tr(language, 'light')}")
         self.theme_buttons["dark"].setText(f"\u263e  {tr(language, 'dark')}")
         self.theme_buttons["system"].setText(f"\u25a3  {tr(language, 'system')}")
-        self.language_combo.blockSignals(True)
-        self.language_combo.clear()
-        self.language_combo.addItems([label for _, label in self.language_options])
-        self.language_combo.setCurrentIndex(0 if self.window.language == "vi" else 1)
-        self.language_combo.blockSignals(False)
+        for code, label in self.language_options:
+            self.language_buttons[code].setText(label)
         self.refresh_theme_buttons()
 
     def refresh_theme_buttons(self) -> None:
@@ -195,6 +197,22 @@ class SettingsDialog(QDialog):
         dark_mode = preview_theme == "dark"
         for mode, button in self.theme_buttons.items():
             is_active = mode == active_mode
+            if dark_mode:
+                button.setStyleSheet(
+                    "background: rgba(37, 99, 255, 0.22); color: #f8fbff; border: 1px solid #2563ff; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                    if is_active
+                    else "background: rgba(15, 23, 42, 0.88); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                )
+            else:
+                button.setStyleSheet(
+                    "background: #eef4ff; color: #0f172a; border: 1px solid #2563ff; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
+                    if is_active
+                    else "background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                )
+
+        active_language = self.window.language
+        for code, button in self.language_buttons.items():
+            is_active = code == active_language
             if dark_mode:
                 button.setStyleSheet(
                     "background: rgba(37, 99, 255, 0.22); color: #f8fbff; border: 1px solid #2563ff; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"

@@ -88,8 +88,8 @@ class DoctorTests(unittest.TestCase):
             using_fallback_model=False,
             model_ready=False,
             model_message="missing medical model",
-            dataset_root=Path("dataset/medical_skin_lesion"),
-            data_yaml_path=Path("dataset/medical_skin_lesion/data.yaml"),
+            dataset_root=Path("dataset/medical/skin_lesion"),
+            data_yaml_path=Path("dataset/medical/skin_lesion/data.yaml"),
             raw_images=0,
             raw_labels=0,
             train_images=0,
@@ -101,11 +101,13 @@ class DoctorTests(unittest.TestCase):
             export_files=0,
             case_db_path=Path("output/medical/medical_cases.db"),
             case_count=0,
+            screening_targets=(("Ung thu da", True), ("Ung thu vu", False)),
+            analyzed_cancers=("Ung thu da", "Ung thu vu"),
         )
 
         with patch("run_doctor._present_and_missing_models", return_value=([], ["yolo11n.pt"])), patch(
             "run_doctor._count_files",
-            side_effect=[0, 0, 0, 0, 0, 0],
+            side_effect=[0] * 20,
         ):
             run_doctor.main()
 
@@ -113,7 +115,72 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("download_models.py", output)
         self.assertIn("prepare_dataset.py", output)
         self.assertIn("model local", output)
+        self.assertIn("run_doctor.py --fix", output)
         self.assertIn("run_medical.py train-all", output)
+
+    @patch("builtins.print")
+    @patch("run_doctor.medical_config_issues", return_value=["conf_threshold phai nam trong khoang (0, 1)."])
+    @patch("run_doctor.runtime_config_issues", return_value=["config/settings.yaml thieu hoac sai muc `models`."])
+    @patch("run_doctor.recommended_medical_commands", return_value=["python run_medical.py validate"])
+    @patch("run_doctor.get_medical_system_status")
+    @patch("run_doctor.detect_hardware")
+    @patch("run_doctor.ensure_project_directories")
+    @patch("run_doctor.parse_args")
+    def test_main_reports_medical_config_issues(
+        self,
+        parse_args_mock,
+        _ensure_dirs_mock,
+        detect_hardware_mock,
+        medical_status_mock,
+        _medical_commands_mock,
+        _runtime_config_issues_mock,
+        _config_issues_mock,
+        print_mock,
+    ) -> None:
+        parse_args_mock.return_value = Mock(camera_index=0, skip_camera_check=True, fix=False)
+        detect_hardware_mock.return_value = Mock(
+            cpu_name="Intel Core i7",
+            ram_gb=16.0,
+            os_name="Windows 11",
+            gpu_name="Khong phat hien GPU",
+            gpu_count=0,
+            vram_gb=0.0,
+            torch_version="2.0",
+            cuda_runtime_reason="CPU-only",
+            cuda_available=False,
+            gpu_hardware_available=False,
+        )
+        medical_status_mock.return_value = MedicalSystemStatus(
+            configured_model_path=Path("models/trained/skin.pt"),
+            resolved_model_path=Path("models/trained/skin.pt"),
+            allow_fallback_model=False,
+            using_fallback_model=False,
+            model_ready=True,
+            model_message="ready",
+            dataset_root=Path("dataset/medical/skin_lesion"),
+            data_yaml_path=Path("dataset/medical/skin_lesion/data.yaml"),
+            raw_images=1,
+            raw_labels=1,
+            train_images=1,
+            val_images=1,
+            test_images=1,
+            report_files=0,
+            normalized_files=0,
+            overlay_files=0,
+            export_files=0,
+            case_db_path=Path("output/medical/medical_cases.db"),
+            case_count=0,
+            screening_targets=(("Ung thu da", True), ("Ung thu vu", False)),
+            analyzed_cancers=("Ung thu da", "Ung thu vu"),
+        )
+
+        run_doctor.main()
+
+        output = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
+        self.assertIn("CAU HINH", output)
+        self.assertIn("Can kiem tra", output)
+        self.assertIn("conf_threshold", output)
+        self.assertIn("models", output)
 
 
 if __name__ == "__main__":

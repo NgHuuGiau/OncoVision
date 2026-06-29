@@ -10,24 +10,24 @@ import yaml
 PROJECT_DIRS = tuple(
     Path(directory)
     for directory in (
-        "dataset/raw/images",
-        "dataset/raw/labels",
-        "dataset/medical_skin_lesion/raw/images",
-        "dataset/medical_skin_lesion/raw/labels",
-        "dataset/medical_skin_lesion/processed/images/train",
-        "dataset/medical_skin_lesion/processed/images/val",
-        "dataset/medical_skin_lesion/processed/images/test",
-        "dataset/medical_skin_lesion/processed/labels/train",
-        "dataset/medical_skin_lesion/processed/labels/val",
-        "dataset/medical_skin_lesion/processed/labels/test",
-        "dataset/medical_skin_lesion/metadata",
-        "dataset/medical_skin_lesion/reports",
-        "dataset/processed/images/train",
-        "dataset/processed/images/val",
-        "dataset/processed/images/test",
-        "dataset/processed/labels/train",
-        "dataset/processed/labels/val",
-        "dataset/processed/labels/test",
+        "dataset/object_detection/raw/images",
+        "dataset/object_detection/raw/labels",
+        "dataset/object_detection/processed/images/train",
+        "dataset/object_detection/processed/images/val",
+        "dataset/object_detection/processed/images/test",
+        "dataset/object_detection/processed/labels/train",
+        "dataset/object_detection/processed/labels/val",
+        "dataset/object_detection/processed/labels/test",
+        "dataset/medical/skin_lesion/raw/images",
+        "dataset/medical/skin_lesion/raw/labels",
+        "dataset/medical/skin_lesion/processed/images/train",
+        "dataset/medical/skin_lesion/processed/images/val",
+        "dataset/medical/skin_lesion/processed/images/test",
+        "dataset/medical/skin_lesion/processed/labels/train",
+        "dataset/medical/skin_lesion/processed/labels/val",
+        "dataset/medical/skin_lesion/processed/labels/test",
+        "dataset/medical/skin_lesion/metadata",
+        "dataset/medical/skin_lesion/reports",
         "models/pretrained",
         "models/trained",
         "models/exported",
@@ -55,6 +55,25 @@ def load_yaml(path: str | Path) -> Any:
     resolved_path = Path(path)
     with resolved_path.open("r", encoding="utf-8") as file:
         return yaml.safe_load(file)
+
+
+def yaml_mapping_issues(data: Any, *, required_keys: tuple[str, ...] = (), label: str = "yaml") -> list[str]:
+    issues: list[str] = []
+    if not isinstance(data, dict):
+        return [f"{label} khong phai dang mapping hop le."]
+    for key in required_keys:
+        if key not in data:
+            issues.append(f"{label} thieu truong `{key}`.")
+    return issues
+
+
+def yaml_file_issues(path: str | Path, *, required_keys: tuple[str, ...] = (), label: str | None = None) -> list[str]:
+    resolved_path = Path(path)
+    try:
+        data = load_yaml(resolved_path)
+    except Exception as exc:
+        return [f"Khong doc duoc {label or resolved_path}: {exc}"]
+    return yaml_mapping_issues(data, required_keys=required_keys, label=str(label or resolved_path))
 
 
 @lru_cache(maxsize=16)

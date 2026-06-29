@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from medical.case_payloads import build_detection_metadata
+from medical.cancer_catalog import supported_cancer_labels
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import update_case_report_case_id
 from medical.storage import MedicalCaseDatabase
@@ -53,6 +54,7 @@ class MedicalChatService:
         )
         metadata = {
             "medical_case_id": case_id,
+            "source_image_path": str(result.source_image),
             "risk_level": result.risk_level,
             "suspected_malignant": result.suspected_malignant,
             "processed_image_path": str(result.processed_image),
@@ -62,10 +64,13 @@ class MedicalChatService:
             "model_name": result.model_name,
             "average_confidence": result.average_confidence,
             "quality_warnings": result.quality_warnings,
+            "supported_screening_targets": supported_cancer_labels(),
+            "predicted_labels": [item.label for item in result.detections],
         }
         detection_summary = ", ".join(
             f"{item.label} {item.confidence:.2f}" for item in result.detections[:5]
         ) or "khong ghi nhan vung nghi ngo ro rang"
+        target_summary = ", ".join(supported_cancer_labels())
         quality_text = (
             " Canh bao chat luong anh: " + "; ".join(result.quality_warnings)
             if result.quality_warnings
@@ -76,8 +81,10 @@ class MedicalChatService:
             f"Muc do sang loc nguy co: {result.risk_level}. "
             f"So vung ton thuong ghi nhan: {len(result.detections)}. "
             f"Tom tat phat hien: {detection_summary}. "
+            f"He thong hien ho tro danh muc sang loc: {target_summary}. "
             f"Khuyen nghi: {result.recommendation}."
             f"{quality_text} "
+            f"Anh goc: {result.source_image}. "
             f"Da luu anh da xu ly tai: {result.processed_image}. "
             f"Da luu bao cao JSON tai: {result.report_json_path}. "
             f"Da luu bao cao Markdown tai: {result.report_md_path}. "

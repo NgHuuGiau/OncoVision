@@ -47,8 +47,21 @@ class RunMedicalTests(unittest.TestCase):
         self.assertIn("Da xoa file: 5", stdout.getvalue())
 
     @patch("run_medical.recommended_medical_commands", return_value=["python run_medical.py train-all"])
+    @patch(
+        "run_medical.tcia_counts",
+        return_value=type(
+            "TciaCounts",
+            (),
+            {
+                "downloaded_total": 1234,
+                "target_total": 25000,
+                "remaining_to_target": 23766,
+                "__getitem__": lambda self, key: getattr(self, key),
+            },
+        )(),
+    )
     @patch("run_medical.get_medical_system_status")
-    def test_status_command_prints_medical_summary(self, status_mock, recommended_mock) -> None:
+    def test_status_command_prints_medical_summary(self, status_mock, _tcia_counts_mock, recommended_mock) -> None:
         status_mock.return_value = type(
             "MedicalStatus",
             (),
@@ -58,8 +71,8 @@ class RunMedicalTests(unittest.TestCase):
                 "allow_fallback_model": False,
                 "model_ready": False,
                 "model_message": "missing model",
-                "dataset_root": Path("dataset/medical_skin_lesion"),
-                "data_yaml_path": Path("dataset/medical_skin_lesion/data.yaml"),
+                "dataset_root": Path("dataset/medical/skin_lesion"),
+                "data_yaml_path": Path("dataset/medical/skin_lesion/data.yaml"),
                 "dataset_initialized": True,
                 "raw_images": 0,
                 "raw_labels": 0,
@@ -71,6 +84,7 @@ class RunMedicalTests(unittest.TestCase):
                 "normalized_files": 0,
                 "overlay_files": 0,
                 "export_files": 0,
+                "analyzed_cancers": ("Ung thu da", "Ung thu vu"),
             },
         )()
         with patch("sys.argv", ["run_medical.py", "status"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
@@ -78,8 +92,11 @@ class RunMedicalTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         output = stdout.getvalue()
-        self.assertIn("Medical system status", output)
+        self.assertIn("Trạng thái hệ thống y", output)
         self.assertIn("missing model", output)
+        self.assertIn("Hệ thống đang phân tích các ung thư:", output)
+        self.assertIn("TCIA cancer image count: 1234/25000", output)
+        self.assertIn("Total cancer raw images in repo: 2134", output)
         self.assertIn("python run_medical.py train-all", output)
         recommended_mock.assert_called_once()
 
@@ -91,6 +108,83 @@ class RunMedicalTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertIn("Train: 7", stdout.getvalue())
+
+    @patch(
+        "run_medical.verify_downloads",
+        return_value={
+            "target_total": 25000,
+            "downloaded_total": 27689,
+            "remaining_to_target": 0,
+            "collections": [
+                {
+                    "collection_name": "TCGA-LUAD",
+                    "downloaded_in_collection": 254,
+                    "failed_count": 0,
+                    "collection_root": "dataset/medical/tcia/TCGA-LUAD",
+                }
+            ],
+        },
+    )
+    def test_verify_tcia_command_prints_collection_dir_and_failed_count(self, _verify_mock) -> None:
+        with patch("sys.argv", ["run_medical.py", "verify-tcia"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            code = run_medical.main()
+
+        self.assertEqual(code, 0)
+        output = stdout.getvalue()
+        self.assertIn("Đã tải: 27689", output)
+        self.assertIn("TCGA-LUAD: 254 anh | failed=0 | dir=dataset/medical/tcia/TCGA-LUAD", output)
+
+    @patch("run_medical.build_cancer_overview")
+    def test_cancer_command_prints_local_image_breakdown(self, overview_mock) -> None:
+        overview_mock.return_value = {
+            "summary": {
+                "total_cancer_images": 27726,
+                "skin_raw_images": 900,
+                "tcia_total_images": 26826,
+                "skin_image_dir": "dataset/medical/skin_lesion/raw/images",
+                "tcia_root": "dataset/medical/tcia",
+            },
+            "cancers": [
+                {
+                    "label": "Ung thu da",
+                    "local_image_count": 900,
+                    "local_status": "co_anh_local",
+                    "model_ready": True,
+                    "local_sources": [
+                        {
+                            "collection_name": "skin_lesion",
+                            "image_count": 900,
+                            "collection_root": "dataset/medical/skin_lesion/raw/images",
+                        }
+                    ],
+                    "sources": [],
+                    "model_notes": "Da co model.",
+                },
+                {
+                    "label": "Ung thu phoi",
+                    "local_image_count": 4173,
+                    "local_status": "co_anh_local",
+                    "model_ready": False,
+                    "local_sources": [
+                        {
+                            "collection_name": "NSCLC-Radiomics",
+                            "image_count": 4173,
+                            "collection_root": "dataset/medical/tcia/NSCLC-Radiomics",
+                        }
+                    ],
+                    "sources": [{"source_name": "TCIA NSCLC-Radiomics", "status": "source_confirmed"}],
+                    "model_notes": "Can model CT chuyen dung.",
+                },
+            ],
+        }
+        with patch("sys.argv", ["run_medical.py", "cancer"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            code = run_medical.main()
+
+        self.assertEqual(code, 0)
+        output = stdout.getvalue()
+        self.assertIn("Tong anh ung thu local: 27726", output)
+        self.assertIn("Ung thu da", output)
+        self.assertIn("NSCLC-Radiomics: 4173 anh", output)
 
     @patch("run_medical.train_medical_model", return_value=Path("models/trained/skin_cancer_screening_best.pt"))
     def test_train_command_reports_model_path(self, _train_mock) -> None:

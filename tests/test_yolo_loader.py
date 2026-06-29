@@ -103,6 +103,9 @@ class YoloLoaderTests(unittest.TestCase):
             ["models/trained/best.pt"],
         )
 
+    def test_candidate_paths_rejects_unsupported_model_name(self) -> None:
+        self.assertEqual(_candidate_paths("unsupported-model.pt"), [])
+
     @patch("core.model_loader._candidate_paths", return_value=[])
     def test_load_yolo_model_reports_missing_local_model(self, _candidate_paths_mock) -> None:
         runtime = self._runtime()

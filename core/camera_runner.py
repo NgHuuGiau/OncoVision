@@ -144,12 +144,9 @@ class CameraStream:
     def _start_capture_worker(self) -> None:
         self.capture_stop_event.clear()
         self.capture_ready_event.clear()
+        # Thread creation is intentionally simple: keep the capture loop isolated
+        # and avoid passing unsupported constructor arguments across Python versions.
         self.capture_thread = threading.Thread(
-            target=self._capture_worker_loop,
-            name="camera-capture-worker",
-            focus_camera_check=False,
-            daemon=True,
-        ) if hasattr(threading.Thread, "focus_camera_check") else threading.Thread(
             target=self._capture_worker_loop,
             name="camera-capture-worker",
             daemon=True,

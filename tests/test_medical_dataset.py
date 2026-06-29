@@ -6,7 +6,13 @@ from tempfile import TemporaryDirectory
 
 from PIL import Image
 
-from medical.dataset import create_default_skin_cancer_dataset_config, ensure_medical_dataset_structure, normalize_uploaded_image
+from medical.dataset import (
+    create_default_medical_cancer_dataset_config,
+    create_default_skin_cancer_dataset_config,
+    ensure_medical_cancer_dataset_structure,
+    ensure_medical_dataset_structure,
+    normalize_uploaded_image,
+)
 
 
 class MedicalDatasetTests(unittest.TestCase):
@@ -18,6 +24,15 @@ class MedicalDatasetTests(unittest.TestCase):
             self.assertTrue(summary.data_yaml_path.exists())
             self.assertTrue((config.processed_images_dir / "train").exists())
             self.assertTrue((config.processed_labels_dir / "test").exists())
+
+    def test_ensure_medical_cancer_dataset_structure_creates_generic_layout(self) -> None:
+        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+            config = create_default_medical_cancer_dataset_config(Path(temp_dir) / "medical_cancer_ds")
+            summary = ensure_medical_cancer_dataset_structure(config)
+
+            self.assertTrue(summary.data_yaml_path.exists())
+            self.assertTrue((config.processed_images_dir / "val").exists())
+            self.assertTrue((config.metadata_dir).exists())
 
     def test_normalize_uploaded_image_letterboxes_to_square_rgb(self) -> None:
         with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
