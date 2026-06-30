@@ -56,16 +56,14 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip 2>&1 | tee ci-logs/01-install-pip.txt
-          pip install --prefer-binary -r requirements-ci.txt 2>&1 | tee ci-logs/02-install-requirements.txt
-          pip install ruff mypy 2>&1 | tee ci-logs/03-install-tools.txt
+          pip install --prefer-binary -r requirements.txt 2>&1 | tee ci-logs/02-install-requirements.txt
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath ci-logs/01-install-pip.txt
-          pip install --prefer-binary -r requirements-ci.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
-          pip install ruff 2>&1 | Tee-Object -FilePath ci-logs/03-install-tools.txt
+          pip install --prefer-binary -r requirements.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
 
       - name: Lint with Ruff (Linux)
         if: runner.os != 'Windows'

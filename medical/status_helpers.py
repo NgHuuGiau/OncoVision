@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import lru_cache
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,16 +33,32 @@ class TciaCounts:
         return getattr(self, key)
 
 
+@lru_cache(maxsize=512)
 def count_files(path: Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for item in path.iterdir() if item.is_file())
+    try:
+        with os.scandir(path) as entries:
+            return sum(1 for item in entries if item.is_file())
+    except OSError:
+        return 0
 
 
+@lru_cache(maxsize=128)
 def count_all_files(path: Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for item in path.rglob("*") if item.is_file())
+    total = 0
+    try:
+        with os.scandir(path) as entries:
+            for item in entries:
+                if item.is_file(follow_symlinks=False):
+                    total += 1
+                elif item.is_dir(follow_symlinks=False):
+                    total += count_all_files(Path(item.path))
+    except OSError:
+        return 0
+    return total
 
 
 def skin_dataset_counts(dataset_root: Path) -> DatasetCounts:

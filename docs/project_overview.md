@@ -106,7 +106,7 @@ File đáng chú ý:
 ### `config/`
 
 - chứa file YAML cho settings runtime và medical,
-- là nơi cần xem đầu tiên nếu cần đổi default path, recording, confidence, iou, output.
+- là nơi cần xem đầu tiên nếu muốn đổi default path, recording, confidence, iou, output.
 
 ### `core/`
 
@@ -164,7 +164,7 @@ Trách nhiệm chính:
 Những file quan trọng:
 
 - `system_status.py`: gom status model + data + output + DB
-- `dataset.py`: tạo cấu trúc dataset
+- `dataset.py`: mô tả layout dataset, đường dẫn mặc định và helper kiểm tra
 - `pipeline.py`: xử lý / phân tích ảnh medical
 - `storage.py`: medical case database
 - `chat_service.py`: logic phản hồi cho chat UI
@@ -319,7 +319,7 @@ dataset/medical/*
 | Chat UI không sẵn sàng | `run_chat.py`, `utils/entrypoint_checks.py`, `app/chat_ui/` |
 | Medical status sai | `medical/system_status.py`, `medical/model_policy.py`, `medical/storage.py` |
 | Train fail | `run_train.py`, `training/train_model.py`, `training/validate_dataset.py` |
-| CI fail | `.github/workflows/test.yml`, `run_smoke.py`, `requirements-ci.txt` |
+| CI fail | `.github/workflows/test.yml`, `run_smoke.py`, `requirements.txt` |
 
 ## 7. Nguyên Tắc Kiến Trúc Đang Thể Hiện Trong Repo
 

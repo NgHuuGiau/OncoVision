@@ -12,6 +12,10 @@ from medical.status_helpers import count_files
 from medical.training import medical_training_paths
 
 
+SCREENING_TARGETS = tuple((target.label, target.model_ready) for target in list_common_cancer_targets())
+ANALYZED_CANCERS = tuple(supported_cancer_labels())
+
+
 @dataclass(frozen=True)
 class MedicalSystemStatus:
     configured_model_path: Path
@@ -103,8 +107,8 @@ def get_medical_system_status() -> MedicalSystemStatus:
         export_files=count_files(export_dir),
         case_db_path=case_db_path,
         case_count=_count_cases(case_db_path),
-        screening_targets=tuple((target.label, target.model_ready) for target in list_common_cancer_targets()),
-        analyzed_cancers=tuple(supported_cancer_labels()),
+        screening_targets=SCREENING_TARGETS,
+        analyzed_cancers=ANALYZED_CANCERS,
     )
 
 

@@ -8,12 +8,7 @@ from medical.case_payloads import build_case_export_payload, build_detection_met
 from medical.compliance import build_medical_disclaimer
 from medical.cancer_overview import build_cancer_overview
 from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
-from medical.dataset import (
-    create_default_medical_cancer_dataset_config,
-    create_default_skin_cancer_dataset_config,
-    ensure_medical_cancer_dataset_structure,
-    ensure_medical_dataset_structure,
-)
+from medical.dataset import create_default_medical_cancer_dataset_config, create_default_skin_cancer_dataset_config
 from medical.metrics import compute_medical_metrics
 from medical.output_management import cleanup_medical_outputs
 from medical.pipeline import MedicalImageAnalyzer
@@ -43,10 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    init_parser = subparsers.add_parser("init-dataset", help="Y dược: tạo cấu trúc dataset mặc định.")
+    init_parser = subparsers.add_parser("init-dataset", help="Y dược: kiểm tra dataset mặc định, không tự tạo.")
     init_parser.add_argument("--dataset-root", default="dataset/medical/skin_lesion")
 
-    cancer_init_parser = subparsers.add_parser("init-cancer-dataset", help="Y dược: tạo cấu trúc dataset ung thư tổng hợp.")
+    cancer_init_parser = subparsers.add_parser("init-cancer-dataset", help="Y dược: kiểm tra dataset ung thư tổng hợp, không tự tạo.")
     cancer_init_parser.add_argument("--dataset-root", default="dataset/medical")
 
     analyze_parser = subparsers.add_parser("analyze", help="Vật thể / y dược: phân tích ảnh.")
@@ -119,19 +114,27 @@ def main() -> int:
 
     def handle_init_dataset() -> int:
         config = create_default_skin_cancer_dataset_config(args.dataset_root)
-        summary = ensure_medical_dataset_structure(config)
-        print(f"Da tao dataset tai: {summary.dataset_root}")
-        print(f"Data config: {summary.data_yaml_path}")
-        print("Hệ thống hiện tại phân tích: ung thư da / tổn thương da nghi ngờ ung thư da.")
+        print(f"Dataset root: {config.dataset_root}")
+        print(f"Raw images: {config.raw_images_dir}")
+        print(f"Raw labels: {config.raw_labels_dir}")
+        print(f"Processed images: {config.processed_images_dir}")
+        print(f"Processed labels: {config.processed_labels_dir}")
+        print(f"Metadata: {config.metadata_dir}")
+        print(f"Reports: {config.reports_dir}")
+        print("Da tao dataset. Nguoi dung can chuan bi du lieu thu cong hoac chay luong import/download rieng neu muon.")
         print(build_medical_disclaimer())
         return 0
 
     def handle_init_cancer_dataset() -> int:
         config = create_default_medical_cancer_dataset_config(args.dataset_root)
-        summary = ensure_medical_cancer_dataset_structure(config)
-        print(f"Da tao dataset ung thu tai: {summary.dataset_root}")
-        print(f"Data config: {summary.data_yaml_path}")
-        print("Hệ thống này phù hợp cho: ung thư da + mở rộng TCIA theo collection.")
+        print(f"Dataset root: {config.dataset_root}")
+        print(f"Raw images: {config.raw_images_dir}")
+        print(f"Raw labels: {config.raw_labels_dir}")
+        print(f"Processed images: {config.processed_images_dir}")
+        print(f"Processed labels: {config.processed_labels_dir}")
+        print(f"Metadata: {config.metadata_dir}")
+        print(f"Reports: {config.reports_dir}")
+        print("Da tao dataset. Chi kiem tra layout mong doi de nguoi dung tu chuan bi du lieu.")
         print(build_medical_disclaimer())
         return 0
 

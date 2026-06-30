@@ -11,7 +11,7 @@ from medical.system_status import get_medical_system_status, recommended_medical
 
 class MedicalSystemStatusTests(unittest.TestCase):
     def test_get_medical_system_status_returns_zero_cases_when_db_is_unavailable(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             dataset_root = root / "dataset" / "medical"
             reports_dir = root / "output" / "medical" / "reports"
@@ -78,7 +78,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
         self.assertEqual(status.case_count, 0)
 
     def test_get_medical_system_status_counts_outputs_and_cases(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             dataset_root = root / "dataset" / "medical"
             reports_dir = root / "output" / "medical" / "reports"
@@ -178,7 +178,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
         self.assertIn("python run_medical.py train-all", commands)
 
     def test_get_medical_system_status_includes_screening_targets(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             dataset_root = root / "dataset" / "medical"
             reports_dir = root / "output" / "medical" / "reports"
@@ -233,7 +233,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
         self.assertIn(("Ung thu da", True), status.screening_targets)
 
     def test_dataset_counts_are_separated_between_medical_and_object_detection(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             medical_root = root / "dataset" / "medical" / "skin_lesion"
             object_root = root / "dataset" / "object_detection"
