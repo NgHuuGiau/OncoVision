@@ -20,7 +20,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="ISIC Archive",
         status="ready",
         official_url="https://www.isic-archive.com/",
-        notes="Nguon chinh cho anh da lieu / skin lesion; co pipeline nhap san qua training/import_skin_lesion_dataset.py.",
+        notes="Nguồn chính cho ảnh da liễu / skin lesion; có pipeline nhập sẵn qua training/import_skin_lesion_dataset.py.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_breast",
@@ -28,7 +28,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA CBIS-DDSM",
         status="source_confirmed",
         official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo collection breast pho bien tren TCIA; dung cho mammography/breast imaging. TCGA-BRCA la collection dung rieng.",
+        notes="Mapping theo collection breast phổ biến trên TCIA; dùng cho mammography/breast imaging. TCGA-BRCA là collection dùng riêng.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_lung",
@@ -44,7 +44,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA TCGA-COADREAD",
         status="source_confirmed",
         official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo collection colorectal pho bien tren TCIA; can loc dung collection truoc khi tai. COAD va READ la hai collection rieng, COADREAD la nhom lien quan.",
+        notes="Mapping theo collection colorectal phổ biến trên TCIA; cần lọc đúng collection trước khi tải. COAD và READ là hai collection riêng, COADREAD là nhóm liên quan.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_liver",
@@ -52,7 +52,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA TCGA-LIHC",
         status="source_confirmed",
         official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo liver cancer collection pho bien tren TCIA.",
+        notes="Mapping theo liver cancer collection phổ biến trên TCIA.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_stomach",
@@ -60,7 +60,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA TCGA-STAD",
         status="source_confirmed",
         official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo stomach/gastric cancer collection pho bien tren TCIA.",
+        notes="Mapping theo stomach/gastric cancer collection phổ biến trên TCIA.",
     ),
 )
 

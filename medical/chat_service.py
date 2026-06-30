@@ -72,23 +72,23 @@ class MedicalChatService:
         ) or "không ghi nhận vùng nghi ngờ rõ ràng"
         target_summary = ", ".join(supported_cancer_labels())
         quality_text = (
-            " Canh bao chat luong anh: " + "; ".join(result.quality_warnings)
+            " Cảnh báo chất lượng ảnh: " + "; ".join(result.quality_warnings)
             if result.quality_warnings
             else ""
         )
         reply_text = (
-            f"Da phan tich anh y khoa cho ma benh nhan {patient_code}. "
-            f"Muc do sang loc nguy co: {result.risk_level}. "
+            f"Đã phân tích ảnh y khoa cho mã bệnh nhân {patient_code}. "
+            f"Mức độ sàng lọc nguy cơ: {result.risk_level}. "
             f"Số vùng tổn thương ghi nhận: {len(result.detections)}. "
-            f"Tom tat phat hien: {detection_summary}. "
-            f"He thong hien ho tro danh muc sang loc: {target_summary}. "
+            f"Tóm tắt phát hiện: {detection_summary}. "
+            f"Hệ thống hiện hỗ trợ danh mục sàng lọc: {target_summary}. "
             f"Khuyến nghị: {result.recommendation}."
             f"{quality_text} "
-            f"Anh goc: {result.source_image}. "
-            f"Da luu anh da xu ly tai: {result.processed_image}. "
-            f"Da luu bao cao JSON tai: {result.report_json_path}. "
-            f"Da luu bao cao Markdown tai: {result.report_md_path}. "
-            f"Luu y: {result.disclaimer}"
+            f"Ảnh gốc: {result.source_image}. "
+            f"Đã lưu ảnh đã xử lý tại: {result.processed_image}. "
+            f"Đã lưu báo cáo JSON tại: {result.report_json_path}. "
+            f"Đã lưu báo cáo Markdown tại: {result.report_md_path}. "
+            f"Lưu ý: {result.disclaimer}"
         )
         return MedicalChatResponse(
             reply_text=reply_text,

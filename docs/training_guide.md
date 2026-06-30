@@ -240,7 +240,7 @@ Mục đích:
 - kiểm tra runtime vẫn mở được,
 - test trong bối cảnh webcam thật.
 
-## 14. Các Câu Hỏi Nên Tự Trả Lời Sau Mỗi Lần Train
+## 14. Câu Hỏi Nên Tự Trả Lời Sau Mỗi Lần Train
 
 1. Model có nhận đúng class chính không?
 2. Có bỏ sót object nhỏ không?

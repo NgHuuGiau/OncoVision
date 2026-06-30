@@ -1,6 +1,6 @@
 # Hướng Dẫn Runtime Advisor
 
-Tài liệu này giải thích công cụ `run_app.py --advisor-only`: nó làm gì, đọc kết quả ra sao, và dùng công cụ này như thế nào để chọn runtime mode phù hợp trước khi mở camera thật.
+Tài liệu này giải thích công cụ `run_app.py --advisor-only`: nó làm gì, đọc kết quả ra sao, và dùng công cụ này thế nào để chọn runtime mode phù hợp trước khi mở camera thật.
 
 ## 1. Runtime Advisor Là Gì
 
@@ -45,7 +45,7 @@ Phù hợp khi:
 
 - máy có GPU tốt,
 - ưu tiên độ chính xác,
-- có thể chấp nhận tải cao hơn.
+- chấp nhận tải cao hơn.
 
 ### `medium`
 

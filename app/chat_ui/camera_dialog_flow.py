@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.chat_ui.paths import build_chat_capture_path, get_chat_capture_dir
 from app.chat_ui.content import translate
+from utils.camera_utils import open_camera_capture_with_fallback
 
 try:
     import cv2
@@ -74,14 +75,28 @@ class CameraCaptureDialog(QDialog):
             self.status_label.setText(tr(self.language, "camera_missing"))
             self.capture_button.setEnabled(False)
             return
-        self.capture = cv2.VideoCapture(self.camera_index_value, cv2.CAP_DSHOW)
-        if not self.capture.isOpened():
-            self.capture.release()
+        open_result = open_camera_capture_with_fallback(self.camera_index_value)
+        self.capture = open_result.capture
+        if self.capture is None or not self.capture.isOpened():
             self.capture = None
-            self.status_label.setText(tr(self.language, "camera_unavailable"))
+            tried = ", ".join(str(index) for index in open_result.attempted_indexes)
+            self.status_label.setText(
+                tr(self.language, "camera_unavailable")
+                + " "
+                + tr(self.language, "camera_fallback_hint")
+                + " "
+                + tr(self.language, "camera_fallback_tried").format(indexes=tried)
+            )
             self.capture_button.setEnabled(False)
             return
-        self.status_label.setText(tr(self.language, "camera_ready"))
+        if open_result.index_used is not None and open_result.index_used != self.camera_index_value:
+            self.status_label.setText(
+                tr(self.language, "camera_ready")
+                + " "
+                + tr(self.language, "camera_fallback_used").format(index=open_result.index_used)
+            )
+        else:
+            self.status_label.setText(tr(self.language, "camera_ready"))
         self.timer.start(30)
 
     def update_preview(self) -> None:
@@ -90,7 +105,9 @@ class CameraCaptureDialog(QDialog):
             return
         ok, frame = self.capture.read()
         if not ok:
-            self.status_label.setText(tr(self.language, "camera_unavailable"))
+            self.status_label.setText(
+                tr(self.language, "camera_unavailable") + " " + tr(self.language, "camera_fallback_hint")
+            )
             return
         self.latest_frame = frame
         self.frame_count += 1

@@ -743,19 +743,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def generate_system_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
             source = attach_kind or "chat"
             if source in {"image", "camera"} and attach_path:
-                self.add_message(
-                    ChatMessage(
-                        sender="assistant",
-                        text=(
-                            f"Đã nhận {source} để phân tích: {Path(attach_path).name}. "
-                            "Hệ thống sẽ hiển thị ảnh gốc, ảnh đã xử lý và nhãn dự đoán ngay bên dưới."
-                        ),
-                        attachment_path=attach_path,
-                        attachment_kind=source,
-                    )
-                )
-            elif source == "chat":
-                self.add_message(ChatMessage(sender="assistant", text=self.build_system_reply(text=prompt, source=source)))
+                self._start_medical_analysis(prompt=prompt, attach_path=attach_path)
             else:
                 self.add_message(ChatMessage(sender="assistant", text=self.build_system_reply(text=prompt, source=source)))
             self.scroll_to_bottom()
@@ -800,10 +788,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
         def _on_medical_analysis_finished(self) -> None:
             state = self.medical_controller.finish_analysis(tr(self.language, "input_placeholder"))
-            self.send_button.setEnabled(True)
-            self.plus_button.setEnabled(True)
-            self.micro_button.setEnabled(True)
-            self.message_input.setEnabled(True)
+            for widget in (self.send_button, self.plus_button, self.micro_button, self.message_input):
+                widget.setEnabled(True)
             self.message_input.setPlaceholderText(state.placeholder)
             self.message_input.setFocus()
             self.medical_worker = None
@@ -816,10 +802,10 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.typewriter_content = full_text
             self.typewriter_idx = 0
             self.current_system_text = ""
-            
+
             if self.typing_timer.isActive():
                 self.typing_timer.stop()
-            
+
             self.typewriter_tick()
 
         def typewriter_tick(self):
@@ -828,14 +814,14 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                 self.current_system_text += char
                 self.update_last_message(self.current_system_text)
                 self.typewriter_idx += 1
-                
+
                 delay = random.randint(10, 45)
-                
+
                 if char in ".?!":
                     delay += 400
                 elif char in ",;:":
                     delay += 200
-                
+
                 QTimer.singleShot(delay, self.typewriter_tick)
                 self.scroll_to_bottom()
             else:
@@ -852,7 +838,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                         last_bubble = item.widget()
                         if isinstance(last_bubble, ChatBubble):
                             last_bubble.update_display_text(text)
-                            if text.startswith("Error:") or text.startswith("Phan tich loi:"):
+                            if text.startswith("Error:") or text.startswith("Phân tích lỗi:"):
                                 self.shake_bubble(last_bubble)
 
         def shake_bubble(self, bubble: ChatBubble):
@@ -931,7 +917,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def _format_error(self, err: str) -> str:
             if "does not support image input" in err or "Cannot read" in err:
                 return tr(self.language, "image_model_error")
-            return f"Phan tich loi: {err}"
+            return f"Phân tích lỗi: {err}"
 
         def pick_image(self) -> None:
             pick_image_flow(self)

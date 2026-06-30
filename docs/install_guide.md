@@ -133,13 +133,11 @@ python run_medical.py sources
 
 ## 6. Cấu Trúc Dependency
 
-Repo hiện có ba nhóm dependency để dễ vận hành:
+Repo hiện có một bộ dependency chính để vận hành:
 
 | File | Mục đích |
 |---|---|
-| `requirements.txt` | Bộ dependency đầy đủ cho runtime chính |
-| `requirements-ci.txt` | Dependency tối thiểu để chạy workflow CI |
-| `requirements-dev.txt` | Runtime đầy đủ + công cụ phát triển như `ruff`, `mypy` |
+| `requirements.txt` | Bộ dependency duy nhất cho runtime, dev và CI |
 
 ## 7. Xử Lý Lỗi Thường Gặp
 
@@ -166,7 +164,7 @@ models/pretrained/
 models/trained/
 ```
 
-Nếu cần object detection pretrained model, xem các script trong `training/download_models.py`.
+Nếu cần pretrained model, xem các script trong `training/download_models.py`.
 
 ### Lỗi CUDA hoặc torch
 
@@ -211,5 +209,4 @@ Môi trường có thể xem là sẵn sàng khi các mục sau đều ổn:
 ## 9. Khuyến Nghị Cho Team
 
 - Không chạy thẳng training hoặc camera trên máy mới mà chưa chạy doctor/smoke.
-- Nếu chỉ muốn review code trên CI, ưu tiên `requirements-ci.txt`.
-- Nếu debug local feature đầy đủ, dùng `requirements.txt` hoặc `requirements-dev.txt`.
+- Mọi môi trường đều dùng `requirements.txt`.

@@ -1,6 +1,6 @@
 # Lệnh Nhanh
 
-Tài liệu này là bảng lệnh để dùng hằng ngày. Nếu bạn đã hiểu repo, đây là file mở đầu tiên để thao tác nhanh.
+Tài liệu này là bảng lệnh dùng hằng ngày. Nếu bạn đã hiểu repo, đây là file mở đầu nhanh nhất.
 
 ## 1. Kiểm Tra Môi Trường
 
@@ -41,6 +41,8 @@ python run_medical.py cancer
 python run_medical.py tcia-download --dry-run
 python run_medical.py verify-tcia --collections-file training/tcia_collections_5.json
 ```
+
+`init-dataset` chỉ in layout mong đợi, không tự tạo dữ liệu trong `dataset/`.
 
 ## 5. Training Object Detection
 

@@ -371,7 +371,7 @@ class ChatBubble(QWidget):
             self.typing_indicator.hide()
         self.text_label.show()
 
-        is_error = text.startswith("Phan tich loi:") or text.startswith("Error:")
+        is_error = text.startswith("Phân tích lỗi:") or text.startswith("Error:")
         if self.effective_theme == "light" and is_error:
             self.text_label.setStyleSheet(
                 "font-size: 15px; color: #b00020; font-weight: 700; "

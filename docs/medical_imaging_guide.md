@@ -48,9 +48,9 @@ output/medical/
 | `run_doctor.py` | Hiện thông tin tổng quan medical model, dataset, output |
 | `run_smoke.py` | Có thể gọi một số preflight medical trong luồng đầy đủ |
 
-## 4. Các Lệnh Quan Trọng Nhiều Nhất
+## 4. Các Lệnh Quan Trọng Nhất
 
-### Khởi tạo dataset
+### Kiểm tra layout dataset
 
 ```powershell
 python run_medical.py init-dataset
@@ -58,9 +58,9 @@ python run_medical.py init-dataset
 
 Dùng khi:
 
-- máy mới chưa có khung thư mục medical,
-- cần đồng bộ lại layout dataset chuẩn,
-- muốn bắt đầu từ pipeline y dược trước khi import/tải data.
+- muốn xem layout dataset mong đợi,
+- muốn kiểm tra đường dẫn raw/processed/metadata/reports,
+- muốn xác nhận repo không tự tạo hay tải dữ liệu hộ.
 
 ### Xem trạng thái tổng quát
 
@@ -106,7 +106,7 @@ Hai lệnh này giúp:
 
 ## 5. Workflow TCIA
 
-### Chạy thuộc tính toán trước khi tải thật
+### Chạy tính toán trước khi tải thật
 
 ```powershell
 python run_medical.py tcia-download --dry-run
@@ -178,6 +178,8 @@ python run_medical.py status
 python run_doctor.py --skip-camera-check
 python run_chat.py --check-only
 ```
+
+`init-dataset` ở đây chỉ kiểm tra layout mong đợi, không tự tạo `dataset/medical/...`.
 
 ### B. Chuẩn bị TCIA
 
