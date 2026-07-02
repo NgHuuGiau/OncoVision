@@ -10,7 +10,7 @@ from medical.reporting import update_case_report_case_id, write_case_report
 
 class MedicalReportingTests(unittest.TestCase):
     def test_write_case_report_uses_unique_filenames(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             payload = {
                 "case_id": None,
                 "risk_level": "low",
@@ -30,7 +30,7 @@ class MedicalReportingTests(unittest.TestCase):
         self.assertNotEqual(first_md.name, second_md.name)
 
     def test_update_case_report_case_id_rewrites_json_and_markdown(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             payload = {
                 "case_id": None,
                 "risk_level": "medium",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,6 +25,8 @@ YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
 SPLITS = DEFAULT_SPLITS
 SEED = DEFAULT_SEED
+DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
+DEFAULT_TRAINED_MODEL_DIR = Path("models/trained")
 
 
 @dataclass(frozen=True)
@@ -53,15 +56,17 @@ def _require_yolo():
     return YOLO
 
 
+def _medical_settings_path() -> Path:
+    return DEFAULT_MEDICAL_SETTINGS_PATH
+
+
 def load_medical_settings() -> dict[str, Any]:
-    return load_yaml("config/medical_settings.yaml").get("medical", {})
+    return load_yaml(_medical_settings_path()).get("medical", {})
 
 
-def medical_training_paths() -> MedicalTrainingPaths:
-    settings = load_medical_settings()
+def _medical_paths_from_settings(settings: dict[str, Any]) -> MedicalTrainingPaths:
     dataset_root = Path(settings.get("dataset_root", "dataset/medical/skin_lesion"))
     disease_name = str(settings.get("disease_name", "skin_cancer_screening"))
-    trained_model = Path(f"models/trained/{disease_name}_best.pt")
     return MedicalTrainingPaths(
         dataset_root=dataset_root,
         raw_images_dir=dataset_root / "raw" / "images",
@@ -71,8 +76,12 @@ def medical_training_paths() -> MedicalTrainingPaths:
         data_yaml_path=dataset_root / "data.yaml",
         train_runs_dir=Path("runs/train"),
         val_runs_dir=Path("runs/val"),
-        trained_model_path=trained_model,
+        trained_model_path=DEFAULT_TRAINED_MODEL_DIR / f"{disease_name}_best.pt",
     )
+
+
+def medical_training_paths() -> MedicalTrainingPaths:
+    return _medical_paths_from_settings(load_medical_settings())
 
 
 def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict[str, Any]:
@@ -83,6 +92,7 @@ def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict
     eligible: list[tuple[Path, Path]] = []
     missing_labels: list[Path] = []
     invalid_labels: list[Path] = []
+
     for image_path in images:
         label_path = label_map.get(image_path.stem)
         if label_path is None:
@@ -93,6 +103,7 @@ def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict
             invalid_labels.append(label_path)
             continue
         eligible.append((image_path, label_path))
+
     return {
         "raw_images": images,
         "raw_labels": labels,
@@ -119,7 +130,7 @@ def prepare_medical_training_dataset(paths: MedicalTrainingPaths | None = None) 
     audit = audit_medical_raw_dataset(paths)
     eligible = audit["eligible"]
     if not eligible:
-        raise FileNotFoundError("Medical dataset raw chua co cap image/label hop le de train.")
+        raise FileNotFoundError("Medical dataset raw chưa có cặp image/label hợp lệ để train.")
     _reset_processed_dirs(paths)
     split_map = _split_items(eligible)
     for split_name, items in split_map.items():
@@ -153,11 +164,23 @@ def _medical_training_kwargs(paths: MedicalTrainingPaths, settings: dict[str, An
     }
 
 
+def _medical_settings_payload() -> dict[str, Any]:
+    return load_yaml(_medical_settings_path())
+
+
+def _copy_best_medical_weight(save_dir: Path, trained_model_path: Path) -> None:
+    best_weight = save_dir / "weights" / "best.pt"
+    if not best_weight.exists():
+        raise FileNotFoundError(f"Không tìm thấy best.pt sau khi train tại {best_weight}")
+    trained_model_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(best_weight, trained_model_path)
+
+
 def sync_medical_model_config(model_path: str | Path) -> None:
-    payload = load_yaml("config/medical_settings.yaml")
+    payload = _medical_settings_payload()
     payload.setdefault("medical", {})
     payload["medical"]["model"] = str(Path(model_path))
-    save_yaml("config/medical_settings.yaml", payload)
+    save_yaml(_medical_settings_path(), payload)
 
 
 def train_medical_model(paths: MedicalTrainingPaths | None = None, *, yolo_cls=None) -> Path:
@@ -168,13 +191,7 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, yolo_cls=N
     base_model_path = resolve_medical_base_model(settings)
     results = yolo_cls(str(base_model_path)).train(model=base_model_path.name, **kwargs)
     save_dir = Path(getattr(results, "save_dir", kwargs["project"]))
-    best_weight = save_dir / "weights" / "best.pt"
-    if not best_weight.exists():
-        raise FileNotFoundError(f"Không tìm thấy best.pt sau khi train tại {best_weight}")
-    paths.trained_model_path.parent.mkdir(parents=True, exist_ok=True)
-    import shutil
-
-    shutil.copy2(best_weight, paths.trained_model_path)
+    _copy_best_medical_weight(save_dir, paths.trained_model_path)
     sync_medical_model_config(paths.trained_model_path)
     return paths.trained_model_path
 

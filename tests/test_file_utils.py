@@ -10,7 +10,7 @@ from utils.file_utils import ensure_project_directories, load_yaml, load_yaml_ca
 
 class FileUtilsTests(unittest.TestCase):
     def test_save_yaml_and_load_yaml_roundtrip(self) -> None:
-        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             yaml_path = Path(temp_dir) / "sample.yaml"
             payload = {
                 "system": {"auto_detect_hardware": True},
@@ -21,7 +21,7 @@ class FileUtilsTests(unittest.TestCase):
             self.assertEqual(loaded, payload)
 
     def test_ensure_project_directories_creates_all_configured_paths(self) -> None:
-        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             project_dirs = (
                 Path(temp_dir) / "models/pretrained",
                 Path(temp_dir) / "output/captures",
@@ -38,7 +38,7 @@ class FileUtilsTests(unittest.TestCase):
 
     def test_load_yaml_cached_returns_cached_value_until_cache_is_cleared(self) -> None:
         load_yaml_cached.cache_clear()
-        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             yaml_path = Path(temp_dir) / "cached.yaml"
 
             save_yaml(yaml_path, {"mode": "initial"})

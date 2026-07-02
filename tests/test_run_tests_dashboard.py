@@ -17,6 +17,11 @@ class RunTestsDashboardTests(unittest.TestCase):
         text = run_tests.meter(3, 5, width=5, filled_char="#", empty_char="-")
         self.assertEqual(text, "# # # - -")
 
+    def test_discover_suite_fast_uses_curated_modules(self) -> None:
+        suite = run_tests.discover_suite(fast=True)
+        self.assertGreater(suite.countTestCases(), 0)
+        self.assertLess(suite.countTestCases(), run_tests.discover_suite(fast=False).countTestCases())
+
     def test_pretty_runner_renders_summary_sections(self) -> None:
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(DummyPassingTest)
         stream = io.StringIO()

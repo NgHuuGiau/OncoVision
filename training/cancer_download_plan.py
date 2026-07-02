@@ -11,7 +11,7 @@ except ModuleNotFoundError:
 ensure_project_root_on_path()
 
 from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
-from training.terminal_ui import CYAN, GREEN, command_row, header, line, row, rule, section
+from training.terminal_ui import CYAN, GREEN, header, line, row, rule, section
 from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
 
@@ -21,27 +21,20 @@ OUTPUT_PATH = Path("dataset/cancer_download_plan.json")
 
 def build_download_plan() -> dict[str, object]:
     sources = common_cancer_dataset_source_dicts()
-    ready_sources = [item for item in sources if item["status"] == "ready"]
-    planned_sources = [item for item in sources if item["source_name"].startswith("TCIA")]
+    planned_downloads = [
+        {
+            "cancer_name": item["cancer_type"],
+            "primary_source": item["source_name"],
+            "status": item["status"],
+            "note": item["notes"],
+        }
+        for item in sources
+    ]
     return {
         "priority_downloads": [
-            {
-                "cancer_name": item["cancer_type"],
-                "primary_source": item["source_name"],
-                "status": item["status"],
-                "note": item["notes"],
-            }
-            for item in ready_sources
+            item for item in planned_downloads if item["status"] == "ready"
         ],
-        "planned_downloads": [
-            {
-                "cancer_name": item["cancer_type"],
-                "primary_source": item["source_name"],
-                "status": item["status"],
-                "note": item["notes"],
-            }
-            for item in planned_sources
-        ],
+        "planned_downloads": planned_downloads,
         "ready_for_train": [],
     }
 
@@ -57,21 +50,15 @@ def main() -> None:
     print(section("Uu tien tai ngay", GREEN))
     for item in plan["priority_downloads"]:
         print(row(item["cancer_name"], item["primary_source"], GREEN, bounded=False))
-        print(row("Trạng thái", item["status"], CYAN, bounded=False))
-        print(row("Ghi chu", item["note"], CYAN, bounded=False))
-    print(line(rule("-"), CYAN))
-    print(section("CO THE TAI TIEP", GREEN))
-    for item in plan["planned_downloads"]:
-        print(row(item["cancer_name"], item["primary_source"], GREEN if item["status"] == "download_planned" else CYAN, bounded=False))
-        print(row("Trạng thái", item["status"], CYAN, bounded=False))
+        print(row("Trang thai", item["status"], CYAN, bounded=False))
         print(row("Ghi chu", item["note"], CYAN, bounded=False))
     print(line(rule("-"), CYAN))
     print(section("KET QUA", GREEN))
     print(row("Plan", str(OUTPUT_PATH), GREEN, bounded=False))
     print(line(rule("-"), CYAN))
     print(section("BUOC TIEP", CYAN))
-    print(command_row(1, r".\.venv\Scripts\python run_medical.py tcia-download"))
-    print(command_row(2, r".\.venv\Scripts\python run_medical.py verify-tcia"))
+    print(row("1", r".\.venv\Scripts\python run_medical.py ready", CYAN, bounded=False))
+    print(row("2", r".\.venv\Scripts\python run_medical.py status", CYAN, bounded=False))
     print(line(rule("="), CYAN))
 
 

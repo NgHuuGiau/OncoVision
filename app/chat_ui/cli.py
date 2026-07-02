@@ -15,11 +15,11 @@ def build_chat_arg_parser(description: str) -> argparse.ArgumentParser:
         "--camera-index",
         default=0,
         type=int,
-        help="Default camera index when opening photo capture dialog.",
+        help="Chỉ số camera mặc định khi mở hộp thoại chụp ảnh.",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="Model label hien thi trong giao dien chat khi khoi dong.",
+        help="Nhãn model hiển thị trong giao diện chat khi khởi động.",
     )
     return parser

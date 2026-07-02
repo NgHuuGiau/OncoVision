@@ -11,7 +11,7 @@ from training import download_models
 class DownloadModelsTests(unittest.TestCase):
     @patch("training.download_models.urlretrieve")
     def test_download_models_downloads_requested_files(self, urlretrieve_mock) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             with patch.object(download_models, "PRETRAINED_DIR", Path(temp_dir)):
                 downloaded, skipped = download_models.download_models(["yolo11n.pt", "yolo11s.pt"])
         self.assertEqual(downloaded, ["yolo11n.pt", "yolo11s.pt"])
@@ -20,7 +20,7 @@ class DownloadModelsTests(unittest.TestCase):
 
     @patch("training.download_models.urlretrieve")
     def test_download_models_skips_existing_when_not_forced(self, urlretrieve_mock) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir)
             (target_dir / "yolo11n.pt").write_text("existing", encoding="utf-8")
             with patch.object(download_models, "PRETRAINED_DIR", target_dir):

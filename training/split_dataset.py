@@ -25,10 +25,10 @@ from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
 
 
-RAW_IMAGES_DIR = Path("dataset/object_detection/raw/images")
-RAW_LABELS_DIR = Path("dataset/object_detection/raw/labels")
-PROCESSED_IMAGES_DIR = Path("dataset/object_detection/processed/images")
-PROCESSED_LABELS_DIR = Path("dataset/object_detection/processed/labels")
+RAW_IMAGES_DIR = Path("dataset/raw/images")
+RAW_LABELS_DIR = Path("dataset/raw/labels")
+PROCESSED_IMAGES_DIR = Path("dataset/processed/images")
+PROCESSED_LABELS_DIR = Path("dataset/processed/labels")
 SPLITS = DEFAULT_SPLITS
 SEED = DEFAULT_SEED
 INVALID_YOLO_LABEL_REASON = "Định dạng YOLO không hợp lệ"
@@ -132,11 +132,11 @@ def main() -> None:
         for item in header("YOLO DATASET :: KHÔNG CÓ DỮ LIỆU ĐỂ SPLIT", color=RED):
             print(item)
         print(section("LÝ DO", RED))
-        print(row("Lý do không chạy", "Không có ảnh trong dataset/object_detection/raw/images", RED))
+        print(row("Lý do không chạy", "Không có ảnh trong dataset/raw/images", RED))
         print(line(rule("-"), CYAN))
         print(section("CẦN LÀM", GREEN))
-        print(row("Bước 1", "Bỏ ảnh vào dataset/object_detection/raw/images", YELLOW))
-        print(row("Bước 2", "Bỏ label vào dataset/object_detection/raw/labels", YELLOW))
+        print(row("Bước 1", "Bỏ ảnh vào dataset/raw/images", YELLOW))
+        print(row("Bước 2", "Bỏ label vào dataset/raw/labels", YELLOW))
         print(row("Bước 3", "Chạy training/validate_dataset.py", YELLOW))
         print(row("Bước 4", "Chạy lại training/split_dataset.py", GREEN))
         print(line(rule("-"), CYAN))

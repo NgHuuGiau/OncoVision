@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -12,6 +13,42 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class RunMenuTests(unittest.TestCase):
+    @patch("run_menu.download_models")
+    @patch("run_menu.os.path.exists")
+    def test_main_auto_downloads_missing_yolo_models_on_startup(self, exists_mock, download_models_mock) -> None:
+        def exists_side_effect(path: str) -> bool:
+            return path.endswith(("yolo11n.pt", "yolo11s.pt"))
+
+        exists_mock.side_effect = exists_side_effect
+        download_models_mock.return_value = (["yolo11m.pt", "yolo11l.pt", "yolo11x.pt"], [])
+
+        answers = iter(["0"])
+
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=lambda _: None,
+            run_script_fn=MagicMock(),
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        download_models_mock.assert_called_once_with(["yolo11m.pt", "yolo11l.pt", "yolo11x.pt"])
+
+    @patch("run_menu.download_models")
+    @patch("run_menu.os.path.exists")
+    def test_main_does_not_download_when_all_yolo_models_exist(self, exists_mock, download_models_mock) -> None:
+        exists_mock.return_value = True
+
+        result = run_menu.main(
+            input_fn=lambda _: "0",
+            print_fn=lambda _: None,
+            run_script_fn=MagicMock(),
+            clear_terminal_fn=MagicMock(),
+        )
+
+        self.assertEqual(result, 0)
+        download_models_mock.assert_not_called()
+
     def test_main_exits_on_zero(self) -> None:
         outputs: list[str] = []
         clear_terminal = MagicMock()
@@ -172,7 +209,7 @@ class RunMenuTests(unittest.TestCase):
         run_script.assert_called_once_with("run_medical.py", "report")
         self.assertTrue(any("Báo cáo nhanh" in line or "report" in line for line in outputs))
 
-    def test_main_enters_medical_menu_and_runs_tcia_download(self) -> None:
+    def test_main_enters_medical_menu_and_runs_ready_option(self) -> None:
         outputs: list[str] = []
         run_script = MagicMock(return_value=0)
         answers = iter(["3", "2", "0", "0"])
@@ -185,8 +222,8 @@ class RunMenuTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_medical.py", "tcia-download")
-        self.assertTrue(any("Tải TCIA" in line or "tcia-download" in line for line in outputs))
+        run_script.assert_called_once_with("run_medical.py", "ready")
+        self.assertTrue(any("Dataset y dược" in line or "ready" in line for line in outputs))
 
     def test_main_enters_medical_menu_and_runs_train_all(self) -> None:
         run_script = MagicMock(return_value=0)

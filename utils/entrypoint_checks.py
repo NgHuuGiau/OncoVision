@@ -3,14 +3,13 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from medical.system_status import get_medical_system_status
 from medical.pipeline import build_default_medical_analyzer_config, validate_medical_analyzer_config
-from utils.file_utils import load_yaml, yaml_file_issues
+from medical.system_status import get_medical_system_status
+from utils.file_utils import ensure_project_directories, load_yaml, yaml_file_issues
 
 
 SETTINGS_PATH = Path("config/settings.yaml")
 MODEL_CONFIG_PATH = Path("config/model_config.yaml")
-from utils.file_utils import ensure_project_directories
 
 
 def module_available(name: str) -> bool:
@@ -80,10 +79,10 @@ def runtime_config_issues() -> list[str]:
         required_modes = {"high", "medium", "low"}
         missing_modes = sorted(required_modes - set(models))
         if missing_modes:
-            issues.append("Thiếu cac mode: " + ", ".join(missing_modes))
+            issues.append("Thiếu các mode: " + ", ".join(missing_modes))
         for mode_name, mode_config in models.items():
             if not isinstance(mode_config, dict):
-                issues.append(f"Mode `{mode_name}` phai la mapping.")
+                issues.append(f"Mode `{mode_name}` phải là mapping.")
                 continue
             if "model" not in mode_config:
                 issues.append(f"Mode `{mode_name}` thiếu trường `model`.")

@@ -9,17 +9,17 @@ def build_camera_arg_parser(description: str) -> argparse.ArgumentParser:
         "--mode",
         default=None,
         choices=["auto", "high", "medium", "low"],
-        help="Che do runtime cho camera realtime.",
+        help="Chế độ runtime cho camera realtime.",
     )
     parser.add_argument(
         "--camera-index",
         default=0,
         type=int,
-        help="Camera index de mo luong realtime.",
+        help="Camera index để mở luồng realtime.",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="Model local hoac ten model de uu tien khi khoi dong camera.",
+        help="Model local hoặc tên model để ưu tiên khi khởi động camera.",
     )
     return parser

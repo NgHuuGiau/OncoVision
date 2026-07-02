@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import argparse
+from functools import lru_cache
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -84,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Chỉ chạy những smoke-check nhẹ, phù hợp với môi trường CI không có camera/dataset đầy đủ.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Chỉ in danh sách check và lệnh sẽ chạy, không thực thi gì cả.",
+    )
     return parser
 
 
@@ -91,6 +97,7 @@ def parse_args() -> argparse.Namespace:
     return build_parser().parse_args()
 
 
+@lru_cache(maxsize=8)
 def select_checks(*, include_tests: bool = False, ci_safe: bool = False) -> tuple[SmokeCheck, ...]:
     checks = [check for check in BASE_SMOKE_CHECKS if not ci_safe or check.ci_safe]
     if include_tests:
@@ -110,6 +117,7 @@ def execute_checks(
     checks: tuple[SmokeCheck, ...],
     *,
     stop_on_fail: bool = False,
+    dry_run: bool = False,
     run_command_fn=_run_command,
     print_fn=print,
 ) -> int:
@@ -123,6 +131,10 @@ def execute_checks(
         print_fn(f"[{index}/{len(checks)}] {check.title}")
         print_fn(f"Command : {_display_command(check)}")
         print_fn(f"Purpose : {check.description}")
+        if dry_run:
+            print_fn("Result  : DRY-RUN (skipped)")
+            pass_count += 1
+            continue
         exit_code = int(run_command_fn(check))
 
         if exit_code == 0:
@@ -152,7 +164,7 @@ def execute_checks(
 def main() -> int:
     args = parse_args()
     checks = select_checks(include_tests=args.include_tests, ci_safe=args.ci_safe)
-    return execute_checks(checks, stop_on_fail=args.stop_on_fail)
+    return execute_checks(checks, stop_on_fail=args.stop_on_fail, dry_run=getattr(args, "dry_run", False))
 
 
 if __name__ == "__main__":

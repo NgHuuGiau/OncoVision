@@ -30,6 +30,16 @@ class RunEntrypointsTests(unittest.TestCase):
             prompt_runtime_mode_fn=run_app.prompt_runtime_mode,
         )
 
+    @patch("run_app.run_runtime_advisor", return_value=0)
+    @patch("run_app.parse_args")
+    def test_run_app_advisor_only_short_circuits_before_camera_flow(self, parse_args_mock, advisor_mock) -> None:
+        parse_args_mock.return_value = SimpleNamespace(advisor_only=True, mode=None, model=None, camera_index=0)
+
+        exit_code = run_app.main()
+
+        self.assertEqual(exit_code, 0)
+        advisor_mock.assert_called_once_with()
+
     @patch("run_app.BootProgress")
     @patch("run_app.run_camera_session")
     @patch("run_app.print_runtime_dashboard")
@@ -163,6 +173,31 @@ class RunEntrypointsTests(unittest.TestCase):
         cleanup_medical_mock.assert_called_once_with(older_than_days=14)
         self.assertIn("Đã xóa file chat: 4", stdout.getvalue())
         self.assertIn("Đã xóa file medical: 2", stdout.getvalue())
+
+    @patch("run_chat.cleanup_medical_outputs")
+    @patch("run_chat.cleanup_chat_outputs")
+    @patch("run_chat.build_chat_arg_parser")
+    def test_run_chat_cleanup_output_uses_same_retention_for_both_outputs(
+        self,
+        build_parser_mock,
+        cleanup_mock,
+        cleanup_medical_mock,
+    ) -> None:
+        parser = build_parser_mock.return_value
+        parser.parse_args.return_value = SimpleNamespace(
+            camera_index=0,
+            cleanup_output=True,
+            older_than_days=30,
+            model=None,
+        )
+        cleanup_mock.return_value = SimpleNamespace(removed_files=1, removed_dirs=0, freed_bytes=10)
+        cleanup_medical_mock.return_value = SimpleNamespace(removed_files=2, removed_dirs=1, freed_bytes=20)
+
+        result = run_chat.main()
+
+        self.assertEqual(result, 0)
+        cleanup_mock.assert_called_once_with(older_than_days=30)
+        cleanup_medical_mock.assert_called_once_with(older_than_days=30)
 
     def test_mode_to_ui_defaults_maps_modes(self) -> None:
         self.assertEqual(mode_to_ui_defaults("auto"), ("auto", "medium"))

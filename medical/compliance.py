@@ -5,10 +5,10 @@ from textwrap import dedent
 
 MEDICAL_DISCLAIMER = dedent(
     """
-    Canh bao y khoa:
-    He thong nay chi ho tro sang loc va nghien cuu hinh anh y khoa.
+    Cảnh báo y khoa:
+    Hệ thống này chỉ hỗ trợ sàng lọc và nghiên cứu hình ảnh y khoa.
     Kết quả phân tích tự động không được dùng để tự chẩn đoán, kê đơn hoặc thay thế ý kiến bác sĩ.
-    Moi truong hop nghi ngo ung thu can duoc danh gia boi bac si chuyen khoa va xet nghiem bo sung.
+    Mọi trường hợp nghi ngờ ung thư cần được đánh giá bởi bác sĩ chuyên khoa và xét nghiệm bổ sung.
     """
 ).strip()
 

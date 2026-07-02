@@ -26,6 +26,7 @@ jobs:
             timeout: 45
     env:
       PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: "1"
 
     steps:
       - name: Checkout code
@@ -55,27 +56,40 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          python -m pip install --upgrade pip 2>&1 | tee ci-logs/01-install-pip.txt
+          python -m pip install --upgrade pip setuptools wheel 2>&1 | tee ci-logs/01-install-pip.txt
           pip install --prefer-binary -r requirements.txt 2>&1 | tee ci-logs/02-install-requirements.txt
+          pip install coverage 2>&1 | tee ci-logs/02b-install-coverage.txt
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath ci-logs/01-install-pip.txt
+          python -m pip install --upgrade pip setuptools wheel 2>&1 | Tee-Object -FilePath ci-logs/01-install-pip.txt
           pip install --prefer-binary -r requirements.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
+
+      - name: Compile Python sources (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python -m compileall . 2>&1 | tee ci-logs/03-compileall.txt
+
+      - name: Compile Python sources (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m compileall . 2>&1 | Tee-Object -FilePath ci-logs/03-compileall.txt
 
       - name: Lint with Ruff (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          ruff check . --line-length 140 --target-version py310 2>&1 | tee ci-logs/04-ruff.txt
+          ruff check . 2>&1 | tee ci-logs/04-ruff.txt
 
       - name: Lint with Ruff (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          ruff check . --line-length 140 --target-version py310 --ignore E402 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
+          ruff check . --ignore E402 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
 
       - name: Type check with mypy (Linux)
         if: runner.os != 'Windows'
@@ -127,24 +141,16 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          python -m unittest discover -v 2>&1 | tee ci-logs/08-unit-tests.txt
+          coverage run --source=. -m unittest discover -s tests -p "test_*.py" -v 2>&1 | tee ci-logs/08-unit-tests.txt
+          coverage report -m 2>&1 | tee ci-logs/09-coverage-report.txt
+          coverage xml -o ci-logs/coverage.xml 2>&1 | tee -a ci-logs/09-coverage-report.txt
+          coverage html -d ci-logs/coverage-html 2>&1 | tee -a ci-logs/09-coverage-report.txt
 
       - name: Run unit tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-<<<<<<< HEAD
-          {
-            echo "# CI Test Summary"
-            echo ""
-            echo "Xem lỗi trực tiếp ở step màu đỏ trong tab Actions. File log cũng được upload ở artifact bên dưới."
-            echo ""
-            echo "## Log files"
-            ls -la ci-logs || true
-          } > ci-logs/00-ci-summary.txt
-=======
           python -m unittest discover -s tests -p "test_*.py" -v 2>&1 | Tee-Object -FilePath ci-logs/08-unit-tests.txt
->>>>>>> 69ed48209bb07bfeffb22bd31f7c760b7ea6de96
 
       - name: Create CI summary (Linux)
         if: always() && runner.os != 'Windows'

@@ -25,7 +25,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset-root",
         type=Path,
-        default=Path("dataset/object_detection"),
+        default=Path("dataset"),
         help="Dataset root containing raw/images and raw/labels.",
     )
     parser.add_argument("--raw-images-dir", type=Path, default=None, help="Override raw image directory.")

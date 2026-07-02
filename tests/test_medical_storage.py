@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from pathlib import Path
@@ -9,7 +9,7 @@ from medical.storage import MedicalCaseDatabase
 
 class MedicalStorageTests(unittest.TestCase):
     def test_save_case_and_list_cases_roundtrip(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             db = MedicalCaseDatabase(Path(temp_dir) / "medical.db")
             case_id = db.save_case(
                 patient_code="BN001",
@@ -32,7 +32,7 @@ class MedicalStorageTests(unittest.TestCase):
             self.assertTrue(cases[0].created_at)
 
     def test_get_case_and_delete_case(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             db = MedicalCaseDatabase(Path(temp_dir) / "medical.db")
             case_id = db.save_case(
                 patient_code="BN002",
@@ -42,7 +42,7 @@ class MedicalStorageTests(unittest.TestCase):
                 report_md_path="report.md",
                 suspected_malignant=False,
                 risk_level="low",
-                recommendation="Theo dõi",
+                recommendation="Theo dĂµi",
                 metadata={"score": 0.2},
             )
 
@@ -54,7 +54,7 @@ class MedicalStorageTests(unittest.TestCase):
             self.assertIsNone(db.get_case(case_id))
 
     def test_delete_case_with_files_removes_artifacts(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             db = MedicalCaseDatabase(root / "medical.db")
             image = root / "source.jpg"
@@ -71,7 +71,7 @@ class MedicalStorageTests(unittest.TestCase):
                 report_md_path=str(report_md),
                 suspected_malignant=False,
                 risk_level="low",
-                recommendation="Theo dõi",
+                recommendation="Theo dĂµi",
                 metadata={},
             )
 
@@ -83,7 +83,7 @@ class MedicalStorageTests(unittest.TestCase):
             self.assertIsNone(db.get_case(case_id))
 
     def test_init_creates_indexes_for_lookup_and_history(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "medical.db"
             db = MedicalCaseDatabase(db_path)
 
@@ -97,7 +97,7 @@ class MedicalStorageTests(unittest.TestCase):
             self.assertIn("idx_medical_cases_created_at", indexes)
 
     def test_connection_enables_wal_mode_and_busy_timeout(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             db = MedicalCaseDatabase(Path(temp_dir) / "medical.db")
 
             with db._connect() as conn:
@@ -106,3 +106,6 @@ class MedicalStorageTests(unittest.TestCase):
 
             self.assertEqual(str(journal_mode).lower(), "wal")
             self.assertEqual(busy_timeout, 5000)
+
+
+

@@ -17,7 +17,7 @@ from medical.dataset import (
 
 class MedicalDatasetTests(unittest.TestCase):
     def test_ensure_medical_dataset_structure_creates_skin_cancer_layout(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             config = create_default_skin_cancer_dataset_config(Path(temp_dir) / "medical_ds")
             summary = ensure_medical_dataset_structure(config)
 
@@ -26,7 +26,7 @@ class MedicalDatasetTests(unittest.TestCase):
             self.assertTrue((config.processed_labels_dir / "test").exists())
 
     def test_ensure_medical_cancer_dataset_structure_creates_generic_layout(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             config = create_default_medical_cancer_dataset_config(Path(temp_dir) / "medical_cancer_ds")
             summary = ensure_medical_cancer_dataset_structure(config)
 
@@ -35,7 +35,7 @@ class MedicalDatasetTests(unittest.TestCase):
             self.assertTrue((config.metadata_dir).exists())
 
     def test_normalize_uploaded_image_letterboxes_to_square_rgb(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "input.png"
             Image.new("L", (300, 100), color=180).save(source)
 
@@ -47,7 +47,7 @@ class MedicalDatasetTests(unittest.TestCase):
                 self.assertEqual(image.mode, "RGB")
 
     def test_normalize_uploaded_image_uses_unique_filenames(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "input.png"
             Image.new("RGB", (64, 64), color=(10, 20, 30)).save(source)
 

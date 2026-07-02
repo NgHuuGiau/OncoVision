@@ -24,7 +24,7 @@ class DatasetCounts:
 
 
 @dataclass(frozen=True)
-class TciaCounts:
+class CancerDownloadCounts:
     target_total: int
     downloaded_total: int
     remaining_to_target: int
@@ -71,10 +71,15 @@ def skin_dataset_counts(dataset_root: Path) -> DatasetCounts:
     )
 
 
-def tcia_counts(collections_file: str | Path = DEFAULT_TCIA_COLLECTIONS_FILE) -> TciaCounts:
+def cancer_download_counts(collections_file: str | Path = DEFAULT_TCIA_COLLECTIONS_FILE) -> CancerDownloadCounts:
     report = verify_downloads(collections_file)
-    return TciaCounts(
+    return CancerDownloadCounts(
         target_total=int(report["target_total"]),
         downloaded_total=int(report["downloaded_total"]),
         remaining_to_target=int(report["remaining_to_target"]),
     )
+
+
+# Backward-compatible aliases for internal callers.
+TciaCounts = CancerDownloadCounts
+tcia_counts = cancer_download_counts

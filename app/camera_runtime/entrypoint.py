@@ -13,7 +13,7 @@ def build_targeted_parser(description: str) -> argparse.ArgumentParser:
         "--target",
         default=None,
         choices=["ui", "camera"],
-        help="Kieu khoi dong: giao dien desktop hoac camera thoi gian thuc.",
+        help="Kiểu khởi động: giao diện desktop hoặc camera thời gian thực.",
     )
     return parser
 

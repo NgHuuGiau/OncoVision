@@ -175,7 +175,7 @@ class MessageInput(QPlainTextEdit):
         self.setContentsMargins(0, 0, 0, 0)
         self.setTabChangesFocus(False)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setPlaceholderText("Nhap tin nhan...")
+        self.setPlaceholderText("Nhập tin nhắn...")
         self._adjust_height()
 
     def apply_visual_style(self, *, dark_mode: bool) -> None:

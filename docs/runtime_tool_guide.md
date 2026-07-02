@@ -1,6 +1,19 @@
 # Hướng Dẫn Runtime Advisor
 
+[![Runtime](https://img.shields.io/badge/Docs-Runtime%20Advisor-6C5CE7?logo=readthedocs&logoColor=white)](runtime_tool_guide.md)
+
 Tài liệu này giải thích công cụ `run_app.py --advisor-only`: nó làm gì, đọc kết quả ra sao, và dùng công cụ này thế nào để chọn runtime mode phù hợp trước khi mở camera thật.
+
+> Đây là file “đọc 2 phút là hiểu”: nhìn mục tiêu, xem ảnh minh hoạ, rồi chạy lệnh đúng mode.
+
+## Tóm Tắt Nhanh
+
+| Bạn cần biết gì | Ý nghĩa |
+|---|---|
+| Không mở camera | Advisor chỉ phân tích hệ thống, không chạy realtime |
+| Không làm ngắt quãng | Dùng để chốt mode trước khi mở camera thật |
+| Có gợi ý mode | Thường trả về `high`, `medium`, `low` hoặc `auto` |
+| Có thông số đầu ra | `device`, `imgsz`, `max_det`, model đề xuất |
 
 ## 1. Runtime Advisor Là Gì
 
@@ -16,6 +29,8 @@ Lệnh:
 ```powershell
 python run_app.py --advisor-only
 ```
+
+![Runtime advisor](../images/Ảnh%20run_app.py%20--advisor-only.png)
 
 ## 2. Mục Tiêu Của Công Cụ
 

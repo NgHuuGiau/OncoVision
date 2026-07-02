@@ -6,7 +6,7 @@ from medical.cancer_dataset_registry import common_cancer_dataset_sources
 
 
 class CancerDatasetRegistryTests(TestCase):
-    def test_common_sources_include_isic_and_tcia_collections(self) -> None:
+    def test_common_sources_include_isic_and_tcia_sources(self) -> None:
         sources = common_cancer_dataset_sources()
         ids = [source.source_id for source in sources]
         self.assertIn("isic_skin", ids)

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from pathlib import Path
@@ -11,6 +11,7 @@ from medical.training import (
     audit_medical_raw_dataset,
     prepare_medical_training_dataset,
     run_full_medical_training_pipeline,
+    medical_training_paths,
     sync_medical_model_config,
     train_medical_model,
     validate_medical_model,
@@ -56,7 +57,7 @@ class MedicalTrainingTests(unittest.TestCase):
             (paths.raw_labels_dir / f"img{index}.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
 
     def test_audit_medical_raw_dataset_reports_eligible_pairs(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             paths = self._paths(Path(temp_dir))
             self._seed_raw_dataset(paths, count=2)
 
@@ -67,7 +68,7 @@ class MedicalTrainingTests(unittest.TestCase):
             self.assertEqual(audit["invalid_labels"], [])
 
     def test_prepare_medical_training_dataset_creates_split_dirs(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             paths = self._paths(Path(temp_dir))
             self._seed_raw_dataset(paths, count=5)
 
@@ -80,7 +81,7 @@ class MedicalTrainingTests(unittest.TestCase):
     @patch("medical.training.sync_medical_model_config")
     @patch("medical.training.resolve_medical_base_model", return_value=Path("yolo11n.pt"))
     def test_train_medical_model_copies_best_weight(self, _resolve_base_model_mock, sync_mock) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             paths = self._paths(Path(temp_dir))
             paths.train_runs_dir.mkdir(parents=True, exist_ok=True)
             run_dir = paths.train_runs_dir / "medical-run" / "weights"
@@ -99,7 +100,7 @@ class MedicalTrainingTests(unittest.TestCase):
 
     @patch("medical.training.resolve_medical_runtime_model_path", side_effect=lambda config: Path(config.model_path))
     def test_validate_medical_model_uses_current_model_path(self, _resolve_runtime_model_mock) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             paths = self._paths(Path(temp_dir))
             paths.trained_model_path.parent.mkdir(parents=True, exist_ok=True)
             paths.trained_model_path.write_text("weight", encoding="utf-8")
@@ -132,7 +133,7 @@ class MedicalTrainingTests(unittest.TestCase):
         self.assertEqual(report["validation_metrics"]["map50"], 0.8)
 
     def test_sync_medical_model_config_updates_model_path(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "medical_settings.yaml"
             config_path.write_text("medical:\n  model: old.pt\n", encoding="utf-8")
 
@@ -143,3 +144,20 @@ class MedicalTrainingTests(unittest.TestCase):
 
             saved_payload = save_mock.call_args.args[1]
             self.assertEqual(Path(saved_payload["medical"]["model"]), Path("models/trained/new.pt"))
+
+    @patch("medical.training.load_medical_settings")
+    def test_medical_training_paths_uses_configured_dataset_and_model_names(self, load_settings_mock) -> None:
+        load_settings_mock.return_value = {
+            "dataset_root": "dataset/custom_medical",
+            "disease_name": "custom_medical",
+        }
+
+        paths = medical_training_paths()
+
+        self.assertEqual(paths.dataset_root, Path("dataset/custom_medical"))
+        self.assertEqual(paths.raw_images_dir, Path("dataset/custom_medical/raw/images"))
+        self.assertEqual(paths.trained_model_path, Path("models/trained/custom_medical_best.pt"))
+
+
+
+

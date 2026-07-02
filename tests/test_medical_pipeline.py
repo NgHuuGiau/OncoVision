@@ -45,7 +45,7 @@ class _FakeDetector:
 
 class MedicalPipelineTests(unittest.TestCase):
     def test_analyze_image_generates_overlay_and_reports(self) -> None:
-        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             image_path = Path(temp_dir) / "input.jpg"
             model_path = Path(temp_dir) / "medical_model.pt"
             cv2.imwrite(str(image_path), np.full((120, 160, 3), 200, dtype=np.uint8))
@@ -129,7 +129,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertTrue(any("quá tối" in warning for warning in warnings))
 
     def test_validate_medical_model_path_rejects_generic_pretrained_model_by_default(self) -> None:
-        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             pretrained_dir = Path(temp_dir) / "models" / "pretrained"
             pretrained_dir.mkdir(parents=True, exist_ok=True)
             generic_model = pretrained_dir / "yolo11n.pt"
@@ -149,7 +149,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertIn("YOLO tổng quát", str(raised.exception))
 
     def test_validate_medical_model_path_allows_explicit_fallback_mode(self) -> None:
-        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             pretrained_dir = Path(temp_dir) / "models" / "pretrained"
             pretrained_dir.mkdir(parents=True, exist_ok=True)
             fallback_model = pretrained_dir / "yolo11n.pt"

@@ -1,6 +1,21 @@
 # Hướng Dẫn Training Object Detection
 
+[![Training](https://img.shields.io/badge/Docs-Training%20Pipeline-FFB000?logo=readthedocs&logoColor=white)](training_guide.md)
+
 Tài liệu này mô tả đầy đủ luồng train YOLO object detection trong OncoVision, từ dữ liệu raw đến model `best.pt` đưa vào runtime camera.
+
+> Nếu bạn đang chuẩn bị train model mới, file này là bản đồ nhanh nhất của luồng dữ liệu và script liên quan.
+
+## Tóm Tắt Nhanh
+
+| Bước | Script chính |
+|---|---|
+| Chuẩn bị dữ liệu | `training/prepare_dataset.py` |
+| Kiểm tra dữ liệu | `training/validate_dataset.py` |
+| Chia tập | `training/split_dataset.py` |
+| Huấn luyện | `run_train.py` / `training/train_model.py` |
+| Đánh giá | `training/validate_model.py` |
+| Xuất model | `training/export_model.py` |
 
 ## 1. Mục Tiêu
 
@@ -265,3 +280,5 @@ Nhánh object detection và nhánh medical tách biệt về dữ liệu:
 - medical: `dataset/medical/`
 
 Không nên trộn 2 layout này vào nhau. Nếu cần huấn luyện medical riêng, hãy đi theo hướng dẫn ở `medical_imaging_guide.md`.
+
+![Luồng training](../images/Ảnh%20luồng%20training.png)

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -13,7 +13,7 @@ from training import tcia_downloader
 
 class TciaDownloaderTests(unittest.TestCase):
     def test_safe_download_streams_to_zip_and_removes_part(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "series.zip"
             response = MagicMock()
             response.__enter__.return_value = response
@@ -29,7 +29,7 @@ class TciaDownloaderTests(unittest.TestCase):
             self.assertFalse(target.with_suffix(".zip.part").exists())
 
     def test_safe_download_cleans_part_after_timeout(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "series.zip"
 
             with patch("training.tcia_downloader.DOWNLOAD_RETRIES", 1), patch(
@@ -43,7 +43,7 @@ class TciaDownloaderTests(unittest.TestCase):
             self.assertFalse(target.with_suffix(".zip.part").exists())
 
     def test_verify_downloads_counts_failed_manifest_items(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -62,7 +62,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_run_from_file_accepts_explicit_collection_list(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -77,7 +77,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_run_from_file_keeps_explicit_collection_downloads_after_target_is_reached(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -92,7 +92,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_max_images_applies_to_new_images_only(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -134,7 +134,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_skips_previous_failed_series(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -160,7 +160,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_prefers_medium_series_first(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -180,7 +180,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_preserves_previous_downloaded_series(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -213,7 +213,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_restores_existing_archives_when_fetch_fails(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -236,7 +236,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_uses_archive_contents_after_successful_download(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -259,7 +259,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_build_collection_status_restores_count_from_existing_zip_files(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -280,7 +280,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_build_collection_status_counts_archive_contents_without_api(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -302,7 +302,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_archive_counter_ignores_license_file(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             archive_path = Path(temp_dir) / "series.zip"
             with zipfile.ZipFile(archive_path, "w") as archive:
                 archive.writestr("LICENSE", b"license")
@@ -311,7 +311,7 @@ class TciaDownloaderTests(unittest.TestCase):
             self.assertEqual(tcia_downloader._count_images_in_archive(archive_path), 1)
 
     def test_count_downloaded_images_uses_series_counts_when_manifest_total_is_zero(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -338,7 +338,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_count_downloaded_images_prefers_actual_archive_contents(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -361,7 +361,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_build_collection_status_prefers_actual_archive_contents(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -387,7 +387,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_stops_after_consecutive_failures(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -409,7 +409,7 @@ class TciaDownloaderTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_download_collection_skips_collection_after_previous_failures(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             previous_cwd = Path.cwd()
             try:
                 os.chdir(temp_dir)
@@ -444,3 +444,7 @@ class TciaDownloaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+

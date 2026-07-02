@@ -4,10 +4,8 @@ import io
 import json
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from medical.storage import MedicalCaseDatabase as RealMedicalCaseDatabase
 import run_medical
 
 
@@ -47,21 +45,8 @@ class RunMedicalTests(unittest.TestCase):
         self.assertIn("Da xoa file: 5", stdout.getvalue())
 
     @patch("run_medical.recommended_medical_commands", return_value=["python run_medical.py train-all"])
-    @patch(
-        "run_medical.tcia_counts",
-        return_value=type(
-            "TciaCounts",
-            (),
-            {
-                "downloaded_total": 1234,
-                "target_total": 25000,
-                "remaining_to_target": 23766,
-                "__getitem__": lambda self, key: getattr(self, key),
-            },
-        )(),
-    )
     @patch("run_medical.get_medical_system_status")
-    def test_status_command_prints_medical_summary(self, status_mock, _tcia_counts_mock, recommended_mock) -> None:
+    def test_status_command_prints_medical_summary(self, status_mock, recommended_mock) -> None:
         status_mock.return_value = type(
             "MedicalStatus",
             (),
@@ -95,8 +80,6 @@ class RunMedicalTests(unittest.TestCase):
         self.assertIn("Trạng thái hệ thống y", output)
         self.assertIn("missing model", output)
         self.assertIn("Hệ thống đang phân tích các ung thư:", output)
-        self.assertIn("TCIA cancer image count: 1234/25000", output)
-        self.assertIn("Total cancer raw images in repo: 2134", output)
         self.assertIn("python run_medical.py train-all", output)
         recommended_mock.assert_called_once()
 
@@ -108,31 +91,6 @@ class RunMedicalTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertIn("Train: 7", stdout.getvalue())
-
-    @patch(
-        "run_medical.verify_downloads",
-        return_value={
-            "target_total": 25000,
-            "downloaded_total": 27689,
-            "remaining_to_target": 0,
-            "collections": [
-                {
-                    "collection_name": "TCGA-LUAD",
-                    "downloaded_in_collection": 254,
-                    "failed_count": 0,
-                    "collection_root": "dataset/medical/tcia/TCGA-LUAD",
-                }
-            ],
-        },
-    )
-    def test_verify_tcia_command_prints_collection_dir_and_failed_count(self, _verify_mock) -> None:
-        with patch("sys.argv", ["run_medical.py", "verify-tcia"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
-            code = run_medical.main()
-
-        self.assertEqual(code, 0)
-        output = stdout.getvalue()
-        self.assertIn("Đã tải: 27689", output)
-        self.assertIn("TCGA-LUAD: 254 anh | failed=0 | dir=dataset/medical/tcia/TCGA-LUAD", output)
 
     @patch("run_medical.build_cancer_overview")
     def test_cancer_command_prints_local_image_breakdown(self, overview_mock) -> None:
@@ -183,8 +141,51 @@ class RunMedicalTests(unittest.TestCase):
         self.assertEqual(code, 0)
         output = stdout.getvalue()
         self.assertIn("Tong anh ung thu local: 27726", output)
+        self.assertNotIn("tcia=", output.lower())
         self.assertIn("Ung thu da", output)
         self.assertIn("NSCLC-Radiomics: 4173 anh", output)
+
+    def test_download_commands_are_not_exposed_in_cli(self) -> None:
+        help_text = run_medical.build_parser().format_help()
+        self.assertNotIn("tcia-download", help_text)
+        self.assertNotIn("verify-tcia", help_text)
+        self.assertNotIn("tcia-log", help_text)
+        self.assertNotIn("tcia-counts", help_text)
+
+    def test_ready_command_prints_training_readiness_without_download_state(self) -> None:
+        with patch(
+            "run_medical.get_medical_system_status",
+            return_value=type(
+                "MedicalStatus",
+                (),
+                {
+                    "dataset_root": Path("dataset/medical/skin_lesion"),
+                    "raw_images": 4,
+                    "raw_labels": 4,
+                    "train_images": 2,
+                    "val_images": 1,
+                    "test_images": 1,
+                    "dataset_initialized": True,
+                    "model_ready": True,
+                    "report_files": 3,
+                    "normalized_files": 3,
+                    "overlay_files": 3,
+                    "export_files": 1,
+                    "case_count": 5,
+                    "raw_dataset_ready": True,
+                    "processed_dataset_ready": True,
+                },
+            )(),
+        ), patch("run_medical.medical_training_paths", return_value=type("Paths", (), {"dataset_root": Path("dataset/medical/skin_lesion")})()), patch(
+            "run_medical.skin_dataset_counts",
+            return_value=type("Counts", (), {"raw_images": 4, "raw_labels": 4, "train_images": 2, "val_images": 1})(),
+        ), patch("sys.argv", ["run_medical.py", "ready"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            code = run_medical.main()
+
+        self.assertEqual(code, 0)
+        output = stdout.getvalue()
+        self.assertIn("ready_for_train_skin: True", output)
+        self.assertNotIn("tcia", output.lower())
 
     @patch("run_medical.train_medical_model", return_value=Path("models/trained/skin_cancer_screening_best.pt"))
     def test_train_command_reports_model_path(self, _train_mock) -> None:
@@ -252,77 +253,55 @@ class RunMedicalTests(unittest.TestCase):
         self.assertIn("Model: models\\trained\\skin_cancer_screening_best.pt", stdout.getvalue().replace("/", "\\"))
 
     def test_show_case_command_prints_case_detail(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
-            db_path = Path(temp_dir) / "medical.db"
-            db = RealMedicalCaseDatabase(db_path)
-            case_id = db.save_case(
-                patient_code="BN100",
-                image_path="source.jpg",
-                processed_image_path="overlay.jpg",
-                report_json_path="report.json",
-                report_md_path="report.md",
-                suspected_malignant=False,
-                risk_level="low",
-                recommendation="Theo doi",
-                metadata={"quality_warnings": []},
-            )
-            with patch("run_medical.MedicalCaseDatabase", side_effect=lambda: RealMedicalCaseDatabase(db_path)), patch(
-                "sys.argv", ["run_medical.py", "show-case", "--case-id", str(case_id)]
-            ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                code = run_medical.main()
+        fake_record = type(
+            "FakeMedicalCaseRecord",
+            (),
+            {
+                "case_id": 100,
+                "patient_code": "BN100",
+                "created_at": "2026-07-01 10:00:00",
+                "risk_level": "low",
+                "image_path": "source.jpg",
+                "processed_image_path": "overlay.jpg",
+                "report_json_path": "report.json",
+                "report_md_path": "report.md",
+                "metadata": {"quality_warnings": []},
+            },
+        )()
+        fake_db = type("FakeMedicalCaseDatabase", (), {"get_case": lambda self, case_id: fake_record})()
+        with patch("run_medical.MedicalCaseDatabase", return_value=fake_db), patch(
+            "sys.argv", ["run_medical.py", "show-case", "--case-id", "100"]
+        ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            code = run_medical.main()
 
         self.assertEqual(code, 0)
         self.assertIn("BN100", stdout.getvalue())
 
     def test_delete_case_command_removes_record(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
-            db_path = Path(temp_dir) / "medical.db"
-            db = RealMedicalCaseDatabase(db_path)
-            case_id = db.save_case(
-                patient_code="BN200",
-                image_path="source.jpg",
-                processed_image_path="overlay.jpg",
-                report_json_path="report.json",
-                report_md_path="report.md",
-                suspected_malignant=False,
-                risk_level="low",
-                recommendation="Theo doi",
-                metadata={},
-            )
-            with patch("run_medical.MedicalCaseDatabase", side_effect=lambda: RealMedicalCaseDatabase(db_path)), patch(
-                "sys.argv", ["run_medical.py", "delete-case", "--case-id", str(case_id)]
-            ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                code = run_medical.main()
+        fake_db = type("FakeMedicalCaseDatabase", (), {"delete_case": lambda self, case_id: True})()
+        with patch("run_medical.MedicalCaseDatabase", return_value=fake_db), patch(
+            "sys.argv", ["run_medical.py", "delete-case", "--case-id", "200"]
+        ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            code = run_medical.main()
 
         self.assertEqual(code, 0)
         self.assertIn("Da xoa", stdout.getvalue())
 
     def test_delete_case_command_can_remove_files(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
-            root = Path(temp_dir)
-            db_path = root / "medical.db"
-            db = RealMedicalCaseDatabase(db_path)
-            image = root / "source.jpg"
-            processed = root / "overlay.jpg"
-            report_json = root / "report.json"
-            report_md = root / "report.md"
-            for path in (image, processed, report_json, report_md):
-                path.write_text("x", encoding="utf-8")
-            case_id = db.save_case(
-                patient_code="BN300",
-                image_path=str(image),
-                processed_image_path=str(processed),
-                report_json_path=str(report_json),
-                report_md_path=str(report_md),
-                suspected_malignant=False,
-                risk_level="low",
-                recommendation="Theo doi",
-                metadata={},
-            )
-            with patch("run_medical.MedicalCaseDatabase", side_effect=lambda: RealMedicalCaseDatabase(db_path)), patch(
-                "sys.argv", ["run_medical.py", "delete-case", "--case-id", str(case_id), "--delete-files"]
-            ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                code = run_medical.main()
+        fake_db = type(
+            "FakeMedicalCaseDatabase",
+            (),
+            {
+                "delete_case_with_files": lambda self, case_id: (
+                    True,
+                    ["source.jpg", "overlay.jpg", "report.json", "report.md"],
+                ),
+            },
+        )()
+        with patch("run_medical.MedicalCaseDatabase", return_value=fake_db), patch(
+            "sys.argv", ["run_medical.py", "delete-case", "--case-id", "300", "--delete-files"]
+        ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            code = run_medical.main()
 
         self.assertEqual(code, 0)
         self.assertIn("Da xoa cac file lien quan", stdout.getvalue())

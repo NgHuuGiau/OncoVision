@@ -8,28 +8,27 @@ from medical.case_payloads import build_case_export_payload, build_detection_met
 from medical.compliance import build_medical_disclaimer
 from medical.cancer_overview import build_cancer_overview
 from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
+from medical.cli_helpers import print_dataset_counts, print_output_counts, print_skin_readiness, print_skin_status_block
 from medical.dataset import create_default_medical_cancer_dataset_config, create_default_skin_cancer_dataset_config
 from medical.metrics import compute_medical_metrics
 from medical.output_management import cleanup_medical_outputs
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import export_case_bundle, update_case_report_case_id
-from medical.status_helpers import count_all_files, skin_dataset_counts, tcia_counts
+from medical.status_helpers import skin_dataset_counts
 from medical.storage import MedicalCaseDatabase
 from medical.system_status import get_medical_system_status, recommended_medical_commands
-from medical.training import medical_training_paths
 from medical.training import (
     audit_medical_raw_dataset,
+    medical_training_paths,
     prepare_medical_training_dataset,
     run_full_medical_training_pipeline,
     train_medical_model,
     validate_medical_model,
 )
-from training.tcia_downloader import build_collection_status, dry_run_from_file, read_collection_log, run_from_file, verify_downloads
 from utils.entrypoint_common import run_entrypoint
 
 
 SKIN_LESION_ROOT = create_default_skin_cancer_dataset_config().dataset_root
-TCIA_ROOT = Path("dataset/medical/tcia")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,25 +50,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("audit-dataset", help="Vật thể: xem số lượng ảnh raw và nhãn.")
     subparsers.add_parser("split-dataset", help="Vật thể: chia raw dataset sang train/val/test.")
     subparsers.add_parser("status", help="Y dược: xem trạng thái model, dataset, output và số ảnh.")
-    subparsers.add_parser("dataset-counts", help="Y dược: xem riêng số ảnh skin lesion và TCIA.")
-    subparsers.add_parser("report", help="Y dược: màn hình tổng hợp ngắn gọn cho dataset, TCIA và sẵn sàng train.")
+    subparsers.add_parser("dataset-counts", help="Y dược: xem riêng số ảnh skin lesion và dataset y khoa.")
+    subparsers.add_parser("report", help="Y dược: màn hình tổng hợp ngắn gọn cho dataset và sẵn sàng train.")
     subparsers.add_parser("sources", help="Y dược: xem danh sách nguồn ung thư và dataset liên quan.")
     subparsers.add_parser("cancer", help="Y dược: tổng quan gói gọn cho toàn bộ dữ liệu ung thư.")
-    tcia_download_parser = subparsers.add_parser("tcia-download", help="Y dược: tải TCIA từ file danh sách collection.")
-    tcia_download_parser.add_argument("--collections-file", default="training/tcia_collections_5.json")
-    tcia_download_parser.add_argument("--collection", action="append", default=[])
-    tcia_download_parser.add_argument("--force", action="store_true")
-    tcia_download_parser.add_argument("--limit", type=int, default=None)
-    tcia_download_parser.add_argument("--dry-run", action="store_true")
-    tcia_download_parser.add_argument("--manifest", action="store_true")
-    tcia_download_parser.add_argument("--no-manifest", action="store_true")
-    verify_tcia_parser = subparsers.add_parser("verify-tcia", help="Y dược: kiểm tra đã tải bao nhiêu TCIA và còn thiếu bao nhiêu.")
-    verify_tcia_parser.add_argument("--collections-file", default="training/tcia_collections_5.json")
-    tcia_log_parser = subparsers.add_parser("tcia-log", help="Xem log theo collection để truy lỗi nhanh.")
-    tcia_log_parser.add_argument("--collection", required=True)
-    tcia_log_parser.add_argument("--tail", type=int, default=50)
-    tcia_counts_parser = subparsers.add_parser("tcia-counts", help="Y dược: xem riêng số ảnh TCIA theo từng collection.")
-    tcia_counts_parser.add_argument("--collections-file", default="training/tcia_collections_5.json")
     subparsers.add_parser("ready", help="Kiểm tra sẵn sàng train cho hệ y và toàn hệ thống.")
     subparsers.add_parser("train", help="Vật thể: train model hiện tại.")
     subparsers.add_parser("validate", help="Vật thể: validate model hiện tại.")
@@ -102,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.epilog = (
         "Y dược: init-dataset, init-cancer-dataset, status, sources, cancer, analyze\n"
-        "Y dược: tcia-download, verify-tcia, tcia-log, ready\n"
+        "Y dược: ready, report, dataset-counts\n"
         "Vật thể: audit-dataset, split-dataset, train, validate, train-all\n"
     )
     return parser
@@ -193,39 +177,8 @@ def main() -> int:
 
     def handle_status() -> int:
         status = get_medical_system_status()
-        tcia_report = tcia_counts()
         skin_counts = skin_dataset_counts(SKIN_LESION_ROOT)
-        print("Trạng thái hệ thống y")
-        print(f"Model config: {status.configured_model_path}")
-        if status.resolved_model_path is not None:
-            print(f"Model runtime: {status.resolved_model_path}")
-        print(f"Fallback allowed: {status.allow_fallback_model}")
-        print(f"Model ready: {status.model_ready}")
-        print(f"Model detail: {status.model_message}")
-        print("Hệ thống đang phân tích các ung thư:")
-        for name in status.analyzed_cancers:
-            print(f"- {name}")
-        print(f"Dataset root: {status.dataset_root}")
-        print(f"Data yaml: {status.data_yaml_path} | exists={status.dataset_initialized}")
-        print(
-            "Dataset counts: "
-            f"raw_images={status.raw_images}, raw_labels={status.raw_labels}, "
-            f"train={status.train_images}, val={status.val_images}, test={status.test_images}"
-        )
-        print(
-            "Outputs: "
-            f"cases={status.case_count}, reports={status.report_files}, "
-            f"normalized={status.normalized_files}, overlay={status.overlay_files}, exports={status.export_files}"
-        )
-        # Counts come from a shared helper so status/report/ready stay consistent.
-        print(
-            "Medical skin lesion counts: "
-            f"raw={skin_counts.raw_images}/{skin_counts.raw_labels}, train={skin_counts.train_images}, val={skin_counts.val_images}"
-        )
-        print(f"TCIA cancer image count: {tcia_report.downloaded_total}/{tcia_report.target_total}")
-        print(f"Total cancer raw images in repo: {skin_counts.raw_images + tcia_report.downloaded_total}")
-        print(f"Skin lesion images live at: {SKIN_LESION_ROOT / 'raw' / 'images'}")
-        print(f"TCIA images live at: {TCIA_ROOT}")
+        print_skin_status_block(status, skin_counts, SKIN_LESION_ROOT)
         print("Recommended commands:")
         for command in recommended_medical_commands(status):
             print(f"- {command}")
@@ -235,28 +188,21 @@ def main() -> int:
         skin_root = create_default_skin_cancer_dataset_config().dataset_root
         skin_counts = skin_dataset_counts(skin_root)
         # Shared dataset counters keep every medical status command in sync.
-        tcia_root = Path("dataset/medical/tcia")
-        tcia_files = count_all_files(tcia_root)
         print("Y dược dataset counts:")
         print(f"- skin lesion raw images: {skin_counts.raw_images}")
         print(f"- skin lesion raw labels: {skin_counts.raw_labels}")
         print(f"- skin lesion train images: {skin_counts.train_images}")
         print(f"- skin lesion val images: {skin_counts.val_images}")
-        print(f"- TCIA files: {tcia_files}")
         return 0
 
     def handle_report() -> int:
         status = get_medical_system_status()
         skin_counts = skin_dataset_counts(SKIN_LESION_ROOT)
-        tcia_report = tcia_counts()
         print("Báo cáo ngắn y dược")
         print(f"- Skin lesion: raw {skin_counts.raw_images}/{skin_counts.raw_labels} | train {skin_counts.train_images} | val {skin_counts.val_images}")
-        print(f"- TCIA: đã tải {tcia_report['downloaded_total']}/{tcia_report['target_total']} | còn thiếu {tcia_report['remaining_to_target']}")
         print(f"- Skin lesion images dir: {SKIN_LESION_ROOT / 'raw' / 'images'}")
-        print(f"- TCIA root dir: {TCIA_ROOT}")
         print(f"- Model ready: {status.model_ready} | dataset initialized: {status.dataset_initialized}")
         print(f"- Ready for train skin: {status.dataset_initialized and status.raw_dataset_ready and status.processed_dataset_ready and status.model_ready}")
-        print(f"- Ready for train full medical: {status.dataset_initialized and status.raw_dataset_ready and status.processed_dataset_ready and status.model_ready and tcia_report['downloaded_total'] >= tcia_report['target_total']}")
         return 0
 
     def handle_sources() -> int:
@@ -272,12 +218,9 @@ def main() -> int:
         overview = build_cancer_overview()
         summary = overview["summary"]
         print("Tong quan ung thu")
-        print(
-            f"Tong anh ung thu local: {summary['total_cancer_images']} "
-            f"(skin={summary['skin_raw_images']}, tcia={summary['tcia_total_images']})"
-        )
+        print(f"Tong anh ung thu local: {summary['total_cancer_images']}")
+        print(f"- skin local: {summary['skin_raw_images']}")
         print(f"Skin lesion dir: {summary['skin_image_dir']}")
-        print(f"TCIA root dir: {summary['tcia_root']}")
         print("Theo tung nhom ung thu:")
         for item in overview["cancers"]:
             print(
@@ -299,71 +242,9 @@ def main() -> int:
             print(f"  ghi chu model: {item['model_notes']}")
         return 0
 
-    def handle_tcia_download() -> int:
-        results = run_from_file(
-            args.collections_file,
-            force=args.force,
-            limit=args.limit,
-            write_manifest=args.manifest or not args.no_manifest,
-            collections=args.collection or None,
-        ) if not args.dry_run else dry_run_from_file(
-            args.collections_file,
-            limit=args.limit,
-            write_manifest=args.manifest or not args.no_manifest,
-            collections=args.collection or None,
-        )
-        for item in results:
-            if args.dry_run:
-                if "error" in item:
-                    print(f"- {item['collection_name']}: dry-run thất bại | {item['error']}")
-                    continue
-                print(f"- {item['collection_name']}: dry-run, tìm thấy {item['series_links_count']} series links")
-                for preview in item["series_links_preview"]:
-                    print(f"  {preview}")
-            else:
-                print(f"- {item['collection_name']}: {item['downloaded_count']} file, failed={item.get('failed_count', 0)}")
-                for failed in item.get("failed", []):
-                    print(f"  FAIL {failed['url']} | {failed['error']}")
-        print(f"Đã xử lý TCIA từ: {args.collections_file}")
-        print(f"TCIA images are stored under: {TCIA_ROOT}")
-        print(f"Collection folders: {', '.join(sorted(p.name for p in TCIA_ROOT.iterdir() if p.is_dir())) if TCIA_ROOT.exists() else 'none'}")
-        return 0
-
-    def handle_verify_tcia() -> int:
-        report = verify_downloads(args.collections_file)
-        print(f"Mục tiêu: {report['target_total']}")
-        print(f"Đã tải: {report['downloaded_total']}")
-        print(f"Còn thiếu: {report['remaining_to_target']}")
-        for item in report["collections"]:
-            print(f"- {item['collection_name']}: {item['downloaded_in_collection']} anh | failed={item['failed_count']} | dir={item['collection_root']}")
-        return 0
-
-    def handle_tcia_log() -> int:
-        report = read_collection_log(args.collection, tail_lines=args.tail)
-        print(f"Đường dẫn log: {report['log_path']}")
-        if not report["exists"]:
-            print("Chưa có log cho collection này.")
-            return 0
-        for line in report["lines"]:
-            print(line)
-        return 0
-
-    def handle_tcia_counts() -> int:
-        report = verify_downloads(args.collections_file)
-        print("TCIA theo từng collection:")
-        for item in report["collections"]:
-            status = build_collection_status(item["collection_name"])
-            print(f"- {status['collection_name']}")
-            print(f"  collection root: {status['collection_root']}")
-            print(f"  da tai trong collection: {status['downloaded_in_collection']}")
-            print(f"  tong da tai: {status['downloaded_total']}")
-            print(f"  con thieu toi muc tieu: {status['remaining_to_target']}")
-        return 0
-
     def handle_ready() -> int:
         status = get_medical_system_status()
         paths = medical_training_paths()
-        tcia_report = tcia_counts()
         medical_root = create_default_skin_cancer_dataset_config().dataset_root
         medical_counts = skin_dataset_counts(medical_root)
         print("Y dược:")
@@ -374,17 +255,13 @@ def main() -> int:
         print(f"- skin lesion raw images/labels: {medical_counts.raw_images}/{medical_counts.raw_labels}")
         print(f"- dataset initialized: {status.dataset_initialized}")
         print(f"- model ready: {status.model_ready}")
-        print(f"- tcia downloaded: {tcia_report['downloaded_total']}/{tcia_report['target_total']}")
         print("Toàn hệ thống:")
         print(f"- medical reports: {status.report_files}")
         print(f"- normalized: {status.normalized_files}")
         print(f"- overlay: {status.overlay_files}")
         print(f"- exports: {status.export_files}")
         print(f"- case db: {status.case_count}")
-        ready_skin = status.dataset_initialized and status.raw_dataset_ready and status.processed_dataset_ready and status.model_ready
-        ready_full_medical = ready_skin and tcia_report["downloaded_total"] >= tcia_report["target_total"]
-        print(f"- ready_for_train_skin: {ready_skin}")
-        print(f"- ready_for_train_full_medical: {ready_full_medical}")
+        print_skin_readiness(status)
         return 0
 
     def handle_export_case() -> int:
@@ -482,10 +359,6 @@ def main() -> int:
         "report": handle_report,
         "sources": handle_sources,
         "cancer": handle_cancer,
-        "tcia-download": handle_tcia_download,
-        "verify-tcia": handle_verify_tcia,
-        "tcia-log": handle_tcia_log,
-        "tcia-counts": handle_tcia_counts,
         "ready": handle_ready,
         "export-case": handle_export_case,
         "delete-case": handle_delete_case,

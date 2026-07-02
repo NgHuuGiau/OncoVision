@@ -23,7 +23,7 @@ class _FakeAnalyzer:
 
 class MedicalChatServiceTests(unittest.TestCase):
     def test_analyze_attachment_returns_reply_and_persists_case(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             report_json = Path(temp_dir) / "report.json"
             report_md = Path(temp_dir) / "report.md"
             overlay = Path(temp_dir) / "overlay.jpg"

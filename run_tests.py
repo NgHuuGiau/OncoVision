@@ -283,13 +283,35 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Neu camera that khong dat thi coi nhu bai test tong the fail.",
     )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="Chi chay nhung test core nhe va bo qua nhung module lon/dep cam nang.",
+    )
     return parser.parse_args()
+
+
+FAST_TEST_MODULES = (
+    "tests.test_boot_progress",
+    "tests.test_file_utils",
+    "tests.test_run_menu",
+    "tests.test_run_smoke",
+    "tests.test_run_tests_dashboard",
+)
+
+
+def discover_suite(*, fast: bool = False) -> unittest.TestSuite:
+    loader = unittest.defaultTestLoader
+    if fast:
+        suites = [loader.loadTestsFromName(module) for module in FAST_TEST_MODULES]
+        return unittest.TestSuite(suites)
+    return loader.discover("tests")
 
 
 def main() -> int:
     args = parse_args()
     ensure_project_directories()
-    suite = unittest.defaultTestLoader.discover("tests")
+    suite = discover_suite(fast=args.fast)
     camera_result = None if args.skip_camera_check else check_camera(index=args.camera_index)
     runner = PrettyTestRunner(
         verbosity=0,

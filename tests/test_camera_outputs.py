@@ -15,7 +15,7 @@ from core.recorder import VideoRecorder
 class CameraOutputTests(unittest.TestCase):
     @patch("core.frame_capture.cv2.imwrite", return_value=True)
     def test_frame_capture_saves_into_target_directory(self, imwrite_mock) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             capture = FrameCapture(Path(temp_dir) / "caps")
             frame = np.zeros((20, 20, 3), dtype=np.uint8)
 

@@ -38,8 +38,6 @@ python run_medical.py status
 python run_medical.py ready
 python run_medical.py sources
 python run_medical.py cancer
-python run_medical.py tcia-download --dry-run
-python run_medical.py verify-tcia --collections-file training/tcia_collections_5.json
 ```
 
 `init-dataset` chỉ in layout mong đợi, không tự tạo dữ liệu trong `dataset/`.

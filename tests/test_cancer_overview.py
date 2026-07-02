@@ -10,7 +10,7 @@ from medical.cancer_overview import build_cancer_overview
 
 class CancerOverviewTests(unittest.TestCase):
     def test_build_cancer_overview_aggregates_local_images_by_cancer(self) -> None:
-        with TemporaryDirectory(dir="D:\\YOLO") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             skin_dir = Path(temp_dir) / "skin"
             skin_dir.mkdir(parents=True)
             for index in range(3):

@@ -1,4 +1,4 @@
-"""Main interactive menu for the OncoVision application."""
+"""Menu chính của OncoVision."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.model_catalog import YOLO11_MODELS_ASC
+from training.download_models import download_models
 from utils.entrypoint_common import run_entrypoint
 from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
@@ -36,9 +38,9 @@ class MenuOption:
 MENU_OPTIONS: dict[str, MenuOption] = {
     "1": MenuOption("run_app.py", "Camera", "Mở camera thời gian thực, chạy model và hiển thị kết quả.", "CHẠY", GREEN),
     "2": MenuOption("run_chat.py", "Chat y dược", "Mở giao diện chat và phân tích ảnh y khoa.", "CHẠY", GREEN),
-    "3": MenuOption("run_medical.py", "Y dược", "Dataset, TCIA, train, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
+    "3": MenuOption("run_medical.py", "Y dược", "Dataset, train, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
     "4": MenuOption("run_train.py", "Huấn luyện", "Chuẩn bị dữ liệu, train, đánh giá và xuất model.", "HUẤN LUYỆN", CYAN),
-    "5": MenuOption("", "Kiểm tra", "Mở submenu Doctor, Test và Smoke để menu chính gọn hơn.", "KIỂM TRA", YELLOW),
+    "5": MenuOption("", "Kiểm tra", "Mở submenu Doctor, Test và Smoke.", "KIỂM TRA", YELLOW),
     "6": MenuOption("run_chat.py", "Dọn output", "Xóa nhanh output chat và medical cũ.", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED),
 }
@@ -46,14 +48,12 @@ MENU_OPTIONS: dict[str, MenuOption] = {
 PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
 TESTED_EXIT_TEXT = "Đã thoát menu."
 TESTED_INVALID_TEXT = "Lựa chọn không hợp lệ. Hãy nhập lại."
-TESTED_BACK_TEXT = "Quay lại menu chính."
-MENU_PROMPT = f"Chọn tác vụ [{ '/'.join(('0', *PRIMARY_KEYS)) }]: "
-MEDICAL_BACK_TEXT = "Quay lại menu chính."
+MENU_PROMPT = f"Chọn tác vụ [{'/'.join(('0', *PRIMARY_KEYS))}]: "
 
 MEDICAL_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_medical.py", "Báo cáo nhanh", "Tóm tắt dataset, TCIA, model và mức sẵn sàng train.", "KIỂM TRA", GREEN, ("report",)),
-    "2": MenuOption("run_medical.py", "Tải TCIA", "Tải thêm dữ liệu mở TCIA tới mục tiêu 25.000 ảnh.", "DATASET", GREEN, ("tcia-download",)),
-    "3": MenuOption("run_medical.py", "Khởi tạo dataset", "Tạo cấu trúc `dataset/medical/skin_lesion`.", "DATASET", GREEN, ("init-dataset",)),
+    "1": MenuOption("run_medical.py", "Báo cáo nhanh", "Tóm tắt dataset, model và mức sẵn sàng train.", "KIỂM TRA", GREEN, ("report",)),
+    "2": MenuOption("run_medical.py", "Dataset y dược", "Kiểm tra dataset raw, split và sẵn sàng train.", "DATASET", GREEN, ("ready",)),
+    "3": MenuOption("run_medical.py", "Khởi tạo dataset", "Tạo cấu trúc dataset/medical/skin_lesion.", "DATASET", GREEN, ("init-dataset",)),
     "4": MenuOption("run_medical.py", "Chia dữ liệu", "Chia raw sang train/val/test.", "DATASET", GREEN, ("split-dataset",)),
     "5": MenuOption("run_medical.py", "Huấn luyện", "Chạy split, train và validate model y dược.", "HUẤN LUYỆN", CYAN, ("train-all",)),
     "6": MenuOption("run_medical.py", "Phân tích ảnh", "Phân tích một ảnh y khoa với mã bệnh nhân nhập tay.", "KẾT QUẢ", YELLOW),
@@ -61,18 +61,46 @@ MEDICAL_OPTIONS: dict[str, MenuOption] = {
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
 }
 MEDICAL_PRIMARY_KEYS = tuple(key for key in MEDICAL_OPTIONS if key != "0")
-MEDICAL_PROMPT = f"Chọn tác vụ y dược [{ '/'.join(('0', *MEDICAL_PRIMARY_KEYS)) }]: "
-CHECK_BACK_TEXT = "Quay lại menu chính."
+MEDICAL_PROMPT = f"Chọn tác vụ y dược [{'/'.join(('0', *MEDICAL_PRIMARY_KEYS))}]: "
+MEDICAL_BACK_TEXT = "Quay lại menu chính."
 
 CHECK_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_doctor.py", "Doctor", "Rà soát tổng thể môi trường, model và dataset mà không cần webcam thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
+    "1": MenuOption("run_doctor.py", "Doctor", "Rà soát môi trường, model và dataset mà không cần webcam thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
     "2": MenuOption("run_tests.py", "Test", "Chạy dashboard unit test và regression mà không yêu cầu camera thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
-    "3": MenuOption("run_smoke.py", "Smoke", "Chạy smoke check qua các entrypoint chính để check nhanh toàn luồng.", "KIỂM TRA", YELLOW),
+    "3": MenuOption("run_smoke.py", "Smoke", "Chạy smoke check qua các entrypoint chính để kiểm tra nhanh toàn luồng.", "KIỂM TRA", YELLOW),
     "4": MenuOption("run_smoke.py", "Smoke + tests", "Chạy smoke check và nối thêm run_tests để rà soát sau cùng.", "KIỂM TRA", YELLOW, ("--include-tests",)),
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
 }
 CHECK_PRIMARY_KEYS = tuple(key for key in CHECK_OPTIONS if key != "0")
-CHECK_PROMPT = f"Chọn tác vụ kiểm tra [{ '/'.join(('0', *CHECK_PRIMARY_KEYS)) }]: "
+CHECK_PROMPT = f"Chọn tác vụ kiểm tra [{'/'.join(('0', *CHECK_PRIMARY_KEYS))}]: "
+
+
+def _progress_bar(percent: int, width: int = 20) -> str:
+    percent = max(0, min(100, percent))
+    filled = round(width * percent / 100)
+    return f"[{'#' * filled}{'.' * (width - filled)}] {percent:3d}%"
+
+
+def _model_exists(model_name: str) -> bool:
+    return os.path.exists(str(Path("models/pretrained") / model_name))
+
+
+def _ensure_yolo11_models() -> None:
+    missing_models = [model_name for model_name in YOLO11_MODELS_ASC if not _model_exists(model_name)]
+    if not missing_models:
+        return
+    total = len(missing_models)
+    print(f"{BOLD}{CYAN}{'=' * 78}{RESET}")
+    print(f"{BOLD}{CYAN}  ĐANG KIỂM TRA VÀ TẢI MODEL YOLO11{RESET}")
+    print(f"{BOLD}{CYAN}{'=' * 78}{RESET}")
+    for index, model_name in enumerate(missing_models, start=1):
+        print(f"{YELLOW}  [{index}/{total}] {model_name} {_progress_bar(0)}{RESET}")
+    downloaded, skipped = download_models(missing_models)
+    for index, model_name in enumerate(downloaded, start=1):
+        print(f"{GREEN}  ✓ [{index}/{total}] {model_name} {_progress_bar(100)}{RESET}")
+    for model_name in skipped:
+        print(f"{CYAN}  • Đã có sẵn {model_name}, bỏ qua{RESET}")
+    print(f"{BOLD}{CYAN}{'=' * 78}{RESET}")
 
 
 def _configure_terminal_encoding() -> None:
@@ -98,12 +126,7 @@ def _wrap_text(text: str, width: int) -> list[str]:
     return textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False) or [""]
 
 
-def _render_options(
-    options: dict[str, MenuOption],
-    primary_keys: tuple[str, ...],
-    title: str,
-    print_fn=print,
-) -> None:
+def _render_options(options: dict[str, MenuOption], primary_keys: tuple[str, ...], title: str, print_fn=print) -> None:
     width = _get_terminal_width()
     print_fn("")
     print_fn(f"{BOLD}{'=' * width}{RESET}")
@@ -122,7 +145,6 @@ def _render_options(
         label = f"{key}. {option.title}"
         cmd = _command_text(option)
         desc = f"{option.description}  {DIM}[{cmd}]{RESET}"
-
         indent = "  " + " " * len(label) + " "
         wrap_width = max(20, width - len(indent) - 2)
         wrapped_desc = _wrap_text(desc, wrap_width)
@@ -177,7 +199,7 @@ def _run_selected_option(
     print_fn=print,
     run_script_fn=_run_script,
     clear_terminal_fn=_clear_terminal,
-    back_text: str = TESTED_BACK_TEXT,
+    back_text: str = TESTED_EXIT_TEXT,
 ) -> None:
     clear_terminal_fn()
     width = _get_terminal_width()
@@ -219,7 +241,7 @@ def _run_medical_menu(input_fn=input, print_fn=print, run_script_fn=_run_script,
             print_fn=print_fn,
             run_script_fn=run_script_fn,
             clear_terminal_fn=clear_terminal_fn,
-            back_text="Quay lại menu medical.",
+            back_text="Quay lại menu y dược.",
         )
 
 
@@ -228,7 +250,7 @@ def _run_check_menu(input_fn=input, print_fn=print, run_script_fn=_run_script, c
         _render_check_menu(print_fn=print_fn)
         choice = input_fn(CHECK_PROMPT).strip()
         if choice == "0":
-            print_fn(f"{YELLOW}{CHECK_BACK_TEXT}{RESET}")
+            print_fn(f"{YELLOW}Quay lại menu chính.{RESET}")
             return
         if not choice:
             continue
@@ -246,49 +268,27 @@ def _run_check_menu(input_fn=input, print_fn=print, run_script_fn=_run_script, c
         )
 
 
-def _run_menu_choice(
-    choice: str,
-    *,
-    input_fn=input,
-    print_fn=print,
-    run_script_fn=_run_script,
-    clear_terminal_fn=_clear_terminal,
-) -> bool:
+def _run_menu_choice(choice: str, *, input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> bool:
     option = MENU_OPTIONS.get(choice)
     if option is None:
         print_fn(f"{RED}{TESTED_INVALID_TEXT}{RESET}")
         return False
     if choice == "3":
         clear_terminal_fn()
-        _run_medical_menu(
-            input_fn=input_fn,
-            print_fn=print_fn,
-            run_script_fn=run_script_fn,
-            clear_terminal_fn=clear_terminal_fn,
-        )
+        _run_medical_menu(input_fn=input_fn, print_fn=print_fn, run_script_fn=run_script_fn, clear_terminal_fn=clear_terminal_fn)
         return True
     if choice == "5":
         clear_terminal_fn()
-        _run_check_menu(
-            input_fn=input_fn,
-            print_fn=print_fn,
-            run_script_fn=run_script_fn,
-            clear_terminal_fn=clear_terminal_fn,
-        )
+        _run_check_menu(input_fn=input_fn, print_fn=print_fn, run_script_fn=run_script_fn, clear_terminal_fn=clear_terminal_fn)
         return True
-    _run_selected_option(
-        option,
-        args=option.args,
-        print_fn=print_fn,
-        run_script_fn=run_script_fn,
-        clear_terminal_fn=clear_terminal_fn,
-    )
+    _run_selected_option(option, args=option.args, print_fn=print_fn, run_script_fn=run_script_fn, clear_terminal_fn=clear_terminal_fn)
     return True
 
 
 def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> int:
     _configure_terminal_encoding()
     ensure_project_directories()
+    _ensure_yolo11_models()
     try:
         while True:
             _render_menu(print_fn=print_fn)
@@ -296,13 +296,7 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
             if choice == "0":
                 print_fn(f"{YELLOW}{TESTED_EXIT_TEXT}{RESET}")
                 return 0
-            _run_menu_choice(
-                choice,
-                input_fn=input_fn,
-                print_fn=print_fn,
-                run_script_fn=run_script_fn,
-                clear_terminal_fn=clear_terminal_fn,
-            )
+            _run_menu_choice(choice, input_fn=input_fn, print_fn=print_fn, run_script_fn=run_script_fn, clear_terminal_fn=clear_terminal_fn)
     except KeyboardInterrupt:
         print_fn(f"{YELLOW}\nĐã thoát menu.{RESET}")
         return 0

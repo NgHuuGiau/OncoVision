@@ -59,8 +59,8 @@ class ValidateDatasetTests(unittest.TestCase):
     def test_main_exits_when_missing_or_invalid_labels_exist(self, audit_mock, print_mock) -> None:
         audit_mock.return_value = _report(
             raw_image_count=3,
-            missing_labels=[Path("dataset/object_detection/raw/images/a.jpg")],
-            invalid_labels=[(Path("dataset/object_detection/raw/labels/b.txt"), "bad format")],
+            missing_labels=[Path("dataset/raw/images/a.jpg")],
+            invalid_labels=[(Path("dataset/raw/labels/b.txt"), "bad format")],
         )
 
         with self.assertRaises(SystemExit) as context:

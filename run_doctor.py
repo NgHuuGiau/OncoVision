@@ -10,7 +10,8 @@ from core.model_catalog import YOLO11_MODELS_ASC
 from core.runtime_advisor import select_runtime_config_optimized
 from medical.dataset import create_default_skin_cancer_dataset_config
 from medical.system_status import MedicalSystemStatus, get_medical_system_status, recommended_medical_commands
-from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
+from training.terminal_ui import CYAN, GREEN, RED, YELLOW, header, line, row, rule, section
+from utils.doctor_helpers import medical_status_color, print_medical_status, print_recommended_commands
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
 from utils.entrypoint_checks import medical_config_issues, runtime_config_issues
@@ -144,47 +145,6 @@ def _print_recommendations(recommendations: dict[str, object]) -> None:
         print(row(label, value, color, bounded=False))
 
 
-def _medical_status_color(status: MedicalSystemStatus) -> str:
-    if not status.model_ready:
-        return RED
-    if status.using_fallback_model or status.allow_fallback_model:
-        return YELLOW
-    return GREEN
-
-
-def _print_medical_status(status: MedicalSystemStatus) -> None:
-    color = _medical_status_color(status)
-    print(line(rule("-"), CYAN))
-    print(section("MEDICAL", color))
-    print(row("Model config", str(status.configured_model_path), CYAN, bounded=False))
-    if status.resolved_model_path is not None:
-        print(row("Model runtime", str(status.resolved_model_path), color, bounded=False))
-    print(row("Fallback", "Bật" if status.allow_fallback_model else "Tắt", YELLOW if status.allow_fallback_model else GREEN, bounded=False))
-    print(row("Trạng thái", status.model_message, color, bounded=False))
-    print(row("Dataset root", str(status.dataset_root), CYAN, bounded=False))
-    print(
-        row(
-            "Medical data",
-            f"raw {status.raw_images}/{status.raw_labels} | train {status.train_images} | val {status.val_images} | test {status.test_images}",
-            GREEN if status.processed_dataset_ready else YELLOW,
-            bounded=False,
-        )
-    )
-    print(
-        row(
-            "Cases / output",
-            f"{status.case_count} ca | reports {status.report_files} | normalized {status.normalized_files} | overlay {status.overlay_files} | exports {status.export_files}",
-            CYAN,
-            bounded=False,
-        )
-    )
-    if status.screening_targets:
-        ready_targets = ", ".join(label for label, ready in status.screening_targets if ready) or "không có"
-        missing_targets = ", ".join(label for label, ready in status.screening_targets if not ready) or "không có"
-        print(row("Target đã sẵn sàng", ready_targets, GREEN, bounded=False))
-        print(row("Target cần mở rộng", missing_targets, YELLOW, bounded=False))
-
-
 def _print_config_health() -> None:
     issues = runtime_config_issues() + medical_config_issues()
     print(line(rule("-"), CYAN))
@@ -195,36 +155,6 @@ def _print_config_health() -> None:
         print(row("Runtime config", "Cần kiểm tra", YELLOW, bounded=False))
         for issue in issues:
             print(row("Vấn đề", issue, RED, bounded=False))
-
-
-def _print_recommended_commands(
-    *,
-    missing_models: list[str],
-    icon_count: int,
-    dataset_ok: bool,
-    split_ok: bool,
-    medical_commands: list[str],
-) -> None:
-    print(line(rule("-"), CYAN))
-    print(section("LỆNH NÊN CHẠY", CYAN))
-    command_index = 1
-    commands: list[str] = []
-    if missing_models:
-        commands.append("python training\\download_models.py")
-    if icon_count < ICON_WARNING_THRESHOLD:
-        commands.append("python run_doctor.py --fix")
-    if not dataset_ok:
-        commands.append("python training\\prepare_dataset.py")
-    elif not split_ok:
-        commands.append("python training\\validate_dataset.py")
-        commands.append("python training\\split_dataset.py")
-    else:
-        commands.append("python run_chat.py")
-        commands.append("python run_train.py")
-    commands.extend(medical_commands)
-    for command in dict.fromkeys(commands):
-        print(command_row(command_index, command))
-        command_index += 1
 
 
 def main() -> None:
@@ -294,7 +224,7 @@ def main() -> None:
     print(row("Y dược train split", f"{MEDICAL_SKIN_PROCESSED_TRAIN_DIR} ({med_train_images} file)", GREEN if med_train_images else YELLOW, bounded=False))
     print(row("Y dược val split", f"{MEDICAL_SKIN_PROCESSED_VAL_DIR} ({med_val_images} file)", GREEN if med_val_images else YELLOW, bounded=False))
 
-    _print_medical_status(medical_status)
+    print_medical_status(medical_status)
     _print_config_health()
 
     print(line(rule("-"), CYAN))
@@ -320,14 +250,15 @@ def main() -> None:
         print(row("Dataset", "Đã có raw vật thể nhưng chưa split train/val.", YELLOW, bounded=False))
     else:
         print(row("Dataset", "Dữ liệu train/val vật thể đã sẵn sàng.", GREEN, bounded=False))
-    print(row("Medical", f"{medical_status.model_message} | raw={med_raw_images}/{med_raw_labels}", _medical_status_color(medical_status), bounded=False))
+    print(row("Medical", f"{medical_status.model_message} | raw={med_raw_images}/{med_raw_labels}", medical_status_color(medical_status), bounded=False))
 
-    _print_recommended_commands(
+    print_recommended_commands(
         missing_models=missing_models,
         icon_count=icon_count,
         dataset_ok=dataset_ok,
         split_ok=split_ok,
         medical_commands=recommended_medical_commands(medical_status),
+        icon_warning_threshold=ICON_WARNING_THRESHOLD,
     )
     print(line(rule("="), CYAN))
 

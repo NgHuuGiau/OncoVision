@@ -21,12 +21,11 @@ def main() -> None:
     print(row("Kết quả", "Đã tạo sẵn các thư mục dataset.", GREEN))
     print(line(rule("-"), CYAN))
     print(section("ĐƯỜNG DẪN", YELLOW))
-    print(row("Raw images", "dataset/object_detection/raw/images"))
-    print(row("Raw labels", "dataset/object_detection/raw/labels"))
-    print(row("Split output", "dataset/object_detection/processed/images and dataset/object_detection/processed/labels", bounded=False))
+    print(row("Raw", "dataset/raw"))
+    print(row("Processed", "dataset/processed"))
     print(line(rule("-"), CYAN))
     print(section("Ý NGHĨA LỆNH", CYAN))
-    print(row("Lệnh này", "Chỉ tạo sẵn thư mục, chưa train và chưa split.", YELLOW, bounded=False))
+    print(row("Lệnh này", "Chỉ tạo sẵn raw và processed, chưa train và chưa split.", YELLOW, bounded=False))
     print(line(rule("="), CYAN))
 
 

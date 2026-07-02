@@ -11,7 +11,7 @@ import run_doctor
 
 class DoctorTests(unittest.TestCase):
     def test_present_and_missing_models_reports_expected_values(self) -> None:
-        with TemporaryDirectory(dir="D:\\OncoVision") as temp_dir:
+        with TemporaryDirectory() as temp_dir:
             model_dir = Path(temp_dir)
             (model_dir / "yolo11n.pt").write_text("n", encoding="utf-8")
             (model_dir / "yolo11s.pt").write_text("s", encoding="utf-8")
