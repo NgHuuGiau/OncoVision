@@ -63,7 +63,8 @@ jobs:
           cmd_status=${PIPESTATUS[0]}
           if [ "$cmd_status" -ne 0 ] && [ "$status" -eq 0 ]; then status=$cmd_status; fi
 
-          pip install --prefer-binary -r requirements.txt 2>&1 | tee ci-logs/02-install-requirements.txt
+          python -c "from pathlib import Path; lines = Path('requirements.txt').read_text(encoding='utf-8').splitlines(); Path('ci-logs/requirements-linux.txt').write_text('\n'.join(line for line in lines if not line.lstrip().startswith('pyaudio')) + '\n', encoding='utf-8')"
+          pip install --prefer-binary -r ci-logs/requirements-linux.txt 2>&1 | tee ci-logs/02-install-requirements.txt
           cmd_status=${PIPESTATUS[0]}
           if [ "$cmd_status" -ne 0 ] && [ "$status" -eq 0 ]; then status=$cmd_status; fi
 
