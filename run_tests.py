@@ -184,9 +184,10 @@ class PrettyTestRunner(unittest.TextTestRunner):
         deps = {
             "PySide6": "Giao dien (UI)",
             "faster_whisper": "Voice Recognition",
-            "pyaudio": "Audio Input",
             "pygments": "Syntax Highlighting",
         }
+        if sys.platform == "win32":
+            deps["pyaudio"] = "Audio Input"
         import importlib.util
         for lib, desc in deps.items():
             if importlib.util.find_spec(lib.split(".")[0]) is None:
