@@ -155,6 +155,8 @@ Nếu vẫn lỗi:
 - chạy `run_doctor.py --skip-camera-check` để xem cảnh báo hệ thống,
 - đổi `camera-index` sang `0`, `1`, `2`.
 
+Nếu lỗi liên quan CI hoặc smoke, xem thêm [ci_and_quality.md](ci_and_quality.md).
+
 ### Thiếu model
 
 Kiểm tra:
@@ -210,3 +212,4 @@ Môi trường có thể xem là sẵn sàng khi các mục sau đều ổn:
 
 - Không chạy thẳng training hoặc camera trên máy mới mà chưa chạy doctor/smoke.
 - Mọi môi trường đều dùng `requirements.txt`.
+- Nếu gặp lỗi chưa rõ nguyên nhân, mở [troubleshooting.md](troubleshooting.md) trước khi đổi cấu hình lớn.

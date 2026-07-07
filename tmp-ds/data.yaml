@@ -1,6 +1,0 @@
-path: D:\YOLO\tmp-ds
-train: processed/images/train
-val: processed/images/val
-test: processed/images/test
-names:
-  0: lesion

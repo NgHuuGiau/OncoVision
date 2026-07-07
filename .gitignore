@@ -33,6 +33,7 @@ Thumbs.db
 *.tmp
 *.bak
 tmp*/
+tmp-ds/
 tmp*.db
 
 # Runtime output

@@ -186,6 +186,8 @@ python run_menu.py
 - [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md): giải thích runtime advisor
 - [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md): luồng y dược
 - [docs/training_guide.md](docs/training_guide.md): luồng training object detection
+- [docs/ci_and_quality.md](docs/ci_and_quality.md): cách đọc CI, smoke và quality gate
+- [docs/troubleshooting.md](docs/troubleshooting.md): lỗi thường gặp và cách khoanh vùng
 
 ## Dành Cho Người Mới
 
@@ -193,3 +195,5 @@ python run_menu.py
 2. Mở [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md) nếu bạn muốn chạy camera realtime.
 3. Mở [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md) nếu bạn làm nhánh medical.
 4. Mở [docs/training_guide.md](docs/training_guide.md) nếu bạn chuẩn bị train model.
+5. Mở [docs/ci_and_quality.md](docs/ci_and_quality.md) nếu bạn đang debug CI hoặc quality gate.
+6. Mở [docs/troubleshooting.md](docs/troubleshooting.md) nếu gặp lỗi cụ thể.
