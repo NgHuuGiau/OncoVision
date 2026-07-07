@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from utils.camera_utils import open_camera_capture
-from utils.console_ui import CYAN, GREEN, RED, YELLOW
 
 
 @dataclass(frozen=True)
