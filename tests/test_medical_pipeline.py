@@ -4,7 +4,6 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import cv2
 import numpy as np

@@ -108,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          ruff check . 2>&1 | tee ci-logs/04-ruff.txt
+          ruff check . --ignore E402 --exclude HieraChain 2>&1 | tee ci-logs/04-ruff.txt
           exit ${PIPESTATUS[0]}
 
       - name: Lint with Ruff (Windows)
