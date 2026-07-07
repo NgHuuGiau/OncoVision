@@ -62,3 +62,6 @@ dataset/cancer_download_plan.json
 dataset/medical/tcia/**
 !dataset/medical/tcia/**/.gitkeep
 !dataset/medical/tcia/**/README.md
+
+# Nested repo
+HieraChain/
