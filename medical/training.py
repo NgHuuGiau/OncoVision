@@ -1,45 +1,48 @@
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
+import time
 from typing import Any
 
-from medical.model_policy import resolve_medical_base_model, resolve_medical_runtime_model_path
-from training.common import require_yolo
-from training.dataset_ops import (
-    DEFAULT_SEED,
-    DEFAULT_SPLITS,
-    IMAGE_EXTENSIONS,
-    copy_split,
-    iter_matching_files,
-    read_yolo_label_status,
-    reset_processed_dirs,
-    split_items,
-)
-from utils.file_utils import load_yaml, save_yaml
+from medical.cancer_catalog import COMMON_CANCER_TARGETS
+from medical.classifier import iter_medical_image_paths, load_medical_classifier, save_medical_classifier, train_medical_classifier
+from medical.dataset import create_default_medical_dataset_config, count_medical_class_split_images, ensure_medical_dataset_structure
+from utils.file_utils import load_yaml
 
 
-YOLO = None
-ULTRALYTICS_IMPORT_ERROR = None
-SPLITS = DEFAULT_SPLITS
-SEED = DEFAULT_SEED
 DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
-DEFAULT_TRAINED_MODEL_DIR = Path("models/trained")
+DEFAULT_TRAINED_MODEL_PATH = Path("medical_7_cancers.pt")
+DEFAULT_SPLITS = ("train", "val", "test")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class MedicalTrainingPaths:
     dataset_root: Path
-    raw_images_dir: Path
-    raw_labels_dir: Path
-    processed_images_dir: Path
-    processed_labels_dir: Path
     data_yaml_path: Path
-    train_runs_dir: Path
-    val_runs_dir: Path
     trained_model_path: Path
+    class_names: tuple[str, ...]
+    feature_size: int
+
+    def __init__(
+        self,
+        dataset_root: str | Path,
+        data_yaml_path: str | Path | None = None,
+        trained_model_path: str | Path | None = None,
+        class_names: tuple[str, ...] | None = None,
+        feature_size: int = 32,
+        **legacy: Any,
+    ) -> None:
+        root = Path(dataset_root)
+        object.__setattr__(self, "dataset_root", root)
+        object.__setattr__(self, "data_yaml_path", Path(data_yaml_path or legacy.get("data_yaml_path") or (root / "data.yaml")))
+        object.__setattr__(
+            self,
+            "trained_model_path",
+            Path(trained_model_path or legacy.get("trained_model_path") or DEFAULT_TRAINED_MODEL_PATH),
+        )
+        object.__setattr__(self, "class_names", tuple(class_names or legacy.get("class_names") or tuple(target.label for target in COMMON_CANCER_TARGETS)))
+        object.__setattr__(self, "feature_size", int(feature_size))
 
 
 @dataclass(frozen=True)
@@ -47,183 +50,153 @@ class MedicalTrainingSummary:
     train_count: int
     val_count: int
     test_count: int
+    total_count: int
+    class_count: int
     trained_model_path: Path | None = None
 
 
-def _require_yolo():
-    global YOLO, ULTRALYTICS_IMPORT_ERROR
-    YOLO, ULTRALYTICS_IMPORT_ERROR = require_yolo(YOLO, ULTRALYTICS_IMPORT_ERROR)
-    return YOLO
-
-
-def _medical_settings_path() -> Path:
-    return DEFAULT_MEDICAL_SETTINGS_PATH
-
-
-def load_medical_settings() -> dict[str, Any]:
-    return load_yaml(_medical_settings_path()).get("medical", {})
-
-
-def _medical_paths_from_settings(settings: dict[str, Any]) -> MedicalTrainingPaths:
-    dataset_root = Path(settings.get("dataset_root", "dataset/medical/skin_lesion"))
-    disease_name = str(settings.get("disease_name", "skin_cancer_screening"))
-    return MedicalTrainingPaths(
-        dataset_root=dataset_root,
-        raw_images_dir=dataset_root / "raw" / "images",
-        raw_labels_dir=dataset_root / "raw" / "labels",
-        processed_images_dir=dataset_root / "processed" / "images",
-        processed_labels_dir=dataset_root / "processed" / "labels",
-        data_yaml_path=dataset_root / "data.yaml",
-        train_runs_dir=Path("runs/train"),
-        val_runs_dir=Path("runs/val"),
-        trained_model_path=DEFAULT_TRAINED_MODEL_DIR / f"{disease_name}_best.pt",
-    )
+def _load_medical_settings() -> dict[str, Any]:
+    return load_yaml(DEFAULT_MEDICAL_SETTINGS_PATH).get("medical", {})
 
 
 def medical_training_paths() -> MedicalTrainingPaths:
-    return _medical_paths_from_settings(load_medical_settings())
+    settings = _load_medical_settings()
+    dataset_root = Path(settings.get("dataset_root", "dataset/medical"))
+    feature_size = int(settings.get("feature_size", 32))
+    return MedicalTrainingPaths(
+        dataset_root=dataset_root,
+        data_yaml_path=dataset_root / "data.yaml",
+        trained_model_path=DEFAULT_TRAINED_MODEL_PATH,
+        class_names=tuple(target.label for target in COMMON_CANCER_TARGETS),
+        feature_size=feature_size,
+    )
 
 
 def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict[str, Any]:
     paths = paths or medical_training_paths()
-    images = iter_matching_files(paths.raw_images_dir, suffixes=IMAGE_EXTENSIONS)
-    labels = iter_matching_files(paths.raw_labels_dir, suffixes={".txt"})
-    label_map = {path.stem: path for path in labels}
-    eligible: list[tuple[Path, Path]] = []
-    missing_labels: list[Path] = []
-    invalid_labels: list[Path] = []
-
-    for image_path in images:
-        label_path = label_map.get(image_path.stem)
-        if label_path is None:
-            missing_labels.append(image_path)
-            continue
-        is_valid, _is_empty = read_yolo_label_status(label_path)
-        if not is_valid:
-            invalid_labels.append(label_path)
-            continue
-        eligible.append((image_path, label_path))
-
-    return {
-        "raw_images": images,
-        "raw_labels": labels,
-        "eligible": eligible,
-        "missing_labels": missing_labels,
-        "invalid_labels": invalid_labels,
+    split_counts = {split: count_medical_class_split_images(paths.dataset_root, split) for split in DEFAULT_SPLITS}
+    class_counts = {
+        class_name: sum(split_counts[split][class_name] for split in DEFAULT_SPLITS)
+        for class_name in paths.class_names
     }
-
-
-def _reset_processed_dirs(paths: MedicalTrainingPaths) -> None:
-    reset_processed_dirs(
-        processed_images_dir=paths.processed_images_dir,
-        processed_labels_dir=paths.processed_labels_dir,
-        splits=SPLITS,
-    )
-
-
-def _split_items(items: list[tuple[Path, Path]]) -> dict[str, list[tuple[Path, Path]]]:
-    return split_items(items, splits=SPLITS, seed=SEED)
+    missing_classes = [class_name for class_name, count in class_counts.items() if count == 0]
+    return {
+        "split_counts": split_counts,
+        "class_counts": class_counts,
+        "missing_classes": missing_classes,
+        "train_images": {
+            class_name: list(iter_medical_image_paths(paths.dataset_root / class_name / "processed" / "images" / "train"))
+            for class_name in paths.class_names
+        },
+        "val_images": {
+            class_name: list(iter_medical_image_paths(paths.dataset_root / class_name / "processed" / "images" / "val"))
+            for class_name in paths.class_names
+        },
+        "test_images": {
+            class_name: list(iter_medical_image_paths(paths.dataset_root / class_name / "processed" / "images" / "test"))
+            for class_name in paths.class_names
+        },
+    }
 
 
 def prepare_medical_training_dataset(paths: MedicalTrainingPaths | None = None) -> MedicalTrainingSummary:
     paths = paths or medical_training_paths()
+    ensure_medical_dataset_structure(
+        create_default_medical_dataset_config(paths.dataset_root),
+    )
     audit = audit_medical_raw_dataset(paths)
-    eligible = audit["eligible"]
-    if not eligible:
-        raise FileNotFoundError("Medical dataset raw chưa có cặp image/label hợp lệ để train.")
-    _reset_processed_dirs(paths)
-    split_map = _split_items(eligible)
-    for split_name, items in split_map.items():
-        copy_split(
-            split_name=split_name,
-            items=items,
-            processed_images_dir=paths.processed_images_dir,
-            processed_labels_dir=paths.processed_labels_dir,
-        )
+    train_count = sum(len(items) for items in audit["train_images"].values())
+    val_count = sum(len(items) for items in audit["val_images"].values())
+    test_count = sum(len(items) for items in audit["test_images"].values())
+    total_count = train_count + val_count + test_count
+    if total_count <= 0:
+        raise FileNotFoundError("Khong tim thay anh medical hop le trong 7 thu muc ung thu.")
+    if audit["missing_classes"]:
+        raise FileNotFoundError("Thieu du lieu cho cac lop: " + ", ".join(audit["missing_classes"]))
     return MedicalTrainingSummary(
-        train_count=len(split_map["train"]),
-        val_count=len(split_map["val"]),
-        test_count=len(split_map["test"]),
+        train_count=train_count,
+        val_count=val_count,
+        test_count=test_count,
+        total_count=total_count,
+        class_count=len(paths.class_names),
     )
 
 
-def _medical_training_kwargs(paths: MedicalTrainingPaths, settings: dict[str, Any]) -> dict[str, Any]:
-    project = str(paths.train_runs_dir.resolve())
-    return {
-        "data": str(paths.data_yaml_path.resolve()),
-        "epochs": int(settings.get("epochs", 80)),
-        "imgsz": int(settings.get("image_size", 640)),
-        "batch": int(settings.get("batch", 4)),
-        "device": settings.get("device", 0),
-        "workers": int(settings.get("workers", 2)),
-        "cache": bool(settings.get("cache", False)),
-        "amp": bool(settings.get("amp", True)),
-        "patience": int(settings.get("patience", 20)),
-        "project": project,
-        "name": str(settings.get("run_name", "medical_skin_lesion")),
-    }
+def _samples_for_split(paths: MedicalTrainingPaths, split: str) -> list[tuple[Path, int]]:
+    return [
+        (image_path, class_index)
+        for class_index, class_name in enumerate(paths.class_names)
+        for image_path in iter_medical_image_paths(paths.dataset_root / class_name / "processed" / "images" / split)
+    ]
 
 
-def _medical_settings_payload() -> dict[str, Any]:
-    return load_yaml(_medical_settings_path())
-
-
-def _copy_best_medical_weight(save_dir: Path, trained_model_path: Path) -> None:
-    best_weight = save_dir / "weights" / "best.pt"
-    if not best_weight.exists():
-        raise FileNotFoundError(f"Không tìm thấy best.pt sau khi train tại {best_weight}")
-    trained_model_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(best_weight, trained_model_path)
-
-
-def sync_medical_model_config(model_path: str | Path) -> None:
-    payload = _medical_settings_payload()
-    payload.setdefault("medical", {})
-    payload["medical"]["model"] = str(Path(model_path))
-    save_yaml(_medical_settings_path(), payload)
-
-
-def train_medical_model(paths: MedicalTrainingPaths | None = None, *, yolo_cls=None) -> Path:
+def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True) -> Path:
     paths = paths or medical_training_paths()
-    settings = load_medical_settings()
-    kwargs = _medical_training_kwargs(paths, settings)
-    yolo_cls = yolo_cls or _require_yolo()
-    base_model_path = resolve_medical_base_model(settings)
-    results = yolo_cls(str(base_model_path)).train(model=base_model_path.name, **kwargs)
-    save_dir = Path(getattr(results, "save_dir", kwargs["project"]))
-    _copy_best_medical_weight(save_dir, paths.trained_model_path)
-    sync_medical_model_config(paths.trained_model_path)
+    if prepare_dataset:
+        prepare_medical_training_dataset(paths)
+    train_samples = _samples_for_split(paths, "train")
+    if not train_samples:
+        raise FileNotFoundError("Khong co du lieu train medical.")
+    classifier_model = train_medical_classifier(
+        train_samples,
+        class_labels=paths.class_names,
+        feature_size=(paths.feature_size, paths.feature_size),
+    )
+    save_medical_classifier(classifier_model, paths.trained_model_path)
     return paths.trained_model_path
 
 
-def validate_medical_model(paths: MedicalTrainingPaths | None = None, *, yolo_cls=None):
+def validate_medical_model(paths: MedicalTrainingPaths | None = None):
     paths = paths or medical_training_paths()
-    settings = load_medical_settings()
-    yolo_cls = yolo_cls or _require_yolo()
+    settings = _load_medical_settings()
     model_path = Path(settings.get("model", paths.trained_model_path))
-    fallback_model_path = Path(settings["fallback_model"]) if settings.get("fallback_model") else None
-    config = SimpleNamespace(
-        model_path=model_path if model_path.exists() else paths.trained_model_path,
-        fallback_model_path=fallback_model_path,
-        allow_fallback_model=bool(settings.get("allow_fallback_model", False)),
-    )
-    resolved_model_path = resolve_medical_runtime_model_path(config)
-    return yolo_cls(str(resolved_model_path)).val(
-        data=str(paths.data_yaml_path.resolve()),
-        project=str(paths.val_runs_dir.resolve()),
-        name=str(settings.get("validation_name", "medical_validation")),
-    )
+    resolved_model_path = model_path if model_path.exists() else paths.trained_model_path
+    classifier_model = load_medical_classifier(resolved_model_path)
+    validation_samples = _samples_for_split(paths, "val")
+    if not validation_samples:
+        raise FileNotFoundError("Khong co du lieu val medical.")
+
+    correct = 0
+    confidences: list[float] = []
+    for image_path, class_index in validation_samples:
+        prediction = classifier_model.predict(image_path, top_k=1)[0]
+        confidences.append(prediction.confidence)
+        if prediction.label == paths.class_names[class_index]:
+            correct += 1
+
+    total = len(validation_samples)
+    accuracy = correct / total
+    return {
+        "accuracy": accuracy,
+        "correct": correct,
+        "total": total,
+        "average_confidence": sum(confidences) / total,
+        "model_path": resolved_model_path,
+        "class_count": len(paths.class_names),
+    }
 
 
-def run_full_medical_training_pipeline(*, yolo_cls=None) -> dict[str, Any]:
+def run_full_medical_training_pipeline() -> dict[str, Any]:
     paths = medical_training_paths()
+    total_start = time.perf_counter()
+    prepare_start = time.perf_counter()
     split_summary = prepare_medical_training_dataset(paths)
-    trained_model_path = train_medical_model(paths, yolo_cls=yolo_cls)
-    validation_metrics = validate_medical_model(paths, yolo_cls=yolo_cls)
+    prepare_seconds = time.perf_counter() - prepare_start
+    # ponytail: reuse the already prepared dataset here; don't scan it twice.
+    train_start = time.perf_counter()
+    trained_model_path = train_medical_model(paths, prepare_dataset=False)
+    train_seconds = time.perf_counter() - train_start
+    validate_start = time.perf_counter()
+    validation_metrics = validate_medical_model(paths)
+    validate_seconds = time.perf_counter() - validate_start
     return {
         "train_count": split_summary.train_count,
         "val_count": split_summary.val_count,
         "test_count": split_summary.test_count,
         "trained_model_path": trained_model_path,
         "validation_metrics": validation_metrics,
+        "prepare_seconds": prepare_seconds,
+        "train_seconds": train_seconds,
+        "validate_seconds": validate_seconds,
+        "total_seconds": time.perf_counter() - total_start,
     }

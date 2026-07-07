@@ -205,12 +205,6 @@ def _usage_row(label: str, percent: float | None) -> str:
         _usage_color(percent),
         bounded=False,
     )
-
-
-def dashboard_boot_bar(_score: int, width: int = BOOT_BAR_WIDTH) -> str:
-    return progress_bar_colored(100, width)
-
-
 def performance_hint(score: int) -> str:
     for minimum, message in PERFORMANCE_HINTS:
         if score >= minimum:

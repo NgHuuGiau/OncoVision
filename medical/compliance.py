@@ -11,7 +11,3 @@ MEDICAL_DISCLAIMER = dedent(
     Mọi trường hợp nghi ngờ ung thư cần được đánh giá bởi bác sĩ chuyên khoa và xét nghiệm bổ sung.
     """
 ).strip()
-
-
-def build_medical_disclaimer() -> str:
-    return MEDICAL_DISCLAIMER

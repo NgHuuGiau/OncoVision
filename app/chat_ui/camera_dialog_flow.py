@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.chat_ui.paths import build_chat_capture_path, get_chat_capture_dir
-from app.chat_ui.content import translate
+from app.chat_ui.content import translate as tr
 from utils.camera_utils import open_camera_capture_with_fallback
 
 try:
@@ -12,12 +12,6 @@ except ImportError:
 from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QImage, QPixmap
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
-
-
-def tr(language: str, key: str) -> str:
-    return translate(language, key)
-
-
 class CameraCaptureDialog(QDialog):
     captured = Signal(str)
 
@@ -142,7 +136,3 @@ class CameraCaptureDialog(QDialog):
             self.capture.release()
             self.capture = None
         super().closeEvent(event)
-
-
-def build_camera_capture_dialog(*, language: str, camera_index_value: int, parent: QWidget | None = None) -> CameraCaptureDialog:
-    return CameraCaptureDialog(language=language, camera_index_value=camera_index_value, parent=parent)

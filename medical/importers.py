@@ -38,7 +38,8 @@ def import_isic_2016_part3b_to_yolo(
         image_target = images_dir / image_path.name
         label_target = labels_dir / f"{image_path.stem}.txt"
         shutil.copy2(image_path, image_target)
-        label_target.write_text(_yolo_line_for_bbox(image_path, bbox), encoding="utf-8")
+        with Image.open(image_path) as image:
+            label_target.write_text(bbox_to_yolo_line(0, bbox, image.size), encoding="utf-8")
         metadata_rows.append(
             {
                 "image_id": image_path.stem,
@@ -78,20 +79,19 @@ def _bbox_from_mask(mask_path: Path) -> tuple[int, int, int, int] | None:
                     ys.append(y)
         if not xs or not ys:
             return None
-        return min(xs), min(ys), max(xs), max(ys)
+        return min(xs), min(ys), max(xs) + 1, max(ys) + 1
 
 
-def _yolo_line_for_bbox(image_path: Path, bbox: tuple[int, int, int, int]) -> str:
-    with Image.open(image_path) as image:
-        width, height = image.size
+def bbox_to_yolo_line(class_id: int, bbox: tuple[float, float, float, float], image_size: tuple[int, int]) -> str:
+    width, height = image_size
     x1, y1, x2, y2 = bbox
-    box_width = max(1, x2 - x1)
-    box_height = max(1, y2 - y1)
+    box_width = max(1.0, x2 - x1)
+    box_height = max(1.0, y2 - y1)
     x_center = (x1 + (box_width / 2.0)) / width
     y_center = (y1 + (box_height / 2.0)) / height
     normalized_w = box_width / width
     normalized_h = box_height / height
-    return f"0 {x_center:.6f} {y_center:.6f} {normalized_w:.6f} {normalized_h:.6f}\n"
+    return f"{class_id} {x_center:.6f} {y_center:.6f} {normalized_w:.6f} {normalized_h:.6f}\n"
 
 
 def _write_metadata_csv(path: Path, rows: list[dict[str, str]]) -> None:

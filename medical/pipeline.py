@@ -7,11 +7,11 @@ from typing import Any, Protocol
 import cv2
 import numpy as np
 
-from medical.compliance import build_medical_disclaimer
+from medical.classifier import MedicalClassifierModel, load_medical_classifier
+from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dataset import normalize_uploaded_image
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.reporting import build_artifact_stamp, write_case_report
-from training.model_paths import resolve_model_source
 from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
 
@@ -30,7 +30,7 @@ class MedicalImageAnalyzerConfig:
     overlay_dir: Path
     fallback_model_path: Path | None = None
     allow_fallback_model: bool = False
-    image_size: int = 640
+    image_size: int = 320
     conf_threshold: float = 0.25
     classify_high_risk_threshold: float = 0.75
     classify_medium_risk_threshold: float = 0.45
@@ -69,38 +69,34 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     settings = load_yaml("config/medical_settings.yaml").get("medical", {})
     if not isinstance(settings, dict):
         settings = {}
-    configured_model = Path(settings.get("model", "models/trained/best.pt"))
+    configured_model = Path(settings.get("model", "medical_7_cancers.pt"))
     return MedicalImageAnalyzerConfig(
-        model_path=resolve_model_source(configured_model),
+        model_path=configured_model,
         working_dir=Path(settings.get("output_root", "output/medical")),
         reports_dir=Path(settings.get("reports_dir", "output/medical/reports")),
         processed_dir=Path(settings.get("processed_dir", "output/medical/normalized_images")),
         overlay_dir=Path(settings.get("overlay_dir", "output/medical/processed_images")),
         fallback_model_path=Path(settings["fallback_model"]) if settings.get("fallback_model") else None,
         allow_fallback_model=bool(settings.get("allow_fallback_model", False)),
-        image_size=int(settings.get("image_size", 640)),
+        image_size=int(settings.get("image_size", 320)),
         conf_threshold=float(settings.get("conf_threshold", 0.25)),
         classify_high_risk_threshold=float(settings.get("classify_high_risk_threshold", 0.75)),
         classify_medium_risk_threshold=float(settings.get("classify_medium_risk_threshold", 0.45)),
     )
 
 
-def validate_medical_model_path(config: MedicalImageAnalyzerConfig) -> Path:
-    return resolve_medical_runtime_model_path(config)
-
-
 def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list[str]:
     issues: list[str] = []
     if config.image_size <= 0:
-        issues.append("image_size phải lớn hơn 0.")
+        issues.append("image_size phai lon hon 0.")
     if not 0.0 < config.conf_threshold < 1.0:
-        issues.append("conf_threshold phải nằm trong khoảng (0, 1).")
+        issues.append("conf_threshold phai nam trong khoang (0, 1).")
     if not 0.0 < config.classify_medium_risk_threshold <= config.classify_high_risk_threshold <= 1.0:
-        issues.append("ngưỡng nguy cơ không hợp lệ.")
+        issues.append("nguong nguy co khong hop le.")
     if not config.model_path:
-        issues.append("model_path không được để trống.")
+        issues.append("model_path khong duoc de trong.")
     if config.allow_fallback_model and config.fallback_model_path is None:
-        issues.append("allow_fallback_model đang bật nhưng fallback_model_path bị thiếu.")
+        issues.append("allow_fallback_model dang bat nhung fallback_model_path bi thieu.")
     return issues
 
 
@@ -108,13 +104,14 @@ class MedicalImageAnalyzer:
     def __init__(self, config: MedicalImageAnalyzerConfig | None = None, detector_backend: DetectorBackend | None = None) -> None:
         self.config = config or build_default_medical_analyzer_config()
         self._detector_backend = detector_backend
+        self._classifier_model: MedicalClassifierModel | None = None
 
     def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
         self.ensure_ready()
         normalized_path = normalize_uploaded_image(image_path, self.config.processed_dir, image_size=self.config.image_size)
         image = cv2.imread(str(normalized_path))
         if image is None:
-            raise RuntimeError(f"Không đọc được ảnh: {normalized_path}")
+            raise RuntimeError(f"Khong doc duoc anh: {normalized_path}")
         quality_warnings = self._evaluate_image_quality(image)
         detections = self._detect_findings(image)
         risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(detections)
@@ -134,7 +131,7 @@ class MedicalImageAnalyzer:
                 {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in detections
             ],
             "quality_warnings": quality_warnings,
-            "disclaimer": build_medical_disclaimer(),
+            "disclaimer": MEDICAL_DISCLAIMER,
         }
         report_json_path, report_md_path = write_case_report(self.config.reports_dir, payload)
         return MedicalAnalysisResult(
@@ -149,7 +146,7 @@ class MedicalImageAnalyzer:
             risk_level=risk_level,
             suspected_malignant=suspected_malignant,
             recommendation=recommendation,
-            disclaimer=build_medical_disclaimer(),
+            disclaimer=MEDICAL_DISCLAIMER,
             average_confidence=average_confidence,
             model_name=self.config.model_path.name,
             quality_warnings=quality_warnings,
@@ -162,16 +159,25 @@ class MedicalImageAnalyzer:
         brightness = float(np.mean(gray))
         height, width = gray.shape[:2]
         if min(height, width) < 256:
-            warnings.append("Ảnh có độ phân giải thấp, kết quả sàng lọc có thể kém ổn định.")
+            warnings.append("Anh co do phan giai thap, ket qua co the kem on dinh.")
         if blur_score < 45:
-            warnings.append("Ảnh có dấu hiệu mờ, nên chụp lại rõ hơn và lấy nét vào vùng tổn thương.")
+            warnings.append("Anh co dau hieu mo, nen chup lai ro hon va lay net vao vung ton thuong.")
         if brightness < 45:
-            warnings.append("Ảnh quá tối, nên bổ sung ánh sáng đều trước khi phân tích.")
+            warnings.append("Anh qua toi, nen bo sung anh sang deu truoc khi phan tich.")
         if brightness > 220:
-            warnings.append("Ảnh quá sáng, có nguy cơ mất chi tiết tổn thương.")
+            warnings.append("Anh qua sang, co nguy co mat chi tiet ton thuong.")
         return warnings
 
     def _detect_findings(self, image: np.ndarray) -> list[DetectionFinding]:
+        if self._detector_backend is not None:
+            return self._detect_with_backend(image)
+        classifier = self._load_classifier()
+        prediction = classifier.predict(image, top_k=1)[0]
+        height, width = image.shape[:2]
+        bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
+        return [DetectionFinding(label=prediction.label, confidence=prediction.confidence, bbox=bbox)]
+
+    def _detect_with_backend(self, image: np.ndarray) -> list[DetectionFinding]:
         backend = self._detector_backend or self._load_default_backend()
         results = backend.predict(
             source=image,
@@ -182,39 +188,61 @@ class MedicalImageAnalyzer:
         )
         findings: list[DetectionFinding] = []
         for result in results:
-            names = getattr(result, "names", {})
-            for box in getattr(result, "boxes", []):
-                cls_id = int(box.cls[0].item())
-                confidence = float(box.conf[0].item())
-                x1, y1, x2, y2 = [int(value) for value in box.xyxy[0].tolist()]
+            if hasattr(result, "boxes"):
+                names = getattr(result, "names", {})
+                for box in getattr(result, "boxes", []):
+                    cls_id = int(box.cls[0].item())
+                    confidence = float(box.conf[0].item())
+                    x1, y1, x2, y2 = [int(value) for value in box.xyxy[0].tolist()]
+                    findings.append(
+                        DetectionFinding(
+                            label=str(names.get(cls_id, cls_id)),
+                            confidence=confidence,
+                            bbox=(x1, y1, x2, y2),
+                        )
+                    )
+            elif hasattr(result, "label") and hasattr(result, "confidence"):
+                bbox = getattr(result, "bbox", None) or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
                 findings.append(
                     DetectionFinding(
-                        label=str(names.get(cls_id, cls_id)),
-                        confidence=confidence,
-                        bbox=(x1, y1, x2, y2),
+                        label=str(result.label),
+                        confidence=float(result.confidence),
+                        bbox=tuple(int(value) for value in bbox),
+                    )
+                )
+            elif isinstance(result, dict) and "label" in result and "confidence" in result:
+                bbox = result.get("bbox") or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
+                findings.append(
+                    DetectionFinding(
+                        label=str(result["label"]),
+                        confidence=float(result["confidence"]),
+                        bbox=tuple(int(value) for value in bbox),
                     )
                 )
         return findings
 
     def ensure_ready(self) -> Path:
-        model_path = validate_medical_model_path(self.config)
+        model_path = resolve_medical_runtime_model_path(self.config)
         issues = validate_medical_analyzer_config(self.config)
         if issues:
-            raise ValueError("Cấu hình medical không hợp lệ: " + "; ".join(issues))
+            raise ValueError("Cau hinh medical khong hop le: " + "; ".join(issues))
         self.config = self.config.with_model_path(model_path)
         return model_path
 
     def _load_default_backend(self) -> DetectorBackend:
-        from ultralytics import YOLO
+        raise RuntimeError("Medical pipeline hien tai dung classifier local, khong can backend YOLO.")
 
-        return YOLO(str(self.config.model_path))
+    def _load_classifier(self) -> MedicalClassifierModel:
+        if self._classifier_model is None:
+            self._classifier_model = load_medical_classifier(self.config.model_path)
+        return self._classifier_model
 
     def _classify_findings(self, detections: list[DetectionFinding]) -> tuple[str, bool, str, float]:
         if not detections:
             return (
                 "low",
                 False,
-                "Không ghi nhận vùng tổn thương rõ ràng trên ảnh này. Nếu bệnh nhân có triệu chứng hoặc tổn thương tồn tại, vẫn nên khám chuyên khoa.",
+                "Khong ghi nhan vung ton thuong ro rang tren anh nay. Neu benh nhan co trieu chung hoac ton thuong ton tai, van nen kham chuyen khoa.",
                 0.0,
             )
         average_confidence = sum(item.confidence for item in detections) / len(detections)
@@ -223,20 +251,20 @@ class MedicalImageAnalyzer:
             return (
                 "high",
                 True,
-                "Phát hiện vùng tổn thương có nguy cơ cao. Nên chuyển bệnh nhân đến bác sĩ da liễu/ung bướu để đánh giá tiếp và sinh thiết nếu cần.",
+                "Phat hien vung ton thuong co nguy co cao. Nen chuyen benh nhan den bac si da lieu/ung buou de danh gia tiep va sinh thiet neu can.",
                 average_confidence,
             )
         if max_confidence >= self.config.classify_medium_risk_threshold:
             return (
                 "medium",
                 True,
-                "Phát hiện vùng tổn thương có nguy cơ trung bình. Nên tái khám sớm và đối chiếu với khám lâm sàng chuyên khoa.",
+                "Phat hien vung ton thuong co nguy co trung binh. Nen tai kham som va doi chieu voi kham lam sang chuyen khoa.",
                 average_confidence,
             )
         return (
             "low",
             False,
-            "Có một vài vùng tổn thương nguy cơ thấp. Nên theo dõi và khám chuyên khoa nếu tổn thương thay đổi kích thước, màu sắc hoặc hình dạng.",
+            "Co mot vai vung ton thuong nguy co thap. Nen theo doi va kham chuyen khoa neu ton thuong thay doi kich thuoc, mau sac hoac hinh dang.",
             average_confidence,
         )
 

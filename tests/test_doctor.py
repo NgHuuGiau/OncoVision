@@ -20,7 +20,7 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(missing, ["yolo11m.pt", "yolo11l.pt", "yolo11x.pt"])
 
     def test_count_files_ignores_missing_directory(self) -> None:
-        self.assertEqual(run_doctor._count_files(Path("missing-dir-for-doctor-test")), 0)
+        self.assertEqual(run_doctor.count_files(Path("missing-dir-for-doctor-test")), 0)
 
     @patch("run_doctor._open_camera_capture")
     def test_probe_camera_reports_warn_when_camera_cannot_open(self, open_camera_mock) -> None:
@@ -49,7 +49,7 @@ class DoctorTests(unittest.TestCase):
     @patch("builtins.print")
     @patch("run_doctor.recommended_medical_commands", return_value=["python run_medical.py train-all"])
     @patch("run_doctor.get_medical_system_status")
-    @patch("run_doctor.select_runtime_config_optimized")
+    @patch("run_doctor.optimized_runtime")
     @patch("run_doctor.detect_hardware")
     @patch("run_doctor.ensure_project_directories")
     @patch("run_doctor.parse_args")
@@ -58,7 +58,7 @@ class DoctorTests(unittest.TestCase):
         parse_args_mock,
         _ensure_dirs_mock,
         detect_hardware_mock,
-        select_runtime_config_optimized_mock,
+        optimized_runtime_mock,
         medical_status_mock,
         _medical_commands_mock,
         print_mock,
@@ -76,7 +76,7 @@ class DoctorTests(unittest.TestCase):
             cuda_available=False,
             gpu_hardware_available=False,
         )
-        select_runtime_config_optimized_mock.side_effect = [
+        optimized_runtime_mock.side_effect = [
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),
             Mock(primary_model_name="yolo11n.pt", resolved_device="cpu", imgsz=320),
@@ -106,7 +106,7 @@ class DoctorTests(unittest.TestCase):
         )
 
         with patch("run_doctor._present_and_missing_models", return_value=([], ["yolo11n.pt"])), patch(
-            "run_doctor._count_files",
+            "run_doctor.count_files",
             side_effect=[0] * 20,
         ):
             run_doctor.main()

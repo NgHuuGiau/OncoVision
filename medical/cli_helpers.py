@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def print_dataset_counts(prefix: str, *, raw_images: int, raw_labels: int, train: int, val: int, test: int) -> None:
-    print(f"{prefix}: raw_images={raw_images}, raw_labels={raw_labels}, train={train}, val={val}, test={test}")
+def print_dataset_counts(prefix: str, *, train: int, val: int, test: int, total: int) -> None:
+    print(f"{prefix}: train={train}, val={val}, test={test}, total={total}")
 
 
 def print_output_counts(*, case_count: int, report_files: int, normalized_files: int, overlay_files: int, export_files: int) -> None:
@@ -14,33 +14,32 @@ def print_output_counts(*, case_count: int, report_files: int, normalized_files:
     )
 
 
-def print_skin_readiness(status) -> None:
+def print_medical_readiness(status) -> None:
     print(
-        "ready_for_train_skin: "
+        "ready_for_train_medical: "
         f"{status.dataset_initialized and status.raw_dataset_ready and status.processed_dataset_ready and status.model_ready}"
     )
 
 
-def print_skin_status_block(status, skin_counts, skin_root: Path) -> None:
-    print("Trạng thái hệ thống y")
+def print_medical_status_block(status, dataset_root: Path) -> None:
+    print("Trang thai he thong medical")
     print(f"Model config: {status.configured_model_path}")
     if status.resolved_model_path is not None:
         print(f"Model runtime: {status.resolved_model_path}")
     print(f"Fallback allowed: {status.allow_fallback_model}")
     print(f"Model ready: {status.model_ready}")
     print(f"Model detail: {status.model_message}")
-    print("Hệ thống đang phân tích các ung thư:")
+    print("He thong dang phan tich cac ung thu:")
     for name in status.analyzed_cancers:
         print(f"- {name}")
     print(f"Dataset root: {status.dataset_root}")
     print(f"Data yaml: {status.data_yaml_path} | exists={status.dataset_initialized}")
     print_dataset_counts(
         "Dataset counts",
-        raw_images=status.raw_images,
-        raw_labels=status.raw_labels,
         train=status.train_images,
         val=status.val_images,
         test=status.test_images,
+        total=status.total_images,
     )
     print_output_counts(
         case_count=status.case_count,
@@ -49,8 +48,4 @@ def print_skin_status_block(status, skin_counts, skin_root: Path) -> None:
         overlay_files=status.overlay_files,
         export_files=status.export_files,
     )
-    print(
-        "Medical skin lesion counts: "
-        f"raw={skin_counts.raw_images}/{skin_counts.raw_labels}, train={skin_counts.train_images}, val={skin_counts.val_images}"
-    )
-    print(f"Skin lesion images live at: {skin_root / 'raw' / 'images'}")
+    print(f"Medical dataset root: {dataset_root}")

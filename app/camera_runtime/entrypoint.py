@@ -1,21 +1,7 @@
 from __future__ import annotations
 
-import argparse
-
-from app.camera_runtime.cli import build_camera_arg_parser
 from app.camera_runtime.launching import CAMERA_BOOT_FINISH_MESSAGE, CAMERA_BOOT_STEPS, run_camera_launch_flow
 from utils.console_ui import BootProgress
-
-
-def build_targeted_parser(description: str) -> argparse.ArgumentParser:
-    parser = build_camera_arg_parser(description)
-    parser.add_argument(
-        "--target",
-        default=None,
-        choices=["ui", "camera"],
-        help="Kiểu khởi động: giao diện desktop hoặc camera thời gian thực.",
-    )
-    return parser
 
 
 def run_targeted_entrypoint(
@@ -54,26 +40,4 @@ def run_targeted_entrypoint(
         boot_progress_cls=BootProgress,
         boot_steps=CAMERA_BOOT_STEPS,
         finish_message=CAMERA_BOOT_FINISH_MESSAGE,
-    )
-
-
-def run_camera_entrypoint(
-    *,
-    args,
-    ui_title: str,
-    dashboard_title: str,
-    resolve_start_bundle_fn,
-    launch_chat_app_fn,
-    print_runtime_dashboard_fn,
-    run_camera_session_fn,
-) -> int:
-    return run_targeted_entrypoint(
-        args=args,
-        preferred_target="camera",
-        ui_title=ui_title,
-        dashboard_title=dashboard_title,
-        resolve_start_bundle_fn=resolve_start_bundle_fn,
-        launch_chat_app_fn=launch_chat_app_fn,
-        print_runtime_dashboard_fn=print_runtime_dashboard_fn,
-        run_camera_session_fn=run_camera_session_fn,
     )

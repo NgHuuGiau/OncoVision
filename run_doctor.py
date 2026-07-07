@@ -7,9 +7,9 @@ from pathlib import Path
 from app.chat_ui.paths import get_chat_capture_dir
 from core.hardware_info import detect_hardware
 from core.model_catalog import YOLO11_MODELS_ASC
-from core.runtime_advisor import select_runtime_config_optimized
+from core.runtime_advisor import optimized_runtime
 from medical.dataset import create_default_skin_cancer_dataset_config
-from medical.system_status import MedicalSystemStatus, get_medical_system_status, recommended_medical_commands
+from medical.system_status import get_medical_system_status, recommended_medical_commands
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, header, line, row, rule, section
 from utils.doctor_helpers import medical_status_color, print_medical_status, print_recommended_commands
 from utils.camera_probe import probe_camera
@@ -50,25 +50,6 @@ class CameraProbeResult:
     @property
     def color(self) -> str:
         return {"PASS": GREEN, "WARN": YELLOW, "ERROR": RED}.get(self.level, CYAN)
-
-
-def _count_files(path: Path) -> int:
-    return count_files(path)
-
-
-def _count_project_files(*paths: Path) -> tuple[int, ...]:
-    return tuple(_count_files(path) for path in paths)
-
-
-def _medical_skin_counts() -> tuple[int, int, int, int]:
-    return _count_project_files(
-        MEDICAL_SKIN_RAW_IMAGES_DIR,
-        MEDICAL_SKIN_RAW_LABELS_DIR,
-        MEDICAL_SKIN_PROCESSED_TRAIN_DIR,
-        MEDICAL_SKIN_PROCESSED_VAL_DIR,
-    )
-
-
 def _present_and_missing_models(model_dir: Path = PRETRAINED_DIR) -> tuple[list[str], list[str]]:
     present = [name for name in YOLO11_MODELS if (model_dir / name).exists()]
     missing = [name for name in YOLO11_MODELS if name not in present]
@@ -77,7 +58,7 @@ def _present_and_missing_models(model_dir: Path = PRETRAINED_DIR) -> tuple[list[
 
 def _runtime_recommendations(hardware) -> dict[str, object]:
     return {
-        label: select_runtime_config_optimized(mode, hardware)
+        label: optimized_runtime(mode, hardware)
         for label, mode in RUNTIME_RECOMMENDATION_MODES
     }
 
@@ -167,16 +148,17 @@ def main() -> None:
     hardware = detect_hardware()
     present_models, missing_models = _present_and_missing_models()
     chat_capture_dir = get_chat_capture_dir(ensure_exists=False)
-    raw_images, raw_labels, train_images, val_images, icon_count, chat_capture_count = _count_project_files(
-        RAW_IMAGES_DIR,
-        RAW_LABELS_DIR,
-        PROCESSED_TRAIN_DIR,
-        PROCESSED_VAL_DIR,
-        ICONS_DIR,
-        chat_capture_dir,
-    )
+    raw_images = count_files(RAW_IMAGES_DIR)
+    raw_labels = count_files(RAW_LABELS_DIR)
+    train_images = count_files(PROCESSED_TRAIN_DIR)
+    val_images = count_files(PROCESSED_VAL_DIR)
+    icon_count = count_files(ICONS_DIR)
+    chat_capture_count = count_files(chat_capture_dir)
     medical_status = get_medical_system_status()
-    med_raw_images, med_raw_labels, med_train_images, med_val_images = _medical_skin_counts()
+    med_raw_images = count_files(MEDICAL_SKIN_RAW_IMAGES_DIR)
+    med_raw_labels = count_files(MEDICAL_SKIN_RAW_LABELS_DIR)
+    med_train_images = count_files(MEDICAL_SKIN_PROCESSED_TRAIN_DIR)
+    med_val_images = count_files(MEDICAL_SKIN_PROCESSED_VAL_DIR)
     camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
     recommendations = _runtime_recommendations(hardware)
 

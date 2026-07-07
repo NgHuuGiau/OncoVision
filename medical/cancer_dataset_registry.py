@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -15,58 +15,62 @@ class CancerDatasetSourceSpec:
 
 COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
     CancerDatasetSourceSpec(
-        source_id="isic_skin",
-        cancer_type="ung_thu_da",
-        source_name="ISIC Archive",
-        status="ready",
-        official_url="https://www.isic-archive.com/",
-        notes="Nguồn chính cho ảnh da liễu / skin lesion; có pipeline nhập sẵn qua training/import_skin_lesion_dataset.py.",
-    ),
-    CancerDatasetSourceSpec(
-        source_id="tcia_breast",
-        cancer_type="ung_thu_vu",
-        source_name="TCIA CBIS-DDSM",
-        status="source_confirmed",
-        official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo collection breast phổ biến trên TCIA; dùng cho mammography/breast imaging. TCGA-BRCA là collection dùng riêng.",
-    ),
-    CancerDatasetSourceSpec(
-        source_id="tcia_lung",
-        cancer_type="ung_thu_phoi",
-        source_name="TCIA NSCLC-Radiomics",
-        status="source_confirmed",
-        official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo collection phổi phổ biến trên TCIA; dữ liệu DICOM CT/PET/MRI. TCGA-LUAD là collection dùng riêng.",
-    ),
-    CancerDatasetSourceSpec(
-        source_id="tcia_colorectal",
-        cancer_type="ung_thu_dai_truc_trang",
-        source_name="TCIA TCGA-COADREAD",
-        status="source_confirmed",
-        official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo collection colorectal phổ biến trên TCIA; cần lọc đúng collection trước khi tải. COAD và READ là hai collection riêng, COADREAD là nhóm liên quan.",
-    ),
-    CancerDatasetSourceSpec(
-        source_id="tcia_liver",
+        source_id="local_liver",
         cancer_type="ung_thu_gan",
-        source_name="TCIA TCGA-LIHC",
-        status="source_confirmed",
-        official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo liver cancer collection phổ biến trên TCIA.",
+        source_name="dataset/medical/Ung thư gan",
+        status="ready",
+        official_url="dataset/medical/Ung thư gan",
+        notes="Ảnh đã có sẵn trong bộ dữ liệu local.",
     ),
     CancerDatasetSourceSpec(
-        source_id="tcia_stomach",
+        source_id="local_lung",
+        cancer_type="ung_thu_phoi",
+        source_name="dataset/medical/Ung thư phổi",
+        status="ready",
+        official_url="dataset/medical/Ung thư phổi",
+        notes="Ảnh đã có sẵn trong bộ dữ liệu local.",
+    ),
+    CancerDatasetSourceSpec(
+        source_id="local_breast",
+        cancer_type="ung_thu_vu",
+        source_name="dataset/medical/Ung thư vú",
+        status="ready",
+        official_url="dataset/medical/Ung thư vú",
+        notes="Ảnh đã có sẵn trong bộ dữ liệu local.",
+    ),
+    CancerDatasetSourceSpec(
+        source_id="local_stomach",
         cancer_type="ung_thu_da_day",
-        source_name="TCIA TCGA-STAD",
-        status="source_confirmed",
-        official_url="https://www.cancerimagingarchive.net/browse-collections/",
-        notes="Mapping theo stomach/gastric cancer collection phổ biến trên TCIA.",
+        source_name="dataset/medical/Ung thư dạ dày",
+        status="ready",
+        official_url="dataset/medical/Ung thư dạ dày",
+        notes="Ảnh đã có sẵn trong bộ dữ liệu local.",
+    ),
+    CancerDatasetSourceSpec(
+        source_id="local_colorectal",
+        cancer_type="ung_thu_dai_truc_trang",
+        source_name="dataset/medical/Ung thư đại trực tràng",
+        status="ready",
+        official_url="dataset/medical/Ung thư đại trực tràng",
+        notes="Ảnh đã có sẵn trong bộ dữ liệu local.",
+    ),
+    CancerDatasetSourceSpec(
+        source_id="local_prostate",
+        cancer_type="ung_thu_tuyen_tien_liet",
+        source_name="dataset/medical/Ung thư tuyến tiền liệt",
+        status="ready",
+        official_url="dataset/medical/Ung thư tuyến tiền liệt",
+        notes="Ảnh đã có sẵn trong bộ dữ liệu local.",
+    ),
+    CancerDatasetSourceSpec(
+        source_id="local_cervical",
+        cancer_type="ung_thu_co_tu_cung",
+        source_name="dataset/medical/Ung thư cổ tử cung",
+        status="ready",
+        official_url="dataset/medical/Ung thư cổ tử cung",
+        notes="Ảnh đã có sẵn trong bộ dữ liệu local.",
     ),
 )
-
-
-def common_cancer_dataset_sources() -> tuple[CancerDatasetSourceSpec, ...]:
-    return COMMON_CANCER_DATASET_SOURCES
 
 
 def common_cancer_dataset_source_dicts() -> list[dict[str, str]]:

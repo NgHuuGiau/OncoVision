@@ -31,9 +31,6 @@ class MedicalChatService:
     def check_ready(self) -> Path:
         return self.analyzer.ensure_ready()
 
-    def _build_case_metadata(self, result, *, user_prompt: str) -> dict[str, object]:
-        return build_detection_metadata(result, user_prompt=user_prompt)
-
     def analyze_attachment(self, *, image_path: str | Path, patient_code: str, user_prompt: str = "") -> MedicalChatResponse:
         result = self.analyzer.analyze_image(image_path, patient_code=patient_code)
         case_id = self.case_db.save_case(
@@ -45,7 +42,7 @@ class MedicalChatService:
             suspected_malignant=result.suspected_malignant,
             risk_level=result.risk_level,
             recommendation=result.recommendation,
-            metadata=self._build_case_metadata(result, user_prompt=user_prompt),
+            metadata=build_detection_metadata(result, user_prompt=user_prompt),
         )
         update_case_report_case_id(
             result.report_json_path,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,16 +12,7 @@ except ModuleNotFoundError:
 
 ensure_project_root_on_path()
 
-from training.dataset_ops import (
-    DEFAULT_SEED,
-    DEFAULT_SPLITS,
-    IMAGE_EXTENSIONS,
-    copy_split,
-    iter_matching_files,
-    read_yolo_label_status,
-    reset_processed_dirs,
-    split_items,
-)
+from training.dataset_ops import DEFAULT_SEED, DEFAULT_SPLITS, IMAGE_EXTENSIONS, iter_matching_files, read_yolo_label_status, split_items
 from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
@@ -51,13 +44,6 @@ class RawDatasetAudit:
     @property
     def eligible(self) -> list[tuple[Path, Path]]:
         return self.eligible_pairs
-
-    @property
-    def eligible_images(self) -> list[Path]:
-        return [image_path for image_path, _ in self.eligible_pairs]
-
-    def __getitem__(self, key: str):
-        return getattr(self, "eligible_pairs" if key == "eligible" else key)
 
 
 def audit_raw_dataset(
@@ -98,29 +84,6 @@ def audit_raw_dataset(
         invalid_labels=invalid_labels,
         orphan_labels=orphan_labels,
     )
-
-
-def _reset_processed_dirs() -> None:
-    reset_processed_dirs(
-        processed_images_dir=PROCESSED_IMAGES_DIR,
-        processed_labels_dir=PROCESSED_LABELS_DIR,
-        splits=SPLITS,
-    )
-
-
-def _split_items(items: list[tuple[Path, Path]]) -> dict[str, list[tuple[Path, Path]]]:
-    return split_items(items, splits=SPLITS, seed=SEED)
-
-
-def _copy_split(split_name: str, items: list[tuple[Path, Path]]) -> None:
-    copy_split(
-        split_name=split_name,
-        items=items,
-        processed_images_dir=PROCESSED_IMAGES_DIR,
-        processed_labels_dir=PROCESSED_LABELS_DIR,
-    )
-
-
 def main() -> None:
     ensure_utf8_console()
     ensure_project_directories()
@@ -145,10 +108,17 @@ def main() -> None:
         print(line(rule("="), CYAN))
         return
 
-    _reset_processed_dirs()
-    split_map = _split_items(eligible)
+    for root in (PROCESSED_IMAGES_DIR, PROCESSED_LABELS_DIR):
+        if root.exists():
+            shutil.rmtree(root)
+    for split_name, _ratio in SPLITS:
+        (PROCESSED_IMAGES_DIR / split_name).mkdir(parents=True, exist_ok=True)
+        (PROCESSED_LABELS_DIR / split_name).mkdir(parents=True, exist_ok=True)
+    split_map = split_items(eligible, splits=SPLITS, seed=SEED)
     for split_name, items in split_map.items():
-        _copy_split(split_name, items)
+        for image_path, label_path in items:
+            shutil.copy2(image_path, PROCESSED_IMAGES_DIR / split_name / image_path.name)
+            shutil.copy2(label_path, PROCESSED_LABELS_DIR / split_name / label_path.name)
 
     for item in header("YOLO DATASET :: CHIA TRAIN / VAL / TEST"):
         print(item)

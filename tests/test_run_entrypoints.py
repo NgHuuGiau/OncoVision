@@ -15,11 +15,12 @@ from utils.console_ui import mode_to_ui_defaults
 class RunEntrypointsTests(unittest.TestCase):
     @patch("run_app.resolve_start_bundle")
     def test_run_app_start_bundle_uses_runtime_tool_prompt(self, resolve_start_bundle_mock) -> None:
-        run_app.resolve_run_app_start_bundle(
+        run_app.resolve_start_bundle(
             requested_mode="high",
             requested_model="yolo11l.pt",
             requested_target="camera",
             preferred_target="camera",
+            prompt_runtime_mode_fn=run_app.prompt_runtime_mode,
         )
 
         resolve_start_bundle_mock.assert_called_once_with(
@@ -43,7 +44,7 @@ class RunEntrypointsTests(unittest.TestCase):
     @patch("run_app.BootProgress")
     @patch("run_app.run_camera_session")
     @patch("run_app.print_runtime_dashboard")
-    @patch("run_app.resolve_run_app_start_bundle")
+    @patch("run_app.resolve_start_bundle")
     @patch("run_app.parse_args")
     def test_run_app_main_runs_camera_only_flow(
         self,
@@ -74,6 +75,7 @@ class RunEntrypointsTests(unittest.TestCase):
             requested_model=None,
             requested_target="camera",
             preferred_target="camera",
+            prompt_runtime_mode_fn=run_app.prompt_runtime_mode,
         )
         boot_progress_mock.assert_called_once_with("OncoVision Camera Realtime")
         progress.advance_to.assert_any_call(16, "Đang nhận cấu hình khởi động")
@@ -95,27 +97,34 @@ class RunEntrypointsTests(unittest.TestCase):
         run_train.main()
         train_main_mock.assert_called_once()
 
-    @patch("run_train.resolve_model_source", side_effect=lambda value: Path(value))
-    @patch("run_train.load_yaml")
-    @patch("run_train.module_available")
+    @patch("run_train.audit_medical_raw_dataset")
+    @patch("run_train.medical_training_paths")
     @patch("run_train.ensure_project_directories")
     def test_run_train_preflight_warns_when_models_missing_but_does_not_fail(
         self,
         ensure_dirs_mock,
-        module_available_mock,
-        load_yaml_mock,
-        _resolve_model_source_mock,
+        medical_training_paths_mock,
+        audit_medical_raw_dataset_mock,
     ) -> None:
-        module_available_mock.return_value = True
-        load_yaml_mock.return_value = {"model": "models/pretrained/yolo11s.pt", "fallback_model": "yolo11n.pt"}
+        medical_training_paths_mock.return_value = SimpleNamespace(
+            dataset_root=Path("dataset/medical"),
+            trained_model_path=Path("medical_7_cancers.pt"),
+            class_names=("Ung thư gan", "Ung thư phổi"),
+        )
+        audit_medical_raw_dataset_mock.return_value = {
+            "train_images": {"Ung thư gan": [Path("a.jpg")], "Ung thư phổi": [Path("b.jpg")]},
+            "val_images": {"Ung thư gan": [Path("c.jpg")], "Ung thư phổi": [Path("d.jpg")]},
+            "test_images": {"Ung thư gan": [], "Ung thư phổi": []},
+            "missing_classes": [],
+        }
 
-        with patch("run_train._count_files", side_effect=[0, 0, 0, 0]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+        with patch("sys.stdout", new_callable=io.StringIO) as stdout:
             result = run_train.run_train_preflight()
 
         self.assertEqual(result, 0)
         ensure_dirs_mock.assert_called_once_with()
-        self.assertIn("Warning: thiếu pretrained model", stdout.getvalue())
-        self.assertIn("training\\download_models.py", stdout.getvalue())
+        self.assertIn("Medical 7-cancer training preflight", stdout.getvalue())
+        self.assertIn("sẵn sàng train", stdout.getvalue())
 
     @patch("run_chat.launch_chat_app")
     @patch("run_chat.build_chat_arg_parser")
@@ -138,14 +147,16 @@ class RunEntrypointsTests(unittest.TestCase):
             selected_model="skin.pt",
         )
 
-    @patch("run_chat.cleanup_medical_outputs")
-    @patch("run_chat.cleanup_chat_outputs")
+    @patch("run_chat._medical_output_directories")
+    @patch("run_chat.cleanup_directories")
+    @patch("run_chat.get_chat_capture_dir")
     @patch("run_chat.build_chat_arg_parser")
     def test_run_chat_cleanup_output_reports_summary(
         self,
         build_parser_mock,
+        get_chat_capture_dir_mock,
         cleanup_mock,
-        cleanup_medical_mock,
+        medical_dirs_mock,
     ) -> None:
         parser = build_parser_mock.return_value
         parser.parse_args.return_value = SimpleNamespace(
@@ -154,34 +165,34 @@ class RunEntrypointsTests(unittest.TestCase):
             older_than_days=14,
             model=None,
         )
-        cleanup_mock.return_value = SimpleNamespace(
-            removed_files=4,
-            removed_dirs=1,
-            freed_bytes=2048,
-        )
-        cleanup_medical_mock.return_value = SimpleNamespace(
-            removed_files=2,
-            removed_dirs=0,
-            freed_bytes=1024,
-        )
+        get_chat_capture_dir_mock.return_value = Path("capture/chat")
+        medical_dirs_mock.return_value = [Path("output/medical/reports")]
+        cleanup_mock.side_effect = [
+            SimpleNamespace(removed_files=4, removed_dirs=1, freed_bytes=2048),
+            SimpleNamespace(removed_files=2, removed_dirs=0, freed_bytes=1024),
+        ]
 
         with patch("sys.stdout", new_callable=io.StringIO) as stdout:
             result = run_chat.main()
 
         self.assertEqual(result, 0)
-        cleanup_mock.assert_called_once_with(older_than_days=14)
-        cleanup_medical_mock.assert_called_once_with(older_than_days=14)
+        self.assertEqual(cleanup_mock.call_count, 2)
+        cleanup_mock.assert_any_call([Path("capture/chat")], older_than_days=14)
+        cleanup_mock.assert_any_call([Path("output/medical/reports")], older_than_days=14)
+        medical_dirs_mock.assert_called_once_with()
         self.assertIn("Đã xóa file chat: 4", stdout.getvalue())
         self.assertIn("Đã xóa file medical: 2", stdout.getvalue())
 
-    @patch("run_chat.cleanup_medical_outputs")
-    @patch("run_chat.cleanup_chat_outputs")
+    @patch("run_chat._medical_output_directories")
+    @patch("run_chat.cleanup_directories")
+    @patch("run_chat.get_chat_capture_dir")
     @patch("run_chat.build_chat_arg_parser")
     def test_run_chat_cleanup_output_uses_same_retention_for_both_outputs(
         self,
         build_parser_mock,
+        get_chat_capture_dir_mock,
         cleanup_mock,
-        cleanup_medical_mock,
+        medical_dirs_mock,
     ) -> None:
         parser = build_parser_mock.return_value
         parser.parse_args.return_value = SimpleNamespace(
@@ -190,14 +201,20 @@ class RunEntrypointsTests(unittest.TestCase):
             older_than_days=30,
             model=None,
         )
-        cleanup_mock.return_value = SimpleNamespace(removed_files=1, removed_dirs=0, freed_bytes=10)
-        cleanup_medical_mock.return_value = SimpleNamespace(removed_files=2, removed_dirs=1, freed_bytes=20)
+        get_chat_capture_dir_mock.return_value = Path("capture/chat")
+        medical_dirs_mock.return_value = [Path("output/medical/reports")]
+        cleanup_mock.side_effect = [
+            SimpleNamespace(removed_files=1, removed_dirs=0, freed_bytes=10),
+            SimpleNamespace(removed_files=2, removed_dirs=1, freed_bytes=20),
+        ]
 
         result = run_chat.main()
 
         self.assertEqual(result, 0)
-        cleanup_mock.assert_called_once_with(older_than_days=30)
-        cleanup_medical_mock.assert_called_once_with(older_than_days=30)
+        self.assertEqual(cleanup_mock.call_count, 2)
+        cleanup_mock.assert_any_call([Path("capture/chat")], older_than_days=30)
+        cleanup_mock.assert_any_call([Path("output/medical/reports")], older_than_days=30)
+        medical_dirs_mock.assert_called_once_with()
 
     def test_mode_to_ui_defaults_maps_modes(self) -> None:
         self.assertEqual(mode_to_ui_defaults("auto"), ("auto", "medium"))

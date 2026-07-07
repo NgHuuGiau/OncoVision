@@ -14,66 +14,55 @@ class CancerScreeningTarget:
 
 COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
     CancerScreeningTarget(
-        key="skin",
-        label="Ung thu da",
-        description="Sàng lọc tổn thương da và nguy cơ ung thư da.",
+        key="liver",
+        label="Ung thư gan",
+        description="Nhóm dữ liệu hình ảnh cho ung thư gan.",
         model_ready=True,
-        notes="Đã có model skin_cancer_screening trong hệ thống hiện tại.",
-    ),
-    CancerScreeningTarget(
-        key="breast",
-        label="Ung thu vu",
-        description="Sàng lọc hình ảnh liên quan tới ung thư vú.",
-        model_ready=False,
-        notes="Cần bổ sung dataset và model riêng.",
+        notes="Dữ liệu sẵn trong dataset/medical/Ung thư gan.",
     ),
     CancerScreeningTarget(
         key="lung",
-        label="Ung thu phoi",
-        description="Sàng lọc hình ảnh y khoa phổi/ngực liên quan ung thư phổi.",
-        model_ready=False,
-        notes="Cần model DICOM/X-ray hoặc CT chuyên dụng.",
+        label="Ung thư phổi",
+        description="Nhóm dữ liệu hình ảnh cho ung thư phổi.",
+        model_ready=True,
+        notes="Dữ liệu sẵn trong dataset/medical/Ung thư phổi.",
     ),
     CancerScreeningTarget(
-        key="colorectal",
-        label="Ung thu dai truc trang",
-        description="Sàng lọc liên quan đại trực tràng và ung thư ruột lớn.",
-        model_ready=False,
-        notes="Cần quy trình riêng và dataset chuyên khoa.",
-    ),
-    CancerScreeningTarget(
-        key="liver",
-        label="Ung thu gan",
-        description="Sàng lọc liên quan tổn thương gan.",
-        model_ready=False,
-        notes="Cần model cho siêu âm/CT/MRI chuyên dụng.",
-    ),
-    CancerScreeningTarget(
-        key="cervical",
-        label="Ung thu co tu cung",
-        description="Sàng lọc liên quan cổ tử cung.",
-        model_ready=False,
-        notes="Cần quy trình papanicolaou/ảnh soi cổ tử cung.",
-    ),
-    CancerScreeningTarget(
-        key="prostate",
-        label="Ung thu tuyen tien liet",
-        description="Sàng lọc liên quan tuyến tiền liệt.",
-        model_ready=False,
-        notes="Cần model và dữ liệu riêng cho imaging/lab data.",
+        key="breast",
+        label="Ung thư vú",
+        description="Nhóm dữ liệu hình ảnh cho ung thư vú.",
+        model_ready=True,
+        notes="Dữ liệu sẵn trong dataset/medical/Ung thư vú.",
     ),
     CancerScreeningTarget(
         key="stomach",
-        label="Ung thu da day",
-        description="Sàng lọc liên quan dạ dày/ống tiêu hóa trên.",
-        model_ready=False,
-        notes="Cần model nội soi hoặc imaging riêng.",
+        label="Ung thư dạ dày",
+        description="Nhóm dữ liệu hình ảnh cho ung thư dạ dày.",
+        model_ready=True,
+        notes="Dữ liệu sẵn trong dataset/medical/Ung thư dạ dày.",
+    ),
+    CancerScreeningTarget(
+        key="colorectal",
+        label="Ung thư đại trực tràng",
+        description="Nhóm dữ liệu hình ảnh cho ung thư đại trực tràng.",
+        model_ready=True,
+        notes="Dữ liệu sẵn trong dataset/medical/Ung thư đại trực tràng.",
+    ),
+    CancerScreeningTarget(
+        key="prostate",
+        label="Ung thư tuyến tiền liệt",
+        description="Nhóm dữ liệu hình ảnh cho ung thư tuyến tiền liệt.",
+        model_ready=True,
+        notes="Dữ liệu sẵn trong dataset/medical/Ung thư tuyến tiền liệt.",
+    ),
+    CancerScreeningTarget(
+        key="cervical",
+        label="Ung thư cổ tử cung",
+        description="Nhóm dữ liệu hình ảnh cho ung thư cổ tử cung.",
+        model_ready=True,
+        notes="Dữ liệu sẵn trong dataset/medical/Ung thư cổ tử cung.",
     ),
 )
-
-
-def list_common_cancer_targets() -> tuple[CancerScreeningTarget, ...]:
-    return COMMON_CANCER_TARGETS
 
 
 def supported_cancer_labels() -> list[str]:

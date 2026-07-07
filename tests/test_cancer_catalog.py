@@ -2,25 +2,27 @@ from __future__ import annotations
 
 import unittest
 
-from medical.cancer_catalog import list_common_cancer_targets, supported_cancer_labels
+from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels
 
 
 class CancerCatalogTests(unittest.TestCase):
-    def test_supported_cancer_labels_include_common_targets(self) -> None:
+    def test_supported_cancer_labels_include_expected_targets(self) -> None:
         labels = supported_cancer_labels()
-        self.assertIn("Ung thu da", labels)
-        self.assertIn("Ung thu vu", labels)
-        self.assertIn("Ung thu phoi", labels)
-        self.assertIn("Ung thu dai truc trang", labels)
+        for expected in (
+            "Ung thư gan",
+            "Ung thư phổi",
+            "Ung thư vú",
+            "Ung thư dạ dày",
+            "Ung thư đại trực tràng",
+            "Ung thư tuyến tiền liệt",
+            "Ung thư cổ tử cung",
+        ):
+            self.assertIn(expected, labels)
 
-    def test_skin_target_is_marked_ready(self) -> None:
-        targets = list_common_cancer_targets()
-        skin_target = next(item for item in targets if item.key == "skin")
-        self.assertTrue(skin_target.model_ready)
-
-    def test_non_skin_targets_are_marked_as_extension_only(self) -> None:
-        targets = list_common_cancer_targets()
-        self.assertTrue(all(not item.model_ready for item in targets if item.key != "skin"))
+    def test_catalog_has_seven_supported_targets(self) -> None:
+        targets = COMMON_CANCER_TARGETS
+        self.assertEqual(len(targets), 7)
+        self.assertTrue(all(item.model_ready for item in targets))
 
 
 if __name__ == "__main__":

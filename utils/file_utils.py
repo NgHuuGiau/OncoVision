@@ -85,6 +85,13 @@ load_yaml_cached.cache_clear = _load_yaml_cached.cache_clear
 def save_yaml(path: str | Path, data: Any) -> None:
     resolved_path = Path(path)
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    if resolved_path.exists():
+        try:
+            if resolved_path.read_text(encoding="utf-8") == serialized:
+                return
+        except Exception:
+            pass
     with resolved_path.open("w", encoding="utf-8") as file:
-        yaml.safe_dump(data, file, allow_unicode=True, sort_keys=False)
+        file.write(serialized)
     _load_yaml_cached.cache_clear()

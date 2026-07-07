@@ -6,12 +6,6 @@ import argparse
 def build_chat_arg_parser(description: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
-        "--mode",
-        default=None,
-        choices=["auto", "high", "medium", "low"],
-        help="Kept for compatibility. Chat interface does not use this parameter.",
-    )
-    parser.add_argument(
         "--camera-index",
         default=0,
         type=int,

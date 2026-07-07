@@ -4,15 +4,16 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from medical.output_management import medical_output_directories
-from medical.cancer_catalog import list_common_cancer_targets, supported_cancer_labels
+from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels
+from medical.dataset import MEDICAL_CLASS_NAMES
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.pipeline import build_default_medical_analyzer_config
-from medical.status_helpers import count_files
 from medical.training import medical_training_paths
+from medical.classifier import iter_medical_image_paths
+from medical.status_helpers import count_files
 
 
-SCREENING_TARGETS = tuple((target.label, target.model_ready) for target in list_common_cancer_targets())
+SCREENING_TARGETS = tuple((target.label, target.model_ready) for target in COMMON_CANCER_TARGETS)
 ANALYZED_CANCERS = tuple(supported_cancer_labels())
 
 
@@ -26,11 +27,10 @@ class MedicalSystemStatus:
     model_message: str
     dataset_root: Path
     data_yaml_path: Path
-    raw_images: int
-    raw_labels: int
     train_images: int
     val_images: int
     test_images: int
+    total_images: int
     report_files: int
     normalized_files: int
     overlay_files: int
@@ -46,11 +46,19 @@ class MedicalSystemStatus:
 
     @property
     def raw_dataset_ready(self) -> bool:
-        return self.raw_images > 0 and self.raw_labels > 0
+        return self.total_images > 0
 
     @property
     def processed_dataset_ready(self) -> bool:
-        return self.train_images > 0 and self.val_images > 0
+        return self.train_images > 0 and self.val_images > 0 and self.test_images > 0
+
+    @property
+    def raw_images(self) -> int:
+        return self.total_images
+
+    @property
+    def raw_labels(self) -> int:
+        return self.total_images
 
 
 def _count_cases(case_db_path: Path) -> int:
@@ -67,10 +75,21 @@ def _count_cases(case_db_path: Path) -> int:
         return 0
 
 
+def _count_split_images(dataset_root: Path, split: str) -> int:
+    total = 0
+    for class_name in MEDICAL_CLASS_NAMES:
+        split_dir = dataset_root / class_name / "processed" / "images" / split
+        total += sum(1 for _ in iter_medical_image_paths(split_dir))
+    return total
+
+
 def get_medical_system_status() -> MedicalSystemStatus:
     config = build_default_medical_analyzer_config()
     training_paths = medical_training_paths()
-    report_dir, normalized_dir, overlay_dir, export_dir = medical_output_directories()
+    report_dir = Path(config.working_dir) / "reports"
+    normalized_dir = Path(config.working_dir) / "normalized_images"
+    overlay_dir = Path(config.working_dir) / "processed_images"
+    export_dir = Path(config.working_dir) / "exports"
     case_db_path = config.working_dir / "medical_cases.db"
 
     try:
@@ -78,14 +97,18 @@ def get_medical_system_status() -> MedicalSystemStatus:
         using_fallback_model = resolved_model_path.resolve(strict=False) != config.model_path.resolve(strict=False)
         model_ready = True
         if using_fallback_model:
-            model_message = f"Đang dùng fallback model: {resolved_model_path.name}"
+            model_message = f"Dang dung fallback model: {resolved_model_path.name}"
         else:
-            model_message = f"Đã sẵn sàng với model: {resolved_model_path.name}"
+            model_message = f"Da san sang voi model: {resolved_model_path.name}"
     except Exception as exc:
         resolved_model_path = None
         using_fallback_model = False
         model_ready = False
         model_message = str(exc)
+
+    train_images = _count_split_images(training_paths.dataset_root, "train")
+    val_images = _count_split_images(training_paths.dataset_root, "val")
+    test_images = _count_split_images(training_paths.dataset_root, "test")
 
     return MedicalSystemStatus(
         configured_model_path=config.model_path,
@@ -96,11 +119,10 @@ def get_medical_system_status() -> MedicalSystemStatus:
         model_message=model_message,
         dataset_root=training_paths.dataset_root,
         data_yaml_path=training_paths.data_yaml_path,
-        raw_images=count_files(training_paths.raw_images_dir),
-        raw_labels=count_files(training_paths.raw_labels_dir),
-        train_images=count_files(training_paths.processed_images_dir / "train"),
-        val_images=count_files(training_paths.processed_images_dir / "val"),
-        test_images=count_files(training_paths.processed_images_dir / "test"),
+        train_images=train_images,
+        val_images=val_images,
+        test_images=test_images,
+        total_images=train_images + val_images + test_images,
         report_files=count_files(report_dir),
         normalized_files=count_files(normalized_dir),
         overlay_files=count_files(overlay_dir),

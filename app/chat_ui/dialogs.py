@@ -4,10 +4,6 @@ from PySide6.QtCore import QParallelAnimationGroup, QPropertyAnimation, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QDialog, QFrame, QGraphicsBlurEffect, QHBoxLayout, QScrollArea, QVBoxLayout, QPushButton, QLabel, QWidget, QSizePolicy
 
-from app.chat_ui.camera_dialog_flow import CameraCaptureDialog
-from app.chat_ui.settings_dialog_flow import SettingsDialog
-
-
 class ImagePreviewDialog(QDialog):
     def __init__(self, image_path: str, parent: QWidget | None = None, effective_theme: str = "dark") -> None:
         super().__init__(parent)
@@ -84,6 +80,4 @@ class ImagePreviewDialog(QDialog):
         self.group.addAnimation(self.blur_anim)
         self.group.start()
         super().showEvent(event)
-
-
-__all__ = ["CameraCaptureDialog", "SettingsDialog", "ImagePreviewDialog"]
+__all__ = ["ImagePreviewDialog"]

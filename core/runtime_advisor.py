@@ -107,12 +107,8 @@ def optimized_runtime(mode: str, hardware) -> RuntimeConfig:
     return select_runtime_config(resolved_mode, hardware)
 
 
-def select_runtime_config_optimized(mode: str, hardware):
-    return optimized_runtime(mode, hardware)
-
-
 def build_recommendations(hardware=None) -> dict[str, RuntimeConfig]:
     hardware = hardware or detect_hardware()
-    recommendations = {mode: select_runtime_config_optimized(mode, hardware) for mode in MODE_ORDER}
-    recommendations["auto"] = select_runtime_config_optimized("auto", hardware)
+    recommendations = {mode: optimized_runtime(mode, hardware) for mode in MODE_ORDER}
+    recommendations["auto"] = optimized_runtime("auto", hardware)
     return recommendations

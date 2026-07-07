@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.chat_ui.output_management import cleanup_chat_outputs
 from app.chat_ui.paths import build_chat_capture_path
+from utils.cleanup_utils import cleanup_directories
 
 
 class ChatAiAppPathTests(unittest.TestCase):
@@ -27,7 +27,7 @@ class ChatAiAppPathTests(unittest.TestCase):
             capture_path = Path(temp_dir) / "camera_capture_test.png"
             capture_path.write_text("x", encoding="utf-8")
 
-            summary = cleanup_chat_outputs(older_than_days=None, base_dir=temp_dir)
+            summary = cleanup_directories([Path(temp_dir)], older_than_days=None)
 
         self.assertEqual(summary.removed_files, 1)
         self.assertFalse(capture_path.exists())

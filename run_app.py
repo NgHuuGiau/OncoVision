@@ -6,8 +6,8 @@ from app.camera_runtime.cli import build_camera_arg_parser
 from app.camera_runtime.bootstrap import resolve_start_bundle
 from app.camera_runtime.launching import run_camera_launch_flow
 from core.hardware_info import detect_hardware
-from core.runtime_prompt import prompt_runtime_mode
 from core.runtime_advisor import build_recommendations
+from core.runtime_prompt import prompt_runtime_mode
 from utils.entrypoint_common import run_entrypoint
 from utils.console_ui import BootProgress, print_runtime_dashboard
 
@@ -20,15 +20,6 @@ def parse_args() -> argparse.Namespace:
         help="Chỉ in khuyến nghị runtime, không mở camera.",
     )
     return parser.parse_args()
-
-
-def resolve_run_app_start_bundle(**kwargs):
-    return resolve_start_bundle(
-        **kwargs,
-        prompt_runtime_mode_fn=prompt_runtime_mode,
-    )
-
-
 def run_camera_session(*, runtime, camera_index: int) -> None:
     from core.camera_runner import run_camera_session as _run_camera_session
 
@@ -52,11 +43,12 @@ def main() -> int:
     if getattr(args, "advisor_only", False):
         return run_runtime_advisor()
 
-    start_options = resolve_run_app_start_bundle(
+    start_options = resolve_start_bundle(
         requested_mode=args.mode,
         requested_model=args.model,
         requested_target="camera",
         preferred_target="camera",
+        prompt_runtime_mode_fn=prompt_runtime_mode,
     )
     return run_camera_launch_flow(
         dashboard_title="OncoVision Camera Realtime",

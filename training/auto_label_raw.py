@@ -4,6 +4,8 @@ import argparse
 import importlib
 from pathlib import Path
 
+from PIL import Image
+
 try:
     from training._training_bootstrap import ensure_project_root_on_path
 except ModuleNotFoundError:
@@ -21,8 +23,7 @@ try:
 except ModuleNotFoundError:
     from terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
 
-from PIL import Image
-
+from medical.importers import bbox_to_yolo_line
 from utils.file_utils import ensure_project_directories
 from utils.logger import get_logger
 
@@ -65,26 +66,6 @@ def _iter_raw_images() -> list[Path]:
     if not RAW_IMAGES_DIR.exists():
         return []
     return sorted(path for path in RAW_IMAGES_DIR.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
-
-
-def _to_yolo_line(class_id: int, bbox: tuple[float, float, float, float], image_size: tuple[int, int]) -> str:
-    image_width, image_height = image_size
-    x1, y1, x2, y2 = bbox
-    x1 = max(0.0, min(x1, image_width - 1))
-    y1 = max(0.0, min(y1, image_height - 1))
-    x2 = max(0.0, min(x2, image_width - 1))
-    y2 = max(0.0, min(y2, image_height - 1))
-    box_width = max(1.0, x2 - x1)
-    box_height = max(1.0, y2 - y1)
-    x_center = x1 + (box_width / 2.0)
-    y_center = y1 + (box_height / 2.0)
-    return (
-        f"{class_id} "
-        f"{x_center / image_width:.6f} "
-        f"{y_center / image_height:.6f} "
-        f"{box_width / image_width:.6f} "
-        f"{box_height / image_height:.6f}"
-    )
 
 
 def auto_label_raw_images(*, overwrite: bool = False, conf: float = 0.25, device: str = "cpu", batch_size: int = 16) -> dict[str, object]:
@@ -130,14 +111,18 @@ def auto_label_raw_images(*, overwrite: bool = False, conf: float = 0.25, device
         for p in batch_paths:
             with Image.open(p) as img:
                 image_sizes[p] = img.size
-
         results = model.predict(source=[str(p) for p in batch_paths], conf=conf, device=device, verbose=False)
         for result, image_path in zip(results, batch_paths):
             lines: list[str] = []
             for box in result.boxes:
                 class_id = int(box.cls[0].item())
                 x1, y1, x2, y2 = [float(value) for value in box.xyxy[0].tolist()]
-                lines.append(_to_yolo_line(class_id, (x1, y1, x2, y2), image_sizes[image_path]))
+                image_width, image_height = image_sizes[image_path]
+                x1 = max(0.0, min(x1, image_width - 1))
+                y1 = max(0.0, min(y1, image_height - 1))
+                x2 = max(0.0, min(x2, image_width - 1))
+                y2 = max(0.0, min(y2, image_height - 1))
+                lines.append(bbox_to_yolo_line(class_id, (x1, y1, x2, y2), image_sizes[image_path]).rstrip("\n"))
             if not lines:
                 no_detection.append(image_path.name)
             else:

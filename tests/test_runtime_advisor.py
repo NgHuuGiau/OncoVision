@@ -14,7 +14,6 @@ from core.runtime_advisor import (
     optimized_runtime,
     profile_specs_for_hardware,
     quality_score,
-    select_runtime_config_optimized,
     stability_score,
 )
 
@@ -121,26 +120,26 @@ class RuntimeAdvisorTests(unittest.TestCase):
         select_runtime_config_mock.assert_called_once_with("high", hardware)
 
     @patch("core.runtime_advisor.select_runtime_config")
-    def test_select_runtime_config_optimized_auto_uses_default_mode(self, select_runtime_config_mock) -> None:
+    def test_optimized_runtime_auto_uses_default_mode(self, select_runtime_config_mock) -> None:
         expected = _runtime(mode="medium", profile_name="medium", primary_model_name="yolo11s.pt", imgsz=512, max_det=120)
         select_runtime_config_mock.return_value = expected
         hardware = _hardware(gpu_name="RTX 3050", vram_gb=4.0, cpu_usage_percent=75.0)
 
-        runtime = select_runtime_config_optimized("auto", hardware)
+        runtime = optimized_runtime("auto", hardware)
 
         self.assertIs(runtime, expected)
         select_runtime_config_mock.assert_called_once_with("medium", hardware)
 
-    @patch("core.runtime_advisor.select_runtime_config_optimized")
+    @patch("core.runtime_advisor.optimized_runtime")
     @patch("core.runtime_advisor.detect_hardware")
     def test_build_recommendations_includes_auto_and_all_modes(
         self,
         detect_hardware_mock,
-        select_runtime_config_optimized_mock,
+        optimized_runtime_mock,
     ) -> None:
         hardware = _hardware()
         detect_hardware_mock.return_value = hardware
-        select_runtime_config_optimized_mock.side_effect = lambda mode, _hardware: f"runtime:{mode}"
+        optimized_runtime_mock.side_effect = lambda mode, _hardware: f"runtime:{mode}"
 
         recommendations = build_recommendations()
 

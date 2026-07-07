@@ -4,9 +4,10 @@ import io
 import sys
 
 from app.chat_ui.cli import build_chat_arg_parser
-from app.chat_ui.output_management import cleanup_chat_outputs
+from app.chat_ui.paths import get_chat_capture_dir
 from app.chat_ui.window import launch_chat_app
-from medical.output_management import cleanup_medical_outputs
+from medical.output_management import _medical_output_directories
+from utils.cleanup_utils import cleanup_directories
 from utils.entrypoint_checks import chat_preflight_status
 from utils.entrypoint_common import run_entrypoint
 from utils.icons import ICONS_DIR, create_default_icons
@@ -73,12 +74,12 @@ def main() -> int:
     if args.cleanup_output:
         output = io.StringIO()
         output.write("=== Chat output ===\n")
-        chat_summary = cleanup_chat_outputs(older_than_days=args.older_than_days)
+        chat_summary = cleanup_directories([get_chat_capture_dir()], older_than_days=args.older_than_days)
         output.write(f"Đã xóa file chat: {chat_summary.removed_files}\n")
         output.write(f"Đã xóa thư mục rỗng: {chat_summary.removed_dirs}\n")
         output.write(f"Dung lượng giải phóng: {chat_summary.freed_bytes} bytes\n")
         output.write("\n=== Medical output ===\n")
-        medical_summary = cleanup_medical_outputs(older_than_days=args.older_than_days)
+        medical_summary = cleanup_directories(_medical_output_directories(), older_than_days=args.older_than_days)
         output.write(f"Đã xóa file medical: {medical_summary.removed_files}\n")
         output.write(f"Đã xóa thư mục rỗng: {medical_summary.removed_dirs}\n")
         output.write(f"Dung lượng giải phóng: {medical_summary.freed_bytes} bytes\n")

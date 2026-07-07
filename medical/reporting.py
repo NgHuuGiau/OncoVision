@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from medical.compliance import build_medical_disclaimer
+from medical.compliance import MEDICAL_DISCLAIMER
 from medical.cancer_catalog import supported_cancer_labels
 
 
@@ -80,5 +80,5 @@ def _markdown_report(payload: dict[str, Any]) -> str:
         "## Recommendation\n"
         f"{payload.get('recommendation', '-')}\n\n"
         "## Legal Notice\n"
-        f"{build_medical_disclaimer()}\n"
+        f"{MEDICAL_DISCLAIMER}\n"
     )

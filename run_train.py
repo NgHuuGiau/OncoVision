@@ -1,111 +1,69 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+import time
 
-from training.model_paths import resolve_model_source
-from training.train_model import (
-    PROCESSED_TRAIN_DIR,
-    PROCESSED_VAL_DIR,
-    RAW_IMAGES_DIR,
-    RAW_LABELS_DIR,
-    main as run_training_main,
-)
-from utils.entrypoint_checks import module_available
-from utils.file_utils import ensure_project_directories, load_yaml
+from medical.training import audit_medical_raw_dataset, medical_training_paths, run_full_medical_training_pipeline
 from utils.entrypoint_common import run_entrypoint
-from utils.path_counts import count_files as _count_files
-
-
-TRAIN_CONFIG_PATH = Path("training/train_config.yaml")
+from utils.file_utils import ensure_project_directories
+from utils.terminal_encoding import ensure_utf8_console
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Huấn luyện model YOLO custom từ dataset local.")
+    parser = argparse.ArgumentParser(description="Huấn luyện model medical 7 ung thư từ dataset/medical.")
     parser.add_argument(
         "--check-only",
         action="store_true",
-        help="Chỉ kiểm tra nhanh config, model và dữ liệu; không chạy train.",
+        help="Chỉ kiểm tra nhanh dataset medical và cấu hình train; không chạy train.",
     )
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def _count_split_items(split_map: dict[str, list[object]]) -> int:
+    return sum(len(items) for items in split_map.values())
 
 
 def run_train_preflight(print_fn=print) -> int:
     ensure_project_directories()
-    config = load_yaml(TRAIN_CONFIG_PATH)
+    paths = medical_training_paths()
+    audit = audit_medical_raw_dataset(paths)
+    train_count = _count_split_items(audit["train_images"])
+    val_count = _count_split_items(audit["val_images"])
+    test_count = _count_split_items(audit["test_images"])
+    missing_classes = audit["missing_classes"]
+    ready = train_count > 0 and val_count > 0 and not missing_classes
 
-    raw_images = _count_files(RAW_IMAGES_DIR)
-    raw_labels = _count_files(RAW_LABELS_DIR)
-    train_images = _count_files(PROCESSED_TRAIN_DIR)
-    val_images = _count_files(PROCESSED_VAL_DIR)
-    primary_model = resolve_model_source(config["model"])
-    fallback_model = resolve_model_source(config.get("fallback_model", "yolo11n.pt"))
-
-    modules_ok = {
-        "ultralytics": module_available("ultralytics"),
-        "torch": module_available("torch"),
-    }
-    missing_models: list[str] = []
-    if not primary_model.exists():
-        missing_models.append(str(primary_model))
-    if not fallback_model.exists() and fallback_model != primary_model:
-        missing_models.append(str(fallback_model))
-
-    hard_failure = not all(modules_ok.values())
-    processed_ready = train_images > 0 and val_images > 0
-    raw_ready = raw_images > 0
-
-    print_fn("YOLO training preflight")
-    print_fn(f"- Config: {TRAIN_CONFIG_PATH}")
-    print_fn(f"- Primary model: {primary_model} | exists={primary_model.exists()}")
-    print_fn(f"- Fallback model: {fallback_model} | exists={fallback_model.exists()}")
-    print_fn(
-        "- Dataset counts: "
-        f"raw_images={raw_images}, raw_labels={raw_labels}, train={train_images}, val={val_images}"
-    )
-    print_fn(
-        "- Python deps: "
-        f"ultralytics={modules_ok['ultralytics']}, torch={modules_ok['torch']}"
-    )
-
-    if hard_failure:
-        print_fn("- Status: lỗi cấu hình hoặc thiếu dependency, chưa thể chạy run_train.py.")
-        return 1
-
-    if missing_models:
-        print_fn(
-            "- Warning: thiếu pretrained model "
-            + ", ".join(missing_models)
-            + ". Có thể tải lại bằng: .\\.venv\\Scripts\\python training\\download_models.py"
-        )
-
-    if processed_ready:
-        print_fn("- Status: dữ liệu train/val đã sẵn sàng, có thể chạy train ngay.")
-        return 0
-
-    if raw_ready:
-        print_fn("- Status: đã có raw dataset, run_train.py có thể thử auto-prepare trước khi train.")
-        return 0
-
-    print_fn("- Status: entrypoint chạy được nhưng hiện chưa có dataset để train custom.")
-    print_fn("- Gợi ý: thêm dữ liệu vào dataset/raw rồi chạy lại run_train.py.")
-    return 0
+    print_fn("Medical 7-cancer training preflight")
+    print_fn(f"- Dataset root: {paths.dataset_root}")
+    print_fn(f"- Model target: {paths.trained_model_path}")
+    print_fn(f"- Classes: {len(paths.class_names)}")
+    print_fn(f"- Counts: train={train_count}, val={val_count}, test={test_count}")
+    print_fn(f"- Missing classes: {len(missing_classes)}")
+    if missing_classes:
+        print_fn("- Class list: " + ", ".join(missing_classes))
+    print_fn(f"- Status: {'sẵn sàng train' if ready else 'chưa đủ dữ liệu medical'}")
+    return 0 if ready else 1
 
 
 def main() -> int:
-    args = parse_args()
+    ensure_utf8_console()
+    args = build_parser().parse_args()
     if getattr(args, "check_only", False):
         return run_train_preflight()
 
-    result = run_training_main()
-    return 0 if result is None else int(result)
-
-
-__all__ = ["main", "run_train_preflight"]
+    start = time.perf_counter()
+    result = run_full_medical_training_pipeline()
+    metrics = result["validation_metrics"]
+    print("Medical 7-cancer training complete")
+    print(f"- Trained model: {result['trained_model_path']}")
+    print(f"- Train/val/test: {result['train_count']}/{result['val_count']}/{result['test_count']}")
+    print(f"- Prepare: {result['prepare_seconds']:.2f}s")
+    print(f"- Train: {result['train_seconds']:.2f}s")
+    print(f"- Validate: {result['validate_seconds']:.2f}s")
+    print(f"- Total: {time.perf_counter() - start:.2f}s")
+    print(f"- Validation accuracy: {metrics['accuracy']:.4f}")
+    print(f"- Validation model: {metrics['model_path']}")
+    return 0
 
 
 if __name__ == "__main__":

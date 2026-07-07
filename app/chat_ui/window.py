@@ -122,7 +122,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
     def tr(language: str, key: str) -> str:
         return translate(language, key)
 
-    from app.chat_ui.dialogs import CameraCaptureDialog, SettingsDialog
+    from app.chat_ui.camera_dialog_flow import CameraCaptureDialog
+    from app.chat_ui.settings_dialog_flow import SettingsDialog
 
     from app.chat_ui.widgets import (
         ChatBubble,

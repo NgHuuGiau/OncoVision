@@ -1,22 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
-from app.chat_ui.content import translate
-
-if TYPE_CHECKING:
-    from app.chat_ui.window import ChatWindow
-
-
-def tr(language: str, key: str) -> str:
-    return translate(language, key)
+from app.chat_ui.content import translate as tr
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, *, parent_window: "ChatWindow") -> None:
+    def __init__(self, *, parent_window) -> None:
         super().__init__(parent_window)
         self.window = parent_window
         self.setWindowTitle(tr(self.window.language, "settings_title"))
@@ -225,7 +216,3 @@ class SettingsDialog(QDialog):
                     if is_active
                     else "background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                 )
-
-
-def build_settings_dialog(*, parent_window: "ChatWindow") -> SettingsDialog:
-    return SettingsDialog(parent_window=parent_window)

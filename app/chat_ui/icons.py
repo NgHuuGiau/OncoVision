@@ -10,10 +10,6 @@ ICONS_DIR = Path(__file__).resolve().parents[2] / "assets" / "icons"
 ICON_CACHE: dict[tuple[str, str, int], QIcon] = {}
 
 
-def icon(name: str) -> QIcon:
-    return QIcon(str(ICONS_DIR / name))
-
-
 def themed_icon(name: str, color: str, size: int) -> QIcon:
     cache_key = (name, color, size)
     if cache_key in ICON_CACHE:

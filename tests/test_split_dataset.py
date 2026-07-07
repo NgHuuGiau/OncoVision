@@ -25,7 +25,7 @@ class SplitDatasetTests(unittest.TestCase):
                 audit = split_dataset.audit_raw_dataset()
 
                 self.assertEqual(audit.raw_image_count, 2)
-                self.assertEqual([path.name for path in audit.eligible_images], ["a.jpg"])
+                self.assertEqual([image_path.name for image_path, _ in audit.eligible], ["a.jpg"])
                 self.assertEqual(audit.invalid_labels[0][0].name, "b.txt")
                 self.assertEqual([path.name for path in audit.orphan_labels], ["c.txt"])
             finally:

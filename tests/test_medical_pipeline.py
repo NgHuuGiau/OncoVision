@@ -9,7 +9,7 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from medical.pipeline import DetectionFinding, MedicalImageAnalyzer, MedicalImageAnalyzerConfig, validate_medical_model_path
+from medical.pipeline import DetectionFinding, MedicalImageAnalyzer, MedicalImageAnalyzerConfig
 
 
 class _FakeValue:
@@ -49,7 +49,7 @@ class MedicalPipelineTests(unittest.TestCase):
             image_path = Path(temp_dir) / "input.jpg"
             model_path = Path(temp_dir) / "medical_model.pt"
             cv2.imwrite(str(image_path), np.full((120, 160, 3), 200, dtype=np.uint8))
-            model_path.write_text("weights", encoding="utf-8")
+            model_path.write_bytes(b"weights")
             config = MedicalImageAnalyzerConfig(
                 model_path=model_path,
                 working_dir=Path(temp_dir) / "work",
@@ -75,7 +75,7 @@ class MedicalPipelineTests(unittest.TestCase):
     def test_classify_findings_returns_low_when_no_detection(self) -> None:
         analyzer = MedicalImageAnalyzer(
             config=MedicalImageAnalyzerConfig(
-                model_path=Path("models/pretrained/yolo11n.pt"),
+                model_path=Path("medical_7_cancers.pt"),
                 working_dir=Path("output/medical"),
                 reports_dir=Path("output/medical/reports"),
                 processed_dir=Path("output/medical/normalized_images"),
@@ -89,12 +89,12 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(risk_level, "low")
         self.assertFalse(suspected_malignant)
         self.assertEqual(average_confidence, 0.0)
-        self.assertIn("Không ghi nhận", recommendation)
+        self.assertIn("Khong ghi nhan", recommendation)
 
     def test_classify_findings_returns_medium_for_mid_confidence(self) -> None:
         analyzer = MedicalImageAnalyzer(
             config=MedicalImageAnalyzerConfig(
-                model_path=Path("models/pretrained/yolo11n.pt"),
+                model_path=Path("medical_7_cancers.pt"),
                 working_dir=Path("output/medical"),
                 reports_dir=Path("output/medical/reports"),
                 processed_dir=Path("output/medical/normalized_images"),
@@ -109,12 +109,12 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(risk_level, "medium")
         self.assertTrue(suspected_malignant)
         self.assertAlmostEqual(average_confidence, 0.6)
-        self.assertIn("trung bình", recommendation)
+        self.assertIn("trung binh", recommendation)
 
     def test_evaluate_image_quality_returns_warning_for_dark_image(self) -> None:
         analyzer = MedicalImageAnalyzer(
             config=MedicalImageAnalyzerConfig(
-                model_path=Path("models/pretrained/yolo11n.pt"),
+                model_path=Path("medical_7_cancers.pt"),
                 working_dir=Path("output/medical"),
                 reports_dir=Path("output/medical/reports"),
                 processed_dir=Path("output/medical/normalized_images"),
@@ -126,36 +126,32 @@ class MedicalPipelineTests(unittest.TestCase):
         warnings = analyzer._evaluate_image_quality(np.zeros((128, 128, 3), dtype=np.uint8))
 
         self.assertTrue(warnings)
-        self.assertTrue(any("quá tối" in warning for warning in warnings))
+        self.assertTrue(any("qua toi" in warning for warning in warnings))
 
-    def test_validate_medical_model_path_rejects_generic_pretrained_model_by_default(self) -> None:
+    def test_validate_medical_model_path_accepts_existing_model_path(self) -> None:
         with TemporaryDirectory() as temp_dir:
-            pretrained_dir = Path(temp_dir) / "models" / "pretrained"
-            pretrained_dir.mkdir(parents=True, exist_ok=True)
-            generic_model = pretrained_dir / "yolo11n.pt"
-            generic_model.write_text("weights", encoding="utf-8")
+            model_path = Path(temp_dir) / "medical_7_cancers.pt"
+            model_path.write_bytes(b"weights")
             config = MedicalImageAnalyzerConfig(
-                model_path=generic_model,
+                model_path=model_path,
                 working_dir=Path(temp_dir) / "work",
                 reports_dir=Path(temp_dir) / "reports",
                 processed_dir=Path(temp_dir) / "normalized",
                 overlay_dir=Path(temp_dir) / "overlay",
             )
 
-            with patch("medical.model_policy.PRETRAINED_MODELS_DIR", pretrained_dir):
-                with self.assertRaises(FileNotFoundError) as raised:
-                    validate_medical_model_path(config)
+            resolved = MedicalImageAnalyzer(config=config, detector_backend=_FakeDetector([])).ensure_ready()
 
-        self.assertIn("YOLO tổng quát", str(raised.exception))
+        self.assertEqual(resolved, model_path)
 
     def test_validate_medical_model_path_allows_explicit_fallback_mode(self) -> None:
         with TemporaryDirectory() as temp_dir:
             pretrained_dir = Path(temp_dir) / "models" / "pretrained"
             pretrained_dir.mkdir(parents=True, exist_ok=True)
-            fallback_model = pretrained_dir / "yolo11n.pt"
-            fallback_model.write_text("weights", encoding="utf-8")
+            fallback_model = pretrained_dir / "medical_fallback.pt"
+            fallback_model.write_bytes(b"weights")
             config = MedicalImageAnalyzerConfig(
-                model_path=Path(temp_dir) / "models" / "trained" / "missing.pt",
+                model_path=Path(temp_dir) / "missing.pt",
                 working_dir=Path(temp_dir) / "work",
                 reports_dir=Path(temp_dir) / "reports",
                 processed_dir=Path(temp_dir) / "normalized",
@@ -164,7 +160,6 @@ class MedicalPipelineTests(unittest.TestCase):
                 allow_fallback_model=True,
             )
 
-            with patch("medical.model_policy.PRETRAINED_MODELS_DIR", pretrained_dir):
-                resolved = validate_medical_model_path(config)
+            resolved = MedicalImageAnalyzer(config=config, detector_backend=_FakeDetector([])).ensure_ready()
 
         self.assertEqual(resolved, fallback_model)

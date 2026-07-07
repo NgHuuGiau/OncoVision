@@ -7,9 +7,8 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from medical.dataset import (
-    create_default_medical_cancer_dataset_config,
-    create_default_skin_cancer_dataset_config,
-    ensure_medical_cancer_dataset_structure,
+    MedicalDatasetConfig,
+    create_default_medical_dataset_config,
     ensure_medical_dataset_structure,
     normalize_uploaded_image,
 )
@@ -18,21 +17,30 @@ from medical.dataset import (
 class MedicalDatasetTests(unittest.TestCase):
     def test_ensure_medical_dataset_structure_creates_skin_cancer_layout(self) -> None:
         with TemporaryDirectory() as temp_dir:
-            config = create_default_skin_cancer_dataset_config(Path(temp_dir) / "medical_ds")
+            config = create_default_medical_dataset_config(Path(temp_dir) / "medical_ds")
             summary = ensure_medical_dataset_structure(config)
 
             self.assertTrue(summary.data_yaml_path.exists())
-            self.assertTrue((config.processed_images_dir / "train").exists())
-            self.assertTrue((config.processed_labels_dir / "test").exists())
+            self.assertTrue((config.dataset_root / "Ung thư gan" / "processed" / "images" / "train").exists())
+            self.assertTrue((config.dataset_root / "Ung thư cổ tử cung" / "processed" / "images" / "test").exists())
 
-    def test_ensure_medical_cancer_dataset_structure_creates_generic_layout(self) -> None:
+    def test_ensure_medical_dataset_structure_creates_medical_cancer_layout(self) -> None:
         with TemporaryDirectory() as temp_dir:
-            config = create_default_medical_cancer_dataset_config(Path(temp_dir) / "medical_cancer_ds")
-            summary = ensure_medical_cancer_dataset_structure(config)
+            root = Path(temp_dir) / "medical_cancer_ds"
+            config = MedicalDatasetConfig(
+                disease_name="medical_cancer_screening",
+                dataset_root=root,
+                metadata_dir=root / "metadata",
+                reports_dir=root / "reports",
+                data_yaml_path=root / "data.yaml",
+                image_size=640,
+                class_names=("Ung thư gan",),
+            )
+            summary = ensure_medical_dataset_structure(config)
 
             self.assertTrue(summary.data_yaml_path.exists())
-            self.assertTrue((config.processed_images_dir / "val").exists())
-            self.assertTrue((config.metadata_dir).exists())
+            self.assertTrue((config.dataset_root / "Ung thư gan" / "processed" / "images" / "val").exists())
+            self.assertTrue(config.metadata_dir.exists())
 
     def test_normalize_uploaded_image_letterboxes_to_square_rgb(self) -> None:
         with TemporaryDirectory() as temp_dir:

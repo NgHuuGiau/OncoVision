@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-from app.camera_runtime.compat import resolve_legacy_start_options
 from core.hardware_info import detect_hardware
-from core.runtime_advisor import select_runtime_config_optimized
+from core.runtime_advisor import optimized_runtime
 from utils.console_ui import prompt_launch_target, prompt_runtime_mode
 
 
@@ -23,7 +22,7 @@ DEFAULT_UI_MODE = "medium"
 
 
 def _resolve_runtime(selected_mode: str, hardware: Any) -> Any:
-    return select_runtime_config_optimized(mode=selected_mode, hardware=hardware)
+    return optimized_runtime(mode=selected_mode, hardware=hardware)
 
 
 def _build_recommendations(hardware: Any) -> dict[str, Any]:
@@ -94,12 +93,4 @@ def resolve_start_bundle(
         launch_target=launch_target,
         hardware=hardware,
         runtime=runtime,
-    )
-
-
-def resolve_start_options(*, requested_mode: str | None, requested_model: str | None) -> tuple[str, str]:
-    return resolve_legacy_start_options(
-        requested_mode=requested_mode,
-        requested_model=requested_model,
-        resolve_start_bundle_fn=resolve_start_bundle,
     )
