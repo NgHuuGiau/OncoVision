@@ -50,61 +50,92 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path ci-logs | Out-Null
-          "CI started on $env:RUNNER_OS" | Set-Content -Path ci-logs/00-start.txt
+          "CI started on $env:RUNNER_OS" | Set-Content -Path ci-logs/00-start.txt -Encoding utf8
 
       - name: Install dependencies (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set +e
+          status=0
+
           python -m pip install --upgrade pip setuptools wheel 2>&1 | tee ci-logs/01-install-pip.txt
+          cmd_status=${PIPESTATUS[0]}
+          if [ "$cmd_status" -ne 0 ] && [ "$status" -eq 0 ]; then status=$cmd_status; fi
+
           pip install --prefer-binary -r requirements.txt 2>&1 | tee ci-logs/02-install-requirements.txt
+          cmd_status=${PIPESTATUS[0]}
+          if [ "$cmd_status" -ne 0 ] && [ "$status" -eq 0 ]; then status=$cmd_status; fi
+
           pip install coverage 2>&1 | tee ci-logs/02b-install-coverage.txt
+          cmd_status=${PIPESTATUS[0]}
+          if [ "$cmd_status" -ne 0 ] && [ "$status" -eq 0 ]; then status=$cmd_status; fi
+
+          exit "$status"
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $status = 0
+
           python -m pip install --upgrade pip setuptools wheel 2>&1 | Tee-Object -FilePath ci-logs/01-install-pip.txt
+          if ($LASTEXITCODE -ne 0 -and $status -eq 0) { $status = $LASTEXITCODE }
+
           pip install --prefer-binary -r requirements.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
+          if ($LASTEXITCODE -ne 0 -and $status -eq 0) { $status = $LASTEXITCODE }
+
+          exit $status
 
       - name: Compile Python sources (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set +e
           python -m compileall . 2>&1 | tee ci-logs/03-compileall.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Compile Python sources (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           python -m compileall . 2>&1 | Tee-Object -FilePath ci-logs/03-compileall.txt
+          exit $LASTEXITCODE
 
       - name: Lint with Ruff (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set +e
           ruff check . 2>&1 | tee ci-logs/04-ruff.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Lint with Ruff (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           ruff check . --ignore E402 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
+          exit $LASTEXITCODE
 
       - name: Type check with mypy (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set +e
           mypy . 2>&1 | tee ci-logs/05-mypy-type-check.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Verify entrypoint help (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set +e
           if [ -f scripts/verify_entrypoints_help.py ]; then
             python scripts/verify_entrypoints_help.py 2>&1 | tee ci-logs/06-verify-entrypoints-help.txt
+            exit ${PIPESTATUS[0]}
           else
             echo "Skipped: scripts/verify_entrypoints_help.py not found" | tee ci-logs/06-verify-entrypoints-help.txt
+            exit 0
           fi
 
       - name: Verify entrypoint help (Windows)
@@ -113,18 +144,23 @@ jobs:
         run: |
           if (Test-Path "scripts/verify_entrypoints_help.py") {
             python scripts/verify_entrypoints_help.py 2>&1 | Tee-Object -FilePath ci-logs/06-verify-entrypoints-help.txt
+            exit $LASTEXITCODE
           } else {
             "Skipped: scripts/verify_entrypoints_help.py not found" | Tee-Object -FilePath ci-logs/06-verify-entrypoints-help.txt
+            exit 0
           }
 
       - name: Smoke check (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set +e
           if [ -f run_smoke.py ]; then
             python run_smoke.py --ci-safe --stop-on-fail 2>&1 | tee ci-logs/07-smoke-check.txt
+            exit ${PIPESTATUS[0]}
           else
             echo "Skipped: run_smoke.py not found" | tee ci-logs/07-smoke-check.txt
+            exit 0
           fi
 
       - name: Smoke check (Windows)
@@ -133,29 +169,47 @@ jobs:
         run: |
           if (Test-Path "run_smoke.py") {
             python run_smoke.py --ci-safe --stop-on-fail 2>&1 | Tee-Object -FilePath ci-logs/07-smoke-check.txt
+            exit $LASTEXITCODE
           } else {
             "Skipped: run_smoke.py not found" | Tee-Object -FilePath ci-logs/07-smoke-check.txt
+            exit 0
           }
 
       - name: Run unit tests (Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set +e
+
           coverage run --source=. -m unittest discover -s tests -p "test_*.py" -v 2>&1 | tee ci-logs/08-unit-tests.txt
+          test_status=${PIPESTATUS[0]}
+
           coverage report -m 2>&1 | tee ci-logs/09-coverage-report.txt
+          report_status=${PIPESTATUS[0]}
+
           coverage xml -o ci-logs/coverage.xml 2>&1 | tee -a ci-logs/09-coverage-report.txt
+          xml_status=${PIPESTATUS[0]}
+
           coverage html -d ci-logs/coverage-html 2>&1 | tee -a ci-logs/09-coverage-report.txt
+          html_status=${PIPESTATUS[0]}
+
+          if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi
+          if [ "$report_status" -ne 0 ]; then exit "$report_status"; fi
+          if [ "$xml_status" -ne 0 ]; then exit "$xml_status"; fi
+          exit "$html_status"
 
       - name: Run unit tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           python -m unittest discover -s tests -p "test_*.py" -v 2>&1 | Tee-Object -FilePath ci-logs/08-unit-tests.txt
+          exit $LASTEXITCODE
 
       - name: Create CI summary (Linux)
         if: always() && runner.os != 'Windows'
         shell: bash
         run: |
+          mkdir -p ci-logs
           cat <<'EOF' > ci-logs/00-ci-summary.md
           # CI Test Summary
 
@@ -169,12 +223,13 @@ jobs:
         if: always() && runner.os == 'Windows'
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path ci-logs | Out-Null
           @"
           # Windows CI Summary
 
           Neu co step mau do, mo truc tiep step do trong tab Actions de xem log day du.
           Ban sao log cung duoc upload thanh artifact ben duoi.
-          "@ | Set-Content -Path ci-logs/00-ci-summary.md
+          "@ | Set-Content -Path ci-logs/00-ci-summary.md -Encoding utf8
           Get-Content ci-logs/00-ci-summary.md
           Get-Content ci-logs/00-ci-summary.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
