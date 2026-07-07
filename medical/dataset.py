@@ -46,6 +46,10 @@ def create_default_medical_dataset_config(dataset_root: str | Path = MEDICAL_DAT
     )
 
 
+def create_default_skin_cancer_dataset_config(dataset_root: str | Path = MEDICAL_DATASET_ROOT) -> MedicalDatasetConfig:
+    return create_default_medical_dataset_config(dataset_root)
+
+
 def ensure_medical_dataset_structure(config: MedicalDatasetConfig | None = None) -> MedicalDatasetSummary:
     config = config or create_default_medical_dataset_config()
     created_dirs = [config.dataset_root, config.metadata_dir, config.reports_dir]

@@ -319,10 +319,18 @@ def main() -> int:
         print(f"Val: {report['val_count']}")
         print(f"Test: {report['test_count']}")
         print(f"Model: {report['trained_model_path']}")
-        print(f"Prepare: {report['prepare_seconds']:.2f}s")
-        print(f"Train: {report['train_seconds']:.2f}s")
-        print(f"Validate: {report['validate_seconds']:.2f}s")
-        print(f"Total: {report['total_seconds']:.2f}s")
+        prepare_seconds = report.get("prepare_seconds")
+        if prepare_seconds is not None:
+            print(f"Prepare: {prepare_seconds:.2f}s")
+        train_seconds = report.get("train_seconds")
+        if train_seconds is not None:
+            print(f"Train: {train_seconds:.2f}s")
+        validate_seconds = report.get("validate_seconds")
+        if validate_seconds is not None:
+            print(f"Validate: {validate_seconds:.2f}s")
+        total_seconds = report.get("total_seconds")
+        if total_seconds is not None:
+            print(f"Total: {total_seconds:.2f}s")
         print(report["validation_metrics"])
         print(MEDICAL_DISCLAIMER)
         return 0

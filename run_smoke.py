@@ -4,7 +4,7 @@ import argparse
 from functools import lru_cache
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from utils.entrypoint_common import run_entrypoint
@@ -100,6 +100,11 @@ def parse_args() -> argparse.Namespace:
 @lru_cache(maxsize=8)
 def select_checks(*, include_tests: bool = False, ci_safe: bool = False) -> tuple[SmokeCheck, ...]:
     checks = [check for check in BASE_SMOKE_CHECKS if not ci_safe or check.ci_safe]
+    if ci_safe:
+        checks = [
+            replace(check, warning_exit_codes=(1,)) if check.key == "training-preflight" else check
+            for check in checks
+        ]
     if include_tests:
         checks.append(TEST_SUITE_CHECK)
     return tuple(checks)

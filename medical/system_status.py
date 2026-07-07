@@ -27,10 +27,11 @@ class MedicalSystemStatus:
     model_message: str
     dataset_root: Path
     data_yaml_path: Path
+    raw_images: int
+    raw_labels: int
     train_images: int
     val_images: int
     test_images: int
-    total_images: int
     report_files: int
     normalized_files: int
     overlay_files: int
@@ -39,6 +40,7 @@ class MedicalSystemStatus:
     case_count: int
     screening_targets: tuple[tuple[str, bool], ...]
     analyzed_cancers: tuple[str, ...]
+    total_images: int = 0
 
     @property
     def dataset_initialized(self) -> bool:
@@ -51,14 +53,6 @@ class MedicalSystemStatus:
     @property
     def processed_dataset_ready(self) -> bool:
         return self.train_images > 0 and self.val_images > 0 and self.test_images > 0
-
-    @property
-    def raw_images(self) -> int:
-        return self.total_images
-
-    @property
-    def raw_labels(self) -> int:
-        return self.total_images
 
 
 def _count_cases(case_db_path: Path) -> int:
@@ -119,6 +113,8 @@ def get_medical_system_status() -> MedicalSystemStatus:
         model_message=model_message,
         dataset_root=training_paths.dataset_root,
         data_yaml_path=training_paths.data_yaml_path,
+        raw_images=train_images + val_images + test_images,
+        raw_labels=train_images + val_images + test_images,
         train_images=train_images,
         val_images=val_images,
         test_images=test_images,

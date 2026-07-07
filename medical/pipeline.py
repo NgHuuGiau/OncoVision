@@ -92,7 +92,7 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
     if not 0.0 < config.conf_threshold < 1.0:
         issues.append("conf_threshold phai nam trong khoang (0, 1).")
     if not 0.0 < config.classify_medium_risk_threshold <= config.classify_high_risk_threshold <= 1.0:
-        issues.append("nguong nguy co khong hop le.")
+        issues.append("ngưỡng nguy cơ không hợp lệ.")
     if not config.model_path:
         issues.append("model_path khong duoc de trong.")
     if config.allow_fallback_model and config.fallback_model_path is None:

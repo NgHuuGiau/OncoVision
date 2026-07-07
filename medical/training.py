@@ -149,8 +149,11 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
 def validate_medical_model(paths: MedicalTrainingPaths | None = None):
     paths = paths or medical_training_paths()
     settings = _load_medical_settings()
-    model_path = Path(settings.get("model", paths.trained_model_path))
-    resolved_model_path = model_path if model_path.exists() else paths.trained_model_path
+    configured_model_path = Path(settings.get("model", paths.trained_model_path))
+    candidate_paths = [paths.trained_model_path]
+    if configured_model_path != paths.trained_model_path:
+        candidate_paths.append(configured_model_path)
+    resolved_model_path = next((path for path in candidate_paths if path.exists()), candidate_paths[0])
     classifier_model = load_medical_classifier(resolved_model_path)
     validation_samples = _samples_for_split(paths, "val")
     if not validation_samples:
