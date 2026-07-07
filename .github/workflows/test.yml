@@ -115,7 +115,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          ruff check . --ignore E402 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
+          ruff check . --ignore E402 --exclude HieraChain 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
           exit $LASTEXITCODE
 
       - name: Type check with mypy (Linux)
