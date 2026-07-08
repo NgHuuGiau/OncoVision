@@ -29,15 +29,8 @@ def add_popup_menu_button(window, menu: QMenu, *, icon_name: str, text: str, ico
 def show_plus_menu(window) -> None:
     menu = QMenu(window)
     strong = window.icon_color()
-    menu.setMinimumWidth(280)
-    add_popup_menu_button(
-        window,
-        menu,
-        icon_name="image.svg",
-        text=translate(window.language, "choose_image"),
-        icon_color=strong,
-        callback=window.pick_image,
-    )
+    menu.setMinimumWidth(240)
+    add_popup_menu_button(window, menu, icon_name="image.svg", text=translate(window.language, "choose_image"), icon_color=strong, callback=window.pick_image)
     add_popup_menu_button(
         window,
         menu,

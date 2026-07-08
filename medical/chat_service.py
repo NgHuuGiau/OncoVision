@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from medical.case_payloads import build_detection_metadata
-from medical.cancer_catalog import supported_cancer_labels
+from medical.cancer_catalog import supported_cancer_labels, supported_cancer_modalities
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import update_case_report_case_id
 from medical.storage import MedicalCaseDatabase
@@ -62,12 +62,14 @@ class MedicalChatService:
             "average_confidence": result.average_confidence,
             "quality_warnings": result.quality_warnings,
             "supported_screening_targets": supported_cancer_labels(),
+            "supported_modalities": supported_cancer_modalities(),
             "predicted_labels": [item.label for item in result.detections],
         }
         detection_summary = ", ".join(
             f"{item.label} {item.confidence:.2f}" for item in result.detections[:5]
         ) or "không ghi nhận vùng nghi ngờ rõ ràng"
         target_summary = ", ".join(supported_cancer_labels())
+        modality_summary = ", ".join(supported_cancer_modalities())
         quality_text = (
             " Cảnh báo chất lượng ảnh: " + "; ".join(result.quality_warnings)
             if result.quality_warnings
@@ -79,6 +81,7 @@ class MedicalChatService:
             f"Số vùng tổn thương ghi nhận: {len(result.detections)}. "
             f"Tóm tắt phát hiện: {detection_summary}. "
             f"Hệ thống hiện hỗ trợ danh mục sàng lọc: {target_summary}. "
+            f"Các kiểu ảnh thường gặp: {modality_summary}. "
             f"Khuyến nghị: {result.recommendation}."
             f"{quality_text} "
             f"Ảnh gốc: {result.source_image}. "

@@ -20,8 +20,16 @@ def subtle_icon_color(window) -> str:
 def apply_theme_assets(window) -> None:
     strong = icon_color(window)
     window.sidebar_app_button.setIcon(themed_icon("sidebar_app.svg", strong, 28))
+    window.sidebar_toggle_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
+    window.sidebar_collapsed_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
     window.new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 22))
     window.settings_button.setIcon(themed_icon("settings.svg", strong, 22))
+    if hasattr(window, "compact_new_chat_button"):
+        window.compact_new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 20))
+    if hasattr(window, "compact_search_button"):
+        window.compact_search_button.setIcon(themed_icon("search.svg", strong, 20))
+    if hasattr(window, "compact_settings_button"):
+        window.compact_settings_button.setIcon(themed_icon("settings.svg", strong, 20))
     window.plus_button.setIcon(themed_icon("plus.svg", strong, 18))
     window.plus_button.setIconSize(QSize(18, 18))
     window.micro_button.setIcon(themed_icon("mic.svg", strong, 18))

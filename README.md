@@ -15,6 +15,18 @@
 
 > OncoVision gom camera realtime, training YOLO và nhánh medical vào một repo duy nhất, nên README này là bản đồ nhanh nhất để vào hệ thống.
 
+## Medical Quick Map
+
+| Nhóm | Ảnh/volume thường dùng |
+|---|---|
+| Gan | Siêu âm, CT, MRI, PET/CT |
+| Phổi | X-quang ngực, CT ngực, PET/CT |
+| Vú | Mammogram, siêu âm vú, MRI vú |
+| Dạ dày | Nội soi, CT, MRI, PET, EUS |
+| Đại trực tràng | Nội soi đại tràng, CT ngực-bụng-chậu, MRI trực tràng, PET |
+| Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
+| Cổ tử cung | MRI, CT, PET/CT |
+
 ## Start Here
 
 1. Xem [Tóm Tắt Nhanh](#tóm-tắt-nhanh) để hiểu repo làm gì trong 30 giây.
@@ -23,6 +35,8 @@
    - [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md) nếu bạn làm camera realtime.
    - [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md) nếu bạn làm medical.
    - [docs/training_guide.md](docs/training_guide.md) nếu bạn train model.
+
+> Model medical mặc định được tìm theo thứ tự: `medical_7_cancers.pt` ở root, `medical/medical_7_cancers.pt`, rồi file `fallback_model` nếu bật trong `config/medical_settings.yaml`.
 
 ## Demo / Screenshots
 
@@ -197,3 +211,20 @@ python run_menu.py
 4. Mở [docs/training_guide.md](docs/training_guide.md) nếu bạn chuẩn bị train model.
 5. Mở [docs/ci_and_quality.md](docs/ci_and_quality.md) nếu bạn đang debug CI hoặc quality gate.
 6. Mở [docs/troubleshooting.md](docs/troubleshooting.md) nếu gặp lỗi cụ thể.
+## Medical Inputs Hỗ Trợ
+
+| Nhóm | Ảnh/volume thường dùng |
+|---|---|
+| Gan | Siêu âm, CT, MRI, đôi khi PET/CT |
+| Phổi | X-quang ngực, CT ngực, PET/CT |
+| Vú | Mammogram, siêu âm vú, MRI vú |
+| Dạ dày | Nội soi, CT, MRI, PET, EUS |
+| Đại trực tràng | Nội soi đại tràng, CT ngực-bụng-chậu, MRI trực tràng, PET |
+| Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
+| Cổ tử cung | MRI, CT, PET/CT |
+
+- `Pap/HPV`, soi cổ tử cung và sinh thiết là đầu vào lâm sàng, không phải file ảnh để upload trực tiếp.
+- Chat UI có preset chọn nhóm bệnh để lọc nguồn ảnh ngay từ đầu.
+- Chat UI có thêm chọn modality theo nhóm bệnh để file picker bám đúng loại ảnh cần dùng.
+- File picker sẽ ưu tiên đuôi ảnh/volume phù hợp với modality đã chọn.
+- Folder DICOM series và volume `.nii/.nii.gz` có thể xem từng lát trong preview.

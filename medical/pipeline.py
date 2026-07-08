@@ -9,7 +9,7 @@ import numpy as np
 
 from medical.classifier import MedicalClassifierModel, load_medical_classifier
 from medical.compliance import MEDICAL_DISCLAIMER
-from medical.dataset import normalize_uploaded_image
+from medical.dataset import is_supported_medical_upload_path, normalize_uploaded_image
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.reporting import build_artifact_stamp, write_case_report
 from utils.draw_utils import draw_detection_results
@@ -108,7 +108,10 @@ class MedicalImageAnalyzer:
 
     def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
         self.ensure_ready()
-        normalized_path = normalize_uploaded_image(image_path, self.config.processed_dir, image_size=self.config.image_size)
+        resolved_source = Path(image_path)
+        if not is_supported_medical_upload_path(resolved_source):
+            raise ValueError(f"Khong ho tro file upload: {resolved_source}")
+        normalized_path = normalize_uploaded_image(resolved_source, self.config.processed_dir, image_size=self.config.image_size)
         image = cv2.imread(str(normalized_path))
         if image is None:
             raise RuntimeError(f"Khong doc duoc anh: {normalized_path}")
@@ -119,7 +122,7 @@ class MedicalImageAnalyzer:
         payload = {
             "case_id": case_id,
             "patient_code": patient_code,
-            "source_image": str(Path(image_path)),
+            "source_image": str(resolved_source),
             "normalized_image": str(normalized_path),
             "processed_image": str(processed_path),
             "model_name": self.config.model_path.name,
@@ -137,7 +140,7 @@ class MedicalImageAnalyzer:
         return MedicalAnalysisResult(
             case_id=case_id,
             patient_code=patient_code,
-            source_image=Path(image_path),
+            source_image=resolved_source,
             normalized_image=normalized_path,
             processed_image=processed_path,
             report_json_path=report_json_path,

@@ -14,13 +14,17 @@ from utils.icons import ICONS_DIR, create_default_icons
 
 
 def run_chat_preflight(print_fn=print, auto_fix_icons: bool = False) -> int:
-    required_modules, icons_count, medical_ready, medical_detail, capture_dir = chat_preflight_status()
+    required_modules, icons_count, medical_status, capture_dir = chat_preflight_status()
 
     print_fn("OncoVision kiểm tra trước khi mở chat")
     print_fn(f"- Capture dir: {capture_dir}")
     print_fn(f"- Icons: {icons_count} file svg")
     print_fn("- Thư viện bắt buộc: " + ", ".join(f"{name}={ok}" for name, ok in required_modules.items()))
-    print_fn(f"- Model medical: chi tiết={medical_detail}")
+    print_fn(f"- Model medical: config={medical_status.configured_model_path}")
+    if medical_status.resolved_model_path is not None:
+        print_fn(f"- Model runtime: {medical_status.resolved_model_path}")
+    print_fn(f"- Model medical: chi tiết={medical_status.model_message}")
+    print_fn("- Modality hỗ trợ: " + ", ".join(medical_status.analyzed_modalities))
 
     if not all(required_modules.values()):
         print_fn("- Trạng thái: thiếu thư viện bắt buộc, chat chưa sẵn sàng để mở GUI.")
@@ -37,8 +41,8 @@ def run_chat_preflight(print_fn=print, auto_fix_icons: bool = False) -> int:
             print_fn("- Trạng thái: thiếu icon UI, chat chưa sẵn sàng để mở GUI.")
             return 1
 
-    if not medical_ready:
-        print_fn("- Trạng thái: GUI có thể mở nhưng phân tích ảnh y khoa chưa sẵn sàng.")
+    if not medical_status.model_ready:
+        print_fn("- Trạng thái: chỉ mở được GUI, chưa có model medical để phân tích.")
         return 2
 
     print_fn("- Trạng thái: chat UI và luồng medical đã sẵn sàng.")

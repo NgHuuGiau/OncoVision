@@ -11,6 +11,8 @@ from app.chat_ui.models import ChatMessage, Conversation
 from app.chat_ui.medical_worker import build_patient_code, create_medical_worker_base
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH
 from app.chat_ui.storage import ChatDatabase
+from medical.cancer_catalog import COMMON_CANCER_TARGETS
+from medical.dataset import is_supported_medical_upload_path
 from utils.logger import get_logger
 
 
@@ -63,6 +65,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             QMessageBox,
             QSystemTrayIcon,
             QPushButton,
+            QStackedWidget,
             QScrollArea,
             QSizePolicy,
             QSpacerItem,
@@ -132,6 +135,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         clear_pending_image_previews,
         handle_camera_capture as handle_camera_capture_flow,
         handle_dropped_image as handle_dropped_image_flow,
+        pick_dicom_folder as pick_dicom_folder_flow,
         pick_image as pick_image_flow,
         refresh_image_previews as refresh_image_previews_flow,
         remove_pending_image_attachment as remove_pending_image_attachment_flow,
@@ -178,6 +182,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.mode_label = mode_label
             self.model_label = model_label or ""
             self.pending_image_attachments: list[tuple[str, str]] = []
+            self.medical_targets = COMMON_CANCER_TARGETS
+            self.current_medical_target = self.medical_targets[0]
+            self.current_medical_modality = self.current_medical_target.modalities[0]
             self.conversations: list[Conversation] = []
             self.db = ChatDatabase(str(CHAT_HISTORY_DB_PATH))
             self.medical_controller = MedicalChatController(MedicalChatService())
@@ -273,7 +280,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             handled = False
             for url in event.mimeData().urls():
                 path = url.toLocalFile()
-                if path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.webp')):
+                if is_supported_medical_upload_path(path):
                     self.handle_dropped_image(path)
                     handled = True
             if handled:
@@ -307,6 +314,21 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             sidebar_layout = QVBoxLayout(self.sidebar)
             sidebar_layout.setContentsMargins(12, 12, 12, 12)
             sidebar_layout.setSpacing(12)
+            self.sidebar_layout = sidebar_layout
+            self.sidebar_stack = QStackedWidget()
+            sidebar_layout.addWidget(self.sidebar_stack)
+
+            self.sidebar_open_page = QWidget()
+            open_layout = QVBoxLayout(self.sidebar_open_page)
+            open_layout.setContentsMargins(0, 0, 0, 0)
+            open_layout.setSpacing(12)
+            self.sidebar_stack.addWidget(self.sidebar_open_page)
+
+            self.sidebar_compact_page = QWidget()
+            compact_layout = QVBoxLayout(self.sidebar_compact_page)
+            compact_layout.setContentsMargins(0, 0, 0, 0)
+            compact_layout.setSpacing(12)
+            self.sidebar_stack.addWidget(self.sidebar_compact_page)
 
             header_frame = QFrame()
             header_frame.setObjectName("SidebarHeader")
@@ -332,13 +354,16 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.sidebar_toggle_button = QPushButton()
             self.sidebar_toggle_button.setObjectName("SidebarToggleButton")
             self.sidebar_toggle_button.setFixedSize(28, 28)
-            self.sidebar_toggle_button.hide()
+            self.sidebar_toggle_button.clicked.connect(self.toggle_sidebar)
+            self.sidebar_collapsed_button = QPushButton()
+            self.sidebar_collapsed_button.setObjectName("SidebarCompactButton")
+            self.sidebar_collapsed_button.setFixedSize(46, 46)
+            self.sidebar_collapsed_button.clicked.connect(self.toggle_sidebar)
             header.addWidget(self.brand_text, 0, Qt.AlignVCenter | Qt.AlignLeft)
             header.addWidget(self.sidebar_header_right_spacer, 1)
-            header.addWidget(self.sidebar_app_button, 0, Qt.AlignCenter)
             header.addWidget(self.sidebar_header_left_spacer, 1)
             header.addWidget(self.sidebar_toggle_button, 0, Qt.AlignRight)
-            sidebar_layout.addWidget(header_frame)
+            open_layout.addWidget(header_frame)
 
             self.new_chat_button = QPushButton()
             self.new_chat_button.setObjectName("SidebarPrimaryButton")
@@ -346,7 +371,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.new_chat_button.setLayoutDirection(Qt.LeftToRight)
             self.new_chat_button.clicked.connect(self.start_new_chat)
             self.new_chat_button.setText("Cuộc trò chuyện mới")
-            sidebar_layout.addWidget(self.new_chat_button)
+            open_layout.addWidget(self.new_chat_button)
 
             self.search_box = QFrame()
             self.search_box.setObjectName("SearchBox")
@@ -368,14 +393,15 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.search_filter_label.setFixedSize(18, 18)
             search_layout.addWidget(self.search_filter_label)
             self.search_box.setMinimumHeight(50)
-            sidebar_layout.addWidget(self.search_box)
+            open_layout.addWidget(self.search_box)
 
             self.history_title = QLabel()
             self.history_title.setObjectName("SectionTitle")
-            sidebar_layout.addWidget(self.history_title)
+            open_layout.addWidget(self.history_title)
 
             self.history_panel = QFrame()
             self.history_panel.setObjectName("HistoryPanel")
+            self.history_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             history_panel_layout = QVBoxLayout(self.history_panel)
             history_panel_layout.setContentsMargins(0, 0, 0, 0)
             history_panel_layout.setSpacing(0)
@@ -388,12 +414,14 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.history_list.setContextMenuPolicy(Qt.CustomContextMenu)  # Kích hoạt menu ngữ cảnh
             self.history_list.customContextMenuRequested.connect(self.show_history_context_menu)  # Kết nối sự kiện chuột phải
             self.history_list.currentRowChanged.connect(self.select_conversation)
-            history_panel_layout.addWidget(self.history_list)
-            sidebar_layout.addWidget(self.history_panel)
+            history_panel_layout.addWidget(self.history_list, 1)
+            open_layout.addWidget(self.history_panel)
+            open_layout.setStretchFactor(self.history_panel, 1)
 
             self.sidebar_spacer = QWidget()
             self.sidebar_spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-            sidebar_layout.addWidget(self.sidebar_spacer)
+            open_layout.addWidget(self.sidebar_spacer)
+            open_layout.setStretchFactor(self.sidebar_spacer, 0)
 
             self.settings_button = QPushButton()
             self.settings_button.setObjectName("SidebarFooterButton")
@@ -401,7 +429,38 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.settings_button.setLayoutDirection(Qt.LeftToRight)
             self.settings_button.clicked.connect(self.open_settings)
             self.settings_button.setText("Cài đặt")
-            sidebar_layout.addWidget(self.settings_button)
+            open_layout.addWidget(self.settings_button)
+
+            compact_header = QHBoxLayout()
+            compact_header.setContentsMargins(0, 8, 0, 0)
+            compact_header.setSpacing(0)
+            compact_header.addStretch(1)
+            compact_header.addWidget(self.sidebar_collapsed_button, 0, Qt.AlignCenter)
+            compact_header.addStretch(1)
+            compact_layout.addLayout(compact_header)
+
+            self.compact_new_chat_button = QPushButton()
+            self.compact_new_chat_button.setObjectName("SidebarCompactButton")
+            self.compact_new_chat_button.setFixedSize(46, 46)
+            self.compact_new_chat_button.clicked.connect(self.start_new_chat)
+            compact_layout.addWidget(self.compact_new_chat_button, 0, Qt.AlignHCenter)
+
+            self.compact_search_button = QPushButton()
+            self.compact_search_button.setObjectName("SidebarCompactButton")
+            self.compact_search_button.setFixedSize(46, 46)
+            self.compact_search_button.clicked.connect(self.toggle_sidebar)
+            compact_layout.addWidget(self.compact_search_button, 0, Qt.AlignHCenter)
+
+            self.compact_spacer = QWidget()
+            self.compact_spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            compact_layout.addWidget(self.compact_spacer)
+
+            self.compact_settings_button = QPushButton()
+            self.compact_settings_button.setObjectName("SidebarCompactButton")
+            self.compact_settings_button.setFixedSize(46, 46)
+            self.compact_settings_button.clicked.connect(self.open_settings)
+            compact_layout.addWidget(self.compact_settings_button, 0, Qt.AlignHCenter)
+
             root.addWidget(self.sidebar, 0)
 
             self.chat_panel = QWidget()
@@ -620,6 +679,18 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.dark_mode_button.setText(f"\u263e  {tr(self.language, 'dark')}")
             self.desktop_button.setText(self.runtime_badge_text())
             self.desktop_button.setToolTip(self.runtime_badge_text())
+            if hasattr(self, "medical_target_label"):
+                self.medical_target_label.setText(tr(self.language, "medical_target"))
+            if hasattr(self, "medical_target_hint_label"):
+                self.medical_target_hint_label.setText(
+                    tr(self.language, "medical_target_hint").format(modalities=", ".join(self.current_medical_target.modalities))
+                )
+            if hasattr(self, "medical_modality_label"):
+                self.medical_modality_label.setText(tr(self.language, "medical_modality"))
+            if hasattr(self, "medical_modality_hint_label"):
+                self.medical_modality_hint_label.setText(
+                    tr(self.language, "medical_modality_hint").format(modality=self.current_medical_modality)
+                )
             if hasattr(self, "medical_status_label"):
                 self.medical_status_label.setText(self.medical_status_message)
             self.update_sidebar_ui()
@@ -744,7 +815,11 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def generate_system_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
             source = attach_kind or "chat"
             if source in {"image", "camera"} and attach_path:
-                self._start_medical_analysis(prompt=prompt, attach_path=attach_path)
+                analysis_prompt = prompt.strip()
+                target_context = self.medical_target_context()
+                if target_context:
+                    analysis_prompt = f"{analysis_prompt} {target_context}".strip()
+                self._start_medical_analysis(prompt=analysis_prompt, attach_path=attach_path)
             else:
                 self.add_message(ChatMessage(sender="assistant", text=self.build_system_reply(text=prompt, source=source)))
             self.scroll_to_bottom()
@@ -798,6 +873,39 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def _build_patient_code(self) -> str:
             conversation = self.active_conversation()
             return build_patient_code(conversation.id, int(time.time()))
+
+        def medical_target_context(self) -> str:
+            modalities = ", ".join(self.current_medical_target.modalities)
+            return (
+                f"{tr(self.language, 'medical_target')}: {self.current_medical_target.label}. "
+                f"{tr(self.language, 'medical_modality')}: {self.current_medical_modality}. "
+                f"{tr(self.language, 'medical_target_hint').format(modalities=modalities)}."
+            )
+
+        def set_medical_target(self, label: str) -> None:
+            for target in self.medical_targets:
+                if target.label == label:
+                    self.current_medical_target = target
+                    self.current_medical_modality = target.modalities[0]
+                    break
+            if hasattr(self, "medical_target_hint_label"):
+                modalities = ", ".join(self.current_medical_target.modalities)
+                self.medical_target_hint_label.setText(tr(self.language, "medical_target_hint").format(modalities=modalities))
+            if hasattr(self, "medical_modality_combo"):
+                self.medical_modality_combo.blockSignals(True)
+                self.medical_modality_combo.clear()
+                for modality in self.current_medical_target.modalities:
+                    self.medical_modality_combo.addItem(modality)
+                self.medical_modality_combo.setCurrentText(self.current_medical_modality)
+                self.medical_modality_combo.blockSignals(False)
+            if hasattr(self, "medical_modality_hint_label"):
+                self.medical_modality_hint_label.setText(tr(self.language, "medical_modality_hint").format(modality=self.current_medical_modality))
+
+        def set_medical_modality(self, label: str) -> None:
+            if label:
+                self.current_medical_modality = label
+            if hasattr(self, "medical_modality_hint_label"):
+                self.medical_modality_hint_label.setText(tr(self.language, "medical_modality_hint").format(modality=self.current_medical_modality))
 
         def start_typewriter(self, full_text: str):
             self.typewriter_content = full_text
@@ -922,6 +1030,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
         def pick_image(self) -> None:
             pick_image_flow(self)
+
+        def pick_dicom_folder(self) -> None:
+            pick_dicom_folder_flow(self)
 
         def open_camera(self) -> None:
             dialog = CameraCaptureDialog(

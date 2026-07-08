@@ -65,6 +65,7 @@ def build_cancer_overview(dataset_root: str | Path = MEDICAL_DATASET_ROOT) -> di
                 "target_key": target.key,
                 "label": target.label,
                 "description": target.description,
+                "modalities": list(target.modalities),
                 "model_ready": target.model_ready,
                 "model_notes": target.notes,
                 "local_status": local_status,

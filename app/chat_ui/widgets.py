@@ -6,10 +6,11 @@ from pathlib import Path
 
 from app.chat_ui.content import translate
 from app.chat_ui.dialogs import ImagePreviewDialog
+from app.chat_ui.image_utils import load_preview_pixmap
 from app.chat_ui.models import ChatMessage
 from utils.logger import get_logger
 
-from PySide6.QtCore import QEasingCurve, QPoint, QRectF, Qt, QPropertyAnimation, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QPoint, QRectF, Qt, QPropertyAnimation, QTimer, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QPainter, QPalette, QPixmap, QTextOption
 from PySide6.QtWidgets import (
     QFrame,
@@ -161,10 +162,15 @@ class RecordingPanel(QFrame):
 
 class MessageInput(QPlainTextEdit):
     enter_pressed = Signal()
+    MAX_VISIBLE_LINES = 5
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.textChanged.connect(self._adjust_height)
+        self._height_animation = QVariantAnimation(self)
+        self._height_animation.setDuration(120)
+        self._height_animation.setEasingCurve(QEasingCurve.OutCubic)
+        self._height_animation.valueChanged.connect(lambda value: self.setFixedHeight(int(value)))
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
@@ -176,6 +182,7 @@ class MessageInput(QPlainTextEdit):
         self.setTabChangesFocus(False)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setPlaceholderText("Nhập tin nhắn...")
+        self.setFixedHeight(40)
         self._adjust_height()
 
     def apply_visual_style(self, *, dark_mode: bool) -> None:
@@ -193,7 +200,7 @@ class MessageInput(QPlainTextEdit):
                 "selection-background-color: #4DB8FF;"
                 "selection-color: #FFFFFF;"
                 "font-size: 16px;"
-                "padding: 8px 6px;"
+                "padding: 6px 4px;"
             )
         else:
             palette.setColor(QPalette.Text, QColor("#111827"))
@@ -208,7 +215,7 @@ class MessageInput(QPlainTextEdit):
                 "selection-background-color: #93C5FD;"
                 "selection-color: #111827;"
                 "font-size: 16px;"
-                "padding: 8px 6px;"
+                "padding: 6px 4px;"
             )
         self.setPalette(palette)
         self.viewport().setPalette(palette)
@@ -216,8 +223,16 @@ class MessageInput(QPlainTextEdit):
 
     def _adjust_height(self) -> None:
         self.document().setTextWidth(self.viewport().width())
-        height = self.document().size().height() + self.contentsMargins().top() + self.contentsMargins().bottom() + 16
-        self.setFixedHeight(max(40, min(int(height), 88)))
+        lines = max(1.0, self.document().size().height())
+        height = (lines * self.fontMetrics().lineSpacing()) + self.contentsMargins().top() + self.contentsMargins().bottom() + 12
+        max_height = max(40, int(self.fontMetrics().lineSpacing() * self.MAX_VISIBLE_LINES + 18))
+        target_height = max(40, min(int(height), max_height))
+        if target_height == self.height():
+            return
+        self._height_animation.stop()
+        self._height_animation.setStartValue(self.height())
+        self._height_animation.setEndValue(target_height)
+        self._height_animation.start()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -237,7 +252,7 @@ class ComposerPreviewThumb(QFrame):
     def __init__(self, *, path: str, attachment_kind: str, remove_callback, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("ComposerPreviewThumb")
-        self.setFixedSize(88, 88)
+        self.setFixedSize(72, 72)
         self.remove_callback = remove_callback
 
         thumb_layout = QVBoxLayout(self)
@@ -246,11 +261,11 @@ class ComposerPreviewThumb(QFrame):
 
         self.thumb_label = QLabel()
         self.thumb_label.setAlignment(Qt.AlignCenter)
-        self.thumb_label.setFixedSize(88, 88)
+        self.thumb_label.setFixedSize(72, 72)
         self.thumb_label.setToolTip(path)
-        pixmap = QPixmap(path)
+        pixmap = load_preview_pixmap(path, max_size=(72, 72))
         if not pixmap.isNull():
-            self.thumb_label.setPixmap(pixmap.scaled(88, 88, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+            self.thumb_label.setPixmap(pixmap.scaled(72, 72, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
         else:
             self.thumb_label.setText("Ảnh" if attachment_kind == "image" else "Chụp")
             self.thumb_label.setStyleSheet("font-size: 12px; font-weight: 700;")
@@ -318,7 +333,7 @@ class ChatBubble(QWidget):
             attachment_label.setToolTip(message.attachment_path)
             self.bubble_layout.addWidget(attachment_label)
             if message.attachment_kind in {"image", "camera"}:
-                pixmap = QPixmap(message.attachment_path)
+                pixmap = load_preview_pixmap(message.attachment_path, max_size=(360, 240))
                 if not pixmap.isNull():
                     self.preview_img = QLabel()
                     self.preview_img.setPixmap(pixmap.scaled(360, 240, Qt.KeepAspectRatio, Qt.SmoothTransformation))

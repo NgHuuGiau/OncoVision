@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels
+from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels, supported_cancer_modalities
 
 
 class CancerCatalogTests(unittest.TestCase):
@@ -23,6 +23,11 @@ class CancerCatalogTests(unittest.TestCase):
         targets = COMMON_CANCER_TARGETS
         self.assertEqual(len(targets), 7)
         self.assertTrue(all(item.model_ready for item in targets))
+
+    def test_catalog_includes_common_modalities(self) -> None:
+        modalities = supported_cancer_modalities()
+        for expected in ("CT", "MRI", "PET/CT", "Siêu âm", "Nội soi"):
+            self.assertIn(expected, modalities)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from medical.pipeline import build_default_medical_analyzer_config, validate_medical_analyzer_config
 from medical.system_status import get_medical_system_status
+from medical.system_status import MedicalSystemStatus
 from utils.file_utils import ensure_project_directories, load_yaml, yaml_file_issues
 
 
@@ -27,7 +28,7 @@ def ensure_directory(path: Path) -> Path:
     return path
 
 
-def chat_preflight_status() -> tuple[dict[str, bool], int, bool, str, Path]:
+def chat_preflight_status() -> tuple[dict[str, bool], int, MedicalSystemStatus, Path]:
     ensure_project_directories()
     capture_dir = ensure_directory(Path("output/chat_captures"))
     medical_status = get_medical_system_status()
@@ -39,7 +40,7 @@ def chat_preflight_status() -> tuple[dict[str, bool], int, bool, str, Path]:
         "torch": module_available("torch"),
     }
     icons_count = count_files(Path("assets/icons"), suffix=".svg")
-    return required_modules, icons_count, medical_status.model_ready, medical_status.model_message, capture_dir
+    return required_modules, icons_count, medical_status, capture_dir
 
 
 def medical_config_issues() -> list[str]:

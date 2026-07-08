@@ -4,7 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels
+from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels, supported_cancer_modalities
 from medical.dataset import MEDICAL_CLASS_NAMES
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.pipeline import build_default_medical_analyzer_config
@@ -40,6 +40,7 @@ class MedicalSystemStatus:
     case_count: int
     screening_targets: tuple[tuple[str, bool], ...]
     analyzed_cancers: tuple[str, ...]
+    analyzed_modalities: tuple[str, ...]
     total_images: int = 0
 
     @property
@@ -88,12 +89,24 @@ def get_medical_system_status() -> MedicalSystemStatus:
 
     try:
         resolved_model_path = resolve_medical_runtime_model_path(config)
-        using_fallback_model = resolved_model_path.resolve(strict=False) != config.model_path.resolve(strict=False)
+        resolved_model_abs = resolved_model_path.resolve(strict=False)
+        configured_model_abs = config.model_path.resolve(strict=False)
+        bundled_model_abs = (Path("medical") / Path(config.model_path).name).resolve(strict=False)
+        fallback_model_abs = (
+            Path(config.fallback_model_path).resolve(strict=False)
+            if config.allow_fallback_model and config.fallback_model_path is not None
+            else None
+        )
+        using_fallback_model = fallback_model_abs is not None and resolved_model_abs == fallback_model_abs
         model_ready = True
-        if using_fallback_model:
-            model_message = f"Dang dung fallback model: {resolved_model_path.name}"
+        if resolved_model_abs == configured_model_abs:
+            model_message = f"Da san sang voi model: {resolved_model_path}"
+        elif using_fallback_model:
+            model_message = f"Dang dung fallback model: {resolved_model_path}"
+        elif resolved_model_abs == bundled_model_abs:
+            model_message = f"Dang dung model dong goi trong medical/: {resolved_model_path}"
         else:
-            model_message = f"Da san sang voi model: {resolved_model_path.name}"
+            model_message = f"Dang dung model medical tai: {resolved_model_path}"
     except Exception as exc:
         resolved_model_path = None
         using_fallback_model = False
@@ -127,6 +140,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
         case_count=_count_cases(case_db_path),
         screening_targets=SCREENING_TARGETS,
         analyzed_cancers=ANALYZED_CANCERS,
+        analyzed_modalities=tuple(supported_cancer_modalities()),
     )
 
 

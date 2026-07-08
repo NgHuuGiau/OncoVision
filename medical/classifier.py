@@ -8,8 +8,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-
-MEDICAL_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+MEDICAL_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 DEFAULT_FEATURE_SIZE = (32, 32)
 
 
@@ -53,6 +52,10 @@ def _resample_filter() -> int:
     return getattr(Image, "Resampling", Image).BILINEAR
 
 
+def is_supported_medical_image_path(path: str | Path) -> bool:
+    return Path(path).suffix.lower() in MEDICAL_IMAGE_EXTENSIONS
+
+
 def extract_medical_features(source: str | Path | np.ndarray, *, feature_size: tuple[int, int] = DEFAULT_FEATURE_SIZE) -> np.ndarray:
     if isinstance(source, np.ndarray):
         array = source
@@ -76,7 +79,7 @@ def iter_medical_image_paths(directory: str | Path) -> Iterable[Path]:
     return (
         path
         for path in sorted(root.rglob("*"))
-        if path.is_file() and path.suffix.lower() in MEDICAL_IMAGE_EXTENSIONS
+        if path.is_file() and is_supported_medical_image_path(path)
     )
 
 

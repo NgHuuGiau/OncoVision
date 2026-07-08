@@ -66,6 +66,8 @@ python run_chat.py --check-only
 - icon UI có đủ,
 - medical model có thể dùng cho chat hay chưa.
 
+Model medical được tìm theo thứ tự: `medical_7_cancers.pt` ở root, `medical/medical_7_cancers.pt`, rồi `fallback_model` nếu bật trong `config/medical_settings.yaml`.
+
 ![Medical status chi tiết](../images/Ảnh%20run_doctor.py%20--skip-camera-check%202.png)
 
 ## 6. Các Module Chính Trong `medical/`
@@ -125,3 +127,20 @@ python run_chat.py --cleanup-output --older-than-days 30
 | Medical status sai | `medical/system_status.py`, `medical/model_policy.py`, `medical/storage.py` |
 | Counts raw/train/val không đúng | `medical/training.py`, `medical/status_helpers.py` |
 | Train medical fail | `medical/training.py`, `training/train_model.py` |
+## 11. Medical Inputs Hỗ Trợ
+
+| Nhóm | Ảnh/volume thường dùng |
+|---|---|
+| Gan | Siêu âm, CT, MRI, đôi khi PET/CT |
+| Phổi | X-quang ngực, CT ngực, PET/CT |
+| Vú | Mammogram, siêu âm vú, MRI vú |
+| Dạ dày | Nội soi, CT, MRI, PET, EUS |
+| Đại trực tràng | Nội soi đại tràng, CT ngực-bụng-chậu, MRI trực tràng, PET |
+| Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
+| Cổ tử cung | MRI, CT, PET/CT |
+
+- `Pap/HPV`, soi cổ tử cung và sinh thiết là đầu vào lâm sàng, không phải file ảnh để upload trực tiếp.
+- Chat UI có preset chọn nhóm bệnh để lọc nguồn ảnh ngay từ đầu.
+- Chat UI có thêm chọn modality theo nhóm bệnh để file picker bám đúng loại ảnh cần dùng.
+- File picker sẽ ưu tiên đuôi ảnh/volume phù hợp với modality đã chọn.
+- Folder DICOM series và volume `.nii/.nii.gz` có thể xem từng lát trong preview.

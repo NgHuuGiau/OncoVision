@@ -88,14 +88,14 @@ _BASE_SHARED = """
     }}
     QFrame#Composer {{
         background: {composer_bg};
-        border: 1px solid {composer_border};
-        border-radius: 20px;
+        border: none;
+        border-radius: 18px;
     }}
     QFrame#ComposerInputRow {{
         background: {composer_input_bg};
         border: 1px solid {composer_input_border};
-        border-radius: 14px;
-        padding: 2px 4px;
+        border-radius: 13px;
+        padding: 1px 3px;
     }}
     QScrollArea#ComposerPreviewScroll,
     QScrollArea#MessageScroll {{
@@ -104,23 +104,23 @@ _BASE_SHARED = """
     }}
     QScrollBar:vertical {{
         background: transparent;
-        width: 10px;
-        margin: 0;
+        width: 6px;
+        margin: 1px 0 1px 0;
     }}
     QScrollBar::handle:vertical {{
         background: {scrollbar_color};
-        border-radius: 5px;
-        min-height: 36px;
+        border-radius: 3px;
+        min-height: 24px;
     }}
     QScrollBar:horizontal {{
         background: transparent;
-        height: 10px;
-        margin: 0;
+        height: 6px;
+        margin: 0 1px 0 1px;
     }}
     QScrollBar::handle:horizontal {{
         background: {scrollbar_color};
-        border-radius: 5px;
-        min-width: 36px;
+        border-radius: 3px;
+        min-width: 24px;
     }}
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical,
@@ -235,9 +235,18 @@ _BASE_SHARED = """
         border-radius: 0;
         color: {text_color};
         font-size: 16px;
-        padding: 12px 8px;
+        padding: 8px 6px;
         min-height: 36px;
-        max-height: 88px;
+        max-height: 180px;
+    }}
+    QFrame#ComposerTargetRow QLabel#Subtle {{
+        font-size: 12px;
+    }}
+    QFrame#ComposerTargetRow QComboBox#SettingsCombo {{
+        min-width: 180px;
+        min-height: 34px;
+        padding: 6px 10px;
+        font-size: 13px;
     }}
     QPlainTextEdit#ComposerInput,
     QPlainTextEdit#ComposerInput QWidget {{
@@ -341,7 +350,7 @@ _BASE_SHARED = """
         max-width: 46px;
         min-height: 46px;
         max-height: 46px;
-        border-radius: 18px;
+        border-radius: 16px;
         qproperty-iconSize: 20px 20px;
     }}
     QFrame#SidebarCompactSearchButton {{
@@ -351,6 +360,20 @@ _BASE_SHARED = """
         max-height: 52px;
         background: transparent;
         border: 1px solid transparent;
+        border-radius: 16px;
+    }}
+    QPushButton#SidebarToggleButton {{
+        min-width: 46px;
+        max-width: 46px;
+        min-height: 46px;
+        max-height: 46px;
+        border-radius: 16px;
+        border: 1px solid transparent;
+        background: transparent;
+        qproperty-iconSize: 20px 20px;
+    }}
+    QPushButton#SidebarToggleButton:hover {{
+        background: {sidebar_hover};
     }}
     QPushButton#RoundButton {{
         min-width: 40px;

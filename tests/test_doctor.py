@@ -103,6 +103,7 @@ class DoctorTests(unittest.TestCase):
             case_count=0,
             screening_targets=(("Ung thu da", True), ("Ung thu vu", False)),
             analyzed_cancers=("Ung thu da", "Ung thu vu"),
+            analyzed_modalities=("CT", "MRI"),
         )
 
         with patch("run_doctor._present_and_missing_models", return_value=([], ["yolo11n.pt"])), patch(
@@ -172,6 +173,7 @@ class DoctorTests(unittest.TestCase):
             case_count=0,
             screening_targets=(("Ung thu da", True), ("Ung thu vu", False)),
             analyzed_cancers=("Ung thu da", "Ung thu vu"),
+            analyzed_modalities=("CT", "MRI"),
         )
 
         run_doctor.main()

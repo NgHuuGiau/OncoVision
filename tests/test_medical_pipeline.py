@@ -7,6 +7,9 @@ from types import SimpleNamespace
 
 import cv2
 import numpy as np
+import pydicom
+from pydicom.dataset import FileDataset, FileMetaDataset
+from pydicom.filewriter import dcmwrite
 
 from medical.pipeline import DetectionFinding, MedicalImageAnalyzer, MedicalImageAnalyzerConfig
 
@@ -70,6 +73,51 @@ class MedicalPipelineTests(unittest.TestCase):
             self.assertTrue(result.suspected_malignant)
             self.assertEqual(len(result.detections), 1)
             self.assertIsInstance(result.quality_warnings, list)
+
+    def test_analyze_image_accepts_dicom_series_folder(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "series"
+            root.mkdir()
+            model_path = Path(temp_dir) / "medical_model.pt"
+            model_path.write_bytes(b"weights")
+
+            def make_dicom(path: Path, value: int) -> None:
+                file_meta = FileMetaDataset()
+                file_meta.MediaStorageSOPClassUID = pydicom.uid.generate_uid()
+                file_meta.MediaStorageSOPInstanceUID = pydicom.uid.generate_uid()
+                file_meta.TransferSyntaxUID = pydicom.uid.ExplicitVRLittleEndian
+                file_meta.ImplementationClassUID = pydicom.uid.generate_uid()
+                dataset = FileDataset(str(path), {}, file_meta=file_meta, preamble=b"\0" * 128)
+                dataset.Rows = 16
+                dataset.Columns = 16
+                dataset.SamplesPerPixel = 1
+                dataset.PhotometricInterpretation = "MONOCHROME2"
+                dataset.BitsAllocated = 16
+                dataset.BitsStored = 16
+                dataset.HighBit = 15
+                dataset.PixelRepresentation = 0
+                dataset.PixelData = np.full((16, 16), value, dtype=np.uint16).tobytes()
+                dcmwrite(path, dataset, little_endian=True, implicit_vr=False)
+
+            make_dicom(root / "slice_001.dcm", 10)
+            make_dicom(root / "slice_002.dcm", 20)
+            make_dicom(root / "slice_003.dcm", 30)
+
+            config = MedicalImageAnalyzerConfig(
+                model_path=model_path,
+                working_dir=Path(temp_dir) / "work",
+                reports_dir=Path(temp_dir) / "reports",
+                processed_dir=Path(temp_dir) / "normalized",
+                overlay_dir=Path(temp_dir) / "overlay",
+                image_size=320,
+            )
+            analyzer = MedicalImageAnalyzer(config=config, detector_backend=_FakeDetector([]))
+
+            result = analyzer.analyze_image(root, patient_code="BN100", case_id=7)
+
+            self.assertEqual(result.source_image, root)
+            self.assertTrue(result.report_json_path.exists())
+            self.assertTrue(result.report_md_path.exists())
 
     def test_classify_findings_returns_low_when_no_detection(self) -> None:
         analyzer = MedicalImageAnalyzer(

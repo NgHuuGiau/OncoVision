@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from medical.compliance import MEDICAL_DISCLAIMER
-from medical.cancer_catalog import supported_cancer_labels
+from medical.cancer_catalog import supported_cancer_labels, supported_cancer_modalities
 
 
 def build_artifact_stamp() -> str:
@@ -63,6 +63,7 @@ def _markdown_report(payload: dict[str, Any]) -> str:
     ) or "- Không có vùng nghi ngờ nào được ghi nhận."
     quality_lines = "\n".join(f"- {warning}" for warning in quality_warnings) or "- Không có cảnh báo chất lượng ảnh."
     supported_targets = ", ".join(supported_cancer_labels())
+    supported_modalities = ", ".join(supported_cancer_modalities())
     return (
         "# Medical Imaging Case Report\n\n"
         f"- Case ID: {payload.get('case_id', '-')}\n"
@@ -70,6 +71,7 @@ def _markdown_report(payload: dict[str, Any]) -> str:
         f"- Suspected malignant: {payload.get('suspected_malignant', False)}\n"
         f"- Model: {payload.get('model_name', '-')}\n"
         f"- Supported screening targets: {supported_targets}\n"
+        f"- Supported modalities: {supported_modalities}\n"
         f"- Source image: {payload.get('source_image', '-')}\n"
         f"- Normalized image: {payload.get('normalized_image', '-')}\n"
         f"- Processed image: {payload.get('processed_image', '-')}\n\n"
