@@ -9,6 +9,61 @@ medical:
   conf_threshold: 0.25
   classify_high_risk_threshold: 0.75
   classify_medium_risk_threshold: 0.45
+  certainty_threshold: 0.55
+  modality_tuning:
+    default:
+      certainty_threshold: 0.55
+      medium_threshold: 0.45
+      quality_threshold: 0.45
+      contrast_boost: 1.0
+      normalize: default
+    ct:
+      certainty_threshold: 0.60
+      medium_threshold: 0.40
+      quality_threshold: 0.45
+      contrast_boost: 1.15
+      normalize: ct
+    mri:
+      certainty_threshold: 0.62
+      medium_threshold: 0.42
+      quality_threshold: 0.45
+      contrast_boost: 1.10
+      normalize: mri
+    mammogram:
+      certainty_threshold: 0.68
+      medium_threshold: 0.48
+      quality_threshold: 0.50
+      contrast_boost: 1.25
+      normalize: mammogram
+    ultrasound:
+      certainty_threshold: 0.72
+      medium_threshold: 0.50
+      quality_threshold: 0.55
+      contrast_boost: 1.20
+      normalize: ultrasound
+  validation_min_confidence: 0.70
+  validation_allowed_extensions:
+    - .jpg
+    - .jpeg
+    - .png
+    - .dcm
+    - .nii
+    - .nii.gz
+  classifier_backend: cnn
+  cnn_backbone: efficientnet_b2
+  cnn_image_size: 320
+  cnn_batch_size: 16
+  cnn_num_epochs: 30
+  cnn_learning_rate: 0.0001
+  cnn_dropout: 0.25
+  cnn_early_stopping_patience: 7
+  cnn_label_smoothing: 0.08
+  cnn_mixed_precision: true
+  cnn_warmup_epochs: 4
+  cnn_class_weighting: true
+  cnn_tta: true
+  submodel_dir: output/medical/submodels
+  submodel_reweight_underrepresented: true
   output_root: output/medical
   reports_dir: output/medical/reports
   processed_dir: output/medical/normalized_images

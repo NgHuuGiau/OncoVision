@@ -21,6 +21,19 @@ class MedicalConfigTests(unittest.TestCase):
                 "conf_threshold": 0.3,
                 "classify_high_risk_threshold": 0.8,
                 "classify_medium_risk_threshold": 0.5,
+                "certainty_threshold": 0.6,
+                "modality_tuning": {
+                    "default": {
+                        "certainty_threshold": 0.52,
+                        "medium_threshold": 0.44,
+                        "quality_threshold": 0.43,
+                    },
+                    "ultrasound": {
+                        "certainty_threshold": 0.76,
+                        "medium_threshold": 0.52,
+                        "quality_threshold": 0.58,
+                    },
+                },
                 "output_root": "output/medical-x",
                 "reports_dir": "output/medical-x/reports",
                 "processed_dir": "output/medical-x/normalized",
@@ -35,6 +48,9 @@ class MedicalConfigTests(unittest.TestCase):
         self.assertAlmostEqual(config.conf_threshold, 0.3)
         self.assertAlmostEqual(config.classify_high_risk_threshold, 0.8)
         self.assertAlmostEqual(config.classify_medium_risk_threshold, 0.5)
+        self.assertAlmostEqual(config.certainty_threshold, 0.6)
+        self.assertEqual(config.modality_tuning["default"]["certainty_threshold"], 0.52)
+        self.assertEqual(config.modality_tuning["ultrasound"]["quality_threshold"], 0.58)
         self.assertEqual(config.working_dir, Path("output/medical-x"))
         self.assertEqual(config.reports_dir, Path("output/medical-x/reports"))
         self.assertEqual(config.fallback_model_path, Path("yolo11n.pt"))

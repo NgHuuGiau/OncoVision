@@ -150,6 +150,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         refresh_history as refresh_history_flow,
         select_conversation as select_conversation_flow,
         show_history_context_menu as show_history_context_menu_flow,
+        expand_sidebar_and_focus_search as expand_sidebar_and_focus_search_flow,
         toggle_sidebar as toggle_sidebar_flow,
         update_sidebar_ui as update_sidebar_ui_flow,
     )
@@ -327,7 +328,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.sidebar_compact_page = QWidget()
             compact_layout = QVBoxLayout(self.sidebar_compact_page)
             compact_layout.setContentsMargins(0, 0, 0, 0)
-            compact_layout.setSpacing(12)
+            compact_layout.setSpacing(8)
             self.sidebar_stack.addWidget(self.sidebar_compact_page)
 
             header_frame = QFrame()
@@ -344,7 +345,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.sidebar_app_button.setLayoutDirection(Qt.LeftToRight)
             self.sidebar_app_button.setCursor(Qt.PointingHandCursor)
             self.sidebar_app_button.clicked.connect(self.toggle_sidebar)
-            self.brand_text = QLabel("OncoVision Chat AI")
+            self.brand_text = QLabel(tr(self.language, "app_name"))
             self.brand_text.setObjectName("BrandText")
             self.brand_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             self.brand_text.setStyleSheet("font-size: 12px; font-weight: 700;")
@@ -357,7 +358,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.sidebar_toggle_button.clicked.connect(self.toggle_sidebar)
             self.sidebar_collapsed_button = QPushButton()
             self.sidebar_collapsed_button.setObjectName("SidebarCompactButton")
-            self.sidebar_collapsed_button.setFixedSize(46, 46)
+            self.sidebar_collapsed_button.setFixedSize(40, 40)
             self.sidebar_collapsed_button.clicked.connect(self.toggle_sidebar)
             header.addWidget(self.brand_text, 0, Qt.AlignVCenter | Qt.AlignLeft)
             header.addWidget(self.sidebar_header_right_spacer, 1)
@@ -370,7 +371,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.new_chat_button.setIconSize(QSize(20, 20))
             self.new_chat_button.setLayoutDirection(Qt.LeftToRight)
             self.new_chat_button.clicked.connect(self.start_new_chat)
-            self.new_chat_button.setText("Cuộc trò chuyện mới")
+            self.new_chat_button.setText(tr(self.language, "new_chat"))
             open_layout.addWidget(self.new_chat_button)
 
             self.search_box = QFrame()
@@ -384,7 +385,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.search_input = QLineEdit()
             self.search_input.setFrame(False)
             self.search_input.setStyleSheet("border: none; background: transparent; padding: 0;")
-            self.search_input.setPlaceholderText("Tìm kiếm cuộc trò chuyện...")
+            self.search_input.setPlaceholderText(tr(self.language, "search"))
             self.search_input.textChanged.connect(self.refresh_history)
             search_layout.addWidget(self.search_input, 1)
             self.search_filter_label = QLabel("\u2630")
@@ -428,11 +429,11 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.settings_button.setIconSize(QSize(20, 20))
             self.settings_button.setLayoutDirection(Qt.LeftToRight)
             self.settings_button.clicked.connect(self.open_settings)
-            self.settings_button.setText("Cài đặt")
+            self.settings_button.setText(tr(self.language, "settings"))
             open_layout.addWidget(self.settings_button)
 
             compact_header = QHBoxLayout()
-            compact_header.setContentsMargins(0, 8, 0, 0)
+            compact_header.setContentsMargins(0, 4, 0, 0)
             compact_header.setSpacing(0)
             compact_header.addStretch(1)
             compact_header.addWidget(self.sidebar_collapsed_button, 0, Qt.AlignCenter)
@@ -441,14 +442,14 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
             self.compact_new_chat_button = QPushButton()
             self.compact_new_chat_button.setObjectName("SidebarCompactButton")
-            self.compact_new_chat_button.setFixedSize(46, 46)
+            self.compact_new_chat_button.setFixedSize(40, 40)
             self.compact_new_chat_button.clicked.connect(self.start_new_chat)
             compact_layout.addWidget(self.compact_new_chat_button, 0, Qt.AlignHCenter)
 
             self.compact_search_button = QPushButton()
             self.compact_search_button.setObjectName("SidebarCompactButton")
-            self.compact_search_button.setFixedSize(46, 46)
-            self.compact_search_button.clicked.connect(self.toggle_sidebar)
+            self.compact_search_button.setFixedSize(40, 40)
+            self.compact_search_button.clicked.connect(self.expand_sidebar_and_focus_search)
             compact_layout.addWidget(self.compact_search_button, 0, Qt.AlignHCenter)
 
             self.compact_spacer = QWidget()
@@ -457,7 +458,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
             self.compact_settings_button = QPushButton()
             self.compact_settings_button.setObjectName("SidebarCompactButton")
-            self.compact_settings_button.setFixedSize(46, 46)
+            self.compact_settings_button.setFixedSize(40, 40)
             self.compact_settings_button.clicked.connect(self.open_settings)
             compact_layout.addWidget(self.compact_settings_button, 0, Qt.AlignHCenter)
 
@@ -517,11 +518,11 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.robot_mark.setAlignment(Qt.AlignCenter)
             self.robot_mark.setStyleSheet("font-size: 86px;")
             empty_layout.addWidget(self.robot_mark)
-            self.empty_title = QLabel("Bác sĩ AI luôn sẵn sàng hỗ trợ bạn")
+            self.empty_title = QLabel(tr(self.language, "empty_title"))
             self.empty_title.setAlignment(Qt.AlignCenter)
             self.empty_title.setStyleSheet("font-size: 20px; font-weight: 700;")
             empty_layout.addWidget(self.empty_title)
-            self.empty_subtitle = QLabel("Đặt câu hỏi về sức khỏe, triệu chứng, xét nghiệm, điều trị và nhận thông tin đáng tin cậy từ AI.")
+            self.empty_subtitle = QLabel(tr(self.language, "empty_subtitle"))
             self.empty_subtitle.setObjectName("Subtle")
             self.empty_subtitle.setAlignment(Qt.AlignCenter)
             empty_layout.addWidget(self.empty_subtitle)
@@ -667,13 +668,16 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
         def retranslate_ui(self) -> None:
             self.update_sidebar_texts()
+            self.brand_text.setText(tr(self.language, "app_name"))
             self.greeting_title.setText(tr(self.language, "greeting_title"))
             self.db.set_setting("language", self.language)
             self.greeting_text.setText(tr(self.language, "greeting_text"))
-            self.search_input.setPlaceholderText("Tìm kiếm cuộc trò chuyện...")
-            self.empty_title.setText("Bác sĩ AI luôn sẵn sàng hỗ trợ bạn")
-            self.empty_subtitle.setText("Đặt câu hỏi về sức khỏe, triệu chứng, xét nghiệm, điều trị và nhận thông tin đáng tin cậy từ AI.")
+            self.search_input.setPlaceholderText(tr(self.language, "search"))
+            self.empty_title.setText(tr(self.language, "empty_title"))
+            self.empty_subtitle.setText(tr(self.language, "empty_subtitle"))
             self.message_input.setPlaceholderText(tr(self.language, "input_placeholder"))
+            if hasattr(self, "disclaimer_label"):
+                self.disclaimer_label.setText(tr(self.language, "disclaimer"))
             self.plus_button.setToolTip(tr(self.language, "attach"))
             self.light_mode_button.setText(f"\u263c  {tr(self.language, 'light')}")
             self.dark_mode_button.setText(f"\u263e  {tr(self.language, 'dark')}")
@@ -700,6 +704,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
         def toggle_sidebar(self) -> None:
             toggle_sidebar_flow(self)
+
+        def expand_sidebar_and_focus_search(self) -> None:
+            expand_sidebar_and_focus_search_flow(self)
 
         def update_sidebar_ui(self) -> None:
             update_sidebar_ui_flow(self)

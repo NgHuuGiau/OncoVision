@@ -74,6 +74,21 @@ class MedicalTrainingTests(unittest.TestCase):
             self.assertEqual(summary.test_count, 7)
             self.assertTrue(paths.data_yaml_path.exists())
 
+    def test_prepare_medical_training_dataset_populates_splits_from_raw_class_images(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            paths = self._paths(Path(temp_dir))
+            class_dir = paths.dataset_root / paths.class_names[0] / "raw" / "images"
+            class_dir.mkdir(parents=True, exist_ok=True)
+            for index in range(6):
+                image_path = class_dir / f"sample_{index}.jpg"
+                Image.new("RGB", (64, 64), (index * 20 % 256, 50, 100)).save(image_path)
+
+            summary = prepare_medical_training_dataset(paths)
+
+            self.assertGreater(summary.train_count, 0)
+            self.assertGreater(summary.val_count, 0)
+            self.assertGreater(summary.test_count, 0)
+
     def test_train_medical_model_saves_classifier(self) -> None:
         with TemporaryDirectory() as temp_dir:
             paths = self._paths(Path(temp_dir))
@@ -117,9 +132,6 @@ class MedicalTrainingTests(unittest.TestCase):
         self.assertEqual(report["train_count"], 7)
         self.assertEqual(report["trained_model_path"], fake_paths.trained_model_path)
         self.assertEqual(report["validation_metrics"]["accuracy"], 0.8)
-
-    def test_sync_medical_model_config_updates_model_path(self) -> None:
-        self.skipTest("sync_medical_model_config removed in medical/root-level training flow")
 
     @patch("medical.training._load_medical_settings")
     def test_medical_training_paths_uses_configured_dataset_and_model_names(self, load_settings_mock) -> None:

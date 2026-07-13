@@ -32,18 +32,28 @@ MEDICAL_UPLOAD_EXTENSIONS = frozenset({
 })
 
 _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("CT ngực-bụng-chậu", ("ct nguc bung chau", "chest abdomen pelvis", "cap ct")),
-    ("CT ngực", ("ct nguc", "chest ct", "thoracic ct")),
+    ("CT ngực-bụng-chậu", ("ct nguc bung chau", "chest abdomen pelvis", "cap ct", "ct cap")),
+    ("CT ngực", ("ct nguc", "chest ct", "thoracic ct", "ct chest")),
+    ("CT gan", ("ct gan", "liver ct", "hepatic ct", "ct liver")),
+    ("CT đại trực tràng", ("ct dai truc trang", "ct colon", "rectal ct", "ct rectal")),
+    ("CT dạ dày", ("ct da day", "ct gastric", "stomach ct", "gastric ct")),
+    ("CT tuyến tiền liệt", ("ct tuyen tien liet", "prostate ct")),
+    ("CT cổ tử cung", ("ct co tu cung", "cervical ct", "pelvic ct")),
     ("MRI tuyến tiền liệt", ("mri tuyen tien liet", "prostate mri")),
     ("MRI trực tràng", ("mri truc trang", "rectal mri")),
     ("MRI vú", ("mri vu", "breast mri")),
+    ("MRI gan", ("mri gan", "liver mri", "hepatic mri")),
+    ("MRI dạ dày", ("mri da day", "mri gastric", "stomach mri")),
+    ("MRI cổ tử cung", ("mri co tu cung", "cervical mri", "pelvic mri")),
     ("Siêu âm vú", ("sieu am vu", "breast ultrasound")),
+    ("Siêu âm gan", ("sieu am gan", "liver ultrasound", "hepatic ultrasound", "fascio")),
+    ("Siêu âm tuyến tiền liệt", ("sieu am tuyen tien liet", "prostate ultrasound", "trus")),
     ("X-quang ngực", ("x quang nguc", "chest x ray", "cxr", "chest radiograph")),
     ("Nội soi đại tràng", ("noi soi dai trang", "colonoscopy")),
     ("Mammogram", ("mammogram", "mammo")),
     ("EUS", ("eus", "endoscopic ultrasound")),
-    ("PET/CT", ("pet ct", "petct")),
-    ("PET", (" pet ", " pet-", "pet scan")),
+    ("PET/CT", ("pet ct", "petct", "pet/ct")),
+    ("PET", (" pet ", " pet-", "pet scan", "pet whole body")),
     ("Nội soi", ("noi soi", "endoscopy", "gastroscopy", "egd")),
     ("Siêu âm", ("sieu am", "ultrasound", "sonography")),
     ("CT", (" computed tomography ", " ct ", "ct scan", "ctscan")),
@@ -51,13 +61,13 @@ _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 _TARGET_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("liver", ("gan", "liver", "hepatic", "hepat", "hcc")),
-    ("lung", ("phoi", "lung", "thorax", "thoracic", "chest", "pulmonary")),
-    ("breast", ("vu", "breast", "mammogram", "mammo")),
-    ("stomach", ("da day", "stomach", "gastric", "gast", "egd", "endoscopy", "noi soi")),
-    ("colorectal", ("dai truc trang", "colorectal", "colon", "rectal", "truc trang", "colonoscopy")),
-    ("prostate", ("tuyen tien liet", "prostate", "prostatic")),
-    ("cervical", ("co tu cung", "cervical", "cervix", "pap", "hpv", "colposcopy")),
+    ("liver", ("gan", "liver", "hepatic", "hepat", "hcc", "liver cancer", "liver lesion", "liver tumor", "liver mass", "liver metastasis")),
+    ("lung", ("phoi", "lung", "thorax", "thoracic", "chest", "pulmonary", "lung cancer", "lung lesion", "lung tumor", "lung nodule", "lung mass", "pulmonary nodule", "pulmonary mass")),
+    ("breast", ("vu", "breast", "mammogram", "mammo", "breast cancer", "breast lesion", "breast mass", "breast tumor", "breast nodule")),
+    ("stomach", ("da day", "stomach", "gastric", "gast", "egd", "endoscopy", "noi soi", "stomach cancer", "gastric cancer", "gastric lesion", "gastric tumor", "gastric mass")),
+    ("colorectal", ("dai truc trang", "colorectal", "colon", "rectal", "truc trang", "colonoscopy", "colorectal cancer", "colon cancer", "rectal cancer", "colon lesion", "rectal lesion", "colon tumor", "rectal tumor")),
+    ("prostate", ("tuyen tien liet", "prostate", "prostatic", "prostate cancer", "prostate lesion", "prostate tumor", "prostate mass")),
+    ("cervical", ("co tu cung", "cervical", "cervix", "pap", "hpv", "colposcopy", "cervical cancer", "cervix cancer", "cervical lesion", "cervical tumor")),
 )
 
 _MODALITY_TO_TARGET_KEY: dict[str, str] = {
@@ -66,12 +76,31 @@ _MODALITY_TO_TARGET_KEY: dict[str, str] = {
     "MRI vú": "breast",
     "X-quang ngực": "lung",
     "CT ngực": "lung",
-    "MRI tuyến tiền liệt": "prostate",
     "MRI trực tràng": "colorectal",
     "Nội soi đại tràng": "colorectal",
     "CT ngực-bụng-chậu": "colorectal",
     "EUS": "stomach",
     "Nội soi": "stomach",
+    "CT gan": "liver",
+    "MRI gan": "liver",
+    "Siêu âm gan": "liver",
+    "CT đại trực tràng": "colorectal",
+    "MRI đại trực tràng": "colorectal",
+    "CT dạ dày": "stomach",
+    "MRI dạ dày": "stomach",
+    "CT tuyến tiền liệt": "prostate",
+    "MRI tuyến tiền liệt": "prostate",
+    "CT cổ tử cung": "cervical",
+    "MRI cổ tử cung": "cervical",
+    "PET/CT gan": "liver",
+    "PET/CT phổi": "lung",
+    "PET/CT đại trực tràng": "colorectal",
+    "PET/CT dạ dày": "stomach",
+    "PET/CT tuyến tiền liệt": "prostate",
+    "PET/CT cổ tử cung": "cervical",
+    "PET gan": "liver",
+    "PET phổi": "lung",
+    "PET đại trực tràng": "colorectal",
 }
 
 _DICOM_MODALITY_MAP: dict[str, str] = {
@@ -83,6 +112,36 @@ _DICOM_MODALITY_MAP: dict[str, str] = {
     "CR": "X-quang ngực",
     "DX": "X-quang ngực",
     "XA": "X-quang ngực",
+}
+
+_DICOM_BODY_PART_TO_TARGET: dict[str, str] = {
+    "LIVER": "liver",
+    "HEPAT": "liver",
+    "CHEST": "lung",
+    "LUNG": "lung",
+    "BREAST": "breast",
+    "CHESTABDPELV": "colorectal",
+    "ABDOMEN": "stomach",
+    "STOMACH": "stomach",
+    "ABDOMENPELVIS": "colorectal",
+    "PELVIS": "prostate",
+    "PROSTATE": "prostate",
+    "RECTUM": "colorectal",
+    "COLON": "colorectal",
+    "CERVIX": "cervical",
+    "UTERUS": "cervical",
+    "PELVISNECK": "cervical",
+    "WHOLEBODY": "lung",
+}
+
+SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
+    "liver": ("ct", "mri", "ultrasound", "pet_ct"),
+    "lung": ("xray", "ct", "pet_ct"),
+    "breast": ("mammogram", "ultrasound", "mri"),
+    "stomach": ("endoscopy", "ct", "mri", "pet_ct", "eus"),
+    "colorectal": ("colonoscopy", "ct", "mri", "pet_ct"),
+    "prostate": ("mri", "ultrasound", "pet_ct"),
+    "cervical": ("ct", "mri", "pet_ct"),
 }
 
 
@@ -226,6 +285,12 @@ def infer_medical_upload_context(path: str | Path) -> tuple[str | None, str | No
     modality = _infer_medical_modality(source, normalized)
     target_key = _infer_medical_target_key(normalized, modality)
     return target_key, modality
+
+
+def supported_medical_modalities_for_target(target_key: str | None) -> tuple[str, ...]:
+    if target_key is None:
+        return ()
+    return SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY.get(target_key, ())
 
 
 def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:

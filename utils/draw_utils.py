@@ -155,6 +155,27 @@ def draw_detection_results(
                 cv2.circle(trail_overlay, end, max(1, thickness // 2), box_color, -1, cv2.LINE_AA)
         if drew_trail:
             image = cv2.addWeighted(trail_overlay, 0.30, image, 0.70, 0.0)
+    if detection_list:
+        heatmap = np.zeros((image.shape[0], image.shape[1]), dtype=np.float32)
+        for detection in detection_list:
+            clamped_bbox = _clamp_bbox_to_image(detection.bbox, image.shape)
+            if clamped_bbox is None:
+                continue
+            x1, y1, x2, y2 = clamped_bbox
+            center_x = (x1 + x2) / 2.0
+            center_y = (y1 + y2) / 2.0
+            radius_x = max(8, (x2 - x1) // 2)
+            radius_y = max(8, (y2 - y1) // 2)
+            cv2.ellipse(heatmap, (int(center_x), int(center_y)), (radius_x, radius_y), 0, 0, 360, 1.0, -1)
+        if np.max(heatmap) > 0:
+            heatmap = cv2.GaussianBlur(heatmap, (31, 31), 0)
+            heatmap = heatmap / max(np.max(heatmap), 1e-6)
+            heatmap_color = np.zeros(image.shape, dtype=np.uint8)
+            heatmap_color[..., 0] = np.clip(heatmap * 255 * 0.35, 0, 255)
+            heatmap_color[..., 1] = np.clip(heatmap * 255 * 0.20, 0, 255)
+            heatmap_color[..., 2] = np.clip(heatmap * 255 * 0.90, 0, 255)
+            image = cv2.addWeighted(image, 0.75, heatmap_color, 0.25, 0.0)
+
     for detection in detection_list:
         clamped_bbox = _clamp_bbox_to_image(detection.bbox, image.shape)
         if clamped_bbox is None:

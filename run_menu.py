@@ -36,12 +36,12 @@ class MenuOption:
 
 
 MENU_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_app.py", "Camera", "Mở camera thời gian thực, chạy model và hiển thị kết quả.", "CHẠY", GREEN),
-    "2": MenuOption("run_chat.py", "Chat y dược", "Mở giao diện chat và phân tích ảnh y khoa.", "CHẠY", GREEN),
-    "3": MenuOption("run_medical.py", "Y dược", "Dataset, train, phân tích ảnh và lịch sử ca.", "Y DƯỢC", CYAN),
+    "1": MenuOption("run_app.py", "Camera realtime", "Mở camera, chạy model và xem kết quả ngay.", "CHẠY NHANH", GREEN),
+    "2": MenuOption("run_chat.py", "Chat y dược", "Mở chat UI và luồng phân tích ảnh y khoa.", "CHẠY NHANH", GREEN),
+    "3": MenuOption("run_medical.py", "Y dược", "Quản lý dataset, lịch sử ca và luồng medical.", "Y DƯỢC", CYAN),
     "4": MenuOption("run_train.py", "Huấn luyện", "Chuẩn bị dữ liệu, train, đánh giá và xuất model.", "HUẤN LUYỆN", CYAN),
     "5": MenuOption("", "Kiểm tra", "Mở submenu Doctor, Test và Smoke.", "KIỂM TRA", YELLOW),
-    "6": MenuOption("run_chat.py", "Dọn output", "Xóa nhanh output chat và medical cũ.", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
+    "6": MenuOption("run_chat.py", "Dọn cache", "Xóa output chat và medical cũ cho repo gọn hơn.", "BẢO TRÌ", YELLOW, ("--cleanup-output",)),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED),
 }
 
@@ -52,12 +52,12 @@ MENU_PROMPT = f"Chọn tác vụ [{'/'.join(('0', *PRIMARY_KEYS))}]: "
 
 MEDICAL_OPTIONS: dict[str, MenuOption] = {
     "1": MenuOption("run_medical.py", "Báo cáo nhanh", "Tóm tắt dataset, model và mức sẵn sàng train.", "KIỂM TRA", GREEN, ("report",)),
-    "2": MenuOption("run_medical.py", "Dataset y dược", "Kiểm tra dataset raw, split và sẵn sàng train.", "DATASET", GREEN, ("ready",)),
+    "2": MenuOption("run_medical.py", "Dataset y dược", "Kiểm tra raw, split và trạng thái sẵn sàng train.", "DATASET", GREEN, ("ready",)),
     "3": MenuOption("run_medical.py", "Khởi tạo dataset", "Tạo cấu trúc dataset/medical/skin_lesion.", "DATASET", GREEN, ("init-dataset",)),
     "4": MenuOption("run_medical.py", "Chia dữ liệu", "Chia raw sang train/val/test.", "DATASET", GREEN, ("split-dataset",)),
     "5": MenuOption("run_medical.py", "Huấn luyện", "Chạy split, train và validate model y dược.", "HUẤN LUYỆN", CYAN, ("train-all",)),
-    "6": MenuOption("run_medical.py", "Phân tích ảnh", "Phân tích một ảnh y khoa với mã bệnh nhân nhập tay.", "KẾT QUẢ", YELLOW),
-    "7": MenuOption("run_medical.py", "Lịch sử ca", "Hiển thị các ca bệnh đã phân tích gần đây.", "KẾT QUẢ", YELLOW, ("history",)),
+    "6": MenuOption("run_medical.py", "Phân tích ảnh", "Phân tích ảnh y khoa với mã bệnh nhân nhập tay.", "KẾT QUẢ", YELLOW),
+    "7": MenuOption("run_medical.py", "Lịch sử ca", "Xem các ca bệnh đã phân tích gần đây.", "KẾT QUẢ", YELLOW, ("history",)),
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
 }
 MEDICAL_PRIMARY_KEYS = tuple(key for key in MEDICAL_OPTIONS if key != "0")
@@ -66,9 +66,10 @@ MEDICAL_BACK_TEXT = "Quay lại menu chính."
 
 CHECK_OPTIONS: dict[str, MenuOption] = {
     "1": MenuOption("run_doctor.py", "Doctor", "Rà soát môi trường, model và dataset mà không cần webcam thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
-    "2": MenuOption("run_tests.py", "Test", "Chạy dashboard unit test và regression mà không yêu cầu camera thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
-    "3": MenuOption("run_smoke.py", "Smoke", "Chạy smoke check qua các entrypoint chính để kiểm tra nhanh toàn luồng.", "KIỂM TRA", YELLOW),
+    "2": MenuOption("run_tests.py", "Test", "Chạy dashboard unit test và regression mà không cần camera thật.", "KIỂM TRA", YELLOW, ("--skip-camera-check",)),
+    "3": MenuOption("run_smoke.py", "Smoke", "Chạy smoke check qua các entrypoint chính để rà nhanh toàn luồng.", "KIỂM TRA", YELLOW),
     "4": MenuOption("run_smoke.py", "Smoke + tests", "Chạy smoke check và nối thêm run_tests để rà soát sau cùng.", "KIỂM TRA", YELLOW, ("--include-tests",)),
+    "5": MenuOption("run_medical.py", "Kiểm tra ảnh y khoa", "Nhập đường dẫn ảnh để kiểm tra hợp lệ và phân loại modality/body region.", "KIỂM TRA", YELLOW, ("validate-image",)),
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
 }
 CHECK_PRIMARY_KEYS = tuple(key for key in CHECK_OPTIONS if key != "0")
@@ -128,14 +129,18 @@ def _wrap_text(text: str, width: int) -> list[str]:
 
 def _render_options(options: dict[str, MenuOption], primary_keys: tuple[str, ...], title: str, print_fn=print) -> None:
     width = _get_terminal_width()
+    ordered_keys = (*primary_keys, "0")
+    label_width = max(len(f"{key}. {options[key].title}") for key in ordered_keys)
     print_fn("")
     print_fn(f"{BOLD}{'=' * width}{RESET}")
     print_fn(f"{BOLD}  {title}{RESET}")
     print_fn(f"{BOLD}{'=' * width}{RESET}")
     print_fn("")
+    print_fn(f"{DIM}  Nhập số để chọn, 0 để quay lại hoặc thoát.{RESET}")
+    print_fn("")
 
     current_group = ""
-    for key in (*primary_keys, "0"):
+    for key in ordered_keys:
         option = options[key]
         if option.group != current_group:
             current_group = option.group
@@ -144,16 +149,15 @@ def _render_options(options: dict[str, MenuOption], primary_keys: tuple[str, ...
 
         label = f"{key}. {option.title}"
         cmd = _command_text(option)
-        desc = f"{option.description}  {DIM}[{cmd}]{RESET}"
-        indent = "  " + " " * len(label) + " "
-        wrap_width = max(20, width - len(indent) - 2)
-        wrapped_desc = _wrap_text(desc, wrap_width)
+        label_pad = " " * (label_width - len(label))
+        desc_indent = " " * (label_width + 6)
+        wrap_width = max(24, width - len(desc_indent) - 2)
+        wrapped_desc = _wrap_text(option.description, wrap_width)
 
-        for i, line in enumerate(wrapped_desc):
-            if i == 0:
-                print_fn(f"{option.color}  {label} {line}{RESET}")
-            else:
-                print_fn(f"{option.color}{indent}{line}{RESET}")
+        print_fn(f"{option.color}  {label}{label_pad}  {wrapped_desc[0]}{RESET}")
+        for line in wrapped_desc[1:]:
+            print_fn(f"{option.color}{desc_indent}{line}{RESET}")
+        print_fn(f"{DIM}{desc_indent}[{cmd}]{RESET}")
 
     print_fn("")
     print_fn(f"{DIM}{'-' * width}{RESET}")
@@ -161,7 +165,7 @@ def _render_options(options: dict[str, MenuOption], primary_keys: tuple[str, ...
 
 
 def _render_menu(print_fn=print) -> None:
-    _render_options(MENU_OPTIONS, PRIMARY_KEYS, "OncoVision : MENU ĐIỀU KHIỂN", print_fn=print_fn)
+    _render_options(MENU_OPTIONS, PRIMARY_KEYS, "OncoVision : MENU CHÍNH", print_fn=print_fn)
 
 
 def _render_medical_menu(print_fn=print) -> None:
@@ -297,6 +301,9 @@ def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_termin
                 print_fn(f"{YELLOW}{TESTED_EXIT_TEXT}{RESET}")
                 return 0
             _run_menu_choice(choice, input_fn=input_fn, print_fn=print_fn, run_script_fn=run_script_fn, clear_terminal_fn=clear_terminal_fn)
+    except EOFError:
+        print_fn(f"{YELLOW}{TESTED_EXIT_TEXT}{RESET}")
+        return 0
     except KeyboardInterrupt:
         print_fn(f"{YELLOW}\nĐã thoát menu.{RESET}")
         return 0

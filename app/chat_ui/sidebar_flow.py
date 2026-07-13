@@ -5,6 +5,7 @@ from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import QListWidgetItem, QMenu, QSizePolicy
 
 from app.chat_ui.icons import themed_icon, themed_pixmap
+from app.chat_ui.content import translate as tr
 from app.chat_ui.widgets import HistoryItemWidget
 
 
@@ -16,24 +17,24 @@ def apply_theme_assets(window) -> None:
     strong = window.icon_color()
     window.sidebar_app_button.setIcon(themed_icon("sidebar_app.svg", strong, 28))
     window.sidebar_toggle_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
-    window.sidebar_collapsed_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
+    window.sidebar_collapsed_button.setIcon(themed_icon("sidebar_app.svg", strong, 18))
     window.new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 22))
     window.settings_button.setIcon(themed_icon("settings.svg", strong, 22))
     if hasattr(window, "compact_new_chat_button"):
-        window.compact_new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 20))
+        window.compact_new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 18))
     if hasattr(window, "compact_search_button"):
-        window.compact_search_button.setIcon(themed_icon("search.svg", strong, 20))
+        window.compact_search_button.setIcon(themed_icon("search.svg", strong, 18))
     if hasattr(window, "compact_settings_button"):
-        window.compact_settings_button.setIcon(themed_icon("settings.svg", strong, 20))
+        window.compact_settings_button.setIcon(themed_icon("settings.svg", strong, 18))
     window.search_icon.setPixmap(themed_pixmap("search.svg", window.subtle_icon_color(), 18))
     window.search_filter_label.setText("\u2630")
 
 
 def update_sidebar_texts(window) -> None:
-    window.new_chat_button.setText("Cuộc trò chuyện mới")
-    window.history_title.setText("Lịch sử trò chuyện")
-    window.settings_button.setText("Cài đặt")
-    window.search_input.setPlaceholderText("Tìm kiếm cuộc trò chuyện...")
+    window.new_chat_button.setText(tr(window.language, "new_chat"))
+    window.history_title.setText(tr(window.language, "history"))
+    window.settings_button.setText(tr(window.language, "settings"))
+    window.search_input.setPlaceholderText(tr(window.language, "search"))
 
 
 def retranslate_sidebar(window) -> None:
@@ -42,7 +43,7 @@ def retranslate_sidebar(window) -> None:
 
 
 def toggle_sidebar(window) -> None:
-    target_width = 96 if window.sidebar_expanded else 288
+    target_width = 92 if window.sidebar_expanded else 288
 
     window.sidebar_anim = QPropertyAnimation(window.sidebar, b"minimumWidth")
     window.sidebar_anim.setDuration(220)
@@ -66,6 +67,22 @@ def toggle_sidebar(window) -> None:
 
     window.sidebar_group.finished.connect(on_finished)
     window.sidebar_group.start()
+
+
+def expand_sidebar_and_focus_search(window) -> None:
+    if window.sidebar_expanded:
+        window.search_input.setFocus()
+        return
+
+    def focus_search() -> None:
+        window.search_input.setFocus()
+        try:
+            window.sidebar_group.finished.disconnect(focus_search)
+        except (TypeError, RuntimeError):
+            pass
+
+    toggle_sidebar(window)
+    window.sidebar_group.finished.connect(focus_search)
 
 
 def update_sidebar_ui(window) -> None:
@@ -116,12 +133,10 @@ def update_sidebar_ui(window) -> None:
         window.search_filter_label.setVisible(False)
         window.new_chat_button.setObjectName("SidebarPrimaryButton")
         window.settings_button.setObjectName("SidebarFooterButton")
-        window.new_chat_button.setText("Cuộc trò chuyện mới")
-        window.settings_button.setText("Cài đặt")
         window.new_chat_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         window.settings_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        window.new_chat_button.setMinimumSize(46, 46)
-        window.settings_button.setMinimumSize(46, 46)
+        window.new_chat_button.setMinimumSize(44, 44)
+        window.settings_button.setMinimumSize(44, 44)
         window.new_chat_button.setIconSize(QSize(18, 18))
         window.settings_button.setIconSize(QSize(18, 18))
         if hasattr(window, "compact_new_chat_button"):
@@ -130,6 +145,8 @@ def update_sidebar_ui(window) -> None:
             window.compact_search_button.setIconSize(QSize(18, 18))
         if hasattr(window, "compact_settings_button"):
             window.compact_settings_button.setIconSize(QSize(18, 18))
+        window.sidebar_collapsed_button.setFixedSize(40, 40)
+        window.sidebar_collapsed_button.setIconSize(QSize(16, 16))
         window.sidebar_collapsed_button.style().unpolish(window.sidebar_collapsed_button)
         window.sidebar_collapsed_button.style().polish(window.sidebar_collapsed_button)
 

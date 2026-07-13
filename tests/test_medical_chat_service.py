@@ -75,6 +75,7 @@ class MedicalChatServiceTests(unittest.TestCase):
             self.assertIn("medical_case_id", metadata)
             self.assertEqual(metadata["risk_level"], "high")
             self.assertEqual(metadata["processed_image_path"], str(overlay))
+            self.assertEqual(metadata["report_html_path"], str(report_json.with_suffix(".html")))
             self.assertEqual(response.attachment_path, str(overlay))
             self.assertIn("BN777", response.reply_text)
             self.assertIn("Anh hoi mo", response.reply_text)

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from medical.case_payloads import build_detection_metadata
 from medical.cancer_catalog import supported_cancer_labels, supported_cancer_modalities
+from medical.compliance import MEDICAL_DISCLAIMER
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import update_case_report_case_id
 from medical.storage import MedicalCaseDatabase
@@ -32,7 +33,27 @@ class MedicalChatService:
         return self.analyzer.ensure_ready()
 
     def analyze_attachment(self, *, image_path: str | Path, patient_code: str, user_prompt: str = "") -> MedicalChatResponse:
-        result = self.analyzer.analyze_image(image_path, patient_code=patient_code)
+        try:
+            result = self.analyzer.analyze_image(image_path, patient_code=patient_code)
+        except ValueError as exc:
+            message = str(exc)
+            if ": " in message:
+                error_code, error_message = message.split(": ", 1)
+            else:
+                error_code = "UNKNOWN_ERROR"
+                error_message = message
+            reply_text = (
+                f"Đã phân tích ảnh y khoa cho mã bệnh nhân {patient_code}. "
+                f"Loi: [{error_code}] {error_message} "
+                f"Vui lòng tải lên đúng loại ảnh y khoa được hỗ trợ: CT, MRI, PET/CT, X-quang ngực, mammogram, siêu âm, nội soi hoặc EUS. "
+                f"Lưu ý: {MEDICAL_DISCLAIMER}"
+            )
+            return MedicalChatResponse(
+                reply_text=reply_text,
+                attachment_path=None,
+                attachment_kind=None,
+                metadata_json="{}",
+            )
         case_id = self.case_db.save_case(
             patient_code=result.patient_code,
             image_path=str(result.source_image),
@@ -57,6 +78,7 @@ class MedicalChatService:
             "processed_image_path": str(result.processed_image),
             "report_json_path": str(result.report_json_path),
             "report_md_path": str(result.report_md_path),
+            "report_html_path": str(result.report_json_path.with_suffix(".html")),
             "recommendation": result.recommendation,
             "model_name": result.model_name,
             "average_confidence": result.average_confidence,
@@ -75,9 +97,17 @@ class MedicalChatService:
             if result.quality_warnings
             else ""
         )
+        if result.risk_level == "uncertain":
+            risk_text = (
+                "KET QUA KHONG DU TIN TUONG. "
+                "He thong khong duoc tu tin de phan loai 7 loai ung thu. "
+                "Can kham chuyen khoa de bao dam. "
+            )
+        else:
+            risk_text = f"Muc do sang loc nguy co: {result.risk_level}. "
         reply_text = (
             f"Đã phân tích ảnh y khoa cho mã bệnh nhân {patient_code}. "
-            f"Mức độ sàng lọc nguy cơ: {result.risk_level}. "
+            f"{risk_text}"
             f"Số vùng tổn thương ghi nhận: {len(result.detections)}. "
             f"Tóm tắt phát hiện: {detection_summary}. "
             f"Hệ thống hiện hỗ trợ danh mục sàng lọc: {target_summary}. "
@@ -88,6 +118,7 @@ class MedicalChatService:
             f"Đã lưu ảnh đã xử lý tại: {result.processed_image}. "
             f"Đã lưu báo cáo JSON tại: {result.report_json_path}. "
             f"Đã lưu báo cáo Markdown tại: {result.report_md_path}. "
+            f"Đã lưu báo cáo HTML tại: {result.report_json_path.with_suffix('.html')}. "
             f"Lưu ý: {result.disclaimer}"
         )
         return MedicalChatResponse(

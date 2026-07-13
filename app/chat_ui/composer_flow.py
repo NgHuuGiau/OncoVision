@@ -51,7 +51,7 @@ def build_composer_section(window, chat_layout) -> None:
     window.plus_button.clicked.connect(window.show_plus_menu)
     input_row_layout.addWidget(window.plus_button, 0, Qt.AlignBottom)
 
-    window.message_input = MessageInput()
+    window.message_input = MessageInput(language=window.language)
     window.message_input.setObjectName("ComposerInput")
     window.message_input.setMinimumHeight(38)
     window.message_input.setMaximumHeight(180)
@@ -78,9 +78,7 @@ def build_composer_section(window, chat_layout) -> None:
 
     window.disclaimer_label = window.disclaimer_label if hasattr(window, "disclaimer_label") else None
     if window.disclaimer_label is None:
-        window.disclaimer_label = QLabel(
-            "Kết quả AI chỉ mang tính hỗ trợ. Hãy kiểm tra lại thông tin quan trọng với bác sĩ chuyên khoa."
-        )
+        window.disclaimer_label = QLabel(window.tr(window.language, "disclaimer"))
     window.disclaimer_label.setObjectName("Subtle")
     window.disclaimer_label.setAlignment(Qt.AlignCenter)
     chat_layout.addWidget(window.disclaimer_label)

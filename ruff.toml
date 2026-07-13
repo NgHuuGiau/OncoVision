@@ -1,0 +1,7 @@
+[lint]
+# E402 (module import not at top of file) is intentional in these entrypoints:
+# they call ensure_project_root_on_path() to set sys.path before importing
+# project modules, and in core/* to avoid heavy/optional import side effects.
+[lint.per-file-ignores]
+"core/**" = ["E402"]
+"training/**" = ["E402"]

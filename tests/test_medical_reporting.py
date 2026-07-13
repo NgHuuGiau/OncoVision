@@ -51,3 +51,25 @@ class MedicalReportingTests(unittest.TestCase):
 
         self.assertEqual(synced_payload["case_id"], 17)
         self.assertIn("Case ID: 17", markdown)
+
+    def test_write_case_report_creates_html_summary_with_overlay(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            payload = {
+                "case_id": 12,
+                "risk_level": "high",
+                "suspected_malignant": True,
+                "model_name": "best.pt",
+                "source_image": "source.jpg",
+                "processed_image": "overlay.jpg",
+                "recommendation": "Can kham chuyen khoa",
+                "quality_warnings": ["Anh mo"],
+                "detections": [{"label": "lesion", "confidence": 0.92, "bbox": [1, 2, 3, 4]}],
+            }
+
+            report_json, report_md = write_case_report(Path(temp_dir), payload)
+            report_html = report_json.with_suffix(".html")
+
+            self.assertTrue(report_html.exists())
+            html_text = report_html.read_text(encoding="utf-8")
+            self.assertIn("Medical Imaging Case Report", html_text)
+            self.assertIn("overlay.jpg", html_text)

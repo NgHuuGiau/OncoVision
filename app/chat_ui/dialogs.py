@@ -3,13 +3,15 @@ from __future__ import annotations
 from PySide6.QtCore import QParallelAnimationGroup, QPropertyAnimation, Qt
 from PySide6.QtWidgets import QDialog, QFrame, QGraphicsBlurEffect, QHBoxLayout, QScrollArea, QSlider, QVBoxLayout, QPushButton, QLabel, QWidget, QSizePolicy
 
+from app.chat_ui.content import translate as tr
 from app.chat_ui.image_utils import load_medical_volume_pixmaps, load_preview_pixmap
 
 class ImagePreviewDialog(QDialog):
     def __init__(self, image_path: str, parent: QWidget | None = None, effective_theme: str = "dark") -> None:
         super().__init__(parent)
         self.image_path = image_path
-        self.setWindowTitle("Image Preview")
+        self.language = getattr(parent, "language", "vi")
+        self.setWindowTitle(tr(self.language, "image_preview_title"))
         self.setModal(True)
         self.resize(1000, 800)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
@@ -127,7 +129,9 @@ class ImagePreviewDialog(QDialog):
         if not pixmap.isNull():
             self.img_label.setPixmap(pixmap.scaled(960, 740, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         if self.slice_caption is not None:
-            self.slice_caption.setText(f"Slice {index + 1}/{len(self.volume_pixmaps)}")
+            self.slice_caption.setText(
+                tr(self.language, "slice_label").format(current=index + 1, total=len(self.volume_pixmaps))
+            )
 
     def _show_previous_slice(self) -> None:
         if self.slice_slider is None:

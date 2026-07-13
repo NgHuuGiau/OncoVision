@@ -17,10 +17,7 @@ class SettingsDialog(QDialog):
         self.resize(1120, 780)
         self.theme_buttons: dict[str, QPushButton] = {}
         self.language_buttons: dict[str, QPushButton] = {}
-        self.language_options = [
-            ("vi", "Tiếng Việt"),
-            ("en", "English"),
-        ]
+        self.language_options = ("vi", "en")
         self.build_ui()
 
     def build_ui(self) -> None:
@@ -139,7 +136,7 @@ class SettingsDialog(QDialog):
 
         language_options = QHBoxLayout()
         language_options.setSpacing(12)
-        for key, _label in self.language_options:
+        for key in self.language_options:
             button = QPushButton()
             button.setObjectName("ThemeChoiceButton")
             button.setMinimumHeight(48)
@@ -176,8 +173,8 @@ class SettingsDialog(QDialog):
         self.theme_buttons["light"].setText(f"\u263c  {tr(language, 'light')}")
         self.theme_buttons["dark"].setText(f"\u263e  {tr(language, 'dark')}")
         self.theme_buttons["system"].setText(f"\u25a3  {tr(language, 'system')}")
-        for code, label in self.language_options:
-            self.language_buttons[code].setText(label)
+        self.language_buttons["vi"].setText(tr(language, "vietnamese"))
+        self.language_buttons["en"].setText(tr(language, "english"))
         self.refresh_theme_buttons()
 
     def refresh_theme_buttons(self) -> None:

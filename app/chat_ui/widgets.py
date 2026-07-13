@@ -164,7 +164,7 @@ class MessageInput(QPlainTextEdit):
     enter_pressed = Signal()
     MAX_VISIBLE_LINES = 5
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, language: str = "vi") -> None:
         super().__init__(parent)
         self.textChanged.connect(self._adjust_height)
         self._height_animation = QVariantAnimation(self)
@@ -181,7 +181,7 @@ class MessageInput(QPlainTextEdit):
         self.setContentsMargins(0, 0, 0, 0)
         self.setTabChangesFocus(False)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setPlaceholderText("Nhập tin nhắn...")
+        self.setPlaceholderText(tr(language, "input_placeholder"))
         self.setFixedHeight(40)
         self._adjust_height()
 
@@ -249,7 +249,7 @@ class MessageInput(QPlainTextEdit):
 
 
 class ComposerPreviewThumb(QFrame):
-    def __init__(self, *, path: str, attachment_kind: str, remove_callback, parent: QWidget | None = None) -> None:
+    def __init__(self, *, path: str, attachment_kind: str, remove_callback, parent: QWidget | None = None, language: str = "vi") -> None:
         super().__init__(parent)
         self.setObjectName("ComposerPreviewThumb")
         self.setFixedSize(72, 72)
@@ -267,7 +267,7 @@ class ComposerPreviewThumb(QFrame):
         if not pixmap.isNull():
             self.thumb_label.setPixmap(pixmap.scaled(72, 72, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
         else:
-            self.thumb_label.setText("Ảnh" if attachment_kind == "image" else "Chụp")
+            self.thumb_label.setText(tr(language, "thumb_image") if attachment_kind == "image" else tr(language, "thumb_camera"))
             self.thumb_label.setStyleSheet("font-size: 12px; font-weight: 700;")
         thumb_layout.addWidget(self.thumb_label)
 

@@ -61,6 +61,7 @@ def refresh_image_previews(window) -> None:
         thumb_widget = ComposerPreviewThumb(
             path=path,
             attachment_kind=attachment_kind,
+            language=window.language,
             remove_callback=lambda _checked=False, idx=index: remove_pending_image_attachment(window, idx),
         )
         window.image_preview_layout.insertWidget(window.image_preview_layout.count() - 1, thumb_widget)

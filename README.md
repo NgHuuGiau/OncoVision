@@ -37,6 +37,7 @@
    - [docs/training_guide.md](docs/training_guide.md) nếu bạn train model.
 
 > Model medical mặc định được tìm theo thứ tự: `medical_7_cancers.pt` ở root, `medical/medical_7_cancers.pt`, rồi file `fallback_model` nếu bật trong `config/medical_settings.yaml`.
+> Hệ thống hỗ trợ 2 backend classifier: centroid (legacy) và CNN (PyTorch). Đổi qua CNN bằng `classifier_backend: cnn` trong `config/medical_settings.yaml`.
 
 ## Demo / Screenshots
 
@@ -222,6 +223,12 @@ python run_menu.py
 | Đại trực tràng | Nội soi đại tràng, CT ngực-bụng-chậu, MRI trực tràng, PET |
 | Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
 | Cổ tử cung | MRI, CT, PET/CT |
+
+### Cải tiến nhận diện ảnh
+- **Validator ảnh đầu vào** (`medical/validator.py`): kiểm tra định dạng, đọc được, phân loại modality + body region, reject ảnh không hợp lệ.
+- **Classifier mới** (`medical/cnn_classifier.py`): ResNet/EfficientNet backbone, pretrained ImageNet, dropout, cosine annealing scheduler. Lưu `.pt` format.
+- **Backward compatible**: cũ centroid classifier vẫn hoạt động, load CNN tự động khi đúng format.
+- **CLI validate**: `python run_medical.py validate-image --image <path> --min-confidence 0.30`
 
 - `Pap/HPV`, soi cổ tử cung và sinh thiết là đầu vào lâm sàng, không phải file ảnh để upload trực tiếp.
 - Chat UI có preset chọn nhóm bệnh để lọc nguồn ảnh ngay từ đầu.

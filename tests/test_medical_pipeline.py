@@ -48,7 +48,7 @@ class _FakeDetector:
 class MedicalPipelineTests(unittest.TestCase):
     def test_analyze_image_generates_overlay_and_reports(self) -> None:
         with TemporaryDirectory() as temp_dir:
-            image_path = Path(temp_dir) / "input.jpg"
+            image_path = Path(temp_dir) / "lung_ct_input.jpg"
             model_path = Path(temp_dir) / "medical_model.pt"
             cv2.imwrite(str(image_path), np.full((120, 160, 3), 200, dtype=np.uint8))
             model_path.write_bytes(b"weights")
@@ -59,6 +59,7 @@ class MedicalPipelineTests(unittest.TestCase):
                 processed_dir=Path(temp_dir) / "normalized",
                 overlay_dir=Path(temp_dir) / "overlay",
                 image_size=320,
+                validation_min_confidence=0.10,
             )
             fake_result = SimpleNamespace(names={0: "lesion"}, boxes=[_FakeBox(0, 0.91, [20, 30, 100, 110])])
             analyzer = MedicalImageAnalyzer(config=config, detector_backend=_FakeDetector([fake_result]))
@@ -96,6 +97,9 @@ class MedicalPipelineTests(unittest.TestCase):
                 dataset.BitsStored = 16
                 dataset.HighBit = 15
                 dataset.PixelRepresentation = 0
+                dataset.Modality = "CT"
+                dataset.SeriesDescription = "CT nguc"
+                dataset.BodyPartExamined = "CHEST"
                 dataset.PixelData = np.full((16, 16), value, dtype=np.uint16).tobytes()
                 dcmwrite(path, dataset, little_endian=True, implicit_vr=False)
 
@@ -110,6 +114,7 @@ class MedicalPipelineTests(unittest.TestCase):
                 processed_dir=Path(temp_dir) / "normalized",
                 overlay_dir=Path(temp_dir) / "overlay",
                 image_size=320,
+                validation_min_confidence=0.10,
             )
             analyzer = MedicalImageAnalyzer(config=config, detector_backend=_FakeDetector([]))
 
@@ -158,6 +163,28 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertAlmostEqual(average_confidence, 0.6)
         self.assertIn("trung binh", recommendation)
 
+    def test_classify_findings_returns_uncertain_when_below_certainty(self) -> None:
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+                certainty_threshold=0.8,
+            ),
+            detector_backend=_FakeDetector([]),
+        )
+        findings = [DetectionFinding(label="lesion", confidence=0.5, bbox=(1, 2, 3, 4))]
+
+        risk_level, suspected_malignant, recommendation, average_confidence = analyzer._classify_findings(findings)
+
+        self.assertEqual(risk_level, "uncertain")
+        self.assertFalse(suspected_malignant)
+        self.assertIn("0.50", recommendation)
+        self.assertIn("0.80", recommendation)
+        self.assertIn("chuyen khoa", recommendation)
+
     def test_evaluate_image_quality_returns_warning_for_dark_image(self) -> None:
         analyzer = MedicalImageAnalyzer(
             config=MedicalImageAnalyzerConfig(
@@ -174,6 +201,43 @@ class MedicalPipelineTests(unittest.TestCase):
 
         self.assertTrue(warnings)
         self.assertTrue(any("qua toi" in warning for warning in warnings))
+
+    def test_prepare_image_for_analysis_uses_modality_specific_preprocessing(self) -> None:
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+            ),
+            detector_backend=_FakeDetector([]),
+        )
+        base = np.tile(np.linspace(60, 90, 64, dtype=np.uint8), (64, 1)).astype(np.uint8)
+        base = np.repeat(base[:, :, None], 3, axis=2)
+
+        processed = analyzer._prepare_image_for_analysis(base, modality="mammogram")
+
+        self.assertEqual(processed.shape, base.shape)
+        self.assertFalse(np.array_equal(processed, base))
+
+    def test_get_modality_thresholds_returns_stricter_ultrasound_profile(self) -> None:
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+            ),
+            detector_backend=_FakeDetector([]),
+        )
+
+        ct_profile = analyzer._get_modality_profile("ct")
+        ultrasound_profile = analyzer._get_modality_profile("ultrasound")
+
+        self.assertGreater(ultrasound_profile["certainty_threshold"], ct_profile["certainty_threshold"])
+        self.assertGreater(ultrasound_profile["medium_threshold"], ct_profile["medium_threshold"])
 
     def test_validate_medical_model_path_accepts_existing_model_path(self) -> None:
         with TemporaryDirectory() as temp_dir:

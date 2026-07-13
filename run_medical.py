@@ -5,18 +5,22 @@ import json
 from pathlib import Path
 
 from medical.case_payloads import build_case_export_payload, build_detection_metadata
-from medical.cancer_catalog import supported_cancer_labels
 from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
 from medical.cancer_overview import build_cancer_overview
 from medical.cli_helpers import print_medical_readiness, print_medical_status_block
 from medical.compliance import MEDICAL_DISCLAIMER
-from medical.dataset import create_default_medical_dataset_config, ensure_medical_dataset_structure
+from medical.dataset import (
+    count_medical_class_split_images,
+    create_default_medical_dataset_config,
+    ensure_medical_dataset_structure,
+)
 from medical.metrics import compute_medical_metrics
 from medical.output_management import _medical_output_directories
+from medical.modality_calibration import apply_calibrated_modality_tuning, calibrate_modality_tuning
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import export_case_bundle, update_case_report_case_id
-from medical.status_helpers import count_files
 from medical.storage import MedicalCaseDatabase
+from medical.validator import validate_image
 from medical.system_status import get_medical_system_status, recommended_medical_commands
 from medical.training import (
     audit_medical_raw_dataset,
@@ -33,10 +37,7 @@ from utils.entrypoint_common import run_entrypoint
 def _dataset_split_counts(dataset_root: Path) -> dict[str, int]:
     counts = {"train": 0, "val": 0, "test": 0}
     for split in counts:
-        counts[split] = sum(
-            count_files(dataset_root / class_name / "processed" / "images" / split)
-            for class_name in supported_cancer_labels()
-        )
+        counts[split] = sum(count_medical_class_split_images(dataset_root, split).values())
     return counts
 
 
@@ -54,6 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--image", required=True)
     analyze_parser.add_argument("--patient-code", required=True)
 
+    validate_image_parser = subparsers.add_parser("validate-image", help="Kiem tra anh y khoa hop le va phan loai modality/body region.")
+    validate_image_parser.add_argument("--image", required=True)
+    validate_image_parser.add_argument("--min-confidence", type=float, default=0.70, help="Ngưỡng confidence tối thiểu (0-1). Mặc định: 0.70")
+
     subparsers.add_parser("audit-dataset", help="Kiem tra anh train/val/test trong 7 thu muc ung thu.")
     subparsers.add_parser("split-dataset", help="Dong bo va xac thuc lai cau truc dataset medical.")
     subparsers.add_parser("status", help="Xem trang thai model, dataset va output medical.")
@@ -65,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("train", help="Train medical classifier.")
     subparsers.add_parser("validate", help="Validate medical classifier.")
     subparsers.add_parser("train-all", help="Split/validate/train theo dataset medical hien co.")
+    calibrate_parser = subparsers.add_parser("calibrate-modality-tuning", help="Thong ke dataset va de xuat nguong tuning theo modality.")
+    calibrate_parser.add_argument("--dataset-root", default="dataset/medical")
+    calibrate_parser.add_argument("--settings-path", default="config/medical_settings.yaml")
+    calibrate_parser.add_argument("--report-path", default="output/medical/reports/modality_tuning_report.json")
+    calibrate_parser.add_argument("--apply", action="store_true", help="Cap nhat modality_tuning trong file config.")
 
     history_parser = subparsers.add_parser("history", help="Xem lich su phan tich.")
     history_parser.add_argument("--limit", type=int, default=10)
@@ -89,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.epilog = (
         "Medical: init-dataset, init-cancer-dataset, status, sources, cancer, analyze\n"
-        "Medical: ready, report, dataset-counts\n"
+        "Medical: ready, report, dataset-counts, calibrate-modality-tuning\n"
         "Medical: audit-dataset, split-dataset, train, validate, train-all\n"
     )
     return parser
@@ -116,7 +126,18 @@ def main() -> int:
     def handle_analyze() -> int:
         analyzer = MedicalImageAnalyzer()
         db = MedicalCaseDatabase()
-        result = analyzer.analyze_image(args.image, patient_code=args.patient_code)
+        try:
+            result = analyzer.analyze_image(args.image, patient_code=args.patient_code)
+        except ValueError as exc:
+            message = str(exc)
+            if ": " in message:
+                error_code, error_message = message.split(": ", 1)
+            else:
+                error_code = "UNKNOWN_ERROR"
+                error_message = message
+            print(f"Loi: [{error_code}] {error_message}")
+            print("Vui long tai len dung loai anh y khoa duoc ho tro.")
+            return 1
         case_id = db.save_case(
             patient_code=result.patient_code,
             image_path=str(result.source_image),
@@ -131,6 +152,8 @@ def main() -> int:
         update_case_report_case_id(result.report_json_path, result.report_md_path, case_id=case_id)
         print(f"Ma ca benh: {case_id}")
         print(f"Muc do sang loc nguy co: {result.risk_level}")
+        if result.risk_level == "uncertain":
+            print("LOI: Ket qua khong du tin tuong de dua ra chan doan.")
         if result.quality_warnings:
             print("Canh bao chat luong anh:")
             for warning in result.quality_warnings:
@@ -139,6 +162,21 @@ def main() -> int:
         print(f"Report JSON: {result.report_json_path}")
         print(f"Report MD: {result.report_md_path}")
         print(MEDICAL_DISCLAIMER)
+        return 0
+
+    def handle_validate_image() -> int:
+        result = validate_image(args.image, min_confidence=args.min_confidence)
+        if result.status == "success":
+            print(f"Trang thai: {result.status}")
+            print(f"Modality: {result.modality}")
+            print(f"Body region: {result.body_region}")
+            print(f"Modality confidence: {result.modality_confidence:.2f}")
+            print(f"Body region confidence: {result.body_region_confidence:.2f}")
+        else:
+            print(f"Trang thai: {result.status}")
+            print(f"Error code: {result.error_code}")
+            print(f"Message: {result.message}")
+            return 1
         return 0
 
     def handle_history() -> int:
@@ -335,10 +373,34 @@ def main() -> int:
         print(MEDICAL_DISCLAIMER)
         return 0
 
+    def handle_calibrate_modality_tuning() -> int:
+        if args.apply:
+            report = apply_calibrated_modality_tuning(args.dataset_root, settings_path=args.settings_path)
+            action = "Da cap nhat"
+        else:
+            report = calibrate_modality_tuning(args.dataset_root, settings_path=args.settings_path)
+            action = "Da de xuat"
+        report_path = Path(args.report_path)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"{action} modality_tuning cho {report['sample_count']} anh.")
+        print(f"Report: {report_path}")
+        for modality, tuning in report["modality_tuning"].items():
+            if modality == "default":
+                continue
+            print(
+                f"- {modality}: certainty={tuning['certainty_threshold']:.2f}, "
+                f"medium={tuning['medium_threshold']:.2f}, quality={tuning['quality_threshold']:.2f}, "
+                f"contrast={tuning['contrast_boost']:.2f}"
+            )
+        print(MEDICAL_DISCLAIMER)
+        return 0
+
     handlers = {
         "init-dataset": handle_init_dataset,
         "init-cancer-dataset": handle_init_cancer_dataset,
         "analyze": handle_analyze,
+        "validate-image": handle_validate_image,
         "history": handle_history,
         "show-case": handle_show_case,
         "status": handle_status,
@@ -356,6 +418,7 @@ def main() -> int:
         "train": handle_train,
         "validate": handle_validate,
         "train-all": handle_train_all,
+        "calibrate-modality-tuning": handle_calibrate_modality_tuning,
     }
 
     handler = handlers.get(args.command)

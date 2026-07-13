@@ -8,6 +8,8 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
+from medical.cnn_classifier import is_cnn_classifier_path, load_cnn_classifier
+
 MEDICAL_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 DEFAULT_FEATURE_SIZE = (32, 32)
 
@@ -24,17 +26,14 @@ class MedicalClassifierModel:
     centroids: np.ndarray
     feature_size: tuple[int, int] = DEFAULT_FEATURE_SIZE
 
-    def predict(self, source: str | Path | np.ndarray, *, top_k: int = 3) -> list[MedicalClassifierPrediction]:
-        features = extract_medical_features(source, feature_size=self.feature_size)
+    def predict(self, source, *, top_k: int = 3) -> list[MedicalClassifierPrediction]:
+        features = _extract_medical_features(source, feature_size=self.feature_size)
         distances = np.linalg.norm(self.centroids - features, axis=1)
         scores = -distances
         probabilities = _softmax(scores)
         ranked_indexes = np.argsort(-probabilities)
         return [
-            MedicalClassifierPrediction(
-                label=self.class_labels[index],
-                confidence=float(probabilities[index]),
-            )
+            MedicalClassifierPrediction(label=self.class_labels[index], confidence=float(probabilities[index]))
             for index in ranked_indexes[: max(1, top_k)]
         ]
 
@@ -56,7 +55,7 @@ def is_supported_medical_image_path(path: str | Path) -> bool:
     return Path(path).suffix.lower() in MEDICAL_IMAGE_EXTENSIONS
 
 
-def extract_medical_features(source: str | Path | np.ndarray, *, feature_size: tuple[int, int] = DEFAULT_FEATURE_SIZE) -> np.ndarray:
+def _extract_medical_features(source, *, feature_size=DEFAULT_FEATURE_SIZE) -> np.ndarray:
     if isinstance(source, np.ndarray):
         array = source
         if array.ndim == 2:
@@ -93,7 +92,7 @@ def train_medical_classifier(
     counts = np.zeros(len(class_labels), dtype=np.int64)
 
     for source, class_index in samples:
-        features = extract_medical_features(source, feature_size=feature_size)
+        features = _extract_medical_features(source, feature_size=feature_size)
         if centroid_sums is None:
             centroid_sums = np.zeros((len(class_labels), features.size), dtype=np.float32)
         centroid_sums[class_index] += features
@@ -117,9 +116,21 @@ def save_medical_classifier(model: MedicalClassifierModel, path: str | Path) -> 
     return target_path
 
 
-def load_medical_classifier(path: str | Path) -> MedicalClassifierModel:
+def load_medical_classifier(path: str | Path):
+    cnn_model = _try_load_cnn_classifier(path)
+    if cnn_model is not None:
+        return cnn_model
     with Path(path).open("rb") as file:
         model = pickle.load(file)
     if not isinstance(model, MedicalClassifierModel):
         raise TypeError("Model medical khong hop le.")
     return model
+
+
+def _try_load_cnn_classifier(path: str | Path):
+    try:
+        if is_cnn_classifier_path(path):
+            return load_cnn_classifier(path)
+    except Exception:
+        pass
+    return None

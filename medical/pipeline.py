@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
+
 
 import cv2
 import numpy as np
 
 from medical.classifier import MedicalClassifierModel, load_medical_classifier
+from medical.cnn_classifier import MedicalCNNClassifierWrapper, is_cnn_classifier_path, load_cnn_classifier
 from medical.compliance import MEDICAL_DISCLAIMER
-from medical.dataset import is_supported_medical_upload_path, normalize_uploaded_image
+from medical.dashboard import write_inference_dashboard
+from medical.dataset import normalize_uploaded_image
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.reporting import build_artifact_stamp, write_case_report
+from medical.validator import ValidationResult, get_modality_tuning, validate_image
 from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
 
@@ -34,6 +38,28 @@ class MedicalImageAnalyzerConfig:
     conf_threshold: float = 0.25
     classify_high_risk_threshold: float = 0.75
     classify_medium_risk_threshold: float = 0.45
+    certainty_threshold: float = 0.55
+    validation_min_confidence: float = 0.70
+    validation_allowed_extensions: tuple[str, ...] = (
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".dcm",
+        ".nii",
+        ".nii.gz",
+    )
+    cnn_backbone: str = "resnet50"
+    cnn_image_size: int = 320
+    cnn_batch_size: int = 16
+    cnn_num_epochs: int = 30
+    cnn_learning_rate: float = 0.0001
+    cnn_dropout: float = 0.3
+    cnn_early_stopping_patience: int = 7
+    cnn_label_smoothing: float = 0.1
+    cnn_mixed_precision: bool = True
+    cnn_warmup_epochs: int = 3
+    cnn_tta: bool = True
+    modality_tuning: dict[str, Any] = field(default_factory=dict)
 
     def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
         return replace(self, model_path=Path(model_path))
@@ -44,6 +70,15 @@ class DetectionFinding:
     label: str
     confidence: float
     bbox: tuple[int, int, int, int]
+
+
+@dataclass(frozen=True)
+class PipelineStageResult:
+    stage: str
+    status: str
+    confidence: float
+    message: str
+    details: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +98,26 @@ class MedicalAnalysisResult:
     average_confidence: float
     model_name: str
     quality_warnings: list[str]
+    stage_confidences: dict[str, float] = field(default_factory=dict)
+    stage_messages: dict[str, str] = field(default_factory=dict)
+
+
+def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
+    detections: list[DetectionFinding] = []
+    for item in items:
+        if isinstance(item, DetectionFinding):
+            detections.append(item)
+            continue
+        if isinstance(item, dict) and "label" in item and "confidence" in item:
+            bbox = item.get("bbox") or (0, 0, 0, 0)
+            detections.append(
+                DetectionFinding(
+                    label=str(item["label"]),
+                    confidence=float(item["confidence"]),
+                    bbox=tuple(int(value) for value in bbox),
+                )
+            )
+    return detections
 
 
 def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
@@ -82,6 +137,23 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         conf_threshold=float(settings.get("conf_threshold", 0.25)),
         classify_high_risk_threshold=float(settings.get("classify_high_risk_threshold", 0.75)),
         classify_medium_risk_threshold=float(settings.get("classify_medium_risk_threshold", 0.45)),
+        certainty_threshold=float(settings.get("certainty_threshold", 0.55)),
+        validation_min_confidence=float(settings.get("validation_min_confidence", 0.70)),
+        validation_allowed_extensions=tuple(
+            settings.get("validation_allowed_extensions", [".jpg", ".jpeg", ".png", ".dcm", ".nii", ".nii.gz"])
+        ),
+        cnn_backbone=str(settings.get("cnn_backbone", "resnet50")),
+        cnn_image_size=int(settings.get("cnn_image_size", 320)),
+        cnn_batch_size=int(settings.get("cnn_batch_size", 16)),
+        cnn_num_epochs=int(settings.get("cnn_num_epochs", 30)),
+        cnn_learning_rate=float(settings.get("cnn_learning_rate", 0.0001)),
+        cnn_dropout=float(settings.get("cnn_dropout", 0.3)),
+        cnn_early_stopping_patience=int(settings.get("cnn_early_stopping_patience", 7)),
+        cnn_label_smoothing=float(settings.get("cnn_label_smoothing", 0.1)),
+        cnn_mixed_precision=bool(settings.get("cnn_mixed_precision", True)),
+        cnn_warmup_epochs=int(settings.get("cnn_warmup_epochs", 3)),
+        cnn_tta=bool(settings.get("cnn_tta", True)),
+        modality_tuning=settings.get("modality_tuning", {}) if isinstance(settings.get("modality_tuning", {}), dict) else {},
     )
 
 
@@ -93,6 +165,28 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
         issues.append("conf_threshold phai nam trong khoang (0, 1).")
     if not 0.0 < config.classify_medium_risk_threshold <= config.classify_high_risk_threshold <= 1.0:
         issues.append("ngưỡng nguy cơ không hợp lệ.")
+    if not 0.0 < config.certainty_threshold <= 1.0:
+        issues.append("certainty_threshold phai nam trong khoang (0, 1].")
+    if not 0.0 < config.validation_min_confidence <= 1.0:
+        issues.append("validation_min_confidence phai nam trong khoang (0, 1].")
+    if not config.validation_allowed_extensions:
+        issues.append("validation_allowed_extensions khong duoc de trong.")
+    if not config.cnn_image_size > 0:
+        issues.append("cnn_image_size phai lon hon 0.")
+    if not config.cnn_batch_size > 0:
+        issues.append("cnn_batch_size phai lon hon 0.")
+    if not config.cnn_num_epochs > 0:
+        issues.append("cnn_num_epochs phai lon hon 0.")
+    if not 0.0 < config.cnn_learning_rate <= 1.0:
+        issues.append("cnn_learning_rate khong hop le.")
+    if not 0.0 <= config.cnn_dropout < 1.0:
+        issues.append("cnn_dropout khong hop le.")
+    if config.cnn_early_stopping_patience <= 0:
+        issues.append("cnn_early_stopping_patience phai lon hon 0.")
+    if not 0.0 <= config.cnn_label_smoothing < 1.0:
+        issues.append("cnn_label_smoothing khong hop le.")
+    if config.cnn_warmup_epochs < 0:
+        issues.append("cnn_warmup_epochs khong duoc am.")
     if not config.model_path:
         issues.append("model_path khong duoc de trong.")
     if config.allow_fallback_model and config.fallback_model_path is None:
@@ -109,16 +203,27 @@ class MedicalImageAnalyzer:
     def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
         self.ensure_ready()
         resolved_source = Path(image_path)
-        if not is_supported_medical_upload_path(resolved_source):
-            raise ValueError(f"Khong ho tro file upload: {resolved_source}")
+        validation = self.validate_input(resolved_source)
+        if validation.status == "error":
+            raise ValueError(f"{validation.error_code}: {validation.message}")
         normalized_path = normalize_uploaded_image(resolved_source, self.config.processed_dir, image_size=self.config.image_size)
         image = cv2.imread(str(normalized_path))
         if image is None:
             raise RuntimeError(f"Khong doc duoc anh: {normalized_path}")
-        quality_warnings = self._evaluate_image_quality(image)
-        detections = self._detect_findings(image)
-        risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(detections)
-        processed_path = self._render_overlay(image.copy(), detections, patient_code=patient_code)
+        modality_profile = self._get_modality_profile(validation.modality)
+        prepared_image = self._prepare_image_for_analysis(image, modality=validation.modality)
+        quality_warnings = sorted(
+            set(self._evaluate_image_quality(prepared_image) + list(validation.quality_warnings))
+        )
+        stage_results = self._run_pipeline_stages(prepared_image, normalized_path, validation, modality_profile=modality_profile)
+        detect_stage = stage_results["detect"]
+        detections = _coerce_detections(detect_stage.details.get("detections", [])) if detect_stage.status == "success" else []
+        risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(
+            detections,
+            modality=validation.modality,
+            modality_profile=modality_profile,
+        )
+        processed_path = self._render_overlay(prepared_image.copy(), detections, patient_code=patient_code)
         payload = {
             "case_id": case_id,
             "patient_code": patient_code,
@@ -134,9 +239,21 @@ class MedicalImageAnalyzer:
                 {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in detections
             ],
             "quality_warnings": quality_warnings,
+            "stages": {name: {"status": item.status, "confidence": item.confidence, "message": item.message} for name, item in stage_results.items()},
             "disclaimer": MEDICAL_DISCLAIMER,
         }
         report_json_path, report_md_path = write_case_report(self.config.reports_dir, payload)
+        dashboard_payload = {
+            "patient_code": patient_code,
+            "source_image": str(resolved_source),
+            "risk_level": risk_level,
+            "suspected_malignant": suspected_malignant,
+            "average_confidence": average_confidence,
+            "detection_count": len(detections),
+            "quality_warnings": quality_warnings,
+            "model_name": self.config.model_path.name,
+        }
+        write_inference_dashboard(self.config.reports_dir, dashboard_payload)
         return MedicalAnalysisResult(
             case_id=case_id,
             patient_code=patient_code,
@@ -153,7 +270,152 @@ class MedicalImageAnalyzer:
             average_confidence=average_confidence,
             model_name=self.config.model_path.name,
             quality_warnings=quality_warnings,
+            stage_confidences={name: item.confidence for name, item in stage_results.items()},
+            stage_messages={name: item.message for name, item in stage_results.items()},
         )
+
+    def _run_pipeline_stages(
+        self,
+        image: np.ndarray,
+        normalized_path: Path,
+        validation: ValidationResult,
+        *,
+        modality_profile: dict[str, Any] | None = None,
+    ) -> dict[str, PipelineStageResult]:
+        validate_stage = PipelineStageResult(
+            stage="validate",
+            status=validation.status,
+            confidence=max(validation.modality_confidence, validation.body_region_confidence),
+            message=validation.message or "Đã kiểm tra đầu vào ảnh.",
+            details={"modality": validation.modality, "body_region": validation.body_region, "quality_warnings": list(validation.quality_warnings)},
+        )
+
+        preprocess_stage = PipelineStageResult(
+            stage="preprocess",
+            status="success" if validation.status in {"success", "uncertain"} else "error",
+            confidence=0.85 if validation.status in {"success", "uncertain"} else 0.0,
+            message="Đã chuẩn hóa ảnh và chuẩn bị cho phân tích.",
+            details={"normalized_path": str(normalized_path)},
+        )
+
+        detect_stage = PipelineStageResult(
+            stage="detect",
+            status="success",
+            confidence=0.0,
+            message="Đợi kết quả phát hiện.",
+            details={},
+        )
+
+        if validation.status == "error":
+            detect_stage = PipelineStageResult(
+                stage="detect",
+                status="error",
+                confidence=0.0,
+                message="Bỏ qua phát hiện vì ảnh không đạt điều kiện kiểm tra đầu vào.",
+                details={},
+            )
+        else:
+            detections = self._detect_findings(image)
+            if detections:
+                confidence = float(np.mean([item.confidence for item in detections]))
+                detect_stage = PipelineStageResult(
+                    stage="detect",
+                    status="success",
+                    confidence=confidence,
+                    message="Phát hiện vùng quan tâm thành công.",
+                    details={"detections": [
+                        {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in detections
+                    ]},
+                )
+            else:
+                detect_stage = PipelineStageResult(
+                    stage="detect",
+                    status="uncertain",
+                    confidence=0.0,
+                    message="Không phát hiện được vùng quan tâm rõ ràng trên ảnh.",
+                    details={},
+                )
+
+        classify_stage = PipelineStageResult(
+            stage="classify",
+            status="success",
+            confidence=0.0,
+            message="Đợi kết quả phân loại.",
+            details={},
+        )
+        if detection_details := detect_stage.details.get("detections"):
+            if detection_details:
+                average_confidence = float(np.mean([item["confidence"] for item in detection_details]))
+                certainty_threshold = (modality_profile or {}).get("certainty_threshold", self.config.certainty_threshold)
+                classify_stage = PipelineStageResult(
+                    stage="classify",
+                    status="success" if average_confidence >= certainty_threshold else "uncertain",
+                    confidence=average_confidence,
+                    message="Phân loại rủi ro dựa trên vùng phát hiện.",
+                    details={"average_confidence": average_confidence, "certainty_threshold": certainty_threshold},
+                )
+
+        report_stage = PipelineStageResult(
+            stage="report",
+            status="success",
+            confidence=max(validate_stage.confidence, preprocess_stage.confidence, detect_stage.confidence, classify_stage.confidence),
+            message="Đã tạo báo cáo và dashboard cho ca phân tích.",
+            details={},
+        )
+
+        return {
+            "validate": validate_stage,
+            "preprocess": preprocess_stage,
+            "detect": detect_stage,
+            "classify": classify_stage,
+            "report": report_stage,
+        }
+
+    def _get_modality_profile(self, modality: str | None) -> dict[str, Any]:
+        tuning = get_modality_tuning(modality, self.config.modality_tuning)
+        if tuning["normalize"] == "default":
+            return {
+                "certainty_threshold": self.config.certainty_threshold,
+                "medium_threshold": self.config.classify_medium_risk_threshold,
+                "contrast_boost": 1.0,
+                "normalize": "default",
+                "quality_threshold": tuning["quality_threshold"],
+            }
+        return {
+            "certainty_threshold": tuning["certainty_threshold"],
+            "medium_threshold": tuning["medium_threshold"],
+            "contrast_boost": tuning["contrast_boost"],
+            "normalize": tuning["normalize"],
+            "quality_threshold": tuning["quality_threshold"],
+        }
+
+    def _prepare_image_for_analysis(self, image: np.ndarray, *, modality: str | None) -> np.ndarray:
+        profile = self._get_modality_profile(modality)
+        img = image.astype(np.float32)
+        if profile["normalize"] == "ct":
+            img = np.clip(img * 1.08, 0, 255).astype(np.uint8)
+        elif profile["normalize"] == "mri":
+            img = np.clip(img * 1.04, 0, 255).astype(np.uint8)
+        elif profile["normalize"] == "mammogram":
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            enhanced = clahe.apply(gray)
+            img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+        elif profile["normalize"] == "ultrasound":
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            img = cv2.cvtColor(cv2.equalizeHist(blurred), cv2.COLOR_GRAY2BGR)
+        else:
+            img = image
+
+        if profile["contrast_boost"] != 1.0:
+            lab = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2LAB)
+            l_channel, a, b = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=profile["contrast_boost"], tileGridSize=(8, 8))
+            l_channel = clahe.apply(l_channel)
+            img = cv2.merge((l_channel, a, b))
+            img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
+        return img.astype(np.uint8)
 
     def _evaluate_image_quality(self, image: np.ndarray) -> list[str]:
         warnings: list[str] = []
@@ -174,11 +436,19 @@ class MedicalImageAnalyzer:
     def _detect_findings(self, image: np.ndarray) -> list[DetectionFinding]:
         if self._detector_backend is not None:
             return self._detect_with_backend(image)
-        classifier = self._load_classifier()
-        prediction = classifier.predict(image, top_k=1)[0]
+        cnn_wrapper = self._load_cnn_wrapper()
+        if cnn_wrapper is not None:
+            prediction = cnn_wrapper.predict(image, top_k=1, tta=self.config.cnn_tta)[0]
+            label = prediction["label"]
+            confidence = prediction["confidence"]
+        else:
+            classifier = self._load_classifier()
+            prediction = classifier.predict(image, top_k=1)[0]
+            label = prediction.label
+            confidence = prediction.confidence
         height, width = image.shape[:2]
         bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
-        return [DetectionFinding(label=prediction.label, confidence=prediction.confidence, bbox=bbox)]
+        return [DetectionFinding(label=label, confidence=confidence, bbox=bbox)]
 
     def _detect_with_backend(self, image: np.ndarray) -> list[DetectionFinding]:
         backend = self._detector_backend or self._load_default_backend()
@@ -232,6 +502,13 @@ class MedicalImageAnalyzer:
         self.config = self.config.with_model_path(model_path)
         return model_path
 
+    def validate_input(self, image_path: str | Path) -> ValidationResult:
+        return validate_image(
+            image_path,
+            allowed_extensions=list(self.config.validation_allowed_extensions),
+            min_confidence=self.config.validation_min_confidence,
+        )
+
     def _load_default_backend(self) -> DetectorBackend:
         raise RuntimeError("Medical pipeline hien tai dung classifier local, khong can backend YOLO.")
 
@@ -240,7 +517,18 @@ class MedicalImageAnalyzer:
             self._classifier_model = load_medical_classifier(self.config.model_path)
         return self._classifier_model
 
-    def _classify_findings(self, detections: list[DetectionFinding]) -> tuple[str, bool, str, float]:
+    def _load_cnn_wrapper(self) -> MedicalCNNClassifierWrapper | None:
+        if is_cnn_classifier_path(self.config.model_path):
+            return load_cnn_classifier(self.config.model_path)
+        return None
+
+    def _classify_findings(
+        self,
+        detections: list[DetectionFinding],
+        *,
+        modality: str | None = None,
+        modality_profile: dict[str, Any] | None = None,
+    ) -> tuple[str, bool, str, float]:
         if not detections:
             return (
                 "low",
@@ -250,6 +538,16 @@ class MedicalImageAnalyzer:
             )
         average_confidence = sum(item.confidence for item in detections) / len(detections)
         max_confidence = max(item.confidence for item in detections)
+        profile = modality_profile or self._get_modality_profile(modality)
+        certainty_threshold = profile.get("certainty_threshold", self.config.certainty_threshold)
+        medium_threshold = profile.get("medium_threshold", self.config.classify_medium_risk_threshold)
+        if max_confidence < certainty_threshold:
+            return (
+                "uncertain",
+                False,
+                f"Ket qua chua du tin tuong (max_confidence={max_confidence:.2f} < {certainty_threshold:.2f}). Khong duoc phan loai benh nhan. Can kham chuyen khoa de bao dam doanh nghiep.",
+                average_confidence,
+            )
         if max_confidence >= self.config.classify_high_risk_threshold or len(detections) >= 3:
             return (
                 "high",
@@ -257,7 +555,7 @@ class MedicalImageAnalyzer:
                 "Phat hien vung ton thuong co nguy co cao. Nen chuyen benh nhan den bac si da lieu/ung buou de danh gia tiep va sinh thiet neu can.",
                 average_confidence,
             )
-        if max_confidence >= self.config.classify_medium_risk_threshold:
+        if max_confidence >= medium_threshold:
             return (
                 "medium",
                 True,
