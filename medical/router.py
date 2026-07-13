@@ -115,7 +115,7 @@ def family_members(family_key: str) -> tuple[str, ...]:
     config = IMAGE_TYPE_FAMILIES.get(family_key)
     if config is None:
         return ()
-    return tuple(config["members"])  # type: ignore[return-value]
+    return tuple(str(member) for member in config["members"])
 
 
 def is_underrepresented(body_region: str) -> bool:

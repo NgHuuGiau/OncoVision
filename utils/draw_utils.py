@@ -140,8 +140,9 @@ def draw_detection_results(
     trail_overlay = image.copy() if (motion_trails and len(motion_trails) > 0) else None
     drew_trail = False
     if trail_overlay is not None:
+        safe_trails = motion_trails or {}
         for detection in detection_list:
-            trail_points = motion_trails.get(getattr(detection, "track_id", -1), [])
+            trail_points = safe_trails.get(getattr(detection, "track_id", -1), [])
             if len(trail_points) < 2:
                 continue
             drew_trail = True
@@ -162,18 +163,19 @@ def draw_detection_results(
             if clamped_bbox is None:
                 continue
             x1, y1, x2, y2 = clamped_bbox
-            center_x = (x1 + x2) / 2.0
-            center_y = (y1 + y2) / 2.0
+            center_x = float((x1 + x2) / 2.0)
+            center_y = float((y1 + y2) / 2.0)
             radius_x = max(8, (x2 - x1) // 2)
             radius_y = max(8, (y2 - y1) // 2)
             cv2.ellipse(heatmap, (int(center_x), int(center_y)), (radius_x, radius_y), 0, 0, 360, 1.0, -1)
         if np.max(heatmap) > 0:
-            heatmap = cv2.GaussianBlur(heatmap, (31, 31), 0)
-            heatmap = heatmap / max(np.max(heatmap), 1e-6)
+            heatmap = cv2.GaussianBlur(heatmap, (31, 31), 0).astype(np.float32)
+            max_heat = float(np.max(heatmap))
+            heatmap = heatmap / max(max_heat, 1e-6)
             heatmap_color = np.zeros(image.shape, dtype=np.uint8)
-            heatmap_color[..., 0] = np.clip(heatmap * 255 * 0.35, 0, 255)
-            heatmap_color[..., 1] = np.clip(heatmap * 255 * 0.20, 0, 255)
-            heatmap_color[..., 2] = np.clip(heatmap * 255 * 0.90, 0, 255)
+            heatmap_color[..., 0] = np.clip(heatmap * 255 * 0.35, 0, 255).astype(np.uint8)
+            heatmap_color[..., 1] = np.clip(heatmap * 255 * 0.20, 0, 255).astype(np.uint8)
+            heatmap_color[..., 2] = np.clip(heatmap * 255 * 0.90, 0, 255).astype(np.uint8)
             image = cv2.addWeighted(image, 0.75, heatmap_color, 0.25, 0.0)
 
     for detection in detection_list:

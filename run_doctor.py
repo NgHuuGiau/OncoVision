@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from app.chat_ui.paths import get_chat_capture_dir
 from core.hardware_info import detect_hardware
@@ -121,8 +122,9 @@ def _print_recommendations(recommendations: dict[str, object]) -> None:
     print(line(rule("-"), CYAN))
     print(section("GỢI Ý CHẠY THEO MÁY", GREEN))
     for label, runtime in recommendations.items():
-        value = f"{runtime.primary_model_name} / {runtime.resolved_device} / imgsz {runtime.imgsz}"
-        color = GREEN if runtime.primary_model_name != "yolo11n.pt" else YELLOW
+        runtime_obj = cast(Any, runtime)
+        value = f"{runtime_obj.primary_model_name} / {runtime_obj.resolved_device} / imgsz {runtime_obj.imgsz}"
+        color = GREEN if runtime_obj.primary_model_name != "yolo11n.pt" else YELLOW
         print(row(label, value, color, bounded=False))
 
 

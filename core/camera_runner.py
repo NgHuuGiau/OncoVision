@@ -194,7 +194,7 @@ class CameraStream:
             self.consecutive_read_failures += 1
             self.last_error_message = "Không đọc được frame từ camera."
             self.last_status_message = f"Mat frame camera ({self.consecutive_read_failures}/{self.max_consecutive_read_failures})."
-        return False, None
+        return False, None  # type: ignore[return-value]
 
     def _take_latest_frame(self) -> np.ndarray | None:
         with self.capture_lock:

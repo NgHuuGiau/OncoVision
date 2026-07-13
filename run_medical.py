@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any, cast
 
 from medical.case_payloads import build_case_export_payload, build_detection_metadata
 from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
@@ -240,7 +241,7 @@ def main() -> int:
 
     def handle_cancer() -> int:
         overview = build_cancer_overview()
-        summary = overview["summary"]
+        summary = cast(dict[str, Any], overview["summary"])
         print("Tong quan ung thu")
         print(f"Tong anh ung thu local: {summary['total_cancer_images']}")
         print("Theo tung nhom ung thu:")

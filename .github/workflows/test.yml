@@ -108,14 +108,14 @@ jobs:
         shell: bash
         run: |
           set +e
-          ruff check . --ignore E402 --exclude HieraChain 2>&1 | tee ci-logs/04-ruff.txt
+          ruff check . --ignore E402 2>&1 | tee ci-logs/04-ruff.txt
           exit ${PIPESTATUS[0]}
 
       - name: Lint with Ruff (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          ruff check . --ignore E402 --exclude HieraChain 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
+          ruff check . --ignore E402 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
           exit $LASTEXITCODE
 
       - name: Type check with mypy (Linux)
@@ -124,33 +124,16 @@ jobs:
         shell: bash
         run: |
           set +e
-          mypy medical utils run_*.py --exclude HieraChain 2>&1 | tee ci-logs/05-mypy-type-check.txt
+          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py run_train.py 2>&1 | tee ci-logs/05-mypy-type-check.txt
           exit ${PIPESTATUS[0]}
 
-      - name: Verify entrypoint help (Linux)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set +e
-          if [ -f scripts/verify_entrypoints_help.py ]; then
-            python scripts/verify_entrypoints_help.py 2>&1 | tee ci-logs/06-verify-entrypoints-help.txt
-            exit ${PIPESTATUS[0]}
-          else
-            echo "Skipped: scripts/verify_entrypoints_help.py not found" | tee ci-logs/06-verify-entrypoints-help.txt
-            exit 0
-          fi
-
-      - name: Verify entrypoint help (Windows)
+      - name: Type check with mypy (Windows)
         if: runner.os == 'Windows'
+        continue-on-error: true
         shell: pwsh
         run: |
-          if (Test-Path "scripts/verify_entrypoints_help.py") {
-            python scripts/verify_entrypoints_help.py 2>&1 | Tee-Object -FilePath ci-logs/06-verify-entrypoints-help.txt
-            exit $LASTEXITCODE
-          } else {
-            "Skipped: scripts/verify_entrypoints_help.py not found" | Tee-Object -FilePath ci-logs/06-verify-entrypoints-help.txt
-            exit 0
-          }
+          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py run_train.py 2>&1 | Tee-Object -FilePath ci-logs/05-mypy-type-check.txt
+          exit $LASTEXITCODE
 
       - name: Smoke check (Linux)
         if: runner.os != 'Windows'

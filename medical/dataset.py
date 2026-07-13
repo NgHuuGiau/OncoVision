@@ -300,10 +300,11 @@ def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:
             return label
 
     if source.is_file() and _medical_upload_suffix(source) == ".dcm":
+        pydicom = None
         try:
             import pydicom
         except ImportError:  # pragma: no cover
-            pydicom = None
+            pass
         if pydicom is not None:
             try:
                 dataset = pydicom.dcmread(str(source), stop_before_pixels=True, force=True)
@@ -407,7 +408,7 @@ def _load_nifti_volume(source: Path) -> np.ndarray:
         raise RuntimeError("Khong doc duoc NIfTI. Hay cai dat nibabel de mo file .nii/.nii.gz.") from exc
 
     image = nib.load(str(source))
-    volume = np.asanyarray(image.dataobj)
+    volume = np.asanyarray(image.dataobj)  # type: ignore[attr-defined]
     if volume.ndim == 4:
         volume = volume[..., 0]
     return np.asarray(volume)
@@ -415,7 +416,7 @@ def _load_nifti_volume(source: Path) -> np.ndarray:
 
 def _load_mha_volume(source: Path) -> np.ndarray:
     try:
-        import SimpleITK as sitk
+        import SimpleITK as sitk  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("Khong doc duoc MHA/MHD. Hay cai dat SimpleITK de mo file .mha/.mhd.") from exc
 

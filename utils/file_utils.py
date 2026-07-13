@@ -79,7 +79,7 @@ def load_yaml_cached(path: str | Path) -> Any:
     return _load_yaml_cached(str(Path(path)))
 
 
-load_yaml_cached.cache_clear = _load_yaml_cached.cache_clear
+load_yaml_cached.cache_clear = _load_yaml_cached.cache_clear  # type: ignore[attr-defined]
 
 
 def save_yaml(path: str | Path, data: Any) -> None:

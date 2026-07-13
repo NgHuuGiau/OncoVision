@@ -29,7 +29,7 @@ def _smooth_bbox(
     return tuple(
         int(round((previous_value * alpha) + (current_value * (1.0 - alpha))))
         for previous_value, current_value in zip(previous_bbox, current_bbox)
-    )
+    )  # type: ignore[return-value]
 
 
 def _bbox_center(box: tuple[int, int, int, int]) -> tuple[float, float]:
@@ -79,4 +79,4 @@ def _estimate_motion_bbox(
 ) -> tuple[int, int, int, int]:
     deltas = [current_value - previous_value for previous_value, current_value in zip(previous_observed_bbox, current_bbox)]
     predicted = tuple(previous_display_value + delta for previous_display_value, delta in zip(previous_display_bbox, deltas))
-    return predicted
+    return predicted  # type: ignore[return-value]

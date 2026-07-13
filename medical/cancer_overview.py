@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
 from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
@@ -56,7 +57,7 @@ def build_cancer_overview(dataset_root: str | Path = MEDICAL_DATASET_ROOT) -> di
                 "failed_count": 0,
             },
         ]
-        local_image_count = sum(item["image_count"] for item in local_sources)
+        local_image_count = sum(cast(Any, item)["image_count"] for item in local_sources)
         total_images += local_image_count
         local_status = "co_anh_local" if local_image_count > 0 else "chua_co_anh_local"
         cancers.append(
@@ -71,7 +72,7 @@ def build_cancer_overview(dataset_root: str | Path = MEDICAL_DATASET_ROOT) -> di
                 "local_status": local_status,
                 "local_image_count": local_image_count,
                 "sources": grouped_sources.get(cancer_type, []),
-                "local_sources": local_sources,
+                "local_sources": cast(list[dict[str, Any]], local_sources),
             }
         )
     return {

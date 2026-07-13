@@ -214,10 +214,10 @@ def _load_modality_tuning_from_config() -> dict[str, dict[str, float | str]]:
 
 
 def _normalize_tuning_block(block: dict[str, Any] | None) -> dict[str, float | str]:
-    merged = dict(_DEFAULT_MODALITY_TUNING)
+    merged: dict[str, float | str] = dict(_DEFAULT_MODALITY_TUNING)
     if isinstance(block, dict):
         for key, value in block.items():
-            if key in merged and value is not None:
+            if key in merged and value is not None and isinstance(value, (int, float, str)):
                 merged[key] = value
     return merged
 

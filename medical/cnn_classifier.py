@@ -263,7 +263,7 @@ class EarlyStopping:
         self.patience = patience
         self.min_delta = min_delta
         self.mode = mode
-        self.best_score = None
+        self.best_score: float | None = None
         self.counter = 0
         self.early_stop = False
         self.delta = min_delta if mode == "min" else -min_delta
@@ -292,7 +292,7 @@ def _create_optimizer(model: nn.Module, learning_rate: float, weight_decay: floa
     return torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
 
-def _create_scheduler(optimizer: torch.optim.Optimizer, num_epochs: int, warmup_epochs: int = 3) -> torch.optim.lr_scheduler._LRScheduler:
+def _create_scheduler(optimizer: torch.optim.Optimizer, num_epochs: int, warmup_epochs: int = 3) -> torch.optim.lr_scheduler.LRScheduler:
     if warmup_epochs > 0:
         warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs
@@ -382,7 +382,7 @@ def train_cnn_classifier(
         "lr": [],
     }
 
-    best_model_state = None
+    best_model_state: dict[str, Any] | None = None
     best_val_acc = 0.0
 
     for epoch in range(num_epochs):
@@ -441,7 +441,7 @@ def train_cnn_classifier(
                     model.load_state_dict(best_model_state["model_state_dict"])
                 break
 
-    wrapper = MedicalCNNClassifierWrapper(model=model, class_labels=class_labels, device=device_obj)
+    wrapper = MedicalCNNClassifierWrapper(model=model, class_labels=class_labels, device=str(device_obj))
     return wrapper, history
 
 

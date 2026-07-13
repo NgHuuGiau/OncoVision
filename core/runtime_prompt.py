@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from core.hardware_info import detect_hardware
 from core.runtime_advisor import (
@@ -14,6 +15,22 @@ from core.runtime_advisor import (
     mode_title,
     quality_score,
     stability_score,
+)
+from core.model_selector import load_settings
+from utils.console_ui import (
+    CYAN,
+    DIM,
+    GREEN,
+    MAGENTA,
+    RED,
+    YELLOW,
+    header,
+    line,
+    row,
+    rule,
+    section,
+    color,
+    pad,
 )
 from core.model_selector import load_settings
 from utils.console_ui import (
@@ -354,7 +371,7 @@ def main() -> None:
             hardware=hardware,
             settings=settings,
             model_config=model_config,
-            recommendations=recommendations,
+            recommendations=cast(dict[str, object], recommendations),
         )
     )
     print(line(rule("="), CYAN))

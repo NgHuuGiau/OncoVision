@@ -109,12 +109,15 @@ def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
             detections.append(item)
             continue
         if isinstance(item, dict) and "label" in item and "confidence" in item:
-            bbox = item.get("bbox") or (0, 0, 0, 0)
+            raw_bbox = item.get("bbox") or (0, 0, 0, 0)
+            bbox = tuple(int(value) for value in raw_bbox)
+            if len(bbox) != 4:
+                bbox = (0, 0, 0, 0)
             detections.append(
                 DetectionFinding(
                     label=str(item["label"]),
                     confidence=float(item["confidence"]),
-                    bbox=tuple(int(value) for value in bbox),
+                    bbox=bbox,
                 )
             )
     return detections
@@ -217,7 +220,9 @@ class MedicalImageAnalyzer:
         )
         stage_results = self._run_pipeline_stages(prepared_image, normalized_path, validation, modality_profile=modality_profile)
         detect_stage = stage_results["detect"]
-        detections = _coerce_detections(detect_stage.details.get("detections", [])) if detect_stage.status == "success" else []
+        detect_details = detect_stage.details or {}
+        raw_detections = detect_details.get("detections", [])
+        detections = _coerce_detections(raw_detections) if detect_stage.status == "success" else []
         risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(
             detections,
             modality=validation.modality,
@@ -343,7 +348,8 @@ class MedicalImageAnalyzer:
             message="Đợi kết quả phân loại.",
             details={},
         )
-        if detection_details := detect_stage.details.get("detections"):
+        detect_details = detect_stage.details or {}
+        if detection_details := detect_details.get("detections"):
             if detection_details:
                 average_confidence = float(np.mean([item["confidence"] for item in detection_details]))
                 certainty_threshold = (modality_profile or {}).get("certainty_threshold", self.config.certainty_threshold)
@@ -409,7 +415,8 @@ class MedicalImageAnalyzer:
             img = image
 
         if profile["contrast_boost"] != 1.0:
-            lab = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2LAB)
+            img_uint8 = img.astype(np.uint8)
+            lab = cv2.cvtColor(img_uint8, cv2.COLOR_BGR2LAB)
             l_channel, a, b = cv2.split(lab)
             clahe = cv2.createCLAHE(clipLimit=profile["contrast_boost"], tileGridSize=(8, 8))
             l_channel = clahe.apply(l_channel)
@@ -439,13 +446,17 @@ class MedicalImageAnalyzer:
         cnn_wrapper = self._load_cnn_wrapper()
         if cnn_wrapper is not None:
             prediction = cnn_wrapper.predict(image, top_k=1, tta=self.config.cnn_tta)[0]
-            label = prediction["label"]
-            confidence = prediction["confidence"]
+            if isinstance(prediction, dict):
+                label = str(prediction.get("label", ""))
+                confidence = float(prediction.get("confidence", 0.0))
+            else:
+                label = str(prediction.label)
+                confidence = float(prediction.confidence)
         else:
             classifier = self._load_classifier()
             prediction = classifier.predict(image, top_k=1)[0]
-            label = prediction.label
-            confidence = prediction.confidence
+            label = str(prediction.label)
+            confidence = float(prediction.confidence)
         height, width = image.shape[:2]
         bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
         return [DetectionFinding(label=label, confidence=confidence, bbox=bbox)]
@@ -475,21 +486,27 @@ class MedicalImageAnalyzer:
                         )
                     )
             elif hasattr(result, "label") and hasattr(result, "confidence"):
-                bbox = getattr(result, "bbox", None) or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
+                raw_bbox = getattr(result, "bbox", None) or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
+                bbox = tuple(int(value) for value in raw_bbox)
+                if len(bbox) != 4:
+                    bbox = (0, 0, image.shape[1] - 1, image.shape[0] - 1)
                 findings.append(
                     DetectionFinding(
                         label=str(result.label),
                         confidence=float(result.confidence),
-                        bbox=tuple(int(value) for value in bbox),
+                        bbox=bbox,
                     )
                 )
             elif isinstance(result, dict) and "label" in result and "confidence" in result:
-                bbox = result.get("bbox") or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
+                raw_bbox = result.get("bbox") or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
+                bbox = tuple(int(value) for value in raw_bbox)
+                if len(bbox) != 4:
+                    bbox = (0, 0, image.shape[1] - 1, image.shape[0] - 1)
                 findings.append(
                     DetectionFinding(
                         label=str(result["label"]),
                         confidence=float(result["confidence"]),
-                        bbox=tuple(int(value) for value in bbox),
+                        bbox=bbox,
                     )
                 )
         return findings

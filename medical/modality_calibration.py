@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, median
-from typing import Any
+from typing import Any, cast
 
 from medical.dataset import infer_medical_upload_context
 from medical.training import MedicalTrainingPaths, medical_training_paths
@@ -106,19 +106,20 @@ def calibrate_modality_tuning(
                 "image_count": 0,
             },
         )
-        bucket["image_count"] = int(bucket["image_count"]) + 1
+        bucket["image_count"] = int(cast(Any, bucket["image_count"])) + 1
         bucket["modality_confidences"].append(float(validation.modality_confidence))
         bucket["body_confidences"].append(float(validation.body_region_confidence))
         bucket["quality_scores"].append(float(quality_score))
-        bucket["warning_count"] = int(bucket["warning_count"]) + (1 if warnings else 0)
+        bucket["warning_count"] = int(cast(Any, bucket["warning_count"])) + (1 if warnings else 0)
 
     summaries: dict[str, ModalityCalibrationSummary] = {}
     for modality, stats in modality_samples.items():
-        modality_confidences = list(stats["modality_confidences"])
-        body_confidences = list(stats["body_confidences"])
-        quality_scores = list(stats["quality_scores"])
-        image_count = int(stats["image_count"])
-        warning_rate = float(stats["warning_count"]) / max(1, image_count)
+        modality_confidences = cast(list[float], list(stats["modality_confidences"]))
+        body_confidences = cast(list[float], list(stats["body_confidences"]))
+        quality_scores = cast(list[float], list(stats["quality_scores"]))
+        image_count = int(cast(Any, stats["image_count"]))
+        warning_count = int(cast(Any, stats["warning_count"]))
+        warning_rate = float(warning_count) / max(1, image_count)
         summaries[modality] = ModalityCalibrationSummary(
             modality=modality,
             image_count=image_count,

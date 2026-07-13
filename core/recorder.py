@@ -40,7 +40,7 @@ class VideoRecorder:
         self.output_path = self._build_output_path()
         self.writer = cv2.VideoWriter(
             str(self.output_path),
-            cv2.VideoWriter_fourcc(*self.codec),
+            cv2.VideoWriter_fourcc(*self.codec),  # type: ignore[attr-defined]
             self.fps,
             frame_size,
         )
