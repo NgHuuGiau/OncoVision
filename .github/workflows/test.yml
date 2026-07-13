@@ -27,6 +27,8 @@ jobs:
     env:
       PYTHONIOENCODING: utf-8
       PYTHONDONTWRITEBYTECODE: "1"
+      QT_QPA_PLATFORM: offscreen
+      QT_QPA_PLATFORM: offscreen
 
     steps:
       - name: Checkout code
