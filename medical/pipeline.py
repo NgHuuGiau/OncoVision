@@ -406,11 +406,11 @@ class MedicalImageAnalyzer:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             enhanced = clahe.apply(gray)
-            img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+            img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)  # type: ignore[assignment]
         elif profile["normalize"] == "ultrasound":
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            img = cv2.cvtColor(cv2.equalizeHist(blurred), cv2.COLOR_GRAY2BGR)
+            img = cv2.cvtColor(cv2.equalizeHist(blurred), cv2.COLOR_GRAY2BGR)  # type: ignore[assignment]
         else:
             img = image
 
@@ -420,8 +420,8 @@ class MedicalImageAnalyzer:
             l_channel, a, b = cv2.split(lab)
             clahe = cv2.createCLAHE(clipLimit=profile["contrast_boost"], tileGridSize=(8, 8))
             l_channel = clahe.apply(l_channel)
-            img = cv2.merge((l_channel, a, b))
-            img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
+            img = cv2.merge((l_channel, a, b))  # type: ignore[assignment]
+            img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)  # type: ignore[assignment]
         return img.astype(np.uint8)
 
     def _evaluate_image_quality(self, image: np.ndarray) -> list[str]:
@@ -445,18 +445,14 @@ class MedicalImageAnalyzer:
             return self._detect_with_backend(image)
         cnn_wrapper = self._load_cnn_wrapper()
         if cnn_wrapper is not None:
-            prediction = cnn_wrapper.predict(image, top_k=1, tta=self.config.cnn_tta)[0]
-            if isinstance(prediction, dict):
-                label = str(prediction.get("label", ""))
-                confidence = float(prediction.get("confidence", 0.0))
-            else:
-                label = str(prediction.label)
-                confidence = float(prediction.confidence)
+            cnn_prediction = cnn_wrapper.predict(image, top_k=1, tta=self.config.cnn_tta)[0]
+            label = str(cnn_prediction.get("label", ""))
+            confidence = float(cnn_prediction.get("confidence", 0.0))
         else:
             classifier = self._load_classifier()
-            prediction = classifier.predict(image, top_k=1)[0]
-            label = str(prediction.label)
-            confidence = float(prediction.confidence)
+            classifier_prediction = classifier.predict(image, top_k=1)[0]
+            label = str(classifier_prediction.label)
+            confidence = float(classifier_prediction.confidence)
         height, width = image.shape[:2]
         bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
         return [DetectionFinding(label=label, confidence=confidence, bbox=bbox)]

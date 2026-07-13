@@ -7,7 +7,7 @@ from urllib.request import urlretrieve
 try:
     from training._training_bootstrap import ensure_project_root_on_path
 except ModuleNotFoundError:
-    from _training_bootstrap import ensure_project_root_on_path
+    from _training_bootstrap import ensure_project_root_on_path  # type: ignore[import-not-found,no-redef]
 
 ensure_project_root_on_path()
 

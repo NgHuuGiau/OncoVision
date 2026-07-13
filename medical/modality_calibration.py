@@ -85,7 +85,7 @@ def calibrate_modality_tuning(
         }
     paths = medical_training_paths() if dataset_root is None else MedicalTrainingPaths(dataset_root=dataset_root)
 
-    modality_samples: dict[str, dict[str, list[float] | int]] = {}
+    modality_samples: dict[str, dict[str, Any]] = {}
     images = [path for path in sorted(paths.dataset_root.rglob("*")) if path.is_file()]
 
     for image_path in images:

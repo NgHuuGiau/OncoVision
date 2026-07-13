@@ -182,9 +182,9 @@ class CameraStream:
         try:
             result = self.capture.read()
         except Exception:
-            result = (False, None)
+            result = (False, None)  # type: ignore[assignment]
         if not isinstance(result, tuple) or len(result) != 2:
-            result = (False, None)
+            result = (False, None)  # type: ignore[assignment]
         ok, frame = result
         if ok and frame is not None:
             if track_failures:

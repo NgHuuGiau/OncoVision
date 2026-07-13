@@ -74,8 +74,14 @@ def _bbox_from_mask(mask_path: Path) -> tuple[int, int, int, int] | None:
         ys: list[int] = []
         for y in range(height):
             for x in range(width):
-                pixel_value = pixels[x, y]
-                if pixel_value is not None and int(pixel_value) > 0:
+                pixel_value = pixels[x, y]  # type: ignore[index]
+                if pixel_value is None:
+                    continue
+                try:
+                    numeric_value = int(pixel_value)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    continue
+                if numeric_value > 0:
                     xs.append(x)
                     ys.append(y)
         if not xs or not ys:

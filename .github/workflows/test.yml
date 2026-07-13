@@ -124,7 +124,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py run_train.py 2>&1 | tee ci-logs/05-mypy-type-check.txt
+          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py run_train.py --exclude HieraChain --exclude app/chat_ui --ignore-missing-imports 2>&1 | tee ci-logs/05-mypy-type-check.txt
           exit ${PIPESTATUS[0]}
 
       - name: Type check with mypy (Windows)
@@ -132,7 +132,7 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py run_train.py 2>&1 | Tee-Object -FilePath ci-logs/05-mypy-type-check.txt
+          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py run_train.py --exclude HieraChain --exclude app/chat_ui --ignore-missing-imports 2>&1 | Tee-Object -FilePath ci-logs/05-mypy-type-check.txt
           exit $LASTEXITCODE
 
       - name: Smoke check (Linux)

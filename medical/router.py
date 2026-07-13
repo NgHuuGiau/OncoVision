@@ -111,11 +111,15 @@ def route_input(
     return InputRoute(family=family, body_region=body_region, modality=modality, multimodal=multimodal)
 
 
+from typing import Any, cast
+
+
 def family_members(family_key: str) -> tuple[str, ...]:
     config = IMAGE_TYPE_FAMILIES.get(family_key)
     if config is None:
         return ()
-    return tuple(str(member) for member in config["members"])
+    members = cast(list[str], config["members"])
+    return tuple(members)
 
 
 def is_underrepresented(body_region: str) -> bool:

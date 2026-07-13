@@ -78,7 +78,7 @@ _DICOM_MODALITY_MAP = {
     "XA": "xray",
 }
 
-_DEFAULT_MODALITY_TUNING = {
+_DEFAULT_MODALITY_TUNING: dict[str, float | str] = {
     "certainty_threshold": 0.55,
     "medium_threshold": 0.45,
     "quality_threshold": 0.45,

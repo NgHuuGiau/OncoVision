@@ -242,10 +242,11 @@ def main() -> int:
     def handle_cancer() -> int:
         overview = build_cancer_overview()
         summary = cast(dict[str, Any], overview["summary"])
+        cancers = cast(list[dict[str, Any]], overview["cancers"])
         print("Tong quan ung thu")
         print(f"Tong anh ung thu local: {summary['total_cancer_images']}")
         print("Theo tung nhom ung thu:")
-        for item in overview["cancers"]:
+        for item in cancers:
             print(
                 f"- {item['label']}: {item['local_image_count']} anh | "
                 f"local_status={item['local_status']} | model_ready={item['model_ready']}"

@@ -125,7 +125,7 @@ def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> N
     for class_name in paths.class_names:
         class_root = paths.dataset_root / class_name
         candidate_roots = [class_root / "raw" / "images", class_root / "raw", class_root]
-        raw_images = []
+        raw_images: list[Path] = []
         for candidate_root in candidate_roots:
             if not candidate_root.exists():
                 continue

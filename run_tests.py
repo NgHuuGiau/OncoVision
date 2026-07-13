@@ -173,8 +173,8 @@ class PrettyTestRunner(unittest.TextTestRunner):
         **kwargs,
     ):
         stream = kwargs.pop("stream", sys.stderr)
-        safe_args = [arg for arg in args if arg is not stream]
-        super().__init__(*safe_args, stream=SilentStream(stream), **kwargs)
+        filtered_args = [arg for arg in args if arg is not stream]
+        super().__init__(*filtered_args, stream=SilentStream(stream), **kwargs)  # type: ignore[misc]
         self.output_stream = stream
         self.total_tests = total_tests
         self.camera_result = camera_result

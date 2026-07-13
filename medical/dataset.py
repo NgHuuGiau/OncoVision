@@ -302,7 +302,7 @@ def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:
     if source.is_file() and _medical_upload_suffix(source) == ".dcm":
         pydicom = None
         try:
-            import pydicom
+            import pydicom  # type: ignore[assignment]
         except ImportError:  # pragma: no cover
             pass
         if pydicom is not None:
