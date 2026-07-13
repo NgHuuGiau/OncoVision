@@ -288,6 +288,46 @@ class EarlyStopping:
         return self.early_stop
 
 
+def _estimate_safe_batch_size(backbone: str, device: str | None = None) -> int:
+    """Estimate a safe batch size based on available GPU memory.
+
+    Uses rough per-image memory footprints for common backbones under mixed
+    precision. Falls back to a conservative CPU default when no GPU is
+    available or the memory query fails.
+    """
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu" or not torch.cuda.is_available():
+        return 8
+
+    try:
+        props = torch.cuda.get_device_properties(device)
+        memory_mb = props.total_memory / (1024 * 1024)
+    except Exception:
+        return 8
+
+    backbone_lower = backbone.lower()
+    if backbone_lower in {"resnet50", "convnext_tiny"}:
+        per_image = 200.0
+    elif backbone_lower in {"efficientnet_b0", "efficientnet_b2", "efficientnet_b3"}:
+        per_image = 150.0
+    else:
+        per_image = 180.0
+
+    estimated = int(memory_mb / per_image)
+    safe = max(4, min(64, estimated))
+    # Round down to nearest power of 2.
+    power = 1
+    while power * 2 <= safe:
+        power *= 2
+    return max(4, power)
+
+
+def get_recommended_batch_size(backbone: str, device: str | None = None) -> int:
+    """Public helper returning the auto-selected batch size for ``backbone``."""
+    return _estimate_safe_batch_size(backbone=backbone, device=device)
+
+
 def _create_optimizer(model: nn.Module, learning_rate: float, weight_decay: float) -> torch.optim.Optimizer:
     return torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -324,7 +364,7 @@ def train_cnn_classifier(
     backbone: str = "resnet50",
     pretrained: bool = True,
     dropout: float = 0.3,
-    batch_size: int = 16,
+    batch_size: int | None = None,
     num_epochs: int = 30,
     learning_rate: float = 1e-4,
     weight_decay: float = 1e-4,
@@ -335,11 +375,17 @@ def train_cnn_classifier(
     mixed_precision: bool = True,
     warmup_epochs: int = 3,
     class_weights: list[float] | tuple[float, ...] | None = None,
+    gradient_accumulation_steps: int = 1,
 ) -> tuple[MedicalCNNClassifierWrapper, dict[str, Any]]:
     if not samples:
         raise FileNotFoundError("Khong co du lieu train cho CNN classifier.")
 
     _set_deterministic_seed()
+    device_obj = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    if batch_size is None:
+        batch_size = _estimate_safe_batch_size(backbone=backbone, device=str(device_obj))
+    effective_batch = batch_size * max(1, int(gradient_accumulation_steps))
+
     train_dataset = MedicalImageDataset(samples, class_labels, image_size=image_size, augment=True)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True, drop_last=True
@@ -380,6 +426,7 @@ def train_cnn_classifier(
         "val_loss": [],
         "val_acc": [],
         "lr": [],
+        "effective_batch": [float(effective_batch)],
     }
 
     best_model_state: dict[str, Any] | None = None
@@ -388,17 +435,26 @@ def train_cnn_classifier(
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0.0
+        accumulated_steps = 0
         for images, labels in train_loader:
             images = images.to(device_obj, non_blocking=True)
             labels = labels.to(device_obj, non_blocking=True)
-            optimizer.zero_grad(set_to_none=True)
             with torch.amp.autocast(device_obj.type, enabled=scaler.is_enabled()):
                 outputs = model(images)
-                loss = criterion(outputs, labels)
+                loss = criterion(outputs, labels) / max(1, gradient_accumulation_steps)
             scaler.scale(loss).backward()
+            accumulated_steps += 1
+            if accumulated_steps >= gradient_accumulation_steps:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+                accumulated_steps = 0
+            total_loss += loss.item() * images.size(0)
+
+        if accumulated_steps > 0:
             scaler.step(optimizer)
             scaler.update()
-            total_loss += loss.item() * images.size(0)
+            optimizer.zero_grad(set_to_none=True)
 
         scheduler.step()
         epoch_loss = total_loss / len(train_dataset)

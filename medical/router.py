@@ -111,7 +111,7 @@ def route_input(
     return InputRoute(family=family, body_region=body_region, modality=modality, multimodal=multimodal)
 
 
-from typing import Any, cast
+from typing import cast
 
 
 def family_members(family_key: str) -> tuple[str, ...]:
