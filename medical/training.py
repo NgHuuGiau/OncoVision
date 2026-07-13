@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 import shutil
 import time
@@ -24,6 +25,12 @@ from medical.dataset import (
 )
 from medical.dashboard import write_training_dashboard
 from medical.metrics import compute_multiclass_metrics
+from medical.model_versioning import (
+    ModelManifest,
+    compute_dataset_hash,
+    get_current_git_commit,
+    write_model_manifest,
+)
 from medical.router import (
     IMAGE_TYPE_FAMILIES,
     family_members,
@@ -92,6 +99,47 @@ def medical_training_paths() -> MedicalTrainingPaths:
         class_names=tuple(target.label for target in COMMON_CANCER_TARGETS),
         feature_size=feature_size,
     )
+
+
+def _write_training_manifest(
+    model_path: Path,
+    paths: MedicalTrainingPaths,
+    settings: dict[str, Any],
+    history: dict[str, Any] | None = None,
+    model_name: str | None = None,
+) -> None:
+    try:
+        file_size = model_path.stat().st_size if model_path.exists() else 0
+        metrics: dict[str, float] = {}
+        if history:
+            val_acc = history.get("val_acc", [])
+            train_loss = history.get("train_loss", [])
+            if val_acc:
+                metrics["best_val_acc"] = float(max(val_acc))
+                metrics["final_val_acc"] = float(val_acc[-1])
+            if train_loss:
+                metrics["final_train_loss"] = float(train_loss[-1])
+                metrics["num_epochs"] = float(len(train_loss))
+            lr = history.get("lr", [])
+            if lr:
+                metrics["final_lr"] = float(lr[-1])
+        manifest = ModelManifest(
+            model_name=model_name or model_path.name,
+            version=datetime.now().strftime("%Y%m%d-%H%M%S"),
+            model_path=model_path.resolve(),
+            training_date=datetime.now(),
+            dataset_hash=compute_dataset_hash(paths.dataset_root),
+            training_config=dict(settings),
+            metrics=metrics,
+            backbone=str(settings.get("cnn_backbone", "centroid")),
+            num_classes=len(paths.class_names),
+            image_size=int(settings.get("cnn_image_size", 320)),
+            file_size_bytes=file_size,
+            git_commit=get_current_git_commit() or "unknown",
+        )
+        write_model_manifest(model_path, manifest)
+    except (OSError, ValueError):
+        pass
 
 
 def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict[str, Any]:
@@ -248,6 +296,7 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
         feature_size=(paths.feature_size, paths.feature_size),
     )
     save_medical_classifier(classifier_model, paths.trained_model_path)
+    _write_training_manifest(paths.trained_model_path, paths, settings)
     return paths.trained_model_path
 
 
@@ -282,6 +331,7 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         class_weights=class_weights,
     )
     wrapper.save(paths.trained_model_path)
+    _write_training_manifest(paths.trained_model_path, paths, settings, _history)
     return paths.trained_model_path
 
 
@@ -342,8 +392,371 @@ def _is_cnn_wrapper(model: Any) -> bool:
     return hasattr(model, "predict") and hasattr(model, "model") and hasattr(model, "class_labels") and not hasattr(model, "centroids")
 
 
-def run_full_medical_training_pipeline() -> dict[str, Any]:
+DEFAULT_KFOLD_MODEL_DIR = Path("output/medical/kfold_models")
+
+# Reverse map cua COMMON_CANCER_TARGETS: nhan lop (label) -> body region key.
+_CLASS_LABEL_TO_BODY_REGION = {target.label: target.key for target in COMMON_CANCER_TARGETS}
+
+
+def _router_body_region(body_region_key: str | None) -> str | None:
+    # dataset dung "cervical" nhung router dung "cervix".
+    if body_region_key == "cervical":
+        return "cervix"
+    return body_region_key
+
+
+def _family_for_sample(paths: MedicalTrainingPaths, image_path: Path, class_index: int) -> str:
+    """Tra ve image family (ct_volume, xray_mammo, endoscopy, ...) cho mot sample."""
+    if class_index < 0 or class_index >= len(paths.class_names):
+        return "unknown"
+    label = paths.class_names[class_index]
+    body_region_key = _CLASS_LABEL_TO_BODY_REGION.get(label)
+    if body_region_key is None:
+        return "unknown"
+    body_region = _router_body_region(body_region_key)
+    modality = None
+    # Chi phoi (lung) can suy luan modality vi no tach lam xray_mammo va ct_volume.
+    if body_region == "lung":
+        try:
+            _, modality = infer_medical_upload_context(image_path)
+        except Exception:
+            modality = None
+    route = route_input(modality, body_region)
+    return route.family or "unknown"
+
+
+def _all_labeled_samples(paths: MedicalTrainingPaths) -> list[tuple[Path, int]]:
+    """Gom toan bo sample co nhan tu tat ca cac split (train/val/test)."""
+    samples: list[tuple[Path, int]] = []
+    for split in DEFAULT_SPLITS:
+        samples.extend(_samples_for_split(paths, split))
+    return samples
+
+
+def _stratify_samples_by_family(
+    samples: list[tuple[Path, int]],
+    class_labels: tuple[str, ...],
+    num_folds: int = 5,
+    *,
+    paths: MedicalTrainingPaths | None = None,
+    seed: int = 42,
+) -> list[tuple[list[tuple[Path, int]], list[tuple[Path, int]]]]:
+    """Chia sample thanh cac fold, phan tang theo (lop, image family).
+
+    Moi (lop, family) duoc rai deu (round-robin) qua cac fold nen moi fold co
+    dai dien tu tung family. Tra ve danh sach (train_samples, val_samples) cho
+    tung fold.
+    """
+    if num_folds < 2:
+        raise ValueError("num_folds phai >= 2 de thuc hien cross-validation.")
+    if not samples:
+        return [([], []) for _ in range(num_folds)]
+
+    paths = paths or medical_training_paths()
+
+    groups: dict[tuple[int, str], list[tuple[Path, int]]] = {}
+    for sample in samples:
+        image_path, class_index = sample
+        family = _family_for_sample(paths, image_path, class_index)
+        groups.setdefault((class_index, family), []).append(sample)
+
+    rng = np.random.default_rng(seed)
+    fold_buckets: list[list[tuple[Path, int]]] = [[] for _ in range(num_folds)]
+    # Duyet nhom theo thu tu on dinh de ket qua co the tai lap.
+    for key in sorted(groups.keys(), key=lambda item: (item[0], str(item[1]))):
+        items = list(groups[key])
+        rng.shuffle(items)
+        for offset, sample in enumerate(items):
+            fold_buckets[offset % num_folds].append(sample)
+
+    folds: list[tuple[list[tuple[Path, int]], list[tuple[Path, int]]]] = []
+    for fold_index in range(num_folds):
+        val_samples = list(fold_buckets[fold_index])
+        train_samples = [
+            sample
+            for other_index in range(num_folds)
+            if other_index != fold_index
+            for sample in fold_buckets[other_index]
+        ]
+        folds.append((train_samples, val_samples))
+    return folds
+
+
+def _cnn_kwargs_from_config(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "image_size": int(config.get("cnn_image_size", 320)),
+        "backbone": config.get("cnn_backbone", "resnet50"),
+        "pretrained": True,
+        "dropout": float(config.get("cnn_dropout", 0.25)),
+        "batch_size": int(config.get("cnn_batch_size", 16)),
+        "num_epochs": int(config.get("cnn_num_epochs", 30)),
+        "learning_rate": float(config.get("cnn_learning_rate", 0.00005)),
+        "early_stopping_patience": int(config.get("cnn_early_stopping_patience", 7)),
+        "label_smoothing": float(config.get("cnn_label_smoothing", 0.08)),
+        "mixed_precision": bool(config.get("cnn_mixed_precision", True)),
+        "warmup_epochs": int(config.get("cnn_warmup_epochs", 4)),
+    }
+
+
+def _train_fold_model(
+    train_samples: list[tuple[Path, int]],
+    class_labels: tuple[str, ...],
+    config: dict[str, Any],
+    paths: MedicalTrainingPaths,
+    *,
+    val_samples: list[tuple[Path, int]] | None = None,
+) -> Any:
+    """Huan luyen mot model cho mot fold dung cung logic voi train_cnn_classifier."""
+    backend = str(config.get("classifier_backend", "cnn")).lower()
+    if backend == "cnn" and _should_use_cnn_backend(paths, train_samples, config):
+        class_weights = None
+        if bool(config.get("cnn_class_weighting", True)):
+            class_weights = _compute_class_weights(train_samples, class_labels)
+        wrapper, _history = train_cnn_classifier(
+            train_samples,
+            class_labels=class_labels,
+            val_samples=val_samples or None,
+            class_weights=class_weights,
+            **_cnn_kwargs_from_config(config),
+        )
+        return wrapper
+    return train_medical_classifier(
+        train_samples,
+        class_labels=class_labels,
+        feature_size=(paths.feature_size, paths.feature_size),
+    )
+
+
+def _save_fold_model(model: Any, model_path: Path) -> None:
+    if hasattr(model, "save"):
+        model.save(model_path)
+    else:
+        save_medical_classifier(model, model_path)
+
+
+def _extract_prediction(prediction: Any) -> tuple[str, float]:
+    if isinstance(prediction, dict):
+        return str(prediction.get("label", "") or ""), float(prediction.get("confidence", 0.0))
+    return str(getattr(prediction, "label", "") or ""), float(getattr(prediction, "confidence", 0.0))
+
+
+def _evaluate_model_on_samples(
+    model: Any,
+    samples: list[tuple[Path, int]],
+    class_labels: tuple[str, ...],
+) -> dict[str, Any]:
+    class_to_index = {name: index for index, name in enumerate(class_labels)}
+    truths: list[int] = []
+    preds: list[int] = []
+    confidences: list[float] = []
+    for image_path, class_index in samples:
+        prediction = model.predict(image_path, top_k=1)[0]
+        label, confidence = _extract_prediction(prediction)
+        confidences.append(confidence)
+        truths.append(class_index)
+        predicted_index = class_to_index.get(label, -1)
+        if predicted_index < 0 or predicted_index >= len(class_labels):
+            # Nhan la (khong khop): gan vao lop khac lop dung de tinh la du doan sai.
+            predicted_index = (class_index + 1) % len(class_labels)
+        preds.append(predicted_index)
+    metrics = compute_multiclass_metrics(truths, preds, list(class_labels))
+    metrics["average_confidence"] = float(np.mean(confidences)) if confidences else 0.0
+    return metrics
+
+
+def _per_class_value(per_class_entry: Any, attribute: str) -> float:
+    if isinstance(per_class_entry, dict):
+        return float(per_class_entry.get(attribute, 0.0))
+    return float(getattr(per_class_entry, attribute, 0.0))
+
+
+def _per_class_label(per_class_entry: Any) -> str | None:
+    if isinstance(per_class_entry, dict):
+        return per_class_entry.get("label")
+    return getattr(per_class_entry, "label", None)
+
+
+def _aggregate_fold_metrics(
+    fold_metrics: list[dict[str, Any]],
+    class_labels: tuple[str, ...],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not fold_metrics:
+        return {}, {}
+
+    scalar_keys = (
+        "accuracy",
+        "macro_precision",
+        "macro_recall",
+        "macro_f1",
+        "micro_precision",
+        "micro_recall",
+        "micro_f1",
+        "average_confidence",
+    )
+    mean_metrics: dict[str, Any] = {}
+    std_metrics: dict[str, Any] = {}
+    for key in scalar_keys:
+        values = [float(metrics.get(key, 0.0)) for metrics in fold_metrics]
+        mean_metrics[key] = float(np.mean(values)) if values else 0.0
+        std_metrics[key] = float(np.std(values)) if values else 0.0
+
+    per_class_mean: dict[str, dict[str, float]] = {}
+    per_class_std: dict[str, dict[str, float]] = {}
+    for label in class_labels:
+        precisions: list[float] = []
+        recalls: list[float] = []
+        f1s: list[float] = []
+        supports: list[float] = []
+        for metrics in fold_metrics:
+            for entry in metrics.get("per_class", []) or []:
+                if _per_class_label(entry) == label:
+                    precisions.append(_per_class_value(entry, "precision"))
+                    recalls.append(_per_class_value(entry, "recall"))
+                    f1s.append(_per_class_value(entry, "f1_score"))
+                    supports.append(_per_class_value(entry, "support"))
+        if not f1s:
+            continue
+        per_class_mean[label] = {
+            "precision": float(np.mean(precisions)),
+            "recall": float(np.mean(recalls)),
+            "f1_score": float(np.mean(f1s)),
+            "support": float(np.mean(supports)),
+        }
+        per_class_std[label] = {
+            "precision": float(np.std(precisions)),
+            "recall": float(np.std(recalls)),
+            "f1_score": float(np.std(f1s)),
+            "support": float(np.std(supports)),
+        }
+    mean_metrics["per_class"] = per_class_mean
+    std_metrics["per_class"] = per_class_std
+    return mean_metrics, std_metrics
+
+
+def train_with_stratified_kfold(
+    samples: list[tuple[Path, int]],
+    class_labels: tuple[str, ...],
+    num_folds: int = 5,
+    *,
+    config: dict[str, Any] | None = None,
+    paths: MedicalTrainingPaths | None = None,
+    output_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Huan luyen voi stratified K-Fold cross-validation.
+
+    - Phan tang theo nhan lop VA image family (ct_volume, xray_mammo, ...).
+    - Moi fold: train tren k-1 fold, validate tren fold giu lai.
+    - Luu model tung fold vao output/medical/kfold_models/fold_{i}.pt.
+    - Tra ve dict gom fold_metrics, mean_metrics, std_metrics.
+    """
+    if not samples:
+        raise FileNotFoundError("Khong co du lieu de chay stratified K-Fold.")
+
+    paths = paths or medical_training_paths()
+    config = dict(config or _load_medical_settings())
+    class_labels = tuple(class_labels)
+    output_dir = Path(output_dir or DEFAULT_KFOLD_MODEL_DIR)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    seed = int(config.get("cv_seed", 42))
+    folds = _stratify_samples_by_family(samples, class_labels, num_folds, paths=paths, seed=seed)
+
+    fold_metrics: list[dict[str, Any]] = []
+    for fold_index, (train_samples, val_samples) in enumerate(folds):
+        if not train_samples or not val_samples:
+            fold_metrics.append(
+                {
+                    "fold": fold_index,
+                    "skipped": True,
+                    "reason": "fold rong (thieu du lieu train hoac val)",
+                    "train_count": len(train_samples),
+                    "val_count": len(val_samples),
+                }
+            )
+            continue
+        model_path = output_dir / f"fold_{fold_index}.pt"
+        try:
+            model = _train_fold_model(
+                train_samples,
+                class_labels,
+                config,
+                paths,
+                val_samples=val_samples,
+            )
+            _save_fold_model(model, model_path)
+            metrics = _evaluate_model_on_samples(model, val_samples, class_labels)
+        except Exception as error:  # pragma: no cover - phong ve tinh mach lac
+            fold_metrics.append(
+                {
+                    "fold": fold_index,
+                    "skipped": True,
+                    "reason": f"loi khi huan luyen/danh gia fold: {error}",
+                    "train_count": len(train_samples),
+                    "val_count": len(val_samples),
+                }
+            )
+            continue
+        metrics["fold"] = fold_index
+        metrics["skipped"] = False
+        metrics["model_path"] = model_path
+        metrics["train_count"] = len(train_samples)
+        metrics["val_count"] = len(val_samples)
+        fold_metrics.append(metrics)
+
+    evaluated = [metrics for metrics in fold_metrics if not metrics.get("skipped")]
+    mean_metrics, std_metrics = _aggregate_fold_metrics(evaluated, class_labels)
+    return {
+        "num_folds": num_folds,
+        "evaluated_folds": len(evaluated),
+        "class_labels": list(class_labels),
+        "fold_metrics": fold_metrics,
+        "mean_metrics": mean_metrics,
+        "std_metrics": std_metrics,
+    }
+
+
+def _select_best_hyperparams(
+    config: dict[str, Any],
+    cv_results: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Chon bo hyperparam tot nhat sau CV.
+
+    Hien tai CV chay voi mot bo cau hinh co dinh (khong grid-search) nen bo
+    hyperparam tot nhat chinh la config da duoc CV kiem chung. Ham nay giu diem
+    mo rong de sau nay co the chon theo fold co macro_f1 cao nhat.
+    """
+    best = dict(config)
+    if cv_results:
+        evaluated = [m for m in cv_results.get("fold_metrics", []) if not m.get("skipped")]
+        if evaluated:
+            best_fold = max(evaluated, key=lambda metrics: float(metrics.get("macro_f1", 0.0)))
+            best["_cv_best_fold"] = best_fold.get("fold")
+            best["_cv_best_macro_f1"] = float(best_fold.get("macro_f1", 0.0))
+    return best
+
+
+def _train_final_model_on_all_data(
+    paths: MedicalTrainingPaths,
+    samples: list[tuple[Path, int]],
+    config: dict[str, Any],
+    cv_results: dict[str, Any] | None = None,
+) -> Path:
+    """Huan luyen model cuoi cung tren toan bo du lieu voi hyperparam tot nhat tu CV."""
+    best_config = _select_best_hyperparams(config, cv_results)
+    model = _train_fold_model(samples, paths.class_names, best_config, paths, val_samples=None)
+    _save_fold_model(model, paths.trained_model_path)
+    return paths.trained_model_path
+
+
+def run_full_medical_training_pipeline(
+    *,
+    run_kfold: bool | None = None,
+    num_folds: int = 5,
+) -> dict[str, Any]:
     paths = medical_training_paths()
+    settings = _load_medical_settings()
+    if run_kfold is None:
+        run_kfold = bool(settings.get("nested_cross_validation", False))
     total_start = time.perf_counter()
     prepare_start = time.perf_counter()
     split_summary = prepare_medical_training_dataset(paths)
@@ -366,6 +779,36 @@ def run_full_medical_training_pipeline() -> dict[str, Any]:
         "validate_seconds": validate_seconds,
         "total_seconds": time.perf_counter() - total_start,
     }
+
+    if run_kfold:
+        cv_start = time.perf_counter()
+        all_samples = _all_labeled_samples(paths)
+        cv_results = train_with_stratified_kfold(
+            all_samples,
+            paths.class_names,
+            num_folds=num_folds,
+            config=settings,
+            paths=paths,
+        )
+        report["cv_results"] = cv_results
+        report["cv_seconds"] = time.perf_counter() - cv_start
+        # Sau K-Fold, huan luyen model cuoi cung tren toan bo du lieu voi
+        # hyperparam tot nhat tu CV.
+        final_start = time.perf_counter()
+        final_model_path = _train_final_model_on_all_data(
+            paths, all_samples, settings, cv_results
+        )
+        report["final_model_path"] = final_model_path
+        report["final_train_seconds"] = time.perf_counter() - final_start
+        report["trained_model_path"] = final_model_path
+        report["best_hyperparams"] = _select_best_hyperparams(settings, cv_results)
+        # Danh gia lai sau khi huan luyen model cuoi cung.
+        try:
+            report["validation_metrics"] = validate_medical_model(paths)
+        except FileNotFoundError:
+            pass
+        report["total_seconds"] = time.perf_counter() - total_start
+
     try:
         write_training_dashboard(Path("output/medical/reports"), report)
     except (PermissionError, OSError):
@@ -477,6 +920,7 @@ def train_medical_submodels(paths: MedicalTrainingPaths | None = None, *, prepar
                 class_weights=class_weights,
             )
             wrapper.save(model_path)
+            _write_training_manifest(model_path, paths, settings, _history, model_name=family_key)
         else:
             classifier_model = train_medical_classifier(
                 train_samples,
@@ -484,6 +928,7 @@ def train_medical_submodels(paths: MedicalTrainingPaths | None = None, *, prepar
                 feature_size=(paths.feature_size, paths.feature_size),
             )
             save_medical_classifier(classifier_model, model_path)
+            _write_training_manifest(model_path, paths, settings, model_name=family_key)
         trained[family_key] = model_path
     return trained
 

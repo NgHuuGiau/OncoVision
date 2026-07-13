@@ -14,8 +14,14 @@ from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dashboard import write_inference_dashboard
 from medical.dataset import normalize_uploaded_image
 from medical.model_policy import resolve_medical_runtime_model_path
+from medical.model_versioning import read_model_manifest
 from medical.reporting import build_artifact_stamp, write_case_report
-from medical.validator import ValidationResult, get_modality_tuning, validate_image
+from medical.validator import (
+    ValidationResult,
+    _DICOM_MODALITY_MAP,
+    get_modality_tuning,
+    validate_image,
+)
 from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
 
@@ -59,6 +65,8 @@ class MedicalImageAnalyzerConfig:
     cnn_mixed_precision: bool = True
     cnn_warmup_epochs: int = 3
     cnn_tta: bool = True
+    ensemble_yolo_weight: float = 0.4
+    ensemble_cnn_weight: float = 0.6
     modality_tuning: dict[str, Any] = field(default_factory=dict)
 
     def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
@@ -156,6 +164,8 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         cnn_mixed_precision=bool(settings.get("cnn_mixed_precision", True)),
         cnn_warmup_epochs=int(settings.get("cnn_warmup_epochs", 3)),
         cnn_tta=bool(settings.get("cnn_tta", True)),
+        ensemble_yolo_weight=float(settings.get("ensemble_yolo_weight", 0.4)),
+        ensemble_cnn_weight=float(settings.get("ensemble_cnn_weight", 0.6)),
         modality_tuning=settings.get("modality_tuning", {}) if isinstance(settings.get("modality_tuning", {}), dict) else {},
     )
 
@@ -190,6 +200,11 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
         issues.append("cnn_label_smoothing khong hop le.")
     if config.cnn_warmup_epochs < 0:
         issues.append("cnn_warmup_epochs khong duoc am.")
+    total_ensemble_weight = config.ensemble_yolo_weight + config.ensemble_cnn_weight
+    if not config.ensemble_yolo_weight >= 0.0 or not config.ensemble_cnn_weight >= 0.0:
+        issues.append("ensemble weights khong duoc am.")
+    if total_ensemble_weight <= 0.0:
+        issues.append("tong ensemble_yolo_weight va ensemble_cnn_weight phai lon hon 0.")
     if not config.model_path:
         issues.append("model_path khong duoc de trong.")
     if config.allow_fallback_model and config.fallback_model_path is None:
@@ -202,6 +217,7 @@ class MedicalImageAnalyzer:
         self.config = config or build_default_medical_analyzer_config()
         self._detector_backend = detector_backend
         self._classifier_model: MedicalClassifierModel | None = None
+        self._dicom_modality_cache: dict[Path, str | None] = {}
 
     def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
         self.ensure_ready()
@@ -442,7 +458,11 @@ class MedicalImageAnalyzer:
 
     def _detect_findings(self, image: np.ndarray) -> list[DetectionFinding]:
         if self._detector_backend is not None:
-            return self._detect_with_backend(image)
+            yolo_detections = self._detect_with_backend(image)
+            cnn_wrapper = self._load_cnn_wrapper()
+            if cnn_wrapper is not None and yolo_detections:
+                return self._ensemble_detections(image, yolo_detections)
+            return yolo_detections
         cnn_wrapper = self._load_cnn_wrapper()
         if cnn_wrapper is not None:
             cnn_prediction = cnn_wrapper.predict(image, top_k=1, tta=self.config.cnn_tta)[0]
@@ -513,14 +533,117 @@ class MedicalImageAnalyzer:
         if issues:
             raise ValueError("Cau hinh medical khong hop le: " + "; ".join(issues))
         self.config = self.config.with_model_path(model_path)
+        self._log_model_manifest(model_path)
         return model_path
 
+    def _log_model_manifest(self, model_path: Path) -> None:
+        try:
+            manifest = read_model_manifest(model_path)
+            if manifest is not None:
+                print(
+                    f"[ModelManifest] {manifest.model_name} v{manifest.version} "
+                    f"(backbone={manifest.backbone}, classes={manifest.num_classes}, "
+                    f"size={manifest.image_size}, git={manifest.git_commit[:8]})"
+                )
+            else:
+                print(
+                    f"[ModelManifest] Warning: no manifest found for {model_path.name} "
+                    f"(old model without versioning)"
+                )
+        except Exception:
+            pass
+
+    def _ensemble_detections(self, image: np.ndarray, yolo_detections: list[DetectionFinding]) -> list[DetectionFinding]:
+        if not yolo_detections:
+            return yolo_detections
+
+        cnn_wrapper = self._load_cnn_wrapper()
+        if cnn_wrapper is None:
+            return yolo_detections
+
+        yolo_weight = float(self.config.ensemble_yolo_weight)
+        cnn_weight = float(self.config.ensemble_cnn_weight)
+        total_weight = yolo_weight + cnn_weight
+        if total_weight <= 0.0:
+            yolo_weight, cnn_weight, total_weight = 0.4, 0.6, 1.0
+
+        height, width = image.shape[:2]
+        combined: list[DetectionFinding] = []
+        for detection in yolo_detections:
+            x1, y1, x2, y2 = detection.bbox
+            x1 = max(0, min(int(x1), width - 1))
+            y1 = max(0, min(int(y1), height - 1))
+            x2 = max(x1 + 1, min(int(x2), width))
+            y2 = max(y1 + 1, min(int(y2), height))
+            crop = image[y1:y2, x1:x2]
+            if crop.size == 0:
+                combined.append(detection)
+                continue
+            try:
+                cnn_prediction = cnn_wrapper.predict(crop, top_k=1, tta=self.config.cnn_tta)[0]
+            except Exception:
+                combined.append(detection)
+                continue
+            cnn_label = str(cnn_prediction.get("label", detection.label))
+            cnn_confidence = float(cnn_prediction.get("confidence", 0.0))
+            ensemble_confidence = (yolo_weight * detection.confidence + cnn_weight * cnn_confidence) / total_weight
+            combined.append(
+                DetectionFinding(
+                    label=cnn_label,
+                    confidence=float(ensemble_confidence),
+                    bbox=detection.bbox,
+                )
+            )
+        return combined
+
+    def _read_dicom_header_modality(self, image_path: str | Path) -> str | None:
+        source = Path(image_path)
+        if source.suffix.lower() != ".dcm":
+            return None
+        if source in self._dicom_modality_cache:
+            return self._dicom_modality_cache[source]
+
+        modality: str | None = None
+        try:
+            import pydicom
+
+            ds = pydicom.dcmread(str(source), stop_before_pixels=True, force=True)
+            dicom_modality = getattr(ds, "Modality", "")
+            body_part = getattr(ds, "BodyPartExamined", "")
+            series_description = getattr(ds, "SeriesDescription", "")
+            chosen = (str(dicom_modality).strip() or str(body_part).strip() or str(series_description).strip())
+            if chosen:
+                modality = chosen.upper()
+        except Exception:
+            modality = None
+
+        self._dicom_modality_cache[source] = modality
+        return modality
+
     def validate_input(self, image_path: str | Path) -> ValidationResult:
-        return validate_image(
+        source = Path(image_path)
+        base_result = validate_image(
             image_path,
             allowed_extensions=list(self.config.validation_allowed_extensions),
             min_confidence=self.config.validation_min_confidence,
         )
+
+        dicom_modality = self._read_dicom_header_modality(source)
+        if dicom_modality is not None:
+            canonical = _DICOM_MODALITY_MAP.get(dicom_modality.upper(), dicom_modality.lower())
+            if base_result.modality is None:
+                return replace(
+                    base_result,
+                    modality=canonical,
+                    modality_confidence=max(base_result.modality_confidence, 0.9),
+                )
+            if base_result.modality_confidence < self.config.validation_min_confidence:
+                return replace(
+                    base_result,
+                    modality=canonical,
+                    modality_confidence=max(base_result.modality_confidence, 0.9),
+                )
+        return base_result
 
     def _load_default_backend(self) -> DetectorBackend:
         raise RuntimeError("Medical pipeline hien tai dung classifier local, khong can backend YOLO.")
