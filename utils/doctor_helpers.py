@@ -59,14 +59,14 @@ def print_recommended_commands(
     command_index = 1
     commands: list[str] = []
     if missing_models:
-        commands.append("python training\\download_models.py")
+        commands.append("python training/download_models.py")
     if icon_count < icon_warning_threshold:
         commands.append("python run_doctor.py --fix")
     if not dataset_ok:
-        commands.append("python training\\prepare_dataset.py")
+        commands.append("python training/prepare_dataset.py")
     elif not split_ok:
-        commands.append("python training\\validate_dataset.py")
-        commands.append("python training\\split_dataset.py")
+        commands.append("python training/validate_dataset.py")
+        commands.append("python training/split_dataset.py")
     else:
         commands.append("python run_chat.py")
         commands.append("python run_train.py")

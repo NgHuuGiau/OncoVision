@@ -1,0 +1,18 @@
+# Ensure LF line endings for GitHub Actions workflows and shell scripts
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+
+# Python files should also use LF
+*.py text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.whl binary
