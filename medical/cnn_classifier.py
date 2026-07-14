@@ -169,7 +169,7 @@ class MedicalCNNClassifierWrapper:
         if tta:
             probs = self._predict_with_tta(source)
         else:
-            image_tensor = _load_image_as_tensor(source)
+            image_tensor = _load_image_as_tensor(source, assume_bgr=True)
             image_tensor = image_tensor.unsqueeze(0).to(self.device)
             probs = self.model.predict_proba(image_tensor).cpu().numpy()[0]
 
@@ -187,7 +187,7 @@ class MedicalCNNClassifierWrapper:
         return results
 
     def _predict_with_tta(self, source: str | Path | np.ndarray) -> np.ndarray:
-        base_tensor = _load_image_as_tensor(source)
+        base_tensor = _load_image_as_tensor(source, assume_bgr=True)
         base_tensor = base_tensor.unsqueeze(0).to(self.device)
 
         tta_transforms = [
@@ -244,12 +244,12 @@ class MedicalCNNClassifierWrapper:
         return cls(model=model, class_labels=tuple(class_labels), device=device, temperature=temperature)
 
 
-def _load_image_as_tensor(source: str | Path | np.ndarray, image_size: int = 320) -> torch.Tensor:
+def _load_image_as_tensor(source: str | Path | np.ndarray, image_size: int = 320, *, assume_bgr: bool = True) -> torch.Tensor:
     transform = _build_base_transform(image_size=image_size)
     if isinstance(source, np.ndarray):
         if source.ndim == 2:
             source = np.stack([source] * 3, axis=-1)
-        elif source.ndim == 3 and source.shape[-1] == 3:
+        elif source.ndim == 3 and source.shape[-1] == 3 and assume_bgr:
             source = source[:, :, ::-1]
         image = Image.fromarray(source.astype(np.uint8), mode="RGB")
     else:

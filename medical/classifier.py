@@ -27,7 +27,7 @@ class MedicalClassifierModel:
     feature_size: tuple[int, int] = DEFAULT_FEATURE_SIZE
 
     def predict(self, source, *, top_k: int = 3) -> list[MedicalClassifierPrediction]:
-        features = _extract_medical_features(source, feature_size=self.feature_size)
+        features = _extract_medical_features(source, feature_size=self.feature_size, assume_bgr=True)
         distances = np.linalg.norm(self.centroids - features, axis=1)
         scores = -distances
         probabilities = _softmax(scores)
@@ -55,12 +55,12 @@ def is_supported_medical_image_path(path: str | Path) -> bool:
     return Path(path).suffix.lower() in MEDICAL_IMAGE_EXTENSIONS
 
 
-def _extract_medical_features(source, *, feature_size=DEFAULT_FEATURE_SIZE) -> np.ndarray:
+def _extract_medical_features(source, *, feature_size=DEFAULT_FEATURE_SIZE, assume_bgr: bool = True) -> np.ndarray:
     if isinstance(source, np.ndarray):
         array = source
         if array.ndim == 2:
             array = np.stack([array] * 3, axis=-1)
-        elif array.ndim == 3 and array.shape[-1] == 3:
+        elif array.ndim == 3 and array.shape[-1] == 3 and assume_bgr:
             array = array[:, :, ::-1]
         image = Image.fromarray(array.astype(np.uint8), mode="RGB")
     else:
@@ -92,7 +92,7 @@ def train_medical_classifier(
     counts = np.zeros(len(class_labels), dtype=np.int64)
 
     for source, class_index in samples:
-        features = _extract_medical_features(source, feature_size=feature_size)
+        features = _extract_medical_features(source, feature_size=feature_size, assume_bgr=True)
         if centroid_sums is None:
             centroid_sums = np.zeros((len(class_labels), features.size), dtype=np.float32)
         centroid_sums[class_index] += features

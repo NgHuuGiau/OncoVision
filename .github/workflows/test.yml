@@ -11,6 +11,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   test:
     name: CI (windows-latest / Python 3.10)
@@ -35,6 +39,12 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
+      - name: Prepare log folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ci-logs | Out-Null
+          "CI started on $env:RUNNER_OS" | Set-Content -Path ci-logs/00-start.txt -Encoding utf8
+
       - name: Install dependencies
         shell: pwsh
         run: |
@@ -43,7 +53,8 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel --timeout 60 2>&1 | Tee-Object -FilePath ci-logs/01-install-pip.txt
           if ($LASTEXITCODE -ne 0 -and $status -eq 0) { $status = $LASTEXITCODE }
 
-          python -m pip install --prefer-binary --timeout 60 -r requirements.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
+          python -c "from pathlib import Path; lines = Path('requirements.txt').read_text(encoding='utf-8').splitlines(); Path('ci-logs/requirements-windows.txt').write_text('\n'.join(line for line in lines if not line.lstrip().startswith('pyaudio')) + '\n', encoding='utf-8')"
+          python -m pip install --prefer-binary --timeout 60 -r ci-logs/requirements-windows.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
           if ($LASTEXITCODE -ne 0 -and $status -eq 0) { $status = $LASTEXITCODE }
 
           python -m pip install coverage --timeout 60 2>&1 | Tee-Object -FilePath ci-logs/02b-install-coverage.txt
