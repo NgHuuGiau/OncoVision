@@ -144,7 +144,7 @@ def _fallback_modality_label(normalized_text: str) -> str | None:
         ("MRI", r"\bmri\b"),
         ("CT", r"\bct\b"),
         ("X-quang ngực", r"\bcxr\b|\bxray\b|\bchest radiograph\b"),
-        ("Siêu âm", r"\bultrasound\b|\bsonography\b|\bultrasound\b"),
+        ("Siêu âm", r"\bultrasound\b|\bsonography\b"),
         ("Nội soi đại tràng", r"\bcolonoscopy\b"),
         ("Nội soi", r"\bendoscopy\b|\begd\b|\bgastroscopy\b"),
         ("EUS", r"\beus\b"),
@@ -301,12 +301,13 @@ def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
                 image = np.stack([pixel_array] * 3, axis=-1)
             else:
                 image = np.asarray(pixel_array)
-            image = np.clip(image, 0, np.iinfo(image.dtype).max)
             if np.issubdtype(image.dtype, np.integer):
+                image = np.clip(image, 0, np.iinfo(image.dtype).max)
                 image = image.astype(np.float32)
                 image = (image - image.min()) / max(image.max() - image.min(), 1.0) * 255.0
                 image = image.astype(np.uint8)
-                image = np.repeat(image[..., None], 3, axis=-1) if image.ndim == 2 else image
+            else:
+                image = np.clip(image, 0, 255)
         except Exception:
             return ["Không thể đọc ảnh để đánh giá chất lượng đầu vào."], 0.0
     else:
@@ -428,7 +429,7 @@ def _validate_single_file(source, allowed, min_confidence):
             body_region_confidence=body_confidence,
         )
 
-    if source.suffix.lower() == ".nii.gz":
+    if source.name.lower().endswith(".nii.gz"):
         from medical.validator import SUPPORTED_MAPPING
         if canonical_body not in SUPPORTED_MAPPING:
             return ValidationResult(
@@ -618,11 +619,11 @@ def validate_image(image_path, allowed_extensions=None, min_confidence=DEFAULT_M
         return _validate_directory(source, allowed, min_confidence)
 
     try:
-        if source.suffix.lower() != ".dcm":
+        if source.suffix.lower() not in {".dcm", ".nii", ".nii.gz"}:
             with Image.open(source) as img:
                 img.convert("RGB")
     except Exception:
-        if source.suffix.lower() == ".dcm":
+        if source.suffix.lower() in {".dcm", ".nii", ".nii.gz"}:
             pass
         else:
             return ValidationResult(

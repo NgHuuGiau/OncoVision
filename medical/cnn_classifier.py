@@ -388,7 +388,12 @@ def train_cnn_classifier(
 
     train_dataset = MedicalImageDataset(samples, class_labels, image_size=image_size, augment=True)
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True, drop_last=True
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=len(train_dataset) > batch_size,
     )
 
     val_loader = None
@@ -406,7 +411,6 @@ def train_cnn_classifier(
         dropout=dropout,
     )
 
-    device_obj = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
     model = model.to(device_obj)
 
     if class_weights is not None and len(class_weights) != num_classes:
@@ -449,7 +453,7 @@ def train_cnn_classifier(
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
                 accumulated_steps = 0
-            total_loss += loss.item() * images.size(0)
+            total_loss += loss.item() * images.size(0) * max(1, gradient_accumulation_steps)
 
         if accumulated_steps > 0:
             scaler.step(optimizer)

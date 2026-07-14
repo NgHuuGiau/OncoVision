@@ -366,16 +366,15 @@ class MedicalImageAnalyzer:
         )
         detect_details = detect_stage.details or {}
         if detection_details := detect_details.get("detections"):
-            if detection_details:
-                average_confidence = float(np.mean([item["confidence"] for item in detection_details]))
-                certainty_threshold = (modality_profile or {}).get("certainty_threshold", self.config.certainty_threshold)
-                classify_stage = PipelineStageResult(
-                    stage="classify",
-                    status="success" if average_confidence >= certainty_threshold else "uncertain",
-                    confidence=average_confidence,
-                    message="Phân loại rủi ro dựa trên vùng phát hiện.",
-                    details={"average_confidence": average_confidence, "certainty_threshold": certainty_threshold},
-                )
+            average_confidence = float(np.mean([item["confidence"] for item in detection_details]))
+            certainty_threshold = (modality_profile or {}).get("certainty_threshold", self.config.certainty_threshold)
+            classify_stage = PipelineStageResult(
+                stage="classify",
+                status="success" if average_confidence >= certainty_threshold else "uncertain",
+                confidence=average_confidence,
+                message="Phân loại rủi ro dựa trên vùng phát hiện.",
+                details={"average_confidence": average_confidence, "certainty_threshold": certainty_threshold},
+            )
 
         report_stage = PipelineStageResult(
             stage="report",
@@ -608,12 +607,9 @@ class MedicalImageAnalyzer:
             import pydicom
 
             ds = pydicom.dcmread(str(source), stop_before_pixels=True, force=True)
-            dicom_modality = getattr(ds, "Modality", "")
-            body_part = getattr(ds, "BodyPartExamined", "")
-            series_description = getattr(ds, "SeriesDescription", "")
-            chosen = (str(dicom_modality).strip() or str(body_part).strip() or str(series_description).strip())
-            if chosen:
-                modality = chosen.upper()
+            dicom_modality = str(getattr(ds, "Modality", "")).strip()
+            if dicom_modality:
+                modality = dicom_modality.upper()
         except Exception:
             modality = None
 
