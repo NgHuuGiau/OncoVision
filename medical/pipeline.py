@@ -7,6 +7,7 @@ from typing import Any, Protocol
 
 import cv2
 import numpy as np
+from PIL import Image
 
 from medical.classifier import MedicalClassifierModel, load_medical_classifier
 from medical.cnn_classifier import MedicalCNNClassifierWrapper, is_cnn_classifier_path, load_cnn_classifier
@@ -109,6 +110,8 @@ class MedicalAnalysisResult:
     quality_warnings: list[str]
     stage_confidences: dict[str, float] = field(default_factory=dict)
     stage_messages: dict[str, str] = field(default_factory=dict)
+    gradcam_overlays: list[str] = field(default_factory=list)
+    deidentified_source: Path | None = None
 
 
 def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
@@ -229,7 +232,12 @@ class MedicalImageAnalyzer:
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
             raise ValueError(f"{validation.error_code}: {validation.message}")
-        normalized_path = normalize_uploaded_image(resolved_source, self.config.processed_dir, image_size=self.config.image_size)
+
+        deidentified_source = None
+        if resolved_source.suffix.lower() == ".dcm" or resolved_source.is_dir():
+            deidentified_source = self._deidentify_input(resolved_source)
+
+        normalized_path = normalize_uploaded_image(deidentified_source or resolved_source, self.config.processed_dir, image_size=self.config.image_size)
         image = cv2.imread(str(normalized_path))
         if image is None:
             raise RuntimeError(f"Khong doc duoc anh: {normalized_path}")
@@ -256,6 +264,7 @@ class MedicalImageAnalyzer:
             modality_profile=modality_profile,
         )
         processed_path = self._render_overlay(prepared_image.copy(), detections, patient_code=patient_code)
+        gradcam_overlays = self._run_gradcam_if_possible(prepared_image, detections, validation)
         payload = {
             "case_id": case_id,
             "patient_code": patient_code,
@@ -273,6 +282,8 @@ class MedicalImageAnalyzer:
             "quality_warnings": quality_warnings,
             "stages": {name: {"status": item.status, "confidence": item.confidence, "message": item.message} for name, item in stage_results.items()},
             "disclaimer": MEDICAL_DISCLAIMER,
+            "gradcam_overlays": gradcam_overlays,
+            "deidentified": deidentified_source is not None,
         }
         report_json_path, report_md_path, _ = write_case_report(self.config.reports_dir, payload)
         dashboard_payload = {
@@ -304,6 +315,8 @@ class MedicalImageAnalyzer:
             quality_warnings=quality_warnings,
             stage_confidences={name: item.confidence for name, item in stage_results.items()},
             stage_messages={name: item.message for name, item in stage_results.items()},
+            gradcam_overlays=gradcam_overlays,
+            deidentified_source=deidentified_source,
         )
 
     def _run_pipeline_stages(
@@ -793,6 +806,61 @@ class MedicalImageAnalyzer:
             "Co mot vai vung ton thuong nguy co thap. Nen theo doi va kham chuyen khoa neu ton thuong thay doi kich thuoc, mau sac hoac hinh dang.",
             average_confidence,
         )
+
+    def _deidentify_input(self, source: Path) -> Path | None:
+        from medical.compliance import ComplianceReport, deidentify_dicom_series, deidentify_dicom_file
+        from medical.reporting import build_artifact_stamp
+
+        try:
+            working = self.config.working_dir / "deidentified"
+            working.mkdir(parents=True, exist_ok=True)
+            stamp = build_artifact_stamp()
+            if source.is_dir():
+                target = working / f"series_{stamp}"
+                target.mkdir(parents=True, exist_ok=True)
+                report = deidentify_dicom_series(source, target)
+            else:
+                target = working / f"{source.stem}_{stamp}{source.suffix}"
+                report = ComplianceReport()
+                try:
+                    deidentify_dicom_file(source, target)
+                    report.record_deidentified(target)
+                except Exception as exc:
+                    report.record_error(str(exc))
+                    report.record_skipped(source)
+                    return None
+            print(f"[Compliance] {report.summary}")
+            return target if target.exists() else None
+        except Exception as exc:
+            print(f"[Compliance] De-identification failed: {exc}")
+            return None
+
+    def _run_gradcam_if_possible(self, prepared_image: np.ndarray, detections: list[DetectionFinding], validation: ValidationResult) -> list[str]:
+        overlays: list[str] = []
+        try:
+            cnn_wrapper = self._load_cnn_wrapper()
+            if cnn_wrapper is None or not detections:
+                return overlays
+            explainer = None
+            try:
+                from medical.explainability import MedicalGradCAMExplainer
+
+                explainer = MedicalGradCAMExplainer(cnn_wrapper, image_size=self.config.image_size, device=getattr(cnn_wrapper, "device", None))
+            except Exception:
+                return overlays
+            if explainer is None or not explainer.is_supported:
+                return overlays
+            top_label = detections[0].label if detections else ""
+            results = explainer.explain(prepared_image, top_k=min(3, len(detections) or 1), tta=self.config.cnn_tta)
+            for idx, result in enumerate(results):
+                self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
+                stamp = build_artifact_stamp()
+                out_path = self.config.overlay_dir / f"gradcam_{stamp}_{idx}_{top_label}.jpg"
+                Image.fromarray(result.overlay).save(out_path, format="JPEG", quality=95)
+                overlays.append(str(out_path))
+        except Exception:
+            pass
+        return overlays
 
     def _render_overlay(self, image: np.ndarray, detections: list[DetectionFinding], *, patient_code: str) -> Path:
         overlay = draw_detection_results(

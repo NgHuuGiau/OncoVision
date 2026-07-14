@@ -186,6 +186,24 @@ class MedicalCNNClassifierWrapper:
             )
         return results
 
+    def explain(self, source: str | Path | np.ndarray, *, top_k: int = 1, tta: bool = False, alpha: float = 0.5) -> list[dict[str, Any]]:
+        try:
+            from medical.explainability import MedicalGradCAMExplainer
+
+            explainer = MedicalGradCAMExplainer(self, image_size=self.model.backbone_name and 320, device=self.device)
+            gradcam_results = explainer.explain(source, top_k=top_k, tta=tta, alpha=alpha)
+            return [
+                {
+                    "label": result.label,
+                    "confidence": result.confidence,
+                    "heatmap": result.heatmap,
+                    "overlay": result.overlay,
+                }
+                for result in gradcam_results
+            ]
+        except Exception:
+            return []
+
     def _predict_with_tta(self, source: str | Path | np.ndarray) -> np.ndarray:
         base_tensor = _load_image_as_tensor(source, assume_bgr=True)
         base_tensor = base_tensor.unsqueeze(0).to(self.device)

@@ -11,7 +11,9 @@ import numpy as np
 from PIL import Image
 
 from utils.file_utils import load_yaml
+from medical.compliance import deidentify_dicom_file, deidentify_dicom_series
 from medical.dataset import supported_medical_modalities_for_target
+from medical.reporting import build_artifact_stamp
 from medical.router import InputRoute, route_input
 
 MEDICAL_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
@@ -281,6 +283,25 @@ class ValidationResult:
 
 def _is_size_only_warning(warnings: list[str] | tuple[str, ...]) -> bool:
     return bool(warnings) and all("kích thước" in warning.lower() for warning in warnings)
+
+
+def _deidentify_dicom_path(source: Path, working_dir: Path | None = None) -> Path:
+    if source.suffix.lower() != ".dcm" and not source.is_dir():
+        return source
+    target = source
+    if working_dir is not None:
+        stamp = build_artifact_stamp()
+        relative = source.relative_to(source.anchor) if source.is_absolute() else Path(source.name)
+        target = working_dir / f"deid_{stamp}_{relative.name}"
+        target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if source.is_dir():
+            deidentify_dicom_series(source, target)
+        else:
+            deidentify_dicom_file(source, target)
+    except Exception:
+        return source
+    return target
 
 
 def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
