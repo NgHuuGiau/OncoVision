@@ -390,7 +390,7 @@ class MedicalImageAnalyzer:
         report_stage = PipelineStageResult(
             stage="report",
             status="success",
-            confidence=max(validate_stage.confidence, preprocess_stage.confidence, detect_stage.confidence, classify_stage.confidence),
+            confidence=min(validate_stage.confidence, preprocess_stage.confidence, detect_stage.confidence, classify_stage.confidence),
             message="Đã tạo báo cáo và dashboard cho ca phân tích.",
             details={},
         )
@@ -571,30 +571,21 @@ class MedicalImageAnalyzer:
         if cnn_wrapper is None:
             return yolo_detections
 
-        height, width = image.shape[:2]
-        cnn_predictions: list[dict[str, Any]] = []
-        for detection in yolo_detections:
-            x1, y1, x2, y2 = detection.bbox
-            x1 = max(0, min(int(x1), width - 1))
-            y1 = max(0, min(int(y1), height - 1))
-            x2 = max(x1 + 1, min(int(x2), width))
-            y2 = max(y1 + 1, min(int(y2), height))
-            crop = image[y1:y2, x1:x2]
-            if crop.size == 0:
-                cnn_predictions.append({})
-                continue
-            try:
-                cnn_prediction = cnn_wrapper.predict(crop, top_k=1, tta=self.config.cnn_tta)[0]
-            except Exception:
-                cnn_prediction = {}
-            cnn_predictions.append(cnn_prediction)
+        try:
+            cnn_prediction = cnn_wrapper.predict(image, top_k=1, tta=self.config.cnn_tta)[0]
+            cnn_label = str(cnn_prediction.get("label", ""))
+            cnn_confidence = float(cnn_prediction.get("confidence", 0.0))
+        except Exception:
+            cnn_label = ""
+            cnn_confidence = 0.0
 
-        return self._weighted_ensemble_detections(yolo_detections, cnn_predictions)
+        return self._weighted_ensemble_detections(yolo_detections, cnn_label, cnn_confidence)
 
     def _weighted_ensemble_detections(
         self,
         yolo_detections: list[DetectionFinding],
-        cnn_predictions: list[dict[str, Any]],
+        cnn_label: str,
+        cnn_confidence: float,
     ) -> list[DetectionFinding]:
         if not yolo_detections:
             return []
@@ -609,23 +600,11 @@ class MedicalImageAnalyzer:
             cnn_weight = cnn_weight / total_weight
 
         combined: list[DetectionFinding] = []
-        for index, detection in enumerate(yolo_detections):
-            cnn_prediction = cnn_predictions[index] if index < len(cnn_predictions) else None
-            if not cnn_prediction:
-                combined.append(
-                    DetectionFinding(
-                        label=detection.label,
-                        confidence=float(detection.confidence),
-                        bbox=detection.bbox,
-                    )
-                )
-                continue
-            cnn_label = str(cnn_prediction.get("label", detection.label))
-            cnn_confidence = float(cnn_prediction.get("confidence", 0.0))
+        for detection in yolo_detections:
             ensemble_confidence = float(yolo_weight * detection.confidence + cnn_weight * cnn_confidence)
             combined.append(
                 DetectionFinding(
-                    label=cnn_label,
+                    label=cnn_label or detection.label,
                     confidence=ensemble_confidence,
                     bbox=detection.bbox,
                 )

@@ -195,14 +195,14 @@ def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> N
 
         total_images = len(raw_images)
         train_count = max(1, int(round(total_images * 0.7))) if total_images > 1 else 1
-        val_count = max(1, int(round(total_images * 0.15))) if total_images > 2 else 0
+        val_count = max(1, int(round(total_images * 0.15))) if total_images > 2 else 1
+        if total_images >= 3 and val_count == 0:
+            val_count = 1
         test_count = total_images - train_count - val_count
         if test_count < 0:
             test_count = 0
-        if total_images > 2 and test_count == 0:
+        if total_images > 2 and test_count == 0 and val_count > 0:
             test_count = 1
-            if val_count == 0:
-                val_count = 1
             if train_count > total_images - val_count - test_count:
                 train_count = total_images - val_count - test_count
         counts = {"train": train_count, "val": val_count, "test": test_count}
@@ -263,14 +263,13 @@ def _should_use_cnn_backend(paths: MedicalTrainingPaths, train_samples: list[tup
     return per_class_count >= 2
 
 
-def _compute_class_weights(train_samples: list[tuple[Path, int]], class_names: tuple[str, ...]) -> list[float] | None:
+def _compute_class_weights(train_samples: list[tuple[Path, int]], class_names: tuple[str, ...]) -> list[float]:
     counts = np.zeros(len(class_names), dtype=np.float32)
     for _, class_index in train_samples:
         if 0 <= class_index < len(counts):
             counts[class_index] += 1.0
-    if np.all(counts > 0):
-        return [float(value) for value in (counts.sum() / (len(class_names) * counts))]
-    return None
+    smoothed_counts = counts + 1.0
+    return [float(smoothed_counts.sum() / (len(class_names) * value)) for value in smoothed_counts]
 
 
 def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True) -> Path:
@@ -554,12 +553,11 @@ def _evaluate_model_on_samples(
         label, confidence = _extract_prediction(prediction)
         confidences.append(confidence)
         truths.append(class_index)
-        predicted_index = class_to_index.get(label, -1)
+        predicted_index = class_to_index.get(label, len(class_labels))
         if predicted_index < 0 or predicted_index >= len(class_labels):
-            # Nhan la (khong khop): gan vao lop khac lop dung de tinh la du doan sai.
-            predicted_index = (class_index + 1) % len(class_labels)
+            predicted_index = len(class_labels)
         preds.append(predicted_index)
-    metrics = compute_multiclass_metrics(truths, preds, list(class_labels))
+    metrics = compute_multiclass_metrics(truths, preds, list(class_labels) + ["__unknown__"])
     metrics["average_confidence"] = float(np.mean(confidences)) if confidences else 0.0
     return metrics
 

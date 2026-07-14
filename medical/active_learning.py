@@ -55,7 +55,7 @@ def select_uncertain_samples(
     candidates: list[tuple[float, Path, float]] = []
     for result in predictions:
         confidence = _extract_confidence(result)
-        uncertainty_score = abs(confidence - 0.5)
+        uncertainty_score = min(confidence, 1.0 - confidence)
         if uncertainty_score <= config.uncertainty_threshold:
             candidates.append((uncertainty_score, _extract_image_path(result), confidence))
 

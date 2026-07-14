@@ -656,7 +656,7 @@ def _validate_directory(source, allowed, min_confidence):
     else:
         representative = candidates[0]
 
-    result = _validate_single_file(representative, allowed, min_confidence)
+    result = _validate_single_file_strict(representative, allowed, min_confidence)
     if result.status == "uncertain" and result.quality_warnings and _is_size_only_warning(result.quality_warnings):
         return ValidationResult(
             status="success",
