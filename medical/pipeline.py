@@ -67,6 +67,7 @@ class MedicalImageAnalyzerConfig:
     cnn_tta: bool = True
     ensemble_yolo_weight: float = 0.4
     ensemble_cnn_weight: float = 0.6
+    detection_consistency_threshold: float = 0.5
     modality_tuning: dict[str, Any] = field(default_factory=dict)
 
     def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
@@ -166,6 +167,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         cnn_tta=bool(settings.get("cnn_tta", True)),
         ensemble_yolo_weight=float(settings.get("ensemble_yolo_weight", 0.4)),
         ensemble_cnn_weight=float(settings.get("ensemble_cnn_weight", 0.6)),
+        detection_consistency_threshold=float(settings.get("detection_consistency_threshold", 0.5)),
         modality_tuning=settings.get("modality_tuning", {}) if isinstance(settings.get("modality_tuning", {}), dict) else {},
     )
 
@@ -200,6 +202,8 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
         issues.append("cnn_label_smoothing khong hop le.")
     if config.cnn_warmup_epochs < 0:
         issues.append("cnn_warmup_epochs khong duoc am.")
+    if not 0.0 <= config.detection_consistency_threshold <= 1.0:
+        issues.append("detection_consistency_threshold phai nam trong khoang [0, 1].")
     total_ensemble_weight = config.ensemble_yolo_weight + config.ensemble_cnn_weight
     if not config.ensemble_yolo_weight >= 0.0 or not config.ensemble_cnn_weight >= 0.0:
         issues.append("ensemble weights khong duoc am.")
@@ -239,6 +243,13 @@ class MedicalImageAnalyzer:
         detect_details = detect_stage.details or {}
         raw_detections = detect_details.get("detections", [])
         detections = _coerce_detections(raw_detections) if detect_stage.status == "success" else []
+        consistency_score, conflicting_pairs = self._compute_detection_consistency(detections)
+        if consistency_score < self.config.detection_consistency_threshold:
+            quality_warnings.append(
+                f"Phat hien khong nhat quan giua cac vung (consistency={consistency_score:.2f} "
+                f"< {self.config.detection_consistency_threshold:.2f}, "
+                f"conflicting_pairs={len(conflicting_pairs)})."
+            )
         risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(
             detections,
             modality=validation.modality,
@@ -263,7 +274,7 @@ class MedicalImageAnalyzer:
             "stages": {name: {"status": item.status, "confidence": item.confidence, "message": item.message} for name, item in stage_results.items()},
             "disclaimer": MEDICAL_DISCLAIMER,
         }
-        report_json_path, report_md_path = write_case_report(self.config.reports_dir, payload)
+        report_json_path, report_md_path, _ = write_case_report(self.config.reports_dir, payload)
         dashboard_payload = {
             "patient_code": patient_code,
             "source_image": str(resolved_source),
@@ -560,14 +571,8 @@ class MedicalImageAnalyzer:
         if cnn_wrapper is None:
             return yolo_detections
 
-        yolo_weight = float(self.config.ensemble_yolo_weight)
-        cnn_weight = float(self.config.ensemble_cnn_weight)
-        total_weight = yolo_weight + cnn_weight
-        if total_weight <= 0.0:
-            yolo_weight, cnn_weight, total_weight = 0.4, 0.6, 1.0
-
         height, width = image.shape[:2]
-        combined: list[DetectionFinding] = []
+        cnn_predictions: list[dict[str, Any]] = []
         for detection in yolo_detections:
             x1, y1, x2, y2 = detection.bbox
             x1 = max(0, min(int(x1), width - 1))
@@ -576,24 +581,133 @@ class MedicalImageAnalyzer:
             y2 = max(y1 + 1, min(int(y2), height))
             crop = image[y1:y2, x1:x2]
             if crop.size == 0:
-                combined.append(detection)
+                cnn_predictions.append({})
                 continue
             try:
                 cnn_prediction = cnn_wrapper.predict(crop, top_k=1, tta=self.config.cnn_tta)[0]
             except Exception:
-                combined.append(detection)
+                cnn_prediction = {}
+            cnn_predictions.append(cnn_prediction)
+
+        return self._weighted_ensemble_detections(yolo_detections, cnn_predictions)
+
+    def _weighted_ensemble_detections(
+        self,
+        yolo_detections: list[DetectionFinding],
+        cnn_predictions: list[dict[str, Any]],
+    ) -> list[DetectionFinding]:
+        if not yolo_detections:
+            return []
+
+        yolo_weight = float(self.config.ensemble_yolo_weight)
+        cnn_weight = float(self.config.ensemble_cnn_weight)
+        total_weight = yolo_weight + cnn_weight
+        if total_weight <= 0.0:
+            yolo_weight, cnn_weight, total_weight = 0.4, 0.6, 1.0
+        if not np.isclose(total_weight, 1.0):
+            yolo_weight = yolo_weight / total_weight
+            cnn_weight = cnn_weight / total_weight
+
+        combined: list[DetectionFinding] = []
+        for index, detection in enumerate(yolo_detections):
+            cnn_prediction = cnn_predictions[index] if index < len(cnn_predictions) else None
+            if not cnn_prediction:
+                combined.append(
+                    DetectionFinding(
+                        label=detection.label,
+                        confidence=float(detection.confidence),
+                        bbox=detection.bbox,
+                    )
+                )
                 continue
             cnn_label = str(cnn_prediction.get("label", detection.label))
             cnn_confidence = float(cnn_prediction.get("confidence", 0.0))
-            ensemble_confidence = (yolo_weight * detection.confidence + cnn_weight * cnn_confidence) / total_weight
+            ensemble_confidence = float(yolo_weight * detection.confidence + cnn_weight * cnn_confidence)
             combined.append(
                 DetectionFinding(
                     label=cnn_label,
-                    confidence=float(ensemble_confidence),
+                    confidence=ensemble_confidence,
                     bbox=detection.bbox,
                 )
             )
         return combined
+
+    @staticmethod
+    def _bbox_iou(
+        bbox_a: tuple[int, int, int, int],
+        bbox_b: tuple[int, int, int, int],
+    ) -> float:
+        ax1, ay1, ax2, ay2 = bbox_a
+        bx1, by1, bx2, by2 = bbox_b
+        inter_x1 = max(ax1, bx1)
+        inter_y1 = max(ay1, by1)
+        inter_x2 = min(ax2, bx2)
+        inter_y2 = min(ay2, by2)
+        inter_w = max(0, inter_x2 - inter_x1)
+        inter_h = max(0, inter_y2 - inter_y1)
+        inter_area = inter_w * inter_h
+        area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
+        area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
+        union_area = area_a + area_b - inter_area
+        if union_area <= 0:
+            return 0.0
+        return inter_area / union_area
+
+    def _compute_detection_consistency(
+        self,
+        detections: list[DetectionFinding],
+    ) -> tuple[float, list[tuple[int, int]]]:
+        if len(detections) < 2:
+            return 1.0, []
+
+        iou_threshold = 0.5
+        conflicting_pairs: list[tuple[int, int]] = []
+        total_pairs = 0
+        overlapping_pairs = 0
+        for i in range(len(detections)):
+            for j in range(i + 1, len(detections)):
+                total_pairs += 1
+                iou = self._bbox_iou(detections[i].bbox, detections[j].bbox)
+                if iou > iou_threshold:
+                    overlapping_pairs += 1
+                    conflicting_pairs.append((i, j))
+
+        if total_pairs == 0:
+            return 1.0, conflicting_pairs
+
+        consistency_score = 1.0 - (overlapping_pairs / total_pairs)
+        return float(consistency_score), conflicting_pairs
+
+    def log_ensemble_metrics(
+        self,
+        yolo_detections: list[DetectionFinding],
+        cnn_detections: list[DetectionFinding],
+        ensemble_detections: list[DetectionFinding],
+    ) -> dict[str, Any]:
+        yolo_count = len(yolo_detections)
+        cnn_count = len(cnn_detections)
+        ensemble_count = len(ensemble_detections)
+
+        yolo_avg = float(np.mean([item.confidence for item in yolo_detections])) if yolo_detections else 0.0
+        cnn_avg = float(np.mean([item.confidence for item in cnn_detections])) if cnn_detections else 0.0
+        ensemble_avg = float(np.mean([item.confidence for item in ensemble_detections])) if ensemble_detections else 0.0
+
+        print(
+            f"[EnsembleMetrics] yolo={yolo_count} (avg_conf={yolo_avg:.3f}), "
+            f"cnn={cnn_count} (avg_conf={cnn_avg:.3f}), "
+            f"ensemble={ensemble_count} (avg_conf={ensemble_avg:.3f})"
+        )
+
+        return {
+            "yolo_count": yolo_count,
+            "cnn_count": cnn_count,
+            "ensemble_count": ensemble_count,
+            "avg_confidences": {
+                "yolo": yolo_avg,
+                "cnn": cnn_avg,
+                "ensemble": ensemble_avg,
+            },
+        }
 
     def _read_dicom_header_modality(self, image_path: str | Path) -> str | None:
         source = Path(image_path)

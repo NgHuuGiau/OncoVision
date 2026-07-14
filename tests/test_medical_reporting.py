@@ -23,8 +23,8 @@ class MedicalReportingTests(unittest.TestCase):
                 "detections": [],
             }
 
-            first_json, first_md = write_case_report(temp_dir, payload)
-            second_json, second_md = write_case_report(temp_dir, payload)
+            first_json, first_md, _ = write_case_report(temp_dir, payload)
+            second_json, second_md, _ = write_case_report(temp_dir, payload)
 
         self.assertNotEqual(first_json.name, second_json.name)
         self.assertNotEqual(first_md.name, second_md.name)
@@ -42,7 +42,7 @@ class MedicalReportingTests(unittest.TestCase):
                 "quality_warnings": ["Anh mo"],
                 "detections": [{"label": "lesion", "confidence": 0.6, "bbox": [1, 2, 3, 4]}],
             }
-            report_json, report_md = write_case_report(Path(temp_dir), payload)
+            report_json, report_md, _ = write_case_report(Path(temp_dir), payload)
 
             update_case_report_case_id(report_json, report_md, case_id=17)
 
@@ -66,7 +66,7 @@ class MedicalReportingTests(unittest.TestCase):
                 "detections": [{"label": "lesion", "confidence": 0.92, "bbox": [1, 2, 3, 4]}],
             }
 
-            report_json, report_md = write_case_report(Path(temp_dir), payload)
+            report_json, report_md, _ = write_case_report(Path(temp_dir), payload)
             report_html = report_json.with_suffix(".html")
 
             self.assertTrue(report_html.exists())
