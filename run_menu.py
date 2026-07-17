@@ -55,7 +55,7 @@ MEDICAL_OPTIONS: dict[str, MenuOption] = {
     "3": MenuOption("run_medical.py", "Dữ liệu & Huấn luyện", "Khởi tạo, chia split và train/validate model y dược (trong terminal).", "Y DƯỢNG", CYAN, ("train-all",)),
     "4": MenuOption("run_medical.py", "Phân tích ảnh", "Phân tích ảnh y khoa với mã bệnh nhân nhập tay.", "KẾT QUẢ", YELLOW, ("analyze",)),
     "5": MenuOption("run_medical.py", "Lịch sử ca", "Xem các ca bệnh đã phân tích gần đây.", "KẾT QUẢ", YELLOW, ("history",)),
-    "6": MenuOption("run_medical.py", "Cải tiến (AL + modality)", "Gợi ý gán nhãn -> train classifier modality -> hiệu chỉnh ngưỡng tuning (gộp 1 luồng).", "CẢI TIẾN", CYAN, ("active-learning", "|", "train-modality", "|", "calibrate-modality-tuning", "--apply")),
+    "6": MenuOption("run_medical.py", "Cải tiến (AL + modality)", "Gợi ý gán nhãn -> train classifier modality -> hiệu chỉnh ngưỡng tuning (gộp 1 luồng).", "CẢI TIẾN", CYAN, ("active-learning", "|", "train-modality", "--epochs", "12", "--verbose", "|", "calibrate-modality-tuning", "--apply")),
     "7": MenuOption("run_medical.py", "Train nhận diện ảnh", "Train classifier nhận diện modality (CT/MRI/X-ray/...) từ dataset y khoa.", "CẢI TIẾN", CYAN, ("train-modality",)),
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED),
 }

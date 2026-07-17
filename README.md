@@ -259,3 +259,13 @@ dataset/medical_modality/
 - `pet_ct`/`eus` là ảnh augment tổng hợp (MedMNIST không có bộ gốc); cần bộ lâm sàng thật nếu muốn 100% ảnh thật.
 - Train: `python run_medical.py train-modality` (tự chia 80/20 train/val stratified). Model ra `models/pretrained/modality_classifier.pt`.
 - Hiện tại: train 12 epoch đạt `val_acc ≈ 0.74`.
+
+### Ảnh unlabeled cho Active Learning
+
+`dataset/medical/unlabeled/` chứa ảnh y khoa thật (từ MedMNIST test split) dùng cho `active-learning` gợi ý ảnh cần dán nhãn. Sinh bằng:
+
+```powershell
+python scripts/build_unlabeled_dataset.py
+```
+
+Mỗi lần chạy tải ~160 ảnh (224×224 RGB) từ BloodMNIST, PathMNIST, OrganMNIST3D, ChestMNIST. Ảnh có prefix `unlabeled_` để không nhầm với ảnh đã dán nhãn.
