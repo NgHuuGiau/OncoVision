@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import re
 import shutil
 import time
 from typing import Any
@@ -169,6 +170,36 @@ def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict
     }
 
 
+def _patient_id_from_path(path: Path) -> str:
+    """Trich id benh nhan tu duong dan de tranh leak giua cac split.
+
+    Thu tu uu tien:
+    1. Ten thu muc cha (vi du: .../BN001/scan_01.dcm -> 'bn001').
+    2. Tiền tố có chứa chữ số trong tên file (vi du: BN001_slice02.jpg -> 'bn001',
+       sub-01_T1.nii -> 'sub-01', P012_img3.dcm -> 'p012').
+
+    Neu khong tim thay ma benh nhan hop le (ten chung nhu 'sample_0', 'img_3'
+    ma khong co dinh danh benh nhan), moi anh duoc coi la mot benh nhan rieng
+    de giu nguyen hanh vi phan split theo anh nhu cu.
+    """
+    parent = path.parent.name
+    if parent and parent.lower() not in {"images", "raw", "processed", ""} and re.search(r"\d", parent):
+        return parent.lower()
+    stem = path.stem
+    # Tien to den dau '_' hoac '-' dau tien, phai co chu so moi la patient id.
+    prefix = re.split(r"[_-]", stem, maxsplit=1)[0]
+    if re.search(r"\d", prefix):
+        return prefix.lower()
+    return stem.lower()
+
+
+def _group_images_by_patient(raw_images: list[Path]) -> list[list[Path]]:
+    groups: dict[str, list[Path]] = {}
+    for image_path in raw_images:
+        groups.setdefault(_patient_id_from_path(image_path), []).append(image_path)
+    return [sorted(items, key=lambda p: p.name.lower()) for items in groups.values()]
+
+
 def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> None:
     for class_name in paths.class_names:
         class_root = paths.dataset_root / class_name
@@ -193,30 +224,39 @@ def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> N
         if not raw_images:
             continue
 
-        total_images = len(raw_images)
-        train_count = max(1, int(round(total_images * 0.7))) if total_images > 1 else 1
-        val_count = max(1, int(round(total_images * 0.15))) if total_images > 2 else 1
-        if total_images >= 3 and val_count == 0:
-            val_count = 1
-        test_count = total_images - train_count - val_count
-        if test_count < 0:
-            test_count = 0
-        if total_images > 2 and test_count == 0 and val_count > 0:
-            test_count = 1
-            if train_count > total_images - val_count - test_count:
-                train_count = total_images - val_count - test_count
-        counts = {"train": train_count, "val": val_count, "test": test_count}
+        # Nhom theo benh nhan de cung mot benh nhan khong bi chia sang ca 2 train/val/test.
+        patient_groups = _group_images_by_patient(raw_images)
+        total_groups = len(patient_groups)
+        if total_groups < 2:
+            # Qua it benh nhan de phan tang: gom tat ca vao train nhu cu.
+            train_groups = patient_groups
+            val_groups: list[list[Path]] = []
+            test_groups: list[list[Path]] = []
+        else:
+            train_count = max(1, int(round(total_groups * 0.7)))
+            val_count = max(1, int(round(total_groups * 0.15)))
+            if val_count == 0 and total_groups >= 3:
+                val_count = 1
+            test_count = total_groups - train_count - val_count
+            if test_count < 0:
+                test_count = 0
+            if total_groups > 2 and test_count == 0 and val_count > 0:
+                test_count = 1
+                if train_count > total_groups - val_count - test_count:
+                    train_count = total_groups - val_count - test_count
+            train_groups = patient_groups[:train_count]
+            val_groups = patient_groups[train_count:train_count + val_count]
+            test_groups = patient_groups[train_count + val_count:]
 
-        index = 0
-        for split in DEFAULT_SPLITS:
+        grouped_splits = {"train": train_groups, "val": val_groups, "test": test_groups}
+        for split, groups in grouped_splits.items():
             target_dir = split_dirs[split]
             target_dir.mkdir(parents=True, exist_ok=True)
-            count = counts[split]
-            for image_path in raw_images[index:index + count]:
-                destination = target_dir / image_path.name
-                if not destination.exists():
-                    shutil.copy2(image_path, destination)
-            index += count
+            for group in groups:
+                for image_path in group:
+                    destination = target_dir / image_path.name
+                    if not destination.exists():
+                        shutil.copy2(image_path, destination)
 
 
 def prepare_medical_training_dataset(paths: MedicalTrainingPaths | None = None) -> MedicalTrainingSummary:
@@ -272,7 +312,7 @@ def _compute_class_weights(train_samples: list[tuple[Path, int]], class_names: t
     return [float(smoothed_counts.sum() / (len(class_names) * value)) for value in smoothed_counts]
 
 
-def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True) -> Path:
+def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True, verbose: bool = False, resume_path: str | Path | None = None) -> Path:
     paths = paths or medical_training_paths()
     settings = _load_medical_settings()
     if prepare_dataset:
@@ -283,7 +323,7 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
     backend = str(settings.get("classifier_backend", "centroid")).lower()
     if backend == "cnn" and _should_use_cnn_backend(paths, train_samples, settings):
         try:
-            return train_cnn_medical_model(paths, prepare_dataset=False)
+            return train_cnn_medical_model(paths, prepare_dataset=False, verbose=verbose, resume_path=resume_path)
         except Exception:
             pass
     train_samples = _samples_for_split(paths, "train")
@@ -293,13 +333,14 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
         train_samples,
         class_labels=paths.class_names,
         feature_size=(paths.feature_size, paths.feature_size),
+        progress_tag="train",
     )
     save_medical_classifier(classifier_model, paths.trained_model_path)
     _write_training_manifest(paths.trained_model_path, paths, settings)
     return paths.trained_model_path
 
 
-def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True) -> Path:
+def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True, verbose: bool = False, resume_path: str | Path | None = None) -> Path:
     paths = paths or medical_training_paths()
     settings = _load_medical_settings()
     if prepare_dataset:
@@ -328,6 +369,9 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         mixed_precision=bool(settings.get("cnn_mixed_precision", True)),
         warmup_epochs=int(settings.get("cnn_warmup_epochs", 4)),
         class_weights=class_weights,
+        progress_tag="train",
+        verbose=verbose,
+        resume_path=resume_path,
     )
     wrapper.save(paths.trained_model_path)
     _write_training_manifest(paths.trained_model_path, paths, settings, _history)
@@ -504,8 +548,12 @@ def _train_fold_model(
     paths: MedicalTrainingPaths,
     *,
     val_samples: list[tuple[Path, int]] | None = None,
+    fold_index: int | None = None,
+    verbose: bool = False,
+    resume_path: str | Path | None = None,
 ) -> Any:
     """Huan luyen mot model cho mot fold dung cung logic voi train_cnn_classifier."""
+    fold_tag = f"fold:{fold_index}" if fold_index is not None else "fold"
     backend = str(config.get("classifier_backend", "cnn")).lower()
     if backend == "cnn" and _should_use_cnn_backend(paths, train_samples, config):
         class_weights = None
@@ -516,6 +564,9 @@ def _train_fold_model(
             class_labels=class_labels,
             val_samples=val_samples or None,
             class_weights=class_weights,
+            progress_tag=fold_tag,
+            verbose=verbose,
+            resume_path=resume_path,
             **_cnn_kwargs_from_config(config),
         )
         return wrapper
@@ -523,6 +574,7 @@ def _train_fold_model(
         train_samples,
         class_labels=class_labels,
         feature_size=(paths.feature_size, paths.feature_size),
+        progress_tag=fold_tag,
     )
 
 
@@ -639,6 +691,8 @@ def train_with_stratified_kfold(
     config: dict[str, Any] | None = None,
     paths: MedicalTrainingPaths | None = None,
     output_dir: str | Path | None = None,
+    verbose: bool = False,
+    resume_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Huan luyen voi stratified K-Fold cross-validation.
 
@@ -680,6 +734,9 @@ def train_with_stratified_kfold(
                 config,
                 paths,
                 val_samples=val_samples,
+                fold_index=fold_index,
+                verbose=verbose,
+                resume_path=resume_path,
             )
             _save_fold_model(model, model_path)
             metrics = _evaluate_model_on_samples(model, val_samples, class_labels)
@@ -738,10 +795,12 @@ def _train_final_model_on_all_data(
     samples: list[tuple[Path, int]],
     config: dict[str, Any],
     cv_results: dict[str, Any] | None = None,
+    verbose: bool = False,
+    resume_path: str | Path | None = None,
 ) -> Path:
     """Huan luyen model cuoi cung tren toan bo du lieu voi hyperparam tot nhat tu CV."""
     best_config = _select_best_hyperparams(config, cv_results)
-    model = _train_fold_model(samples, paths.class_names, best_config, paths, val_samples=None)
+    model = _train_fold_model(samples, paths.class_names, best_config, paths, val_samples=None, verbose=verbose, resume_path=resume_path)
     _save_fold_model(model, paths.trained_model_path)
     return paths.trained_model_path
 
@@ -750,22 +809,39 @@ def run_full_medical_training_pipeline(
     *,
     run_kfold: bool | None = None,
     num_folds: int = 5,
+    verbose: bool = False,
+    resume_path: str | Path | None = None,
 ) -> dict[str, Any]:
     paths = medical_training_paths()
     settings = _load_medical_settings()
     if run_kfold is None:
         run_kfold = bool(settings.get("nested_cross_validation", False))
     total_start = time.perf_counter()
+    print("=" * 60, flush=True)
+    print("BAT DAU TRAINING MEDICAL 7 UNG THU", flush=True)
+    print("=" * 60, flush=True)
+    print("[1/4] Dang chuan bi du lieu (quet dataset, tao split)...", flush=True)
     prepare_start = time.perf_counter()
     split_summary = prepare_medical_training_dataset(paths)
     prepare_seconds = time.perf_counter() - prepare_start
-    # ponytail: reuse the already prepared dataset here; don't scan it twice.
+    print(
+        f"[1/4] Xong chuan bi: train={split_summary.train_count} "
+        f"val={split_summary.val_count} test={split_summary.test_count} ({prepare_seconds:.1f}s)",
+        flush=True,
+    )
+    print("[2/4] Dang huan luyen model...", flush=True)
     train_start = time.perf_counter()
-    trained_model_path = train_medical_model(paths, prepare_dataset=False)
+    trained_model_path = train_medical_model(paths, prepare_dataset=False, verbose=verbose, resume_path=resume_path)
     train_seconds = time.perf_counter() - train_start
+    print(f"[2/4] Xong huan luyen: {trained_model_path} ({train_seconds:.1f}s)", flush=True)
+    print("[3/4] Dang danh gia model...", flush=True)
     validate_start = time.perf_counter()
     validation_metrics = validate_medical_model(paths)
     validate_seconds = time.perf_counter() - validate_start
+    print(
+        f"[3/4] Xong danh gia: accuracy={validation_metrics.get('accuracy', 0):.4f} ({validate_seconds:.1f}s)",
+        flush=True,
+    )
     report = {
         "train_count": split_summary.train_count,
         "val_count": split_summary.val_count,
@@ -779,6 +855,7 @@ def run_full_medical_training_pipeline(
     }
 
     if run_kfold:
+        print("[4/4] Dang chay K-Fold cross-validation...", flush=True)
         cv_start = time.perf_counter()
         all_samples = _all_labeled_samples(paths)
         cv_results = train_with_stratified_kfold(
@@ -787,25 +864,35 @@ def run_full_medical_training_pipeline(
             num_folds=num_folds,
             config=settings,
             paths=paths,
+            verbose=verbose,
+            resume_path=resume_path,
         )
         report["cv_results"] = cv_results
         report["cv_seconds"] = time.perf_counter() - cv_start
-        # Sau K-Fold, huan luyen model cuoi cung tren toan bo du lieu voi
-        # hyperparam tot nhat tu CV.
+        print(f"[4/4] Xong K-Fold ({report['cv_seconds']:.1f}s)", flush=True)
+        print("[bonus] Dang huan luyen model cuoi cung tren toan bo du lieu...", flush=True)
         final_start = time.perf_counter()
         final_model_path = _train_final_model_on_all_data(
-            paths, all_samples, settings, cv_results
+            paths, all_samples, settings, cv_results, verbose=verbose, resume_path=resume_path
         )
         report["final_model_path"] = final_model_path
         report["final_train_seconds"] = time.perf_counter() - final_start
         report["trained_model_path"] = final_model_path
         report["best_hyperparams"] = _select_best_hyperparams(settings, cv_results)
-        # Danh gia lai sau khi huan luyen model cuoi cung.
+        print(f"[bonus] Xong model cuoi cung ({report['final_train_seconds']:.1f}s)", flush=True)
+        print("[bonus] Dang danh gia lai model cuoi cung...", flush=True)
         try:
             report["validation_metrics"] = validate_medical_model(paths)
         except FileNotFoundError:
             pass
         report["total_seconds"] = time.perf_counter() - total_start
+
+    print("-" * 60, flush=True)
+    print(f"HOAN TAT: {report['total_seconds']:.1f}s", flush=True)
+    print(f"Model: {report['trained_model_path']}", flush=True)
+    if "validation_metrics" in report and report["validation_metrics"]:
+        print(f"Accuracy: {report['validation_metrics'].get('accuracy', 0):.4f}", flush=True)
+    print("=" * 60, flush=True)
 
     try:
         write_training_dashboard(Path("output/medical/reports"), report)
@@ -916,6 +1003,7 @@ def train_medical_submodels(paths: MedicalTrainingPaths | None = None, *, prepar
                 mixed_precision=bool(settings.get("cnn_mixed_precision", True)),
                 warmup_epochs=int(settings.get("cnn_warmup_epochs", 4)),
                 class_weights=class_weights,
+                progress_tag=f"submodel:{family_key}",
             )
             wrapper.save(model_path)
             _write_training_manifest(model_path, paths, settings, _history, model_name=family_key)
@@ -924,6 +1012,7 @@ def train_medical_submodels(paths: MedicalTrainingPaths | None = None, *, prepar
                 train_samples,
                 class_labels=class_labels,
                 feature_size=(paths.feature_size, paths.feature_size),
+                progress_tag=f"submodel:{family_key}",
             )
             save_medical_classifier(classifier_model, model_path)
             _write_training_manifest(model_path, paths, settings, model_name=family_key)

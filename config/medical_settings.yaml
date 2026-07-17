@@ -17,38 +17,14 @@ medical:
       quality_threshold: 0.45
       contrast_boost: 1.0
       normalize: default
-    ct:
-      certainty_threshold: 0.60
-      medium_threshold: 0.40
-      quality_threshold: 0.45
-      contrast_boost: 1.15
-      normalize: ct
-    mri:
-      certainty_threshold: 0.62
-      medium_threshold: 0.42
-      quality_threshold: 0.45
-      contrast_boost: 1.10
-      normalize: mri
-    mammogram:
-      certainty_threshold: 0.68
-      medium_threshold: 0.48
-      quality_threshold: 0.50
-      contrast_boost: 1.25
-      normalize: mammogram
-    ultrasound:
-      certainty_threshold: 0.72
-      medium_threshold: 0.50
-      quality_threshold: 0.55
-      contrast_boost: 1.20
-      normalize: ultrasound
-  validation_min_confidence: 0.70
+  validation_min_confidence: 0.7
   validation_allowed_extensions:
-    - .jpg
-    - .jpeg
-    - .png
-    - .dcm
-    - .nii
-    - .nii.gz
+  - .jpg
+  - .jpeg
+  - .png
+  - .dcm
+  - .nii
+  - .nii.gz
   classifier_backend: cnn
   cnn_backbone: efficientnet_b2
   cnn_image_size: 320

@@ -147,6 +147,28 @@ class MedicalTrainingTests(unittest.TestCase):
         self.assertEqual(paths.trained_model_path, Path("medical_7_cancers.pt"))
         self.assertEqual(paths.feature_size, 24)
 
+    @patch("medical.training.train_cnn_classifier")
+    @patch("medical.training._load_medical_settings")
+    def test_train_medical_model_passes_resume_path(self, load_settings_mock, train_cnn_mock) -> None:
+        load_settings_mock.return_value = {"classifier_backend": "cnn", "cnn_class_weighting": True}
+        train_cnn_mock.return_value = (SimpleNamespace(save=lambda p: p), {"train_loss": [0.1]})
+        with TemporaryDirectory() as temp_dir:
+            paths = self._paths(Path(temp_dir))
+            dataset_root = paths.dataset_root
+            for class_name in paths.class_names:
+                for split in ("train", "val", "test"):
+                    split_dir = dataset_root / class_name / "processed" / "images" / split
+                    split_dir.mkdir(parents=True, exist_ok=True)
+                    for k in range(2):
+                        Image.new("RGB", (24, 24), (k * 40 % 255, 30, 90)).save(split_dir / f"{class_name}_{split}_{k}.jpg")
+            resume = Path(temp_dir) / "resume.pt"
+            resume.write_bytes(b"ckpt")
+
+            train_medical_model(paths, resume_path=resume)
+
+            _, kwargs = train_cnn_mock.call_args
+            self.assertEqual(kwargs.get("resume_path"), resume)
+
 
 if __name__ == "__main__":
     unittest.main()

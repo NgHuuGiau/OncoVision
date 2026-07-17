@@ -66,6 +66,8 @@ class MedicalImageAnalyzerConfig:
     cnn_mixed_precision: bool = True
     cnn_warmup_epochs: int = 3
     cnn_tta: bool = True
+    analyze_topk: int = 3
+    yolo_model_path: Path | None = None
     ensemble_yolo_weight: float = 0.4
     ensemble_cnn_weight: float = 0.6
     detection_consistency_threshold: float = 0.5
@@ -168,6 +170,8 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         cnn_mixed_precision=bool(settings.get("cnn_mixed_precision", True)),
         cnn_warmup_epochs=int(settings.get("cnn_warmup_epochs", 3)),
         cnn_tta=bool(settings.get("cnn_tta", True)),
+        analyze_topk=int(settings.get("analyze_topk", 3)),
+        yolo_model_path=Path(settings["yolo_model_path"]) if settings.get("yolo_model_path") else None,
         ensemble_yolo_weight=float(settings.get("ensemble_yolo_weight", 0.4)),
         ensemble_cnn_weight=float(settings.get("ensemble_cnn_weight", 0.6)),
         detection_consistency_threshold=float(settings.get("detection_consistency_threshold", 0.5)),
@@ -228,6 +232,11 @@ class MedicalImageAnalyzer:
 
     def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
         self.ensure_ready()
+        if self._detector_backend is None and self.config.yolo_model_path and Path(self.config.yolo_model_path).exists():
+            try:
+                self._detector_backend = self._load_default_backend()
+            except Exception as exc:
+                print(f"[Ensemble] Bo qua YOLO backend: {exc}")
         resolved_source = Path(image_path)
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
@@ -488,17 +497,29 @@ class MedicalImageAnalyzer:
             return yolo_detections
         cnn_wrapper = self._load_cnn_wrapper()
         if cnn_wrapper is not None:
-            cnn_prediction = cnn_wrapper.predict(image, top_k=1, tta=self.config.cnn_tta)[0]
-            label = str(cnn_prediction.get("label", ""))
-            confidence = float(cnn_prediction.get("confidence", 0.0))
-        else:
-            classifier = self._load_classifier()
-            classifier_prediction = classifier.predict(image, top_k=1)[0]
-            label = str(classifier_prediction.label)
-            confidence = float(classifier_prediction.confidence)
+            cnn_predictions = cnn_wrapper.predict(image, top_k=max(1, self.config.analyze_topk), tta=self.config.cnn_tta)
+            height, width = image.shape[:2]
+            bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
+            return [
+                DetectionFinding(
+                    label=str(item.get("label", "")),
+                    confidence=float(item.get("confidence", 0.0)),
+                    bbox=bbox,
+                )
+                for item in cnn_predictions
+            ]
+        classifier = self._load_classifier()
+        classifier_predictions = classifier.predict(image, top_k=max(1, self.config.analyze_topk))
         height, width = image.shape[:2]
         bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
-        return [DetectionFinding(label=label, confidence=confidence, bbox=bbox)]
+        return [
+            DetectionFinding(
+                label=str(item.label),
+                confidence=float(item.confidence),
+                bbox=bbox,
+            )
+            for item in classifier_predictions
+        ]
 
     def _detect_with_backend(self, image: np.ndarray) -> list[DetectionFinding]:
         backend = self._detector_backend or self._load_default_backend()
@@ -748,6 +769,13 @@ class MedicalImageAnalyzer:
         return base_result
 
     def _load_default_backend(self) -> DetectorBackend:
+        if self.config.yolo_model_path and Path(self.config.yolo_model_path).exists():
+            try:
+                from ultralytics import YOLO
+
+                return YOLO(str(self.config.yolo_model_path))
+            except Exception as exc:
+                print(f"[Ensemble] Khong the tai YOLO backend: {exc}")
         raise RuntimeError("Medical pipeline hien tai dung classifier local, khong can backend YOLO.")
 
     def _load_classifier(self) -> MedicalClassifierModel:

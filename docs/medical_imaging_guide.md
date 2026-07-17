@@ -144,3 +144,28 @@ python run_chat.py --cleanup-output --older-than-days 30
 - Chat UI có thêm chọn modality theo nhóm bệnh để file picker bám đúng loại ảnh cần dùng.
 - File picker sẽ ưu tiên đuôi ảnh/volume phù hợp với modality đã chọn.
 - Folder DICOM series và volume `.nii/.nii.gz` có thể xem từng lát trong preview.
+
+## 12. Menu Y Dược & Train Modality
+
+Vào menu y dược từ `run_menu.py` → chọn `3` (Y dược). Các mục:
+
+1. **Báo cáo nhanh** → `report`
+2. **Kiểm tra ảnh** → `validate-image`
+3. **Dữ liệu & Huấn luyện** → `train-all`
+4. **Phân tích ảnh** → `analyze`
+5. **Lịch sử ca** → `history`
+6. **Cải tiến (AL + modality)** → gộp `active-learning` → `train-modality` → `calibrate-modality-tuning --apply`
+7. **Train nhận diện ảnh** → `train-modality` (train riêng classifier modality)
+
+### Train classifier nhận diện modality
+
+Classifier phân loại modality (ct/mri/xray/ultrasound/mammogram/endoscopy/pet_ct/eus) đọc từ `dataset/medical_modality/<modality>/*.jpg`.
+
+```powershell
+python run_medical.py train-modality --epochs 12 --verbose
+```
+
+- Dataset: 8 modality × 200 ảnh (224×224 RGB) từ MedMNIST. Sinh lại bằng `python scripts/build_modality_dataset.py`.
+- Tự chia 80/20 train/val (stratified theo class) — không cần tách tay.
+- Model ra `models/pretrained/modality_classifier.pt`.
+- `pet_ct`/`eus` là ảnh augment tổng hợp (MedMNIST không có bộ gốc).

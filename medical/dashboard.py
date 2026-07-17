@@ -2,8 +2,43 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+TRAINING_PROGRESS_PATH = Path("output/medical/reports/training_progress.json")
+
+
+def write_training_progress(*, backend: str | None = None, tag: str | None = None, **fields: Any) -> None:
+    """Ghi tien do huan luyen ra file JSON de theo doi tu ben ngoai.
+
+    Ho tro ca hai backend:
+    - cnn: theo epoch (truyen epoch, num_epochs, train_loss, val_loss, val_acc, lr, best_val_acc).
+    - centroid: theo so anh (truyen processed, total).
+    Chi giu lai cac truong khac None de ghi chuong trinh goi.
+    """
+    try:
+        path = TRAINING_PROGRESS_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        record = {key: value for key, value in fields.items() if value is not None}
+        history: list[dict[str, Any]] = []
+        if path.exists():
+            try:
+                history = json.loads(path.read_text(encoding="utf-8")).get("history", [])
+            except (ValueError, OSError):
+                history = []
+        history.append(record)
+        payload = {
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "backend": backend,
+            "tag": tag,
+            "current": record,
+            "history": history[-300:],
+        }
+        path.write_text(json.dumps(_normalize_for_json(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
 
 
 def _normalize_for_json(value: Any) -> Any:

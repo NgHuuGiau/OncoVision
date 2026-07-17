@@ -211,7 +211,7 @@ class RunMenuTests(unittest.TestCase):
     def test_main_enters_medical_menu_and_runs_ready_option(self) -> None:
         outputs: list[str] = []
         run_script = MagicMock(return_value=0)
-        answers = iter(["3", "2", "0", "0"])
+        answers = iter(["3", "3", "0", "0"])
 
         result = run_menu.main(
             input_fn=lambda _: next(answers),
@@ -226,7 +226,7 @@ class RunMenuTests(unittest.TestCase):
 
     def test_main_enters_medical_menu_and_runs_train_all(self) -> None:
         run_script = MagicMock(return_value=0)
-        answers = iter(["3", "5", "0", "0"])
+        answers = iter(["3", "6", "0", "0"])
 
         result = run_menu.main(
             input_fn=lambda _: next(answers),
@@ -236,11 +236,11 @@ class RunMenuTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_medical.py", "train-all")
+        run_script.assert_called_once_with("run_medical.py", "train-all", env={"PYTHONUNBUFFERED": "1"})
 
     def test_medical_analyze_prompts_for_path_and_patient_code(self) -> None:
         run_script = MagicMock(return_value=0)
-        answers = iter(["3", "6", "sample.jpg", "BN009", "0", "0"])
+        answers = iter(["3", "7", "sample.jpg", "BN009", "0", "0"])
 
         result = run_menu.main(
             input_fn=lambda _: next(answers),

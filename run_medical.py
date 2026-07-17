@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -20,10 +21,13 @@ from medical.output_management import _medical_output_directories
 from medical.modality_calibration import apply_calibrated_modality_tuning, calibrate_modality_tuning
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import export_case_bundle, update_case_report_case_id
+from medical.active_learning import suggest_active_learning_samples
+from medical.modality_training import train_modality_classifier
 from medical.storage import MedicalCaseDatabase
 from medical.validator import validate_image
 from medical.system_status import get_medical_system_status, recommended_medical_commands
 from medical.training import (
+    _load_medical_settings,
     audit_medical_raw_dataset,
     medical_training_paths,
     prepare_medical_training_dataset,
@@ -33,6 +37,15 @@ from medical.training import (
 )
 from utils.cleanup_utils import cleanup_directories
 from utils.entrypoint_common import run_entrypoint
+
+
+@dataclass
+class _SimpleModelConfig:
+    model_path: Path
+    allow_fallback_model: bool = False
+    fallback_model_path: Path | None = None
+
+
 
 
 def _dataset_split_counts(dataset_root: Path) -> dict[str, int]:
@@ -68,14 +81,30 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("sources", help="Xem 7 nhom ung thu da co san.")
     subparsers.add_parser("cancer", help="Tong quan 7 ung thu va so anh local.")
     subparsers.add_parser("ready", help="Kiem tra san sang train medical.")
-    subparsers.add_parser("train", help="Train medical classifier.")
+    train_parser = subparsers.add_parser("train", help="Train medical classifier.")
+    train_parser.add_argument("--verbose", action="store_true", help="In chi tiet tung batch ke ca khi chay qua pipe (menu).")
+    train_parser.add_argument("--resume", default=None, help="Duong dan checkpoint .pt de tiep tuc train.")
     subparsers.add_parser("validate", help="Validate medical classifier.")
-    subparsers.add_parser("train-all", help="Split/validate/train theo dataset medical hien co.")
+    train_all_parser = subparsers.add_parser("train-all", help="Split/validate/train theo dataset medical hien co.")
+    train_all_parser.add_argument("--verbose", action="store_true", help="In chi tiet tung batch ke ca khi chay qua pipe (menu).")
+    train_all_parser.add_argument("--resume", default=None, help="Duong dan checkpoint .pt de tiep tuc train.")
     calibrate_parser = subparsers.add_parser("calibrate-modality-tuning", help="Thong ke dataset va de xuat nguong tuning theo modality.")
     calibrate_parser.add_argument("--dataset-root", default="dataset/medical")
     calibrate_parser.add_argument("--settings-path", default="config/medical_settings.yaml")
     calibrate_parser.add_argument("--report-path", default="output/medical/reports/modality_tuning_report.json")
     calibrate_parser.add_argument("--apply", action="store_true", help="Cap nhat modality_tuning trong file config.")
+
+    active_learning_parser = subparsers.add_parser("active-learning", help="Goi y anh can dan nhan them tu thu muc anh chua dan nhan.")
+    active_learning_parser.add_argument("--image-dir", default="dataset/medical/unlabeled", help="Thu muc anh chua dan nhan.")
+    active_learning_parser.add_argument("--uncertainty-threshold", type=float, default=0.15)
+    active_learning_parser.add_argument("--max-samples", type=int, default=10)
+
+    modality_parser = subparsers.add_parser("train-modality", help="Train classifier phan loai modality (ct/mri/xray/...).")
+    modality_parser.add_argument("--dataset-root", default="dataset/medical_modality")
+    modality_parser.add_argument("--output-path", default="models/pretrained/modality_classifier.pt")
+    modality_parser.add_argument("--epochs", type=int, default=10)
+    modality_parser.add_argument("--batch-size", type=int, default=16)
+    modality_parser.add_argument("--verbose", action="store_true", help="In chi tiet tung batch ke ca khi chay qua pipe (menu).")
 
     history_parser = subparsers.add_parser("history", help="Xem lich su phan tich.")
     history_parser.add_argument("--limit", type=int, default=10)
@@ -86,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser = subparsers.add_parser("export-case", help="Dong goi report va anh cua mot ca benh.")
     export_parser.add_argument("--case-id", type=int, required=True)
     export_parser.add_argument("--output-dir", default="output/medical/exports")
+    export_parser.add_argument("--pdf", action="store_true", help="Tao them file bao cao PDF.")
 
     delete_parser = subparsers.add_parser("delete-case", help="Xoa mot ban ghi ca benh khoi lich su.")
     delete_parser.add_argument("--case-id", type=int, required=True)
@@ -289,8 +319,52 @@ def main() -> int:
             payload,
             args.output_dir,
             include_files=[item.image_path, item.processed_image_path, item.report_json_path, item.report_md_path],
+            include_pdf=args.pdf,
         )
         print(f"Da export ca benh #{item.case_id} ra: {bundle_path}")
+        if args.pdf:
+            pdf_path = Path(args.output_dir) / f"case_{item.case_id}.pdf"
+            print(f"Bao cao PDF: {pdf_path if pdf_path.exists() else '(chua tao duoc)'}")
+        return 0
+
+    def handle_active_learning() -> int:
+        from medical.active_learning import ActiveLearningConfig
+        from medical.model_policy import resolve_medical_runtime_model_path
+
+        config = ActiveLearningConfig(
+            uncertainty_threshold=args.uncertainty_threshold,
+            max_samples_per_batch=args.max_samples,
+        )
+        settings = _load_medical_settings()
+        model_config = _SimpleModelConfig(
+            model_path=Path(settings.get("model", "medical_7_cancers.pt")),
+            allow_fallback_model=bool(settings.get("allow_fallback_model", False)),
+            fallback_model_path=Path(settings["fallback_model"]) if settings.get("fallback_model") else None,
+        )
+        try:
+            model_path = resolve_medical_runtime_model_path(model_config)
+        except FileNotFoundError as exc:
+            print(f"Khong the chay active-learning: {exc}")
+            return 1
+        candidates = suggest_active_learning_samples(args.image_dir, config=config, model_path=model_path)
+        if not candidates:
+            print("Khong co anh nao can dan nhan them (hoac chua co model / thu muc anh).")
+            return 0
+        print(f"Goi y {len(candidates)} anh can dan nhan them tu {args.image_dir}:")
+        for path, confidence, uncertainty in candidates:
+            print(f"- {path} (conf={confidence:.3f}, uncertainty={uncertainty:.3f})")
+        print(f"Danh sach chi tiet: {config.output_dir / 'active_learning_candidates.csv'}")
+        return 0
+
+    def handle_train_modality() -> int:
+        path = train_modality_classifier(
+            args.dataset_root,
+            args.output_path,
+            num_epochs=args.epochs,
+            batch_size=args.batch_size,
+            verbose=args.verbose,
+        )
+        print(f"Da train modality classifier: {path}")
         return 0
 
     def handle_delete_case() -> int:
@@ -343,7 +417,7 @@ def main() -> int:
         return 0
 
     def handle_train() -> int:
-        model_path = train_medical_model()
+        model_path = train_medical_model(verbose=args.verbose, resume_path=args.resume)
         print(f"Da luu model medical: {model_path}")
         return 0
 
@@ -354,7 +428,7 @@ def main() -> int:
         return 0
 
     def handle_train_all() -> int:
-        report = run_full_medical_training_pipeline()
+        report = run_full_medical_training_pipeline(verbose=args.verbose, resume_path=args.resume)
         print(f"Train: {report['train_count']}")
         print(f"Val: {report['val_count']}")
         print(f"Test: {report['test_count']}")
@@ -421,6 +495,8 @@ def main() -> int:
         "validate": handle_validate,
         "train-all": handle_train_all,
         "calibrate-modality-tuning": handle_calibrate_modality_tuning,
+        "active-learning": handle_active_learning,
+        "train-modality": handle_train_modality,
     }
 
     handler = handlers.get(args.command)

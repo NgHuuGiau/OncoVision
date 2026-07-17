@@ -9,9 +9,11 @@ import numpy as np
 from PIL import Image
 
 from medical.cnn_classifier import is_cnn_classifier_path, load_cnn_classifier
+from medical.dashboard import write_training_progress
 
 MEDICAL_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 DEFAULT_FEATURE_SIZE = (32, 32)
+DEFAULT_PROGRESS_LOG_EVERY = 2000
 
 
 @dataclass(frozen=True)
@@ -87,16 +89,29 @@ def train_medical_classifier(
     *,
     class_labels: tuple[str, ...],
     feature_size: tuple[int, int] = DEFAULT_FEATURE_SIZE,
+    progress_tag: str | None = None,
+    log_every: int = DEFAULT_PROGRESS_LOG_EVERY,
 ) -> MedicalClassifierModel:
     centroid_sums: np.ndarray | None = None
     counts = np.zeros(len(class_labels), dtype=np.int64)
 
+    total = len(samples) if hasattr(samples, "__len__") else None
+    processed = 0
     for source, class_index in samples:
         features = _extract_medical_features(source, feature_size=feature_size, assume_bgr=True)
         if centroid_sums is None:
             centroid_sums = np.zeros((len(class_labels), features.size), dtype=np.float32)
         centroid_sums[class_index] += features
         counts[class_index] += 1
+        processed += 1
+        if log_every and processed % log_every == 0:
+            print(f"[train-centroid] {processed}/{total if total is not None else '?'} anh", flush=True)
+            write_training_progress(
+                backend="centroid",
+                tag=progress_tag,
+                processed=processed,
+                total=total,
+            )
 
     if centroid_sums is None:
         raise FileNotFoundError("Khong co anh hop le de huan luyen medical classifier.")
@@ -105,6 +120,14 @@ def train_medical_classifier(
         raise FileNotFoundError(f"Thiếu dữ liệu cho các lớp: {missing}")
 
     centroids = centroid_sums / counts[:, None]
+    print(f"[train-centroid] hoan tat {processed} anh", flush=True)
+    write_training_progress(
+        backend="centroid",
+        tag=progress_tag,
+        processed=processed,
+        total=total,
+        done=True,
+    )
     return MedicalClassifierModel(class_labels=class_labels, centroids=centroids, feature_size=feature_size)
 
 

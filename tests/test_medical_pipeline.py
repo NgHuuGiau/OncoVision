@@ -274,3 +274,30 @@ class MedicalPipelineTests(unittest.TestCase):
             resolved = MedicalImageAnalyzer(config=config, detector_backend=_FakeDetector([])).ensure_ready()
 
         self.assertEqual(resolved, fallback_model)
+
+    def test_detect_findings_returns_topk_cnn_classes(self) -> None:
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+                analyze_topk=3,
+            ),
+        )
+        fake_wrapper = SimpleNamespace(
+            predict=lambda source, **kw: [
+                {"label": "Ung thư gan", "confidence": 0.7, "probabilities": {}},
+                {"label": "Ung thư phổi", "confidence": 0.2, "probabilities": {}},
+                {"label": "Ung thư vú", "confidence": 0.1, "probabilities": {}},
+            ]
+        )
+        analyzer._load_cnn_wrapper = lambda: fake_wrapper  # type: ignore[assignment]
+
+        findings = analyzer._detect_findings(np.zeros((64, 64, 3), dtype=np.uint8))
+
+        self.assertEqual(len(findings), 3)
+        labels = [item.label for item in findings]
+        self.assertIn("Ung thư gan", labels)
+        self.assertAlmostEqual(findings[0].confidence, 0.7)

@@ -113,6 +113,7 @@ run_tests.py     -> dashboard unit test
 | Kiểm tra tổng thể môi trường | `python run_doctor.py --skip-camera-check` |
 | Train YOLO object detection | `python run_train.py` |
 | Kiểm tra nhanh luồng y dược | `python run_medical.py status` |
+| Train classifier nhận diện modality | `python run_medical.py train-modality` |
 | Chạy smoke check an toàn | `python run_smoke.py` |
 | Chạy unit test | `python -m unittest discover -s tests -p "test_*.py"` |
 
@@ -235,3 +236,26 @@ python run_menu.py
 - Chat UI có thêm chọn modality theo nhóm bệnh để file picker bám đúng loại ảnh cần dùng.
 - File picker sẽ ưu tiên đuôi ảnh/volume phù hợp với modality đã chọn.
 - Folder DICOM series và volume `.nii/.nii.gz` có thể xem từng lát trong preview.
+
+### Dataset nhận diện modality (`dataset/medical_modality`)
+
+Dùng để train classifier phân loại modality ảnh y khoa (CT/MRI/X-ray/...). Cấu trúc:
+
+```text
+dataset/medical_modality/
+  ct/        200 anh  (OrganMNIST3D - CT)
+  mri/       200 anh  (OrganMNIST3D - MRI)
+  xray/      200 anh  (ChestMNIST - X-quang nguc)
+  mammogram/ 200 anh  (BreastMNIST - nhu anh mammography)
+  endoscopy/ 200 anh  (PathMNIST - mo beneficiary hoc duong tieu hoa/colon)
+  ultrasound/200 anh  (BloodMNIST - anh mau, gan the closest)
+  pet_ct/    200 anh  (OrganMNIST3D + augment, synthetic)
+  eus/       200 anh  (PathMNIST + augment, synthetic)
+```
+
+- Nguồn: [MedMNIST](https://medmnist.com/) (BSD license), ảnh chuẩn hóa, resize **224×224 RGB**.
+- Tổng: **1600 ảnh** (200/class × 8 modality).
+- Sinh lại bằng: `python scripts/build_modality_dataset.py` (tự động tải MedMNIST và tạo dataset).
+- `pet_ct`/`eus` là ảnh augment tổng hợp (MedMNIST không có bộ gốc); cần bộ lâm sàng thật nếu muốn 100% ảnh thật.
+- Train: `python run_medical.py train-modality` (tự chia 80/20 train/val stratified). Model ra `models/pretrained/modality_classifier.pt`.
+- Hiện tại: train 12 epoch đạt `val_acc ≈ 0.74`.

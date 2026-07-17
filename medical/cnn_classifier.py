@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,8 @@ from torchvision.models import (
     resnet50,
 )
 from torchvision.transforms import InterpolationMode
+
+from medical.dashboard import write_training_progress
 
 
 def _build_medical_augmentations(image_size: int = 320) -> transforms.Compose:
@@ -341,11 +345,6 @@ def _estimate_safe_batch_size(backbone: str, device: str | None = None) -> int:
     return max(4, power)
 
 
-def get_recommended_batch_size(backbone: str, device: str | None = None) -> int:
-    """Public helper returning the auto-selected batch size for ``backbone``."""
-    return _estimate_safe_batch_size(backbone=backbone, device=device)
-
-
 def _create_optimizer(model: nn.Module, learning_rate: float, weight_decay: float) -> torch.optim.Optimizer:
     return torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -374,6 +373,26 @@ def _set_deterministic_seed(seed: int = 42) -> None:
     torch.backends.cudnn.benchmark = False
 
 
+def _training_progress_line(
+    epoch: int,
+    num_epochs: int,
+    batch_idx: int,
+    total_batches: int,
+    running_loss: float,
+    elapsed: float,
+    phase: str = "train",
+) -> str:
+    width = 30
+    total_batches = max(1, total_batches)
+    filled = int(width * batch_idx / total_batches)
+    bar = "#" * filled + "." * (width - filled)
+    pct = int(100 * batch_idx / total_batches)
+    return (
+        f"[train:{phase}] ep {epoch}/{num_epochs} [{bar}] {batch_idx}/{total_batches} ({pct}%) "
+        f"loss={running_loss:.4f} {elapsed:.0f}s"
+    )
+
+
 def train_cnn_classifier(
     samples: list[tuple[Path, int]],
     class_labels: tuple[str, ...],
@@ -394,6 +413,9 @@ def train_cnn_classifier(
     warmup_epochs: int = 3,
     class_weights: list[float] | tuple[float, ...] | None = None,
     gradient_accumulation_steps: int = 1,
+    progress_tag: str | None = None,
+    verbose: bool = False,
+    resume_path: str | Path | None = None,
 ) -> tuple[MedicalCNNClassifierWrapper, dict[str, Any]]:
     if not samples:
         raise FileNotFoundError("Khong co du lieu train cho CNN classifier.")
@@ -429,6 +451,19 @@ def train_cnn_classifier(
         dropout=dropout,
     )
 
+    if resume_path is not None:
+        resume_path = Path(resume_path)
+        if resume_path.exists():
+            try:
+                checkpoint = torch.load(resume_path, map_location="cpu", weights_only=False)
+                if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+                    model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+                    print(f"[train] resume tu checkpoint: {resume_path}", flush=True)
+                else:
+                    print(f"[train] checkpoint khong hop le, bo qua resume: {resume_path}", flush=True)
+            except Exception as exc:
+                print(f"[train] loi khi resume ({exc}), bat dau tu dau.", flush=True)
+
     model = model.to(device_obj)
 
     if class_weights is not None and len(class_weights) != num_classes:
@@ -443,6 +478,19 @@ def train_cnn_classifier(
 
     scaler = torch.amp.GradScaler(device_obj.type, enabled=mixed_precision and device_obj.type == "cuda")
 
+    print(
+        f"[train] khoi dong CNN: backbone={backbone} epochs={num_epochs} "
+        f"batch={batch_size} device={device_obj.type} train={len(train_dataset)} anh",
+        flush=True,
+    )
+    _progress_tty = sys.stdout.isatty()
+    _progress_total_batches = len(train_loader)
+    # Terminal (tty): cap nhat moi batch de thanh tien trinh chuyen dong lien tuc.
+    # File/pipe: chi cap nhat moi ~4% de log khong bi qua tai.
+    # --verbose: bypass throttle, in moi batch ke ca khi chay qua pipe (menu).
+    _progress_every = 1 if (_progress_tty or verbose) else max(1, _progress_total_batches // 25)
+    _progress_start = time.time()
+
     history: dict[str, list[float]] = {
         "train_loss": [],
         "val_loss": [],
@@ -455,9 +503,12 @@ def train_cnn_classifier(
     best_val_acc = 0.0
 
     for epoch in range(num_epochs):
+        print(f"[train] --- epoch {epoch + 1}/{num_epochs} ---", flush=True)
         model.train()
         total_loss = 0.0
         accumulated_steps = 0
+        batch_idx = 0
+        processed = 0
         for images, labels in train_loader:
             images = images.to(device_obj, non_blocking=True)
             labels = labels.to(device_obj, non_blocking=True)
@@ -472,6 +523,22 @@ def train_cnn_classifier(
                 optimizer.zero_grad(set_to_none=True)
                 accumulated_steps = 0
             total_loss += loss.item() * images.size(0) * max(1, gradient_accumulation_steps)
+            processed += images.size(0)
+            batch_idx += 1
+            if batch_idx % _progress_every == 0 or batch_idx == _progress_total_batches:
+                running_loss = total_loss / max(1, processed)
+                line = _training_progress_line(
+                    epoch + 1,
+                    num_epochs,
+                    batch_idx,
+                    _progress_total_batches,
+                    running_loss,
+                    time.time() - _progress_start,
+                )
+                if _progress_tty:
+                    print(f"\r{line}", end="", flush=True)
+                else:
+                    print(line, flush=True)
 
         if accumulated_steps > 0:
             scaler.step(optimizer)
@@ -490,6 +557,9 @@ def train_cnn_classifier(
             val_loss_sum = 0.0
             correct = 0
             total = 0
+            val_total_batches = len(val_loader)
+            val_batch_idx = 0
+            val_processed = 0
             with torch.no_grad():
                 for images, labels in val_loader:
                     images = images.to(device_obj, non_blocking=True)
@@ -501,6 +571,23 @@ def train_cnn_classifier(
                     _, predicted = torch.max(outputs, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
+                    val_processed += images.size(0)
+                    val_batch_idx += 1
+                    if val_batch_idx % _progress_every == 0 or val_batch_idx == val_total_batches:
+                        val_running = val_loss_sum / max(1, val_processed)
+                        val_line = _training_progress_line(
+                            epoch + 1,
+                            num_epochs,
+                            val_batch_idx,
+                            val_total_batches,
+                            val_running,
+                            time.time() - _progress_start,
+                            phase="val",
+                        )
+                        if _progress_tty:
+                            print(f"\r{val_line}", end="", flush=True)
+                        else:
+                            print(val_line, flush=True)
             val_loss = val_loss_sum / total
             val_acc = correct / total
             history["val_loss"].append(val_loss)
@@ -518,6 +605,30 @@ def train_cnn_classifier(
                 if best_model_state is not None:
                     model.load_state_dict(best_model_state["model_state_dict"])
                 break
+
+        if _progress_tty:
+            print(flush=True)
+        write_training_progress(
+            backend="cnn",
+            tag=progress_tag,
+            epoch=epoch + 1,
+            num_epochs=num_epochs,
+            train_loss=epoch_loss,
+            val_loss=val_loss,
+            val_acc=val_acc,
+            lr=float(optimizer.param_groups[0]["lr"]),
+            backbone=backbone,
+            best_val_acc=best_val_acc,
+            stopped_early=early_stopping.early_stop,
+        )
+        print(
+            f"[train] epoch {epoch + 1}/{num_epochs} "
+            f"loss={epoch_loss:.4f} val_loss={val_loss:.4f} "
+            f"val_acc={val_acc:.4f} best_val_acc={best_val_acc:.4f} "
+            f"lr={optimizer.param_groups[0]['lr']:.2e}"
+            + (" [early-stop]" if early_stopping.early_stop else ""),
+            flush=True,
+        )
 
     wrapper = MedicalCNNClassifierWrapper(model=model, class_labels=class_labels, device=str(device_obj))
     return wrapper, history
