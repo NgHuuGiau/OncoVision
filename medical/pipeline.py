@@ -20,6 +20,7 @@ from medical.reporting import build_artifact_stamp, write_case_report
 from medical.validator import (
     ValidationResult,
     _DICOM_MODALITY_MAP,
+    _load_modality_tuning_from_config,
     get_modality_tuning,
     validate_image,
 )
@@ -426,8 +427,11 @@ class MedicalImageAnalyzer:
         }
 
     def _get_modality_profile(self, modality: str | None) -> dict[str, Any]:
+        modality_key = (modality or "").lower()
+        tuning_source = self.config.modality_tuning or _load_modality_tuning_from_config()
+        has_specific = isinstance(tuning_source, dict) and modality_key in tuning_source
         tuning = get_modality_tuning(modality, self.config.modality_tuning)
-        if tuning["normalize"] == "default":
+        if tuning["normalize"] == "default" and not has_specific:
             return {
                 "certainty_threshold": self.config.certainty_threshold,
                 "medium_threshold": self.config.classify_medium_risk_threshold,

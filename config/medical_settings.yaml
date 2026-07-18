@@ -17,6 +17,54 @@ medical:
       quality_threshold: 0.45
       contrast_boost: 1.0
       normalize: default
+    ct:
+      certainty_threshold: 0.50
+      medium_threshold: 0.40
+      quality_threshold: 0.40
+      contrast_boost: 1.0
+      normalize: ct
+    mri:
+      certainty_threshold: 0.50
+      medium_threshold: 0.40
+      quality_threshold: 0.40
+      contrast_boost: 1.0
+      normalize: mri
+    xray:
+      certainty_threshold: 0.55
+      medium_threshold: 0.45
+      quality_threshold: 0.45
+      contrast_boost: 1.1
+      normalize: xray
+    ultrasound:
+      certainty_threshold: 0.68
+      medium_threshold: 0.55
+      quality_threshold: 0.60
+      contrast_boost: 1.3
+      normalize: ultrasound
+    mammogram:
+      certainty_threshold: 0.62
+      medium_threshold: 0.50
+      quality_threshold: 0.55
+      contrast_boost: 1.2
+      normalize: mammogram
+    endoscopy:
+      certainty_threshold: 0.58
+      medium_threshold: 0.46
+      quality_threshold: 0.48
+      contrast_boost: 1.1
+      normalize: endoscopy
+    pet_ct:
+      certainty_threshold: 0.60
+      medium_threshold: 0.48
+      quality_threshold: 0.50
+      contrast_boost: 1.1
+      normalize: pet_ct
+    eus:
+      certainty_threshold: 0.64
+      medium_threshold: 0.52
+      quality_threshold: 0.55
+      contrast_boost: 1.2
+      normalize: eus
   validation_min_confidence: 0.7
   validation_allowed_extensions:
   - .jpg

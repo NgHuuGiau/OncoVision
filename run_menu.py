@@ -207,17 +207,17 @@ def _is_training_command(args: tuple[str, ...]) -> bool:
 
 
 def _split_steps(args: tuple[str, ...]) -> list[tuple[str, ...]]:
+    if not args:
+        return [()]
     steps: list[tuple[str, ...]] = []
     current: list[str] = []
     for token in args:
         if token == "|":
-            if current:
-                steps.append(tuple(current))
-                current = []
+            steps.append(tuple(current))
+            current = []
             continue
         current.append(token)
-    if current:
-        steps.append(tuple(current))
+    steps.append(tuple(current))
     return steps
 
 
@@ -235,7 +235,7 @@ def _run_selected_option(
     steps = _split_steps(args)
     multi_step = len(steps) > 1
     for step_index, step_args in enumerate(steps, start=1):
-        if not step_args:
+        if multi_step and not step_args:
             continue
         if multi_step:
             print_fn(f"{BOLD}{option.color}{'=' * width}{RESET}")
