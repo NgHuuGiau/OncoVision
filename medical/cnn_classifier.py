@@ -96,14 +96,16 @@ def _build_convnext_backbone(name: str, pretrained: bool) -> tuple[nn.Module, in
         model = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
-    elif name == "convnextv2_tiny":
-        from torchvision.models import convnextv2_tiny, ConvNeXt_V2_Tiny_Weights
-        model = convnextv2_tiny(weights=ConvNeXt_V2_Tiny_Weights.DEFAULT if pretrained else None)
+    elif name in ("convnextv2_tiny", "convnext_tiny"):
+        from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
+
+        model = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
-    elif name == "convnextv2_base":
-        from torchvision.models import convnextv2_base, ConvNeXt_V2_Base_Weights
-        model = convnextv2_base(weights=ConvNeXt_V2_Base_Weights.DEFAULT if pretrained else None)
+    elif name in ("convnextv2_base", "convnext_base"):
+        from torchvision.models import convnext_base, ConvNeXt_Base_Weights
+
+        model = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
     else:
@@ -300,6 +302,9 @@ class MedicalCNNClassifier(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.backbone(x)
+        if features.dim() > 2:
+            # Gop khong gian: global average pool ve [B, C] de tuong thich moi backbone.
+            features = features.mean(dim=(-2, -1)) if features.dim() == 4 else features.flatten(start_dim=1)
         return self.classifier(features)
 
     def predict_proba(self, x: torch.Tensor) -> torch.Tensor:

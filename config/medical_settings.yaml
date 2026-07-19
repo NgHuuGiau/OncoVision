@@ -19,7 +19,7 @@ medical:
   - .nii
   - .nii.gz
   classifier_backend: cnn
-  cnn_backbone: convnextv2_tiny
+  cnn_backbone: convnext_tiny
   cnn_image_size: 320
   cnn_batch_size: 16
   cnn_num_epochs: 30
