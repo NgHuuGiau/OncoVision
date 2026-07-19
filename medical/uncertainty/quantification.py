@@ -129,21 +129,15 @@ class TemperatureScaling:
 
 
 def compute_ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> float:
-    confidences = probs.max(axis=1)
-    predictions = probs.argmax(axis=1)
-    accuracies = (predictions == labels).astype(np.float64)
-    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
-    bin_indices = np.clip(np.digitize(confidences, bin_edges[1:-1], right=False), 0, n_bins - 1)
-    ece = 0.0
-    for b in range(n_bins):
-        mask = bin_indices == b
-        count = int(np.count_nonzero(mask))
-        if count == 0:
-            continue
-        mean_conf = float(confidences[mask].mean())
-        mean_acc = float(accuracies[mask].mean())
-        ece += (count / len(labels)) * abs(mean_acc - mean_conf)
-    return float(ece)
+    """Expected Calibration Error.
+
+    Delegate ve medical.metrics.compute_calibration_curve de dung MOT nguon
+    duy nhat cho logic ECE (tranh lech ket qua giua cac module).
+    """
+    from medical.metrics import compute_calibration_curve
+
+    result = compute_calibration_curve(labels, probs, n_bins=n_bins)
+    return float(result["ece"])
 
 
 __all__ = [

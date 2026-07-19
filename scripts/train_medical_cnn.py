@@ -62,31 +62,21 @@ def main() -> int:
     summary = prepare_medical_training_dataset(paths)
     print(f"      train={summary.train_count} val={summary.val_count} test={summary.test_count}")
 
-    # Ap dung override tu CLI vao config in-memory bang bien moi truong khong tien;
-    # thay vao do sua truc tiep settings truoc khi goi train.
+    # Override in-memory (KHONG ghi de config/medical_settings.yaml tren dia).
+    override: dict = {"classifier_backend": "cnn", "cnn_pretrained": not args.no_pretrained}
     if args.backbone:
-        settings["cnn_backbone"] = args.backbone
+        override["cnn_backbone"] = args.backbone
     if args.epochs is not None:
-        settings["cnn_num_epochs"] = args.epochs
+        override["cnn_num_epochs"] = args.epochs
     if args.batch_size is not None:
-        settings["cnn_batch_size"] = args.batch_size
-    settings["classifier_backend"] = "cnn"
+        override["cnn_batch_size"] = args.batch_size
 
-    # Ghi tam config da override de train_cnn_medical_model doc lai.
-    import yaml
-
-    full = load_yaml(settings_path)
-    full["medical"].update({
-        "cnn_backbone": settings.get("cnn_backbone"),
-        "cnn_num_epochs": settings.get("cnn_num_epochs"),
-        "cnn_batch_size": settings.get("cnn_batch_size"),
-        "classifier_backend": "cnn",
-    })
-    settings_path.write_text(yaml.safe_dump(full, allow_unicode=True, sort_keys=False), encoding="utf-8")
-
-    print(f"[2/3] Train CNN backbone={settings.get('cnn_backbone')} "
-          f"epochs={settings.get('cnn_num_epochs')} pretrained={not args.no_pretrained}...")
-    model_path = train_cnn_medical_model(paths, prepare_dataset=False, verbose=args.verbose)
+    print(f"[2/3] Train CNN backbone={override.get('cnn_backbone', settings.get('cnn_backbone'))} "
+          f"epochs={override.get('cnn_num_epochs', settings.get('cnn_num_epochs'))} "
+          f"pretrained={not args.no_pretrained}...")
+    model_path = train_cnn_medical_model(
+        paths, prepare_dataset=False, verbose=args.verbose, settings_override=override
+    )
     print(f"      Model da luu: {model_path}")
 
     print(f"[3/3] Danh gia tren split '{args.eval_split}' (giu rieng)...")

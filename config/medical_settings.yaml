@@ -105,7 +105,7 @@ medical:
       normalize: eus
 
   advanced:
-    enable_segmentation_roi: true
+    enable_segmentation_roi: false
     segmentation_backend: unet
     enable_multitask: true
     multitask_heads:
@@ -124,8 +124,9 @@ medical:
       - convnextv2_tiny
       - efficientnet_v2_m
     ensemble_weight_optimization: true
-    enable_mc_dropout: true
+    enable_mc_dropout: false
     mc_dropout_samples: 20
+    enable_advanced_preprocessing: false
     enable_temperature_scaling: true
     enable_checkpoint_averaging: true
     checkpoint_averaging_window: 5

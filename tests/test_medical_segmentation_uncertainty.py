@@ -73,6 +73,17 @@ class ExperimentalImportTests(unittest.TestCase):
         config = SelfSupervisedConfig()
         self.assertEqual(config.method, "dinov2")
 
+    def test_experimental_ensemble_importable(self) -> None:
+        import experimental.ensemble as ensemble_mod
+
+        self.assertTrue(hasattr(ensemble_mod, "MedicalEnsemble"))
+
+    def test_experimental_augmentation_importable(self) -> None:
+        from experimental.augmentation import AugmentationConfig, MedicalAugmentationPipeline
+
+        self.assertTrue(callable(MedicalAugmentationPipeline))
+        self.assertTrue(AugmentationConfig is not None)
+
 
 if __name__ == "__main__":
     unittest.main()

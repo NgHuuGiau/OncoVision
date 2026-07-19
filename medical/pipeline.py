@@ -77,6 +77,7 @@ class MedicalImageAnalyzerConfig:
     segmentation_roi_margin: int = 12
     enable_mc_dropout: bool = False
     mc_dropout_samples: int = 20
+    enable_advanced_preprocessing: bool = False
 
     def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
         return replace(self, model_path=Path(model_path))
@@ -188,6 +189,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         segmentation_roi_margin=int(advanced.get("segmentation_roi_margin", 12)),
         enable_mc_dropout=bool(advanced.get("enable_mc_dropout", False)),
         mc_dropout_samples=int(advanced.get("mc_dropout_samples", 20)),
+        enable_advanced_preprocessing=bool(advanced.get("enable_advanced_preprocessing", False)),
     )
 
 
@@ -245,6 +247,9 @@ class MedicalImageAnalyzer:
         self._detector_backend = detector_backend
         self._classifier_model: MedicalClassifierModel | None = None
         self._dicom_modality_cache: dict[Path, str | None] = {}
+        self._cnn_wrapper_cache: MedicalCNNClassifierWrapper | None = None
+        self._cnn_wrapper_cache_path: Path | None = None
+        self._roi_extractor: Any = None
 
     def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
         self.ensure_ready()
@@ -277,6 +282,7 @@ class MedicalImageAnalyzer:
         detect_details = detect_stage.details or {}
         raw_detections = detect_details.get("detections", [])
         detections = _coerce_detections(raw_detections) if detect_stage.status == "success" else []
+        report_detections = self._detections_in_source_frame(detections, roi_info)
         consistency_score, conflicting_pairs = self._compute_detection_consistency(detections)
         if consistency_score < self.config.detection_consistency_threshold:
             quality_warnings.append(
@@ -309,7 +315,7 @@ class MedicalImageAnalyzer:
             "average_confidence": average_confidence,
             "recommendation": recommendation,
             "detections": [
-                {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in detections
+                {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in report_detections
             ],
             "quality_warnings": quality_warnings,
             "stages": {name: {"status": item.status, "confidence": item.confidence, "message": item.message} for name, item in stage_results.items()},
@@ -339,7 +345,7 @@ class MedicalImageAnalyzer:
             processed_image=processed_path,
             report_json_path=report_json_path,
             report_md_path=report_md_path,
-            detections=detections,
+            detections=report_detections,
             risk_level=risk_level,
             suspected_malignant=suspected_malignant,
             recommendation=recommendation,
@@ -472,6 +478,10 @@ class MedicalImageAnalyzer:
         }
 
     def _prepare_image_for_analysis(self, image: np.ndarray, *, modality: str | None) -> np.ndarray:
+        if self.config.enable_advanced_preprocessing:
+            advanced = self._advanced_preprocess(image, modality=modality)
+            if advanced is not None:
+                image = advanced
         profile = self._get_modality_profile(modality)
         img = image.astype(np.float32)
         if profile["normalize"] == "ct":
@@ -505,28 +515,62 @@ class MedicalImageAnalyzer:
 
         Dung SAMROIExtractor voi fallback Otsu (khong can tai trong so mang).
         Neu tat hoac loi, tra ve anh goc va roi_info=None.
+
+        roi_info chua 'bbox' (he toa do anh truoc crop) va 'offset' (x1, y1) de
+        cac stage sau co the doi bbox detections ve cung he toa do anh truoc crop.
         """
         if not self.config.enable_segmentation_roi:
             return image, None
         try:
-            from medical.segmentation import SAMROIExtractor, crop_to_roi
+            from medical.segmentation import crop_to_roi
 
-            extractor = SAMROIExtractor()
+            extractor = self._load_roi_extractor()
             result = extractor.extract_roi(image)
             if result is None:
                 return image, None
             cropped = crop_to_roi(image, result.bbox, margin=self.config.segmentation_roi_margin)
             if cropped is None or cropped.size == 0:
                 return image, None
+            # Goc crop thuc te sau khi tinh margin/clamp (giong logic crop_to_roi).
+            height, width = image.shape[:2]
+            x1 = max(0, result.bbox[0] - self.config.segmentation_roi_margin)
+            y1 = max(0, result.bbox[1] - self.config.segmentation_roi_margin)
+            x1 = min(x1, max(0, width - 1))
+            y1 = min(y1, max(0, height - 1))
             roi_info = {
                 "bbox": list(result.bbox),
                 "area": float(result.area),
                 "confidence": float(result.confidence),
+                "offset": [int(x1), int(y1)],
             }
             return cropped, roi_info
         except Exception as exc:
             print(f"[Segmentation] Bo qua ROI crop: {exc}")
             return image, None
+
+    def _load_roi_extractor(self):
+        if self._roi_extractor is None:
+            from medical.segmentation import SAMROIExtractor
+
+            self._roi_extractor = SAMROIExtractor()
+        return self._roi_extractor
+
+    def _advanced_preprocess(self, image: np.ndarray, *, modality: str | None) -> np.ndarray | None:
+        """Tien xu ly theo modality bang medical.preprocessing (tuy chon).
+
+        Tra ve anh BGR uint8 da xu ly, hoac None neu loi/khong ap dung.
+        """
+        try:
+            from medical.preprocessing import preprocess_image
+
+            result = preprocess_image(image, target_size=self.config.image_size, modality=modality)
+            processed = getattr(result, "image", None)
+            if processed is None or getattr(processed, "size", 0) == 0:
+                return None
+            return processed
+        except Exception as exc:
+            print(f"[Preprocess] Bo qua advanced preprocessing: {exc}")
+            return None
 
     def _estimate_uncertainty(self, image: np.ndarray) -> dict[str, Any] | None:
         """Uoc luong do bat dinh bang MC Dropout khi backend la CNN.
@@ -879,9 +923,42 @@ class MedicalImageAnalyzer:
         return self._classifier_model
 
     def _load_cnn_wrapper(self) -> MedicalCNNClassifierWrapper | None:
-        if is_cnn_classifier_path(self.config.model_path):
-            return load_cnn_classifier(self.config.model_path)
+        model_path = Path(self.config.model_path)
+        if self._cnn_wrapper_cache is not None and self._cnn_wrapper_cache_path == model_path:
+            return self._cnn_wrapper_cache
+        if is_cnn_classifier_path(model_path):
+            wrapper = load_cnn_classifier(model_path)
+            self._cnn_wrapper_cache = wrapper
+            self._cnn_wrapper_cache_path = model_path
+            return wrapper
         return None
+
+    @staticmethod
+    def _detections_in_source_frame(
+        detections: list[DetectionFinding],
+        roi_info: dict[str, Any] | None,
+    ) -> list[DetectionFinding]:
+        """Doi bbox detections (dang o he toa do anh da crop) ve he toa do anh
+        truoc crop, dung offset ROI. Neu khong crop, tra ve nguyen ven."""
+        if not roi_info:
+            return detections
+        offset = roi_info.get("offset")
+        if not offset or len(offset) != 2:
+            return detections
+        off_x, off_y = int(offset[0]), int(offset[1])
+        if off_x == 0 and off_y == 0:
+            return detections
+        shifted: list[DetectionFinding] = []
+        for item in detections:
+            x1, y1, x2, y2 = item.bbox
+            shifted.append(
+                DetectionFinding(
+                    label=item.label,
+                    confidence=item.confidence,
+                    bbox=(x1 + off_x, y1 + off_y, x2 + off_x, y2 + off_y),
+                )
+            )
+        return shifted
 
     def _classify_findings(
         self,

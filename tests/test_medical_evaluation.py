@@ -106,5 +106,28 @@ class EvaluationTests(unittest.TestCase):
             self.assertIn("Per-Class", md_path.read_text(encoding="utf-8"))
 
 
+class PredictScoresTests(unittest.TestCase):
+    def test_out_of_vocab_label_returns_negative_index(self) -> None:
+        class _ForeignModel:
+            class_labels = ("X", "Y")
+
+            def predict(self, image_path, top_k: int = 3):
+                return [{"label": "X", "confidence": 0.9}, {"label": "Y", "confidence": 0.1}]
+
+        idx, scores = evaluation._predict_scores(_ForeignModel(), Path("0_a.jpg"), ("A", "B"))
+        self.assertEqual(idx, -1)
+        # Khong nhan nao khop nen scores van la vector 0.
+        self.assertEqual(float(scores.sum()), 0.0)
+
+    def test_in_vocab_label_maps_correctly(self) -> None:
+        class _Model:
+            def predict(self, image_path, top_k: int = 3):
+                return [{"label": "B", "confidence": 0.8}, {"label": "A", "confidence": 0.2}]
+
+        idx, scores = evaluation._predict_scores(_Model(), Path("1_b.jpg"), ("A", "B"))
+        self.assertEqual(idx, 1)
+        self.assertAlmostEqual(float(scores[1]), 0.8)
+
+
 if __name__ == "__main__":
     unittest.main()

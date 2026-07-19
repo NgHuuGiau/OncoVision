@@ -340,9 +340,11 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
     return paths.trained_model_path
 
 
-def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True, verbose: bool = False, resume_path: str | Path | None = None) -> Path:
+def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True, verbose: bool = False, resume_path: str | Path | None = None, settings_override: dict[str, Any] | None = None) -> Path:
     paths = paths or medical_training_paths()
     settings = _load_medical_settings()
+    if settings_override:
+        settings = {**settings, **settings_override}
     if prepare_dataset:
         prepare_medical_training_dataset(paths)
     train_samples = _samples_for_split(paths, "train")
@@ -358,7 +360,7 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         class_labels=paths.class_names,
         image_size=int(settings.get("cnn_image_size", 320)),
         backbone=settings.get("cnn_backbone", "resnet50"),
-        pretrained=True,
+        pretrained=bool(settings.get("cnn_pretrained", True)),
         dropout=float(settings.get("cnn_dropout", 0.25)),
         batch_size=int(settings.get("cnn_batch_size", 16)),
         num_epochs=int(settings.get("cnn_num_epochs", 30)),

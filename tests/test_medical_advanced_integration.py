@@ -10,6 +10,7 @@ from medical.pipeline import (
     build_default_medical_analyzer_config,
     validate_medical_analyzer_config,
 )
+from medical.pipeline import DetectionFinding
 
 
 def _base_config(**overrides) -> MedicalImageAnalyzerConfig:
@@ -56,6 +57,26 @@ class UncertaintyIntegrationTests(unittest.TestCase):
         analyzer = MedicalImageAnalyzer(config=_base_config(enable_mc_dropout=True))
         image = np.full((64, 64, 3), 100, dtype=np.uint8)
         self.assertIsNone(analyzer._estimate_uncertainty(image))
+
+
+
+
+class DetectionFrameTests(unittest.TestCase):
+    def test_detections_offset_to_source_frame(self) -> None:
+        detections = [DetectionFinding(label="x", confidence=0.9, bbox=(1, 2, 3, 4))]
+        shifted = MedicalImageAnalyzer._detections_in_source_frame(detections, {"offset": [10, 20]})
+        self.assertEqual(shifted[0].bbox, (11, 22, 13, 24))
+
+    def test_no_roi_returns_same_detections(self) -> None:
+        detections = [DetectionFinding(label="x", confidence=0.9, bbox=(1, 2, 3, 4))]
+        self.assertEqual(
+            MedicalImageAnalyzer._detections_in_source_frame(detections, None), detections
+        )
+
+    def test_zero_offset_returns_same(self) -> None:
+        detections = [DetectionFinding(label="x", confidence=0.9, bbox=(1, 2, 3, 4))]
+        shifted = MedicalImageAnalyzer._detections_in_source_frame(detections, {"offset": [0, 0]})
+        self.assertEqual(shifted[0].bbox, (1, 2, 3, 4))
 
 
 class ConfigValidationTests(unittest.TestCase):

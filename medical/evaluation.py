@@ -50,7 +50,9 @@ def _predict_scores(model: Any, image_path: Path, class_labels: tuple[str, ...])
         if conf > top_conf:
             top_conf = conf
             top_label = label
-    predicted_index = label_to_index.get(top_label, int(np.argmax(scores)))
+    # Neu nhan top khong thuoc class-set (model co class khac), tra -1 (out-of-vocab)
+    # thay vi mac dinh ve class 0. compute_multiclass_metrics se coi -1 la du doan sai.
+    predicted_index = label_to_index.get(top_label, -1)
     return predicted_index, scores
 
 
@@ -74,6 +76,14 @@ def evaluate_on_test_set(
 
     model, _is_cnn = _resolve_model(resolved_model_path)
     class_labels = paths.class_names
+
+    # Canh bao neu class-set cua model khong khop dataset (co the gay danh gia sai).
+    model_labels = getattr(model, "class_labels", None)
+    if model_labels is not None and tuple(model_labels) != tuple(class_labels):
+        print(
+            f"[Evaluation] Canh bao: class-set model {tuple(model_labels)} "
+            f"khac dataset {tuple(class_labels)}. Metric co the khong chinh xac."
+        )
 
     truths: list[int] = []
     preds: list[int] = []

@@ -10,6 +10,8 @@ sang cho production va co the thay doi hoac bi go bo.
 |---|---|---|
 | `multitask/` | Mo hinh multi-task (cancer + modality + anatomical + quality + tumor presence) | Dataset da gan nhan da nhiem vu |
 | `self_supervised/` | Pretrain DINOv2 cho anh y khoa | Tai trong so tu mang: dat `ONCOVISION_ALLOW_WEIGHT_DOWNLOAD=1` |
+| `ensemble.py` | Stacking/weighted ensemble nhieu model CNN | Cac model thanh phan da train |
+| `augmentation/` | Pipeline augmentation nang cao (mixup/cutmix/gridmask...) | Wire vao luong train khi can |
 
 ## Vi sao tach rieng
 
