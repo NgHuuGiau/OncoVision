@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from medical.cnn_classifier import MedicalCNNClassifier, MedicalCNNClassifierWrapper
+from medical.network_policy import resolve_pretrained
 
 
 _MODALITY_LABELS = [
@@ -21,7 +22,7 @@ def build_modality_classifier(num_classes: int = 8) -> MedicalCNNClassifier:
     return MedicalCNNClassifier(
         num_classes=num_classes,
         backbone="resnet18",
-        pretrained=True,
+        pretrained=resolve_pretrained(True, context="modality:resnet18"),
         dropout=0.2,
     )
 

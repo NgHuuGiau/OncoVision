@@ -73,6 +73,10 @@ class MedicalImageAnalyzerConfig:
     ensemble_cnn_weight: float = 0.6
     detection_consistency_threshold: float = 0.5
     modality_tuning: dict[str, Any] = field(default_factory=dict)
+    enable_segmentation_roi: bool = False
+    segmentation_roi_margin: int = 12
+    enable_mc_dropout: bool = False
+    mc_dropout_samples: int = 20
 
     def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
         return replace(self, model_path=Path(model_path))
@@ -142,6 +146,9 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     settings = load_yaml("config/medical_settings.yaml").get("medical", {})
     if not isinstance(settings, dict):
         settings = {}
+    advanced = settings.get("advanced", {})
+    if not isinstance(advanced, dict):
+        advanced = {}
     configured_model = Path(settings.get("model", "medical_7_cancers.pt"))
     return MedicalImageAnalyzerConfig(
         model_path=configured_model,
@@ -177,6 +184,10 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         ensemble_cnn_weight=float(settings.get("ensemble_cnn_weight", 0.6)),
         detection_consistency_threshold=float(settings.get("detection_consistency_threshold", 0.5)),
         modality_tuning=settings.get("modality_tuning", {}) if isinstance(settings.get("modality_tuning", {}), dict) else {},
+        enable_segmentation_roi=bool(advanced.get("enable_segmentation_roi", False)),
+        segmentation_roi_margin=int(advanced.get("segmentation_roi_margin", 12)),
+        enable_mc_dropout=bool(advanced.get("enable_mc_dropout", False)),
+        mc_dropout_samples=int(advanced.get("mc_dropout_samples", 20)),
     )
 
 
@@ -212,6 +223,10 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
         issues.append("cnn_warmup_epochs khong duoc am.")
     if not 0.0 <= config.detection_consistency_threshold <= 1.0:
         issues.append("detection_consistency_threshold phai nam trong khoang [0, 1].")
+    if config.segmentation_roi_margin < 0:
+        issues.append("segmentation_roi_margin khong duoc am.")
+    if config.mc_dropout_samples <= 0:
+        issues.append("mc_dropout_samples phai lon hon 0.")
     total_ensemble_weight = config.ensemble_yolo_weight + config.ensemble_cnn_weight
     if not config.ensemble_yolo_weight >= 0.0 or not config.ensemble_cnn_weight >= 0.0:
         issues.append("ensemble weights khong duoc am.")
@@ -253,6 +268,7 @@ class MedicalImageAnalyzer:
             raise RuntimeError(f"Khong doc duoc anh: {normalized_path}")
         modality_profile = self._get_modality_profile(validation.modality)
         prepared_image = self._prepare_image_for_analysis(image, modality=validation.modality)
+        prepared_image, roi_info = self._apply_segmentation_roi(prepared_image)
         quality_warnings = sorted(
             set(self._evaluate_image_quality(prepared_image) + list(validation.quality_warnings))
         )
@@ -273,6 +289,12 @@ class MedicalImageAnalyzer:
             modality=validation.modality,
             modality_profile=modality_profile,
         )
+        uncertainty_info = self._estimate_uncertainty(prepared_image)
+        if uncertainty_info and uncertainty_info.get("high_uncertainty"):
+            quality_warnings.append(
+                f"Do bat dinh cao (entropy={uncertainty_info['entropy']:.2f}, "
+                f"confidence={uncertainty_info['confidence']:.2f}). Can bac si xem lai."
+            )
         processed_path = self._render_overlay(prepared_image.copy(), detections, patient_code=patient_code)
         gradcam_overlays = self._run_gradcam_if_possible(prepared_image, detections, validation)
         payload = {
@@ -294,6 +316,8 @@ class MedicalImageAnalyzer:
             "disclaimer": MEDICAL_DISCLAIMER,
             "gradcam_overlays": gradcam_overlays,
             "deidentified": deidentified_source is not None,
+            "roi": roi_info,
+            "uncertainty": uncertainty_info,
         }
         report_json_path, report_md_path, _ = write_case_report(self.config.reports_dir, payload)
         dashboard_payload = {
@@ -475,6 +499,73 @@ class MedicalImageAnalyzer:
             img = cv2.merge((l_channel, a, b))  # type: ignore[assignment]
             img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)  # type: ignore[assignment]
         return img.astype(np.uint8)
+
+    def _apply_segmentation_roi(self, image: np.ndarray) -> tuple[np.ndarray, dict[str, Any] | None]:
+        """Cat vung quan tam (ROI) bang segmentation truoc khi phan tich.
+
+        Dung SAMROIExtractor voi fallback Otsu (khong can tai trong so mang).
+        Neu tat hoac loi, tra ve anh goc va roi_info=None.
+        """
+        if not self.config.enable_segmentation_roi:
+            return image, None
+        try:
+            from medical.segmentation import SAMROIExtractor, crop_to_roi
+
+            extractor = SAMROIExtractor()
+            result = extractor.extract_roi(image)
+            if result is None:
+                return image, None
+            cropped = crop_to_roi(image, result.bbox, margin=self.config.segmentation_roi_margin)
+            if cropped is None or cropped.size == 0:
+                return image, None
+            roi_info = {
+                "bbox": list(result.bbox),
+                "area": float(result.area),
+                "confidence": float(result.confidence),
+            }
+            return cropped, roi_info
+        except Exception as exc:
+            print(f"[Segmentation] Bo qua ROI crop: {exc}")
+            return image, None
+
+    def _estimate_uncertainty(self, image: np.ndarray) -> dict[str, Any] | None:
+        """Uoc luong do bat dinh bang MC Dropout khi backend la CNN.
+
+        Chi chay khi enable_mc_dropout va model la CNN classifier. Khong tai
+        trong so mang. Neu loi, tra ve None de khong pha vo luong chinh.
+        """
+        if not self.config.enable_mc_dropout:
+            return None
+        cnn_wrapper = self._load_cnn_wrapper()
+        if cnn_wrapper is None:
+            return None
+        try:
+            from medical.cnn_classifier import _load_image_as_tensor
+            from medical.uncertainty import MCDropoutUncertainty
+
+            tensor = _load_image_as_tensor(image, image_size=self.config.cnn_image_size, assume_bgr=True)
+            tensor = tensor.unsqueeze(0)
+            device = getattr(cnn_wrapper, "device", "cpu")
+            estimator = MCDropoutUncertainty(
+                cnn_wrapper.model,
+                num_samples=self.config.mc_dropout_samples,
+                device=device,
+            )
+            result = estimator.predict(tensor, class_labels=list(cnn_wrapper.class_labels))
+            entropy = float(result.entropy[0]) if len(result.entropy) else 0.0
+            confidence = float(result.confidence)
+            high_uncertainty = confidence < self.config.certainty_threshold
+            return {
+                "predicted_label": result.predicted_label,
+                "confidence": confidence,
+                "entropy": entropy,
+                "mutual_information": float(result.mutual_information[0]) if len(result.mutual_information) else 0.0,
+                "num_samples": self.config.mc_dropout_samples,
+                "high_uncertainty": bool(high_uncertainty),
+            }
+        except Exception as exc:
+            print(f"[Uncertainty] Bo qua MC Dropout: {exc}")
+            return None
 
     def _evaluate_image_quality(self, image: np.ndarray) -> list[str]:
         warnings: list[str] = []

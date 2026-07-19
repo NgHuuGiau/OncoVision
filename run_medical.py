@@ -85,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument("--verbose", action="store_true", help="In chi tiết từng batch kể cả khi chạy qua pipe (menu).")
     train_parser.add_argument("--resume", default=None, help="Đường dẫn checkpoint .pt để tiếp tục train.")
     subparsers.add_parser("validate", help="Validate medical classifier.")
+    evaluate_parser = subparsers.add_parser("evaluate", help="Danh gia model tren TEST set, cong bo metric per-class (AUC/sensitivity/specificity).")
+    evaluate_parser.add_argument("--model", default=None, help="Duong dan model .pt (mac dinh: model da train).")
+    evaluate_parser.add_argument("--split", default="test", choices=["test", "val", "train"], help="Split de danh gia (mac dinh: test).")
     train_all_parser = subparsers.add_parser("train-all", help="Split/validate/train theo dataset medical hiện có.")
     train_all_parser.add_argument("--verbose", action="store_true", help="In chi tiết từng batch kể cả khi chạy qua pipe (menu).")
     train_all_parser.add_argument("--resume", default=None, help="Đường dẫn checkpoint .pt để tiếp tục train.")
@@ -427,6 +430,27 @@ def main() -> int:
         print(MEDICAL_DISCLAIMER)
         return 0
 
+    def handle_evaluate() -> int:
+        from medical.evaluation import evaluate_on_test_set, write_evaluation_report
+
+        report = evaluate_on_test_set(model_path=args.model, split=args.split)
+        print(f"Model: {report['model_path']}")
+        print(f"Split: {report['split']} | So mau: {report['num_samples']}")
+        print(f"Accuracy: {report['accuracy']:.4f}")
+        print(f"Macro F1: {report['macro_f1']:.4f} | Macro ROC-AUC: {report['macro_roc_auc']:.4f}")
+        print("Per-class (label | sensitivity | specificity | f1 | roc_auc):")
+        for entry in report["per_class"]:
+            print(
+                f"  {entry['label']}: sens={entry['sensitivity']:.3f} "
+                f"spec={entry['specificity']:.3f} f1={entry['f1_score']:.3f} "
+                f"auc={entry['roc_auc']:.3f} (n={entry['support']})"
+            )
+        json_path, md_path = write_evaluation_report(report)
+        print(f"Bao cao JSON: {json_path}")
+        print(f"Bao cao MD:   {md_path}")
+        print(MEDICAL_DISCLAIMER)
+        return 0
+
     def handle_train_all() -> int:
         report = run_full_medical_training_pipeline(verbose=args.verbose, resume_path=args.resume)
         print(f"Train: {report['train_count']}")
@@ -493,6 +517,7 @@ def main() -> int:
         "split-dataset": handle_split_dataset,
         "train": handle_train,
         "validate": handle_validate,
+        "evaluate": handle_evaluate,
         "train-all": handle_train_all,
         "calibrate-modality-tuning": handle_calibrate_modality_tuning,
         "active-learning": handle_active_learning,

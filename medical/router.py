@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 # Canonical image-type families (nhóm theo kiểu ảnh, không phải theo từng ung thư).
 CT_VOLUME_FAMILY = "ct_volume"
@@ -109,9 +110,6 @@ def route_input(
 
     multimodal = family in _MULTIMODAL_FAMILIES or body_region in _MULTIMODAL_BODY_REGIONS
     return InputRoute(family=family, body_region=body_region, modality=modality, multimodal=multimodal)
-
-
-from typing import cast
 
 
 def family_members(family_key: str) -> tuple[str, ...]:

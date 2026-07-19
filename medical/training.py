@@ -987,23 +987,14 @@ def train_medical_submodels(paths: MedicalTrainingPaths | None = None, *, prepar
             class_weights = None
             if reweight and bool(settings.get("cnn_class_weighting", True)):
                 class_weights = _compute_class_weights(train_samples, class_labels)
+            cnn_kwargs = _cnn_kwargs_from_config(dict(settings))
             wrapper, _history = train_cnn_classifier(
                 train_samples,
                 class_labels=class_labels,
-                image_size=int(settings.get("cnn_image_size", 320)),
-                backbone=settings.get("cnn_backbone", "resnet50"),
-                pretrained=True,
-                dropout=float(settings.get("cnn_dropout", 0.25)),
-                batch_size=int(settings.get("cnn_batch_size", 16)),
-                num_epochs=int(settings.get("cnn_num_epochs", 30)),
-                learning_rate=float(settings.get("cnn_learning_rate", 0.00005)),
                 val_samples=val_samples or None,
-                early_stopping_patience=int(settings.get("cnn_early_stopping_patience", 7)),
-                label_smoothing=float(settings.get("cnn_label_smoothing", 0.08)),
-                mixed_precision=bool(settings.get("cnn_mixed_precision", True)),
-                warmup_epochs=int(settings.get("cnn_warmup_epochs", 4)),
                 class_weights=class_weights,
                 progress_tag=f"submodel:{family_key}",
+                **cnn_kwargs,
             )
             wrapper.save(model_path)
             _write_training_manifest(model_path, paths, settings, _history, model_name=family_key)

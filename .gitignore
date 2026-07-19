@@ -64,5 +64,11 @@ dataset/medical/tcia/**
 !dataset/medical/tcia/**/.gitkeep
 !dataset/medical/tcia/**/README.md
 
+# One-off audit / inventory artifacts
+analyze_project.py
+project_source_inventory.txt
+file_inventory.json
+COMPLETE_PROJECT_AUDIT.md
+
 # Nested repo
 HieraChain/

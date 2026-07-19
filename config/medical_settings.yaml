@@ -10,6 +10,44 @@ medical:
   classify_high_risk_threshold: 0.75
   classify_medium_risk_threshold: 0.45
   certainty_threshold: 0.55
+  validation_min_confidence: 0.7
+  validation_allowed_extensions:
+  - .jpg
+  - .jpeg
+  - .png
+  - .dcm
+  - .nii
+  - .nii.gz
+  classifier_backend: cnn
+  cnn_backbone: convnextv2_tiny
+  cnn_image_size: 320
+  cnn_batch_size: 16
+  cnn_num_epochs: 30
+  cnn_learning_rate: 0.0001
+  cnn_dropout: 0.25
+  cnn_early_stopping_patience: 7
+  cnn_label_smoothing: 0.08
+  cnn_mixed_precision: true
+  cnn_warmup_epochs: 4
+  cnn_class_weighting: true
+  cnn_tta: true
+  cnn_scheduler: cosine_warmup_restart
+  cnn_optimizer: adamw
+  cnn_weight_decay: 0.0001
+  cnn_gradient_clip_norm: 1.0
+  cnn_gradient_accumulation_steps: 2
+  cnn_ema: true
+  cnn_ema_decay: 0.999
+  cnn_checkpoint_averaging: true
+  cnn_checkpoint_averaging_window: 5
+  cnn_gradient_checkpointing: false
+  submodel_dir: output/medical/submodels
+  submodel_reweight_underrepresented: true
+  output_root: output/medical
+  reports_dir: output/medical/reports
+  processed_dir: output/medical/normalized_images
+  overlay_dir: output/medical/processed_images
+
   modality_tuning:
     default:
       certainty_threshold: 0.55
@@ -65,30 +103,119 @@ medical:
       quality_threshold: 0.55
       contrast_boost: 1.2
       normalize: eus
-  validation_min_confidence: 0.7
-  validation_allowed_extensions:
-  - .jpg
-  - .jpeg
-  - .png
-  - .dcm
-  - .nii
-  - .nii.gz
-  classifier_backend: cnn
-  cnn_backbone: efficientnet_b2
-  cnn_image_size: 320
-  cnn_batch_size: 16
-  cnn_num_epochs: 30
-  cnn_learning_rate: 0.0001
-  cnn_dropout: 0.25
-  cnn_early_stopping_patience: 7
-  cnn_label_smoothing: 0.08
-  cnn_mixed_precision: true
-  cnn_warmup_epochs: 4
-  cnn_class_weighting: true
-  cnn_tta: true
-  submodel_dir: output/medical/submodels
-  submodel_reweight_underrepresented: true
-  output_root: output/medical
-  reports_dir: output/medical/reports
-  processed_dir: output/medical/normalized_images
-  overlay_dir: output/medical/processed_images
+
+  advanced:
+    enable_segmentation_roi: true
+    segmentation_backend: unet
+    enable_multitask: true
+    multitask_heads:
+      - cancer_classification
+      - modality_classification
+      - anatomical_region
+      - image_quality_score
+      - tumor_presence
+    enable_self_supervised_pretrain: false
+    self_supervised_method: dinov2
+    self_supervised_backbone: vit_large_patch14_dinov2.lvd142m
+    enable_ensemble: true
+    ensemble_method: stacking
+    ensemble_models:
+      - efficientnet_v2_s
+      - convnextv2_tiny
+      - efficientnet_v2_m
+    ensemble_weight_optimization: true
+    enable_mc_dropout: true
+    mc_dropout_samples: 20
+    enable_temperature_scaling: true
+    enable_checkpoint_averaging: true
+    checkpoint_averaging_window: 5
+    enable_ema: true
+    ema_decay: 0.999
+    gradient_clip_norm: 1.0
+    gradient_accumulation_steps: 2
+    advanced_augmentation: true
+    augmentation_strategy: rand_augment
+    rand_augment_n: 2
+    rand_augment_m: 10
+    enable_mixup: true
+    mixup_alpha: 0.2
+    enable_cutmix: true
+    cutmix_alpha: 1.0
+    enable_cutout: true
+    cutout_n_holes: 1
+    cutout_length: 16
+    enable_gridmask: true
+    gridmask_d1: 0.1
+    gridmask_d2: 0.3
+    focal_loss_gamma: 2.0
+    focal_tversky_alpha: 0.7
+    focal_tversky_beta: 0.3
+    focal_tversky_gamma: 0.75
+    ldam_loss_margin: 0.5
+    ldam_loss_s: 30
+    balanced_softmax_beta: 0.5
+    asl_gamma_pos: 0.0
+    asl_gamma_neg: 4.0
+    asl_clip: 0.05
+    use_focal_loss: false
+    use_focal_tversky: false
+    use_ldam: false
+    use_asl: false
+    use_balanced_softmax: false
+    loss_function: cross_entropy
+    scheduler: cosine_warmup_restart
+    weight_decay: 0.0001
+    optimizer: adamw
+    adamw_beta1: 0.9
+    adamw_beta2: 0.999
+    patient_leakage_prevention: true
+    enable_duplicate_detection: true
+    enable_noisy_label_detection: true
+    enable_modality_imbalance_handling: true
+    modality_reweight_factor: 1.5
+    hard_example_mining: true
+    hard_example_k: 0.3
+    active_learning_enabled: false
+    pseudo_label_threshold: 0.95
+    explainability_methods:
+      - gradcam
+      - gradcam_pp
+      - eigen_cam
+      - score_cam
+      - attention_rollout
+    uncertainty_methods:
+      - mc_dropout
+      - deep_ensemble
+      - temperature_scaling
+    validation_metrics:
+      - accuracy
+      - sensitivity
+      - specificity
+      - precision
+      - recall
+      - f1
+      - roc_auc
+      - pr_auc
+      - matthews_correlation
+      - balanced_accuracy
+      - calibration_error
+      - ece
+    early_stopping_metric: val_f1
+    kfold_num_folds: 5
+    nested_cross_validation: false
+    checkpoint_dir: output/medical/checkpoints
+    tensorboard_dir: output/medical/tensorboard
+    wandb_project: oncovision-medical
+    seed: 42
+    deterministic: true
+    num_workers: 4
+    pin_memory: true
+    prefetch_factor: 2
+    enable_progressive_resizing: false
+    progressive_resizing_schedule:
+      - 128
+      - 224
+      - 320
+    enable_stochastic_weight_averaging: false
+    swa_start_epoch: 10
+    swa_lr: 0.00005
