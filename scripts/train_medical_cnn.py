@@ -33,6 +33,8 @@ def main() -> int:
     parser.add_argument("--no-pretrained", action="store_true", help="Khong dung ImageNet pretrained (train tu dau).")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--eval-split", default="test", choices=["test", "val", "train"])
+    parser.add_argument("--resume-path", default=None, help="Checkpoint path de tiep tuc train (luu full state moi epoch).")
+    parser.add_argument("--fresh", action="store_true", help="Bo qua checkpoint cu va train tu dau.")
     args = parser.parse_args()
 
     # Train la hanh dong chu dong: cho phep tai ImageNet pretrained tru khi tat.
@@ -50,7 +52,7 @@ def main() -> int:
     settings_path = Path("config/medical_settings.yaml")
     settings = load_yaml(settings_path).get("medical", {})
     if str(settings.get("classifier_backend", "")).lower() != "cnn":
-        print("[warn] classifier_backend trong config khong phai 'cnn'. "
+        print("[warn] classifier_backend trong config không phải 'cnn'. "
               "Van train CNN nhung nen dat classifier_backend: cnn de runtime dung CNN.")
 
     paths = medical_training_paths()
@@ -71,11 +73,24 @@ def main() -> int:
     if args.batch_size is not None:
         override["cnn_batch_size"] = args.batch_size
 
+    default_ckpt = Path("output/medical/cnn_checkpoint.pt")
+    default_ckpt.parent.mkdir(parents=True, exist_ok=True)
+    resume_path = args.resume_path
+    if not args.fresh and resume_path is None:
+        if default_ckpt.exists():
+            resume_path = str(default_ckpt)
+            print(f"[resume] Tim thay checkpoint mac dinh: {resume_path}")
+        else:
+            print("[start] Khong tim thay checkpoint cu, train tu dau.")
+    elif args.fresh and resume_path is None:
+        print("[fresh] Bo qua checkpoint cu, train tu dau.")
+
     print(f"[2/3] Train CNN backbone={override.get('cnn_backbone', settings.get('cnn_backbone'))} "
           f"epochs={override.get('cnn_num_epochs', settings.get('cnn_num_epochs'))} "
           f"pretrained={not args.no_pretrained}...")
     model_path = train_cnn_medical_model(
-        paths, prepare_dataset=False, verbose=args.verbose, settings_override=override
+        paths, prepare_dataset=False, verbose=args.verbose, settings_override=override,
+        checkpoint_path=resume_path or str(default_ckpt),
     )
     print(f"      Model da luu: {model_path}")
 

@@ -146,7 +146,7 @@ def load_medical_classifier(path: str | Path):
     with Path(path).open("rb") as file:
         model = pickle.load(file)
     if not isinstance(model, MedicalClassifierModel):
-        raise TypeError("Model medical khong hop le.")
+        raise TypeError("Model medical không hợp lệ.")
     return model
 
 

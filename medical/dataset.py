@@ -35,19 +35,19 @@ _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("CT ngực-bụng-chậu", ("ct nguc bung chau", "chest abdomen pelvis", "cap ct", "ct cap")),
     ("CT ngực", ("ct nguc", "chest ct", "thoracic ct", "ct chest")),
     ("CT gan", ("ct gan", "liver ct", "hepatic ct", "ct liver")),
-    ("CT đại trực tràng", ("ct dai truc trang", "ct colon", "rectal ct", "ct rectal")),
-    ("CT dạ dày", ("ct da day", "ct gastric", "stomach ct", "gastric ct")),
-    ("CT tuyến tiền liệt", ("ct tuyen tien liet", "prostate ct")),
-    ("CT cổ tử cung", ("ct co tu cung", "cervical ct", "pelvic ct")),
-    ("MRI tuyến tiền liệt", ("mri tuyen tien liet", "prostate mri")),
+    ("CT đại trực tràng", ("ct đại trực tràng", "ct colon", "rectal ct", "ct rectal")),
+    ("CT dạ dày", ("ct dạ dày", "ct gastric", "stomach ct", "gastric ct")),
+    ("CT tuyến tiền liệt", ("ct tuyến tiền liệt", "prostate ct")),
+    ("CT cổ tử cung", ("ct cổ tử cung", "cervical ct", "pelvic ct")),
+    ("MRI tuyến tiền liệt", ("mri tuyến tiền liệt", "prostate mri")),
     ("MRI trực tràng", ("mri truc trang", "rectal mri")),
-    ("MRI vú", ("mri vu", "breast mri")),
+    ("MRI vú", ("mri vú", "breast mri")),
     ("MRI gan", ("mri gan", "liver mri", "hepatic mri")),
-    ("MRI dạ dày", ("mri da day", "mri gastric", "stomach mri")),
-    ("MRI cổ tử cung", ("mri co tu cung", "cervical mri", "pelvic mri")),
+    ("MRI dạ dày", ("mri dạ dày", "mri gastric", "stomach mri")),
+    ("MRI cổ tử cung", ("mri cổ tử cung", "cervical mri", "pelvic mri")),
     ("Siêu âm vú", ("sieu am vu", "breast ultrasound")),
-    ("Siêu âm gan", ("sieu am gan", "liver ultrasound", "hepatic ultrasound", "fascio")),
-    ("Siêu âm tuyến tiền liệt", ("sieu am tuyen tien liet", "prostate ultrasound", "trus")),
+    ("Siêu âm gan", ("siêu âm gan", "liver ultrasound", "hepatic ultrasound", "fascio")),
+    ("Siêu âm tuyến tiền liệt", ("siêu âm tuyến tiền liệt", "prostate ultrasound", "trus")),
     ("X-quang ngực", ("x quang nguc", "chest x ray", "cxr", "chest radiograph")),
     ("Nội soi đại tràng", ("noi soi dai trang", "colonoscopy")),
     ("Mammogram", ("mammogram", "mammo")),
@@ -62,12 +62,12 @@ _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 _TARGET_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("liver", ("gan", "liver", "hepatic", "hepat", "hcc", "liver cancer", "liver lesion", "liver tumor", "liver mass", "liver metastasis")),
-    ("lung", ("phoi", "lung", "thorax", "thoracic", "chest", "pulmonary", "lung cancer", "lung lesion", "lung tumor", "lung nodule", "lung mass", "pulmonary nodule", "pulmonary mass")),
-    ("breast", ("vu", "breast", "mammogram", "mammo", "breast cancer", "breast lesion", "breast mass", "breast tumor", "breast nodule")),
-    ("stomach", ("da day", "stomach", "gastric", "gast", "egd", "endoscopy", "noi soi", "stomach cancer", "gastric cancer", "gastric lesion", "gastric tumor", "gastric mass")),
-    ("colorectal", ("dai truc trang", "colorectal", "colon", "rectal", "truc trang", "colonoscopy", "colorectal cancer", "colon cancer", "rectal cancer", "colon lesion", "rectal lesion", "colon tumor", "rectal tumor")),
-    ("prostate", ("tuyen tien liet", "prostate", "prostatic", "prostate cancer", "prostate lesion", "prostate tumor", "prostate mass")),
-    ("cervical", ("co tu cung", "cervical", "cervix", "pap", "hpv", "colposcopy", "cervical cancer", "cervix cancer", "cervical lesion", "cervical tumor")),
+    ("lung", ("phổi", "lung", "thorax", "thoracic", "chest", "pulmonary", "lung cancer", "lung lesion", "lung tumor", "lung nodule", "lung mass", "pulmonary nodule", "pulmonary mass")),
+    ("breast", ("vú", "breast", "mammogram", "mammo", "breast cancer", "breast lesion", "breast mass", "breast tumor", "breast nodule")),
+    ("stomach", ("dạ dày", "stomach", "gastric", "gast", "egd", "endoscopy", "nội soi", "stomach cancer", "gastric cancer", "gastric lesion", "gastric tumor", "gastric mass")),
+    ("colorectal", ("đại trực tràng", "colorectal", "colon", "rectal", "trực tràng", "colonoscopy", "colorectal cancer", "colon cancer", "rectal cancer", "colon lesion", "rectal lesion", "colon tumor", "rectal tumor")),
+    ("prostate", ("tuyến tiền liệt", "prostate", "prostatic", "prostate cancer", "prostate lesion", "prostate tumor", "prostate mass")),
+    ("cervical", ("cổ tử cung", "cervical", "cervix", "pap", "hpv", "colposcopy", "cervical cancer", "cervix cancer", "cervical lesion", "cervical tumor")),
 )
 
 _MODALITY_TO_TARGET_KEY: dict[str, str] = {
@@ -342,7 +342,7 @@ def resolve_medical_upload_path(path: str | Path) -> Path:
         if candidate.is_file() and _medical_upload_suffix(candidate) in MEDICAL_UPLOAD_EXTENSIONS
     )
     if not candidates:
-        raise FileNotFoundError(f"Thu muc khong chua anh hop le: {source}")
+        raise FileNotFoundError(f"Thư mục không chứa ảnh hợp lệ: {source}")
 
     dicom_candidates = [candidate for candidate in candidates if _medical_upload_suffix(candidate) == ".dcm"]
     if dicom_candidates:
@@ -383,7 +383,7 @@ def _load_dicom_slice(source: Path) -> Image.Image:
         import pydicom
         from pydicom.pixels import apply_voi_lut
     except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("Khong doc duoc DICOM. Hay cai dat pydicom de mo file .dcm.") from exc
+        raise RuntimeError("Không đọc được DICOM. Hãy cài đặt pydicom để mở file .dcm.") from exc
 
     dataset = pydicom.dcmread(str(source), force=True)
     array = dataset.pixel_array.astype(np.float32)
@@ -405,7 +405,7 @@ def _load_nifti_volume(source: Path) -> np.ndarray:
     try:
         import nibabel as nib
     except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("Khong doc duoc NIfTI. Hay cai dat nibabel de mo file .nii/.nii.gz.") from exc
+        raise RuntimeError("Không đọc được NIfTI. Hãy cài đặt nibabel để mở file .nii/.nii.gz.") from exc
 
     image = nib.load(str(source))
     volume = np.asanyarray(image.dataobj)  # type: ignore[attr-defined]
@@ -418,7 +418,7 @@ def _load_mha_volume(source: Path) -> np.ndarray:
     try:
         import SimpleITK as sitk  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("Khong doc duoc MHA/MHD. Hay cai dat SimpleITK de mo file .mha/.mhd.") from exc
+        raise RuntimeError("Không đọc được MHA/MHD. Hãy cài đặt SimpleITK để mở file .mha/.mhd.") from exc
 
     image = sitk.ReadImage(str(source))
     return sitk.GetArrayFromImage(image)
@@ -429,7 +429,7 @@ def _load_dicom_series_volume(source: Path) -> np.ndarray:
         import pydicom
         from pydicom.pixels import apply_voi_lut
     except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("Khong doc duoc DICOM. Hay cai dat pydicom de mo thu muc series .dcm.") from exc
+        raise RuntimeError("Không đọc được DICOM. Hãy cài đặt pydicom để mở thư mục series .dcm.") from exc
 
     slice_entries: list[tuple[float, np.ndarray]] = []
     for candidate in sorted(source.rglob("*")):
@@ -450,7 +450,7 @@ def _load_dicom_series_volume(source: Path) -> np.ndarray:
         slice_entries.append((order, array))
 
     if not slice_entries:
-        raise FileNotFoundError(f"Thu muc khong chua anh DICOM hop le: {source}")
+        raise FileNotFoundError(f"Thư mục không chứa ảnh DICOM hợp lệ: {source}")
 
     slice_entries.sort(key=lambda item: item[0])
     slices = []

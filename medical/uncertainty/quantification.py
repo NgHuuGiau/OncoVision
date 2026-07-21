@@ -131,8 +131,8 @@ class TemperatureScaling:
 def compute_ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> float:
     """Expected Calibration Error.
 
-    Delegate ve medical.metrics.compute_calibration_curve de dung MOT nguon
-    duy nhat cho logic ECE (tranh lech ket qua giua cac module).
+    Delegate về medical.metrics.compute_calibration_curve để dùng MOT nguồn
+    duy nhất cho logic ECE (tránh lệch kết quả giữa các module).
     """
     from medical.metrics import compute_calibration_curve
 

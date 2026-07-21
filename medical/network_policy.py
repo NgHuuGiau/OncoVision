@@ -1,16 +1,16 @@
-"""Chinh sach tai trong so tu mang cho OncoVision.
+"""Chính sách tải trọng số từ mạng cho OncoVision.
 
-Quy tac: KHI CHAY HE THONG KHONG TAI GI TRU YOLO.
+Quy tắc: KHI CHẠY HỆ THỐNG KHÔNG TẢI GÌ TRỪ YOLO.
 
-- Model detection YOLO (Ultralytics) van duoc phep tai binh thuong.
-- Moi trong so khac (ImageNet pretrained cho backbone CNN, DINOv2, SAM, ...)
-  bi chan mac dinh de tranh tai mang khong mong muon luc runtime.
+- Model detection YOLO (Ultralytics) vẫn được phép tải bình thường.
+- Mọi trọng số khác (ImageNet pretrained cho backbone CNN, DINOv2, SAM, ...)
+  bị chặn mặc định để tránh tải mạng không mong muốn lúc runtime.
 
-Nguoi dung co the mo lai bang bien moi truong:
+Người dùng có thể mở lại bằng biến môi trường:
 
     ONCOVISION_ALLOW_WEIGHT_DOWNLOAD=1
 
-Khi do pretrained=True se tai trong so ImageNet nhu binh thuong.
+Khi đó pretrained=True sẽ tải trọng số ImageNet như bình thường.
 """
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ def _warn_once(context: str) -> None:
         return
     _warned_contexts.add(context)
     print(
-        f"[NetworkPolicy] Chan tai trong so pretrained cho '{context}' (offline). "
-        f"Dat {_ENV_ALLOW}=1 de cho phep tai. YOLO khong bi anh huong.",
+        f"[NetworkPolicy] Chặn tải trọng số pretrained cho '{context}' (offline). "
+        f"Đặt {_ENV_ALLOW}=1 để cho phép tải. YOLO không bị ảnh hưởng.",
         flush=True,
     )
 

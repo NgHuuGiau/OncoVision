@@ -1,11 +1,11 @@
-"""Tai anh y khoa that (MedMNIST test split) vao dataset/medical/unlabeled/.
+"""Tải ảnh y khoa thật (MedMNIST test split) vào dataset/medical/unlabeled/.
 
-Muc dich: cung cap anh chua dan nhan that de active-learning (run_medical.py
-active-learning) goi y anh nao can dan nhan them. Anh lay tu tap test cua
-MedMNIST (BSD license) - anh y khoa thuc te, da chuan hoa.
+Mục đích: cung cấp ảnh chưa dán nhãn thật để active-learning (run_medical.py
+active-learning) gợi ý ảnh nào cần dán nhãn thêm. Ảnh lấy từ tập test của
+MedMNIST (BSD license) - ảnh y khoa thực tế, đã chuẩn hóa.
 
-Anh duoc resize 224x224 RGB va luu voi ten khong nhan de tranh nham lan
-voi du lieu da dan nhan.
+Ảnh được resize 224x224 RGB và lưu với tên không nhãn để tránh nhầm lẫn
+với dữ liệu đã dán nhãn.
 """
 
 from __future__ import annotations
@@ -62,8 +62,8 @@ def main() -> int:
             img.save(out, quality=92)
             count += 1
         total += count
-        print(f"+ {tag:<6} {count} anh -> {OUTPUT_DIR}")
-    print(f"Xong. Tong {total} anh chua dan nhan tai {OUTPUT_DIR}")
+        print(f"+ {tag:<6} {count} ảnh -> {OUTPUT_DIR}")
+    print(f"Xong. Tổng {total} ảnh chưa dán nhãn tại {OUTPUT_DIR}")
     return 0
 
 

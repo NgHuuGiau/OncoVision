@@ -161,7 +161,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(risk_level, "medium")
         self.assertTrue(suspected_malignant)
         self.assertAlmostEqual(average_confidence, 0.6)
-        self.assertIn("trung binh", recommendation)
+        self.assertIn("trung bình", recommendation)
 
     def test_classify_findings_returns_uncertain_when_below_certainty(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -183,7 +183,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertFalse(suspected_malignant)
         self.assertIn("0.50", recommendation)
         self.assertIn("0.80", recommendation)
-        self.assertIn("chuyen khoa", recommendation)
+        self.assertIn("chuyên khoa", recommendation)
 
     def test_evaluate_image_quality_returns_warning_for_dark_image(self) -> None:
         analyzer = MedicalImageAnalyzer(

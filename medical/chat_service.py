@@ -99,9 +99,9 @@ class MedicalChatService:
         )
         if result.risk_level == "uncertain":
             risk_text = (
-                "KET QUA KHONG DU TIN TUONG. "
-                "He thong khong duoc tu tin de phan loai 7 loai ung thu. "
-                "Can kham chuyen khoa de bao dam. "
+                "KẾT QUẢ KHÔNG ĐỦ TIN TƯỞNG. "
+                "Hệ thống không được tự tin để phân loại 7 loại ung thư. "
+                "Cần khám chuyên khoa để bảo đảm. "
             )
         else:
             risk_text = f"Muc do sang loc nguy co: {result.risk_level}. "

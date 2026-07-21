@@ -398,7 +398,7 @@ def _validate_single_file(source, allowed, min_confidence):
         return ValidationResult(
             status="error",
             error_code="NON_IMAGE_CERVICAL_INPUT",
-            message="Pap, HPV, colposcopy va cac dau hieu lam sang tuong tu khong phai anh y khoa de dua qua cung pipeline nay.",
+            message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
             body_region="cervical",
             route=route_input(None, "cervix"),
         )
@@ -519,7 +519,7 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         return ValidationResult(
             status="error",
             error_code="NON_IMAGE_CERVICAL_INPUT",
-            message="Pap, HPV, colposcopy va cac dau hieu lam sang tuong tu khong phai anh y khoa de dua qua cung pipeline nay.",
+            message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
             body_region="cervical",
             route=route_input(None, "cervix"),
         )
@@ -529,7 +529,7 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         return ValidationResult(
             status="error",
             error_code="UNKNOWN_IMAGE_TYPE",
-            message="Khong xac dinh duoc loai anh. Hay tai len dung loai anh y khoa duoc ho tro.",
+            message="Không xác định được loại ảnh. Hãy tải lên đúng loại ảnh y khoa được hỗ trợ.",
         )
 
     tuning = get_modality_tuning(canonical_modality)
@@ -537,7 +537,7 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         return ValidationResult(
             status="uncertain",
             error_code="LOW_CONFIDENCE",
-            message="Khong du do tin cay de nhan dien loai anh mot cach chac chan. Hay dung anh ro hon hoac co them thong tin mo ta.",
+            message="Không đủ độ tin cậy để xác định loại ảnh một cách chắc chắn. Hãy dùng ảnh rõ hơn hoặc có thêm thông tin mô tả.",
             modality=canonical_modality,
             modality_confidence=modality_confidence,
         )
@@ -551,14 +551,14 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         return ValidationResult(
             status="error",
             error_code="UNKNOWN_BODY_REGION",
-            message="Khong xac dinh duoc vung co the trong anh.",
+            message="Không xác định được vùng cơ thể trong ảnh.",
         )
 
     if target_key == "cervical" and modality_label is None:
         return ValidationResult(
             status="error",
             error_code="NON_IMAGE_CERVICAL_INPUT",
-            message="Pap, HPV, colposcopy va cac dau hieu lam sang tuong tu khong phai anh y khoa de dua qua cung pipeline nay.",
+            message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
             body_region="cervical",
             route=route_input(None, "cervix"),
         )
@@ -568,13 +568,13 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         return ValidationResult(
             status="error",
             error_code="UNSUPPORTED_BODY_REGION",
-            message="Vung co the nay chua duoc he thong ho tro.",
+            message="Vùng cơ thể này chưa được hệ thống hỗ trợ.",
         )
     if canonical_modality not in supported_modalities:
         return ValidationResult(
             status="error",
             error_code="UNSUPPORTED_IMAGE_FOR_CANCER_TYPE",
-            message="Loai anh nay khong duoc ho tro cho nhom ung thu can nhan dien.",
+            message="Loại ảnh này không được hỗ trợ cho nhóm ung thư cần nhận diện.",
         )
 
     body_confidence = _score_hint_confidence(normalized, _TARGET_HINTS, target_key)
@@ -586,7 +586,7 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         return ValidationResult(
             status="uncertain",
             error_code="LOW_CONFIDENCE",
-            message="Khong du do tin cay de xac dinh vung co the. Hay cung cap anh co goc chup ro va vung quan tam duoc thay day du.",
+            message="Không đủ độ tin cậy để xác định vùng cơ thể. Hãy cung cấp ảnh có góc chụp rõ và vùng quan tâm được thấy đầy đủ.",
             modality=canonical_modality,
             body_region=canonical_body,
             modality_confidence=modality_confidence,

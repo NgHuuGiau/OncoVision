@@ -38,7 +38,7 @@ def check_camera(index: int = 0, attempts: int = 3) -> CameraCheckResult:
     result = probe_camera(
         index=index,
         attempts=attempts,
-        unavailable_detail="Ly do khong chay   Camera khong san sang, dang bi app khac chiem hoac khong co webcam.",
+        unavailable_detail="Lý do không chạy   Camera không sẵn sàng, đang bị app khác chiếm hoặc không có webcam.",
         open_camera_capture_fn=_open_camera_capture,
     )
     return CameraCheckResult(level=result.level, summary=result.summary, detail=result.detail)
@@ -283,7 +283,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strict-camera",
         action="store_true",
-        help="Neu camera that khong dat thi coi nhu bai test tong the fail.",
+        help="Nếu camera thật không đạt thì coi như bài test tổng thể fail.",
     )
     parser.add_argument(
         "--fast",

@@ -39,17 +39,49 @@ tmp*.db
 # Runtime output
 output/
 runs/
+runs/segment/
+runs/classify/
+runs/pose/
+runs/obb/
 
 # Dataset generated locally
 dataset/**
 !dataset/**/.gitkeep
 !dataset/**/README.md
 
+# Dataset processed data (large generated files)
+dataset/processed/images/
+dataset/processed/labels/
+!dataset/processed/data.yaml
+
+# Cache files
+*.cache
+.cache/
+
 # Local model files
 models/pretrained/**
 models/trained/**
 models/exported/**
 !models/**/.gitkeep
+
+# Root-level model binaries (do not commit directly)
+*.pt
+
+# Model checkpoints and training artifacts
+output/medical/cnn_checkpoint.pt
+output/medical/*.pt
+*checkpoint*.pt
+
+# Model manifest files (generated)
+*manifest.json
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Large binary files (safety)
+*.bin
+*.safetensors
 
 # Generated config
 training/.generated_data.yaml
@@ -58,7 +90,6 @@ training/.generated_data.yaml
 output/medical/
 
 # Generated helper files
-training/.generated_data.yaml
 dataset/cancer_download_plan.json
 dataset/medical/tcia/**
 !dataset/medical/tcia/**/.gitkeep
@@ -70,5 +101,5 @@ project_source_inventory.txt
 file_inventory.json
 COMPLETE_PROJECT_AUDIT.md
 
-# Nested repo
+# Nested repo (do not touch)
 HieraChain/

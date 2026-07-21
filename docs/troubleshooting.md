@@ -1,10 +1,10 @@
 # Troubleshooting
 
-Day la cac loi hay gap va noi can xem dau tien.
+Đây là các lỗi hay gặp và nơi cần xem đầu tiên.
 
-## 1. Camera khong mo duoc
+## 1. Camera không mở được
 
-Thu:
+Thử:
 
 ```powershell
 python run_app.py --advisor-only
@@ -12,32 +12,32 @@ python run_doctor.py --skip-camera-check
 python run_app.py --mode low --camera-index 1
 ```
 
-Neu van loi:
+Nếu vẫn lỗi:
 
-- kiem tra app khac co dang dung webcam khong
-- thu `camera-index` khac
+- kiểm tra app khác có đang dùng webcam không
+- thử `camera-index` khác
 - xem `core/camera_runner.py`
 
-## 2. Model khong co san
+## 2. Model không có sẵn
 
-Kiem tra:
+Kiểm tra:
 
 ```text
 models/pretrained/
 models/trained/
 ```
 
-Neu can tai model pretrained, xem `training/download_models.py`.
+Nếu cần tải model pretrained, xem `training/download_models.py`.
 
-## 3. Chat UI chua san sang
+## 3. Chat UI chưa sẵn sàng
 
-Thu:
+Thử:
 
 ```powershell
 python run_chat.py --check-only --auto-fix-icons
 ```
 
-Neu that bai, xem:
+Nếu thất bại, xem:
 
 - `utils/entrypoint_checks.py`
 - `medical/system_status.py`
@@ -45,15 +45,15 @@ Neu that bai, xem:
 
 ## 4. Train preflight fail
 
-Thu:
+Thử:
 
 ```powershell
 python run_train.py --check-only
 ```
 
-Neu fail:
+Nếu fail:
 
-- kiem tra dataset raw va split
+- kiểm tra dataset raw và split
 - xem `training/validate_dataset.py`
 - xem `training/split_dataset.py`
 
@@ -68,7 +68,7 @@ Xem:
 
 ## 6. CI fail
 
-Xem theo thu tu:
+Xem theo thứ tự:
 
 1. `.github/workflows/test.yml`
 2. `run_smoke.py`
@@ -76,12 +76,29 @@ Xem theo thu tu:
 4. `ci-logs/05-mypy-type-check.txt`
 5. `ci-logs/07-smoke-check.txt`
 
-## 7. Loi tren Ubuntu nhung Windows van xanh
+## 7. Lỗi trên Ubuntu nhưng Windows vẫn xanh
 
-Thuong do:
+Thường do:
 
-- khac biet dependency
-- mypy quet type debt cu
-- smoke check phu thuoc dataset mau
+- khác biệt dependency
+- mypy quét type debt cũ
+- smoke check phụ thuộc dataset mẫu
 
-Khi gap truong hop nay, xem log Ubuntu truoc, khong dua tren Windows.
+Khi gặp trường hợp này, xem log Ubuntu trước, không dựa trên Windows.
+
+## 8. Web Chat UI không mở được
+
+Thử:
+
+```powershell
+python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
+```
+
+Mở trình duyệt: `http://localhost:8000`
+
+Nếu vẫn lỗi:
+
+- kiểm tra port 8000 có bị chiếm không: `netstat -ano | findstr :8000`
+- thử port khác: `python -m uvicorn web_app:app --host 0.0.0.0 --port 8080`
+- xem log server để tìm lỗi cụ thể
+- admin DB viewer: `http://localhost:8000/admin/db`

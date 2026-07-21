@@ -53,8 +53,9 @@ class UncertaintyIntegrationTests(unittest.TestCase):
         self.assertIsNone(analyzer._estimate_uncertainty(image))
 
     def test_uncertainty_returns_none_when_no_cnn(self) -> None:
-        # Model centroid mac dinh -> _load_cnn_wrapper tra None -> uncertainty None.
-        analyzer = MedicalImageAnalyzer(config=_base_config(enable_mc_dropout=True))
+        # Model centroid (không phải CNN) -> _load_cnn_wrapper trả None -> uncertainty None.
+        # Dung file centroid thuc te de test dung muc dich (model mac dinh da la CNN).
+        analyzer = MedicalImageAnalyzer(config=_base_config(enable_mc_dropout=True, model_path="medical/medical_7_cancers.pt"))
         image = np.full((64, 64, 3), 100, dtype=np.uint8)
         self.assertIsNone(analyzer._estimate_uncertainty(image))
 

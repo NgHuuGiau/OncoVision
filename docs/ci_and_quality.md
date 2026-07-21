@@ -34,11 +34,11 @@ Mac dinh nhung step nay co the lam CI do:
 - smoke check
 - unit tests
 
-Step `mypy` dang duoc de `continue-on-error: true` de khong chan CI, nhung van ghi log trong artifact.
+Step `mypy` đang được để `continue-on-error: true` để không chặn CI, nhưng vẫn ghi log trong artifact.
 
-## 3. Pham vi mypy hien tai
+## 3. Phạm vi mypy hiện tại
 
-`mypy` chi soi cac module dang duoc bao tri:
+`mypy` chỉ soi các module đang được bảo trì:
 
 - `core`
 - `medical`
@@ -46,16 +46,16 @@ Step `mypy` dang duoc de `continue-on-error: true` de khong chan CI, nhung van g
 - `utils`
 - `run_*.py`
 
-HieraChain da bi loai ra khoi scope CI.
+HieraChain đã bị loại ra khỏi scope CI.
 
 ## 4. Smoke check
 
-`run_smoke.py` co 2 che do:
+`run_smoke.py` có 2 chế độ:
 
-- mac dinh: canh bao va fail neu mot check fail
-- `--ci-safe`: chi chay cac check nhe, phu hop CI
+- mặc định: cảnh báo và fail nếu một check fail
+- `--ci-safe`: chỉ chạy các check nhẹ, phù hợp CI
 
-Trong `--ci-safe`, `training-preflight` duoc ha tu fail sang warn de tranh fail do dataset mau khong ton tai tren runner.
+Trong `--ci-safe`, `training-preflight` được hạ từ fail sang warn để tránh fail do dataset mẫu không tồn tại trên runner.
 
 ## 5. Khi CI do thi xem gi truoc
 
@@ -74,7 +74,7 @@ python run_train.py --check-only
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## 7. Ghi chu
+## 7. Ghi chú
 
-- Neu muon bat mypy quay lai thanh gate cứng, can don type debt truoc.
-- Neu chi can CI xanh va on dinh, cach hien tai la dung muc tieu.
+- Nếu muốn bật mypy quay lại thành gate cứng, cần dọn type debt trước.
+- Nếu chỉ cần CI xanh và ổn định, cách hiện tại là đúng mục tiêu.
