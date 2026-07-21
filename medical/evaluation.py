@@ -7,7 +7,7 @@ Module nay tao bao cao day du cho model phan loai ung thu:
 - Confusion matrix.
 - Xuat JSON + Markdown vao output/medical/reports/.
 
-Danh gia CHI dung split "test" (khong dung train/val) de tranh ro ri.
+    # Đánh giá CHỈ dùng split "test" (không dùng train/val) để tránh rò rỉ.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _predict_scores(model: Any, image_path: Path, class_labels: tuple[str, ...])
         if conf > top_conf:
             top_conf = conf
             top_label = label
-    # Neu nhan top khong thuoc class-set (model co class khac), tra -1 (out-of-vocab)
+    # Nếu nhận top không thuộc class-set (model có class khác), trả -1 (out-of-vocab)
     # thay vi mac dinh ve class 0. compute_multiclass_metrics se coi -1 la du doan sai.
     predicted_index = label_to_index.get(top_label, -1)
     return predicted_index, scores
@@ -77,12 +77,12 @@ def evaluate_on_test_set(
     model, _is_cnn = _resolve_model(resolved_model_path)
     class_labels = paths.class_names
 
-    # Canh bao neu class-set cua model khong khop dataset (co the gay danh gia sai).
+    # Cảnh báo nếu class-set của model không khớp dataset (có thể gây đánh giá sai).
     model_labels = getattr(model, "class_labels", None)
     if model_labels is not None and tuple(model_labels) != tuple(class_labels):
         print(
             f"[Evaluation] Canh bao: class-set model {tuple(model_labels)} "
-            f"khac dataset {tuple(class_labels)}. Metric co the khong chinh xac."
+            f"khác dataset {tuple(class_labels)}. Metric có thể không chính xác."
         )
 
     truths: list[int] = []

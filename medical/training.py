@@ -43,6 +43,7 @@ from utils.file_utils import load_yaml
 
 DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
 DEFAULT_TRAINED_MODEL_PATH = Path("medical_7_cancers.pt")
+DEFAULT_CNN_MODEL_PATH = Path("medical_7_cancers_cnn.pt")
 DEFAULT_SPLITS = ("train", "val", "test")
 
 
@@ -51,6 +52,7 @@ class MedicalTrainingPaths:
     dataset_root: Path
     data_yaml_path: Path
     trained_model_path: Path
+    cnn_model_path: Path
     class_names: tuple[str, ...]
     feature_size: int
 
@@ -59,6 +61,7 @@ class MedicalTrainingPaths:
         dataset_root: str | Path,
         data_yaml_path: str | Path | None = None,
         trained_model_path: str | Path | None = None,
+        cnn_model_path: str | Path | None = None,
         class_names: tuple[str, ...] | None = None,
         feature_size: int = 32,
         **legacy: Any,
@@ -70,6 +73,11 @@ class MedicalTrainingPaths:
             self,
             "trained_model_path",
             Path(trained_model_path or legacy.get("trained_model_path") or DEFAULT_TRAINED_MODEL_PATH),
+        )
+        object.__setattr__(
+            self,
+            "cnn_model_path",
+            Path(cnn_model_path or legacy.get("cnn_model_path") or DEFAULT_CNN_MODEL_PATH),
         )
         object.__setattr__(self, "class_names", tuple(class_names or legacy.get("class_names") or tuple(target.label for target in COMMON_CANCER_TARGETS)))
         object.__setattr__(self, "feature_size", int(feature_size))
@@ -97,6 +105,7 @@ def medical_training_paths() -> MedicalTrainingPaths:
         dataset_root=dataset_root,
         data_yaml_path=dataset_root / "data.yaml",
         trained_model_path=DEFAULT_TRAINED_MODEL_PATH,
+        cnn_model_path=DEFAULT_CNN_MODEL_PATH,
         class_names=tuple(target.label for target in COMMON_CANCER_TARGETS),
         feature_size=feature_size,
     )
@@ -178,9 +187,9 @@ def _patient_id_from_path(path: Path) -> str:
     2. Tiền tố có chứa chữ số trong tên file (vi du: BN001_slice02.jpg -> 'bn001',
        sub-01_T1.nii -> 'sub-01', P012_img3.dcm -> 'p012').
 
-    Neu khong tim thay ma benh nhan hop le (ten chung nhu 'sample_0', 'img_3'
-    ma khong co dinh danh benh nhan), moi anh duoc coi la mot benh nhan rieng
-    de giu nguyen hanh vi phan split theo anh nhu cu.
+    Nếu không tìm thấy mã bệnh nhân hợp lệ (tên chung như 'sample_0', 'img_3'
+    mà không có định danh bệnh nhân), mỗi ảnh được coi là một bệnh nhân riêng
+    để giữ nguyên hành vi phân split theo ảnh như cũ.
     """
     parent = path.parent.name
     if parent and parent.lower() not in {"images", "raw", "processed", ""} and re.search(r"\d", parent):
@@ -224,7 +233,7 @@ def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> N
         if not raw_images:
             continue
 
-        # Nhom theo benh nhan de cung mot benh nhan khong bi chia sang ca 2 train/val/test.
+        # Nhóm theo bệnh nhân để cùng một bệnh nhân không bị chia sang cả 2 train/val/test.
         patient_groups = _group_images_by_patient(raw_images)
         total_groups = len(patient_groups)
         if total_groups < 2:
@@ -340,7 +349,7 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
     return paths.trained_model_path
 
 
-def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True, verbose: bool = False, resume_path: str | Path | None = None, settings_override: dict[str, Any] | None = None) -> Path:
+def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_dataset: bool = True, verbose: bool = False, resume_path: str | Path | None = None, checkpoint_path: str | Path | None = None, settings_override: dict[str, Any] | None = None, max_train_samples: int | None = None, output_model_path: str | Path | None = None) -> Path:
     paths = paths or medical_training_paths()
     settings = _load_medical_settings()
     if settings_override:
@@ -348,6 +357,8 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
     if prepare_dataset:
         prepare_medical_training_dataset(paths)
     train_samples = _samples_for_split(paths, "train")
+    if max_train_samples is not None and len(train_samples) > max_train_samples:
+        train_samples = train_samples[:max_train_samples]
     val_samples = _samples_for_split(paths, "val")
     if not train_samples:
         raise FileNotFoundError("Khong co du lieu train medical.")
@@ -374,10 +385,13 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         progress_tag="train",
         verbose=verbose,
         resume_path=resume_path,
+        checkpoint_path=checkpoint_path,
     )
-    wrapper.save(paths.trained_model_path)
-    _write_training_manifest(paths.trained_model_path, paths, settings, _history)
-    return paths.trained_model_path
+    # Luu CNN vao path rieng de KHONG ghi de model centroid cu (medical_7_cancers.pt).
+    target_path = Path(output_model_path) if output_model_path else paths.cnn_model_path
+    wrapper.save(target_path)
+    _write_training_manifest(target_path, paths, settings, _history)
+    return target_path
 
 
 def validate_medical_model(paths: MedicalTrainingPaths | None = None):
@@ -460,7 +474,7 @@ def _family_for_sample(paths: MedicalTrainingPaths, image_path: Path, class_inde
         return "unknown"
     body_region = _router_body_region(body_region_key)
     modality = None
-    # Chi phoi (lung) can suy luan modality vi no tach lam xray_mammo va ct_volume.
+    # Chỉ phổi (lung) cần suy luận modality vì nó tách làm xray_mammo và ct_volume.
     if body_region == "lung":
         try:
             _, modality = infer_medical_upload_context(image_path)
@@ -486,11 +500,11 @@ def _stratify_samples_by_family(
     paths: MedicalTrainingPaths | None = None,
     seed: int = 42,
 ) -> list[tuple[list[tuple[Path, int]], list[tuple[Path, int]]]]:
-    """Chia sample thanh cac fold, phan tang theo (lop, image family).
+    """Chia sample thành các fold, phân tăng theo (lớp, image family).
 
-    Moi (lop, family) duoc rai deu (round-robin) qua cac fold nen moi fold co
-    dai dien tu tung family. Tra ve danh sach (train_samples, val_samples) cho
-    tung fold.
+    Mỗi (lớp, family) được rải đều (round-robin) qua các fold nên mỗi fold có
+    đại diện từng family. Trả về danh sách (train_samples, val_samples) cho
+    từng fold.
     """
     if num_folds < 2:
         raise ValueError("num_folds phai >= 2 de thuc hien cross-validation.")
@@ -776,11 +790,11 @@ def _select_best_hyperparams(
     config: dict[str, Any],
     cv_results: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Chon bo hyperparam tot nhat sau CV.
+    """Chọn bộ hyperparam tốt nhất sau CV.
 
-    Hien tai CV chay voi mot bo cau hinh co dinh (khong grid-search) nen bo
-    hyperparam tot nhat chinh la config da duoc CV kiem chung. Ham nay giu diem
-    mo rong de sau nay co the chon theo fold co macro_f1 cao nhat.
+    Hiện tại CV chạy với một bộ cấu hình cố định (không grid-search) nên bộ
+    hyperparam tốt nhất chính là config đã được CV kiểm chứng. Hàm này giữ điểm
+    mở rộng để sau này có thể chọn theo fold có macro_f1 cao nhất.
     """
     best = dict(config)
     if cv_results:

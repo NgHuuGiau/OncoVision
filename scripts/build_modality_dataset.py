@@ -3,17 +3,17 @@
 Lấy ảnh từ MedMNIST (bộ ảnh y khoa chuẩn hóa, BSD license) và đưa vào
 dataset/medical_modality/<modality>/*.jpg với kích thước >= 224px.
 
-Map modality -> bo MedMNIST:
+Map modality -> bộ MedMNIST:
   ct         -> organmnist_ct   (CT)
   mri        -> organmnist      (MRI)
-  xray       -> chestmnist      (X-quang nguc)
-  mammogram  -> breastmnist     (nhu anh mammography)
-  endoscopy  -> pathmnist       (mo beneficiary hoc duong tieu hoa/colon)
-  ultrasound -> bloodmnist      (anh máu - gan thay the gan nhu the closest)
-  pet_ct     -> organmnist_ct + augment (khong co bo pet rieng)
-  eus        -> pathmnist + augment (khong co bo eus rieng)
+  xray       -> chestmnist      (X-quang ngực)
+  mammogram  -> breastmnist     (như ảnh mammography)
+  endoscopy  -> pathmnist       (nội soi ống tiêu hóa/colon)
+  ultrasound -> bloodmnist      (ảnh máu - gan thay thế gần nhất)
+  pet_ct     -> organmnist_ct + augment (không có bộ PET riêng)
+  eus        -> pathmnist + augment (không có bộ EUS riêng)
 
-Cac modality pet_ct/eus duoc danh dau la synthetic-augment tu bo gan nhat.
+Các modality pet_ct/eus được đánh dấu là synthetic-augment từ bộ gần nhất.
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def build_modality(modality: str, source_name: str, loader) -> int:
 
     base = _collect_images(loader, "train") + _collect_images(loader, "test")
     if not base:
-        print(f"  ! {modality}: khong lay duoc anh tu {source_name}")
+        print(f"  ! {modality}: không lấy được ảnh từ {source_name}")
         return 0
 
     count = 0

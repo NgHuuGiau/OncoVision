@@ -110,6 +110,9 @@ run_tests.py     -> dashboard unit test
 | Kiểm tra máy nên chạy runtime nào | `python run_app.py --advisor-only` |
 | Mở camera realtime | `python run_app.py` |
 | Kiểm tra chat UI sẵn sàng chưa | `python run_chat.py --check-only` |
+| Mở chat UI desktop | `python run_chat.py` |
+| Mở web chat UI | `python -m uvicorn web_app:app --host 0.0.0.0 --port 8000` rồi mở `http://localhost:8000` |
+| Xem lịch sử chat web | `http://localhost:8000/admin/db` |
 | Kiểm tra tổng thể môi trường | `python run_doctor.py --skip-camera-check` |
 | Train YOLO object detection | `python run_train.py` |
 | Kiểm tra nhanh luồng y dược | `python run_medical.py status` |
@@ -269,3 +272,38 @@ python scripts/build_unlabeled_dataset.py
 ```
 
 Mỗi lần chạy tải ~160 ảnh (224×224 RGB) từ BloodMNIST, PathMNIST, OrganMNIST3D, ChestMNIST. Ảnh có prefix `unlabeled_` để không nhầm với ảnh đã dán nhãn.
+
+### 3. Nhánh Web Chat
+
+Mục tiêu:
+
+- giao diện chat web giống desktop,
+- lưu lịch sử vào SQLite,
+- xem và xóa lịch sử từ sidebar,
+- upload ảnh y khoa phân tích trực tiếp.
+
+Thư mục liên quan:
+
+```text
+web_app.py
+templates/index.html
+output/web_uploads/
+output/chat_history.db
+```
+
+Luồng cơ bản:
+
+```powershell
+python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
+```
+
+Mở trình duyệt: `http://localhost:8000`
+
+Tính năng:
+
+- Chat realtime với medical pipeline
+- Upload ảnh y khoa (JPG, PNG, DICOM, NIfTI)
+- Phân tích ảnh + hiển thị kết quả
+- Lịch sử chat lưu vào `output/chat_history.db`
+- Sidebar xem/xóa lịch sử
+- Admin DB viewer: `http://localhost:8000/admin/db`

@@ -11,7 +11,7 @@ from medical.dataset import MEDICAL_DATASET_ROOT
 
 TARGET_KEY_TO_CANCER_TYPE = {
     "liver": "ung_thu_gan",
-    "lung": "ung_thu_phoi",
+    "lung": "ung_thu_phổi",
     "breast": "ung_thu_vu",
     "stomach": "ung_thu_da_day",
     "colorectal": "ung_thu_dai_truc_trang",
@@ -59,7 +59,7 @@ def build_cancer_overview(dataset_root: str | Path = MEDICAL_DATASET_ROOT) -> di
         ]
         local_image_count = sum(cast(Any, item)["image_count"] for item in local_sources)
         total_images += local_image_count
-        local_status = "co_anh_local" if local_image_count > 0 else "chua_co_anh_local"
+        local_status = "có_ảnh_local" if local_image_count > 0 else "chưa_có_ảnh_local"
         cancers.append(
             {
                 "cancer_type": cancer_type,

@@ -14,7 +14,7 @@ from medical.cnn_classifier import MedicalCNNClassifierWrapper, is_cnn_classifie
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dashboard import write_inference_dashboard
 from medical.dataset import normalize_uploaded_image
-from medical.model_policy import resolve_medical_runtime_model_path
+from medical.model_policy import iter_medical_runtime_model_paths, resolve_medical_runtime_model_path
 from medical.model_versioning import read_model_manifest
 from medical.reporting import build_artifact_stamp, write_case_report
 from medical.validator import (
@@ -202,40 +202,40 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
     if not 0.0 < config.classify_medium_risk_threshold <= config.classify_high_risk_threshold <= 1.0:
         issues.append("ngưỡng nguy cơ không hợp lệ.")
     if not 0.0 < config.certainty_threshold <= 1.0:
-        issues.append("certainty_threshold phai nam trong khoang (0, 1].")
+        issues.append("certainty_threshold phải nằm trong khoảng (0, 1].")
     if not 0.0 < config.validation_min_confidence <= 1.0:
-        issues.append("validation_min_confidence phai nam trong khoang (0, 1].")
+        issues.append("validation_min_confidence phải nằm trong khoảng (0, 1].")
     if not config.validation_allowed_extensions:
-        issues.append("validation_allowed_extensions khong duoc de trong.")
+        issues.append("validation_allowed_extensions không được để trống.")
     if not config.cnn_image_size > 0:
-        issues.append("cnn_image_size phai lon hon 0.")
+        issues.append("cnn_image_size phải lớn hơn 0.")
     if not config.cnn_batch_size > 0:
-        issues.append("cnn_batch_size phai lon hon 0.")
+        issues.append("cnn_batch_size phải lớn hơn 0.")
     if not config.cnn_num_epochs > 0:
-        issues.append("cnn_num_epochs phai lon hon 0.")
+        issues.append("cnn_num_epochs phải lớn hơn 0.")
     if not 0.0 < config.cnn_learning_rate <= 1.0:
-        issues.append("cnn_learning_rate khong hop le.")
+        issues.append("cnn_learning_rate không hợp lệ.")
     if not 0.0 <= config.cnn_dropout < 1.0:
-        issues.append("cnn_dropout khong hop le.")
+        issues.append("cnn_dropout không hợp lệ.")
     if config.cnn_early_stopping_patience <= 0:
-        issues.append("cnn_early_stopping_patience phai lon hon 0.")
+        issues.append("cnn_early_stopping_patience phải lớn hơn 0.")
     if not 0.0 <= config.cnn_label_smoothing < 1.0:
-        issues.append("cnn_label_smoothing khong hop le.")
+        issues.append("cnn_label_smoothing không hợp lệ.")
     if config.cnn_warmup_epochs < 0:
-        issues.append("cnn_warmup_epochs khong duoc am.")
+        issues.append("cnn_warmup_epochs không được âm.")
     if not 0.0 <= config.detection_consistency_threshold <= 1.0:
-        issues.append("detection_consistency_threshold phai nam trong khoang [0, 1].")
+        issues.append("detection_consistency_threshold phải nằm trong khoảng [0, 1].")
     if config.segmentation_roi_margin < 0:
-        issues.append("segmentation_roi_margin khong duoc am.")
+        issues.append("segmentation_roi_margin không được âm.")
     if config.mc_dropout_samples <= 0:
-        issues.append("mc_dropout_samples phai lon hon 0.")
+        issues.append("mc_dropout_samples phải lớn hơn 0.")
     total_ensemble_weight = config.ensemble_yolo_weight + config.ensemble_cnn_weight
     if not config.ensemble_yolo_weight >= 0.0 or not config.ensemble_cnn_weight >= 0.0:
-        issues.append("ensemble weights khong duoc am.")
+        issues.append("ensemble weights không được âm.")
     if total_ensemble_weight <= 0.0:
-        issues.append("tong ensemble_yolo_weight va ensemble_cnn_weight phai lon hon 0.")
+        issues.append("Tổng ensemble_yolo_weight và ensemble_cnn_weight phải lớn hơn 0.")
     if not config.model_path:
-        issues.append("model_path khong duoc de trong.")
+        issues.append("model_path không được để trống.")
     if config.allow_fallback_model and config.fallback_model_path is None:
         issues.append("allow_fallback_model dang bat nhung fallback_model_path bi thieu.")
     return issues
@@ -252,7 +252,15 @@ class MedicalImageAnalyzer:
         self._roi_extractor: Any = None
 
     def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
-        self.ensure_ready()
+        try:
+            self.ensure_ready()
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                "Chua co model medical de phan tich. Hay train truoc bang lenh:\n"
+                "  python run_train.py\n"
+                "hoac kiem tra config/medical_settings.yaml (khoa 'model').\n"
+                f"Chi tiet: {exc}"
+            ) from exc
         if self._detector_backend is None and self.config.yolo_model_path and Path(self.config.yolo_model_path).exists():
             try:
                 self._detector_backend = self._load_default_backend()
@@ -270,7 +278,7 @@ class MedicalImageAnalyzer:
         normalized_path = normalize_uploaded_image(deidentified_source or resolved_source, self.config.processed_dir, image_size=self.config.image_size)
         image = cv2.imread(str(normalized_path))
         if image is None:
-            raise RuntimeError(f"Khong doc duoc anh: {normalized_path}")
+            raise RuntimeError(f"Không đọc được ảnh: {normalized_path}")
         modality_profile = self._get_modality_profile(validation.modality)
         prepared_image = self._prepare_image_for_analysis(image, modality=validation.modality)
         prepared_image, roi_info = self._apply_segmentation_roi(prepared_image)
@@ -286,7 +294,7 @@ class MedicalImageAnalyzer:
         consistency_score, conflicting_pairs = self._compute_detection_consistency(detections)
         if consistency_score < self.config.detection_consistency_threshold:
             quality_warnings.append(
-                f"Phat hien khong nhat quan giua cac vung (consistency={consistency_score:.2f} "
+                f"Phát hiện không nhất quán giữa các vùng (consistency={consistency_score:.2f} "
                 f"< {self.config.detection_consistency_threshold:.2f}, "
                 f"conflicting_pairs={len(conflicting_pairs)})."
             )
@@ -511,13 +519,13 @@ class MedicalImageAnalyzer:
         return img.astype(np.uint8)
 
     def _apply_segmentation_roi(self, image: np.ndarray) -> tuple[np.ndarray, dict[str, Any] | None]:
-        """Cat vung quan tam (ROI) bang segmentation truoc khi phan tich.
+        """Cắt vùng quan tâm (ROI) bằng segmentation trước khi phân tích.
 
-        Dung SAMROIExtractor voi fallback Otsu (khong can tai trong so mang).
-        Neu tat hoac loi, tra ve anh goc va roi_info=None.
+        Dùng SAMROIExtractor với fallback Otsu (không cần tải trọng số mạng).
+        Nếu tắt hoặc lỗi, trả về ảnh gốc và roi_info=None.
 
-        roi_info chua 'bbox' (he toa do anh truoc crop) va 'offset' (x1, y1) de
-        cac stage sau co the doi bbox detections ve cung he toa do anh truoc crop.
+        roi_info chứa 'bbox' (hệ tọa độ ảnh trước crop) và 'offset' (x1, y1) để
+        các stage sau có thể đổi bbox detections về cùng hệ tọa độ ảnh trước crop.
         """
         if not self.config.enable_segmentation_roi:
             return image, None
@@ -531,7 +539,7 @@ class MedicalImageAnalyzer:
             cropped = crop_to_roi(image, result.bbox, margin=self.config.segmentation_roi_margin)
             if cropped is None or cropped.size == 0:
                 return image, None
-            # Goc crop thuc te sau khi tinh margin/clamp (giong logic crop_to_roi).
+            # Góc crop thực tế sau khi tính margin/clamp (giống logic crop_to_roi).
             height, width = image.shape[:2]
             x1 = max(0, result.bbox[0] - self.config.segmentation_roi_margin)
             y1 = max(0, result.bbox[1] - self.config.segmentation_roi_margin)
@@ -556,9 +564,9 @@ class MedicalImageAnalyzer:
         return self._roi_extractor
 
     def _advanced_preprocess(self, image: np.ndarray, *, modality: str | None) -> np.ndarray | None:
-        """Tien xu ly theo modality bang medical.preprocessing (tuy chon).
+        """Tiền xử lý theo modality bằng medical.preprocessing (tùy chọn).
 
-        Tra ve anh BGR uint8 da xu ly, hoac None neu loi/khong ap dung.
+        Trả về ảnh BGR uint8 đã xử lý, hoặc None nếu lỗi/không áp dụng.
         """
         try:
             from medical.preprocessing import preprocess_image
@@ -573,10 +581,10 @@ class MedicalImageAnalyzer:
             return None
 
     def _estimate_uncertainty(self, image: np.ndarray) -> dict[str, Any] | None:
-        """Uoc luong do bat dinh bang MC Dropout khi backend la CNN.
+        """Ước lượng độ bất định bằng MC Dropout khi backend là CNN.
 
-        Chi chay khi enable_mc_dropout va model la CNN classifier. Khong tai
-        trong so mang. Neu loi, tra ve None de khong pha vo luong chinh.
+        Chỉ chạy khi enable_mc_dropout và model là CNN classifier. Không tải
+        trọng số mạng. Nếu lỗi, trả về None để không phá vỡ luồng chính.
         """
         if not self.config.enable_mc_dropout:
             return None
@@ -711,10 +719,18 @@ class MedicalImageAnalyzer:
         return findings
 
     def ensure_ready(self) -> Path:
-        model_path = resolve_medical_runtime_model_path(self.config)
+        try:
+            model_path = resolve_medical_runtime_model_path(self.config)
+        except FileNotFoundError:
+            candidates = ", ".join(str(p) for p in iter_medical_runtime_model_paths(self.config))
+            raise FileNotFoundError(
+                "Thieu model medical de phan tich. Da thu cac duong dan: "
+                f"{candidates}. Hay train model bang 'python run_train.py' "
+                "hoac cap nhat 'model' trong config/medical_settings.yaml."
+            )
         issues = validate_medical_analyzer_config(self.config)
         if issues:
-            raise ValueError("Cau hinh medical khong hop le: " + "; ".join(issues))
+            raise ValueError("Cấu hình medical không hợp lệ: " + "; ".join(issues))
         self.config = self.config.with_model_path(model_path)
         self._log_model_manifest(model_path)
         return model_path
@@ -915,7 +931,7 @@ class MedicalImageAnalyzer:
                 return YOLO(str(self.config.yolo_model_path))
             except Exception as exc:
                 print(f"[Ensemble] Khong the tai YOLO backend: {exc}")
-        raise RuntimeError("Medical pipeline hien tai dung classifier local, khong can backend YOLO.")
+        raise RuntimeError("Medical pipeline hiện tại dùng classifier local, không cần backend YOLO.")
 
     def _load_classifier(self) -> MedicalClassifierModel:
         if self._classifier_model is None:
@@ -938,8 +954,8 @@ class MedicalImageAnalyzer:
         detections: list[DetectionFinding],
         roi_info: dict[str, Any] | None,
     ) -> list[DetectionFinding]:
-        """Doi bbox detections (dang o he toa do anh da crop) ve he toa do anh
-        truoc crop, dung offset ROI. Neu khong crop, tra ve nguyen ven."""
+        """Đổi bbox detections (đang ở hệ tọa độ ảnh đã crop) về hệ tọa độ ảnh
+        trước crop, dùng offset ROI. Nếu không crop, trả về nguyên ven."""
         if not roi_info:
             return detections
         offset = roi_info.get("offset")
@@ -983,27 +999,27 @@ class MedicalImageAnalyzer:
             return (
                 "uncertain",
                 False,
-                f"Ket qua chua du tin tuong (max_confidence={max_confidence:.2f} < {certainty_threshold:.2f}). Khong duoc phan loai benh nhan. Can kham chuyen khoa de bao dam doanh nghiep.",
+                f"Kết quả chưa đủ tin tưởng (max_confidence={max_confidence:.2f} < {certainty_threshold:.2f}). Không được phân loại bệnh nhân. Cần khám chuyên khoa để bảo đảm doanh nghiệp.",
                 average_confidence,
             )
         if max_confidence >= self.config.classify_high_risk_threshold or len(detections) >= 3:
             return (
                 "high",
                 True,
-                "Phat hien vung ton thuong co nguy co cao. Nen chuyen benh nhan den bac si da lieu/ung buou de danh gia tiep va sinh thiet neu can.",
+                "Phát hiện vùng tổn thương có nguy cơ cao. Nên chuyển bệnh nhân đến bác sĩ da liễu/ung bướu để đánh giá tiếp và sinh thiết nếu cần.",
                 average_confidence,
             )
         if max_confidence >= medium_threshold:
             return (
                 "medium",
                 True,
-                "Phat hien vung ton thuong co nguy co trung binh. Nen tai kham som va doi chieu voi kham lam sang chuyen khoa.",
+                "Phát hiện vùng tổn thương có nguy cơ trung bình. Nên tái khám sớm và đối chiếu với khám lâm sàng chuyên khoa.",
                 average_confidence,
             )
         return (
             "low",
             False,
-            "Co mot vai vung ton thuong nguy co thap. Nen theo doi va kham chuyen khoa neu ton thuong thay doi kich thuoc, mau sac hoac hinh dang.",
+            "Có một vài vùng tổn thương nguy cơ thấp. Nên theo dõi và khám chuyên khoa nếu tổn thương thay đổi kích thước, màu sắc hoặc hình dạng.",
             average_confidence,
         )
 

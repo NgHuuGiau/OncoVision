@@ -19,9 +19,9 @@ medical:
   - .nii
   - .nii.gz
   classifier_backend: cnn
-  cnn_backbone: convnextv2_tiny
-  cnn_image_size: 320
-  cnn_batch_size: 16
+  cnn_backbone: resnet50
+  cnn_image_size: 224
+  cnn_batch_size: 8
   cnn_num_epochs: 30
   cnn_learning_rate: 0.0001
   cnn_dropout: 0.25
@@ -35,12 +35,12 @@ medical:
   cnn_optimizer: adamw
   cnn_weight_decay: 0.0001
   cnn_gradient_clip_norm: 1.0
-  cnn_gradient_accumulation_steps: 2
+  cnn_gradient_accumulation_steps: 4
   cnn_ema: true
   cnn_ema_decay: 0.999
   cnn_checkpoint_averaging: true
   cnn_checkpoint_averaging_window: 5
-  cnn_gradient_checkpointing: false
+  cnn_gradient_checkpointing: true
   submodel_dir: output/medical/submodels
   submodel_reweight_underrepresented: true
   output_root: output/medical

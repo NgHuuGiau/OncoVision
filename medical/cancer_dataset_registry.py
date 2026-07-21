@@ -28,15 +28,15 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA liver dataset",
         status="ready",
         official_url="https://www.cancerimagingarchive.net/",
-        notes="Nguon tham chieu TCIA cho ung thu gan.",
+        notes="Nguồn tham chiếu TCIA cho ung thư gan.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_lung",
-        cancer_type="ung_thu_phoi",
+        cancer_type="ung_thu_phổi",
         source_name="TCIA lung dataset",
         status="ready",
         official_url="https://www.cancerimagingarchive.net/",
-        notes="Nguon tham chieu TCIA cho ung thu phoi.",
+        notes="Nguồn tham chiếu TCIA cho ung thư phổi.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_breast",
@@ -44,7 +44,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA breast dataset",
         status="ready",
         official_url="https://www.cancerimagingarchive.net/",
-        notes="Nguon tham chieu TCIA cho ung thu vu.",
+        notes="Nguồn tham chiếu TCIA cho ung thư vú.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_stomach",
@@ -52,7 +52,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA stomach dataset",
         status="ready",
         official_url="https://www.cancerimagingarchive.net/",
-        notes="Nguon tham chieu TCIA cho ung thu da day.",
+        notes="Nguồn tham chiếu TCIA cho ung thư dạ dày.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_colorectal",
@@ -60,7 +60,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="TCIA colorectal dataset",
         status="ready",
         official_url="https://www.cancerimagingarchive.net/",
-        notes="Nguon tham chieu TCIA cho ung thu dai truc trang.",
+        notes="Nguồn tham chiếu TCIA cho ung thư đại trực tràng.",
     ),
     CancerDatasetSourceSpec(
         source_id="local_liver",
@@ -72,7 +72,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
     ),
     CancerDatasetSourceSpec(
         source_id="local_lung",
-        cancer_type="ung_thu_phoi",
+        cancer_type="ung_thu_phổi",
         source_name="dataset/medical/Ung thư phổi",
         status="ready",
         official_url="dataset/medical/Ung thư phổi",

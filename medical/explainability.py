@@ -30,7 +30,7 @@ _SUPPORTED_BACKBONES: tuple[str, ...] = (
 def _get_target_conv_layer(model: nn.Module, backbone_name: str) -> nn.Module:
     backbone = getattr(model, "backbone", None)
     if backbone is None:
-        raise GradCAMUnsupportedError("Mo hinh khong co thuoc tinh 'backbone'.")
+        raise GradCAMUnsupportedError("Mô hình không có thuộc tính 'backbone'.")
     if backbone_name in {"resnet18", "resnet50"}:
         return backbone.layer4
     elif backbone_name in {"efficientnet_b0", "efficientnet_b2", "efficientnet_b3"}:
@@ -41,7 +41,7 @@ def _get_target_conv_layer(model: nn.Module, backbone_name: str) -> nn.Module:
         return backbone.features[-1][-1].mlp
     elif backbone_name.startswith("vit_"):
         return backbone.encoder.layers[-1].mlp
-    raise GradCAMUnsupportedError(f"Backbone '{backbone_name}' khong ho tro Grad-CAM.")
+        raise GradCAMUnsupportedError(f"Backbone '{backbone_name}' không hỗ trợ Grad-CAM.")
 
 
 def _jet_colormap(heatmap: np.ndarray) -> np.ndarray:
@@ -89,13 +89,13 @@ class GradCAM:
         self.gradients = grad_output[0].detach()
 
     def generate(self, input_tensor: torch.Tensor, class_idx: int) -> np.ndarray:
-        if self.activations is None or self.gradients is None:
-            raise GradCAMError("Chua co dac trung hoac gradient.")
         x = input_tensor.to(self.device)
         if x.dim() == 3:
             x = x.unsqueeze(0)
         self.model.zero_grad(set_to_none=True)
         output = self.model(x)
+        if self.activations is None:
+            raise GradCAMError("Chua co dac trung hoac gradient.")
         if class_idx < 0 or class_idx >= output.shape[1]:
             raise GradCAMError(f"class_idx {class_idx} nam ngoai pham vi.")
         score = output[0, class_idx]
@@ -309,7 +309,7 @@ def generate_gradcam_overlay(image: np.ndarray, heatmap: np.ndarray, *, alpha: f
     if colormap == "jet":
         colored = _jet_colormap(heatmap)
     else:
-        raise ValueError(f"Colormap '{colormap}' chua duoc ho tro.")
+        raise ValueError(f"Colormap '{colormap}' chưa được hỗ trợ.")
     base = image.astype(np.float32)
     alpha = float(np.clip(alpha, 0.0, 1.0))
     overlay = (alpha * colored.astype(np.float32) + (1.0 - alpha) * base).astype(np.uint8)
@@ -357,7 +357,7 @@ class MedicalGradCAMExplainer:
             model = self.wrapper.model
             backbone_name = getattr(model, "backbone_name", None)
             if backbone_name is None or backbone_name not in _SUPPORTED_BACKBONES:
-                raise GradCAMUnsupportedError(f"Backbone '{backbone_name}' khong nam trong danh sach ho tro.")
+                raise GradCAMUnsupportedError(f"Backbone '{backbone_name}' không nằm trong danh sách hỗ trợ.")
             target_layer = _get_target_conv_layer(model, backbone_name)
             self.gradcam = GradCAM(model, target_layer, device=self.device)
             self.gradcam_pp = GradCAMPlusPlus(model, target_layer, device=self.device)

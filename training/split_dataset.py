@@ -140,7 +140,7 @@ def main() -> None:
     print(line(rule("-"), CYAN))
     print(section("LỆNH TIẾP", CYAN))
     print(command_row(1, r".\.venv\Scripts\python run_train.py"))
-    print(command_row(2, r".\.venv\Scripts\python training\validate_model.py"))
+    print(command_row(2, r".\.venv\Scripts\python scripts\train_medical_cnn.py"))
     print(line(rule("="), CYAN))
 
 

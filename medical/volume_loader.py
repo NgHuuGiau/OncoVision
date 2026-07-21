@@ -115,7 +115,7 @@ def _load_nifti_slices(path: Path) -> list[np.ndarray]:
     if data.ndim == 2:
         data = data[None, ...]
     if data.ndim != 3:
-        raise ValueError(f"NIfTI khong hop le: kich thuoc {data.shape}")
+        raise ValueError(f"NIfTI không hợp lệ: kích thước {data.shape}")
 
     slices: list[np.ndarray] = []
     for i in range(data.shape[2]):
@@ -140,7 +140,7 @@ def _load_mhd_slices(path: Path) -> list[np.ndarray]:
     if data.ndim == 2:
         data = data[None, ...]
     if data.ndim != 3:
-        raise ValueError(f"MHA/MHD khong hop le: kich thuoc {data.shape}")
+        raise ValueError(f"MHA/MHD không hợp lệ: kích thước {data.shape}")
 
     slices: list[np.ndarray] = []
     for i in range(data.shape[0]):

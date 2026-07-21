@@ -96,14 +96,16 @@ def _build_convnext_backbone(name: str, pretrained: bool) -> tuple[nn.Module, in
         model = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
-    elif name == "convnextv2_tiny":
-        from torchvision.models import convnextv2_tiny, ConvNeXt_V2_Tiny_Weights
-        model = convnextv2_tiny(weights=ConvNeXt_V2_Tiny_Weights.DEFAULT if pretrained else None)
+    elif name in ("convnextv2_tiny", "convnext_tiny"):
+        from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
+
+        model = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
-    elif name == "convnextv2_base":
-        from torchvision.models import convnextv2_base, ConvNeXt_V2_Base_Weights
-        model = convnextv2_base(weights=ConvNeXt_V2_Base_Weights.DEFAULT if pretrained else None)
+    elif name in ("convnextv2_base", "convnext_base"):
+        from torchvision.models import convnext_base, ConvNeXt_Base_Weights
+
+        model = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
     else:
@@ -300,6 +302,9 @@ class MedicalCNNClassifier(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.backbone(x)
+        if features.dim() > 2:
+            # Gộp không gian: global average pool về [B, C] để tương thích mọi backbone.
+            features = features.mean(dim=(-2, -1)) if features.dim() == 4 else features.flatten(start_dim=1)
         return self.classifier(features)
 
     def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
@@ -609,6 +614,7 @@ def train_cnn_classifier(
     progress_tag: str | None = None,
     verbose: bool = False,
     resume_path: str | Path | None = None,
+    checkpoint_path: str | Path | None = None,
     enable_ema: bool = False,
     ema_decay: float = 0.999,
     enable_checkpoint_averaging: bool = False,
@@ -661,16 +667,22 @@ def train_cnn_classifier(
         dropout=dropout,
     )
 
-    if resume_path is not None:
-        resume_path = Path(resume_path)
-        if resume_path.exists():
-            try:
-                checkpoint = torch.load(resume_path, map_location="cpu", weights_only=False)
-                if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-                    model.load_state_dict(checkpoint["model_state_dict"], strict=False)
-                    print(f"[train] resume tu checkpoint: {resume_path}", flush=True)
-            except Exception as exc:
-                print(f"[train] loi khi resume ({exc}), bat dau tu dau.", flush=True)
+    checkpoint_path = Path(checkpoint_path) if checkpoint_path else None
+    start_epoch = 0
+
+    _loaded_checkpoint: dict[str, Any] | None = None
+    if resume_path is not None or (checkpoint_path is not None and checkpoint_path.exists()):
+        ckpt_file = checkpoint_path if (checkpoint_path is not None and checkpoint_path.exists()) else Path(resume_path)
+        try:
+            _loaded_checkpoint = torch.load(ckpt_file, map_location="cpu", weights_only=False)
+            if isinstance(_loaded_checkpoint, dict) and "model_state_dict" in _loaded_checkpoint:
+                model.load_state_dict(_loaded_checkpoint["model_state_dict"], strict=False)
+                original_state = {k: v.clone().cpu() for k, v in model.state_dict().items()}
+                if "epoch" in _loaded_checkpoint:
+                    start_epoch = int(_loaded_checkpoint["epoch"])
+                print(f"[train] resume tu checkpoint: {ckpt_file} (epoch {start_epoch})", flush=True)
+        except Exception as exc:
+            print(f"[train] loi khi load checkpoint ({exc}), bat dau tu dau.", flush=True)
 
     model = model.to(device_obj)
 
@@ -686,6 +698,30 @@ def train_cnn_classifier(
     scaler = torch.amp.GradScaler(device_obj.type, enabled=mixed_precision and device_obj.type == "cuda")
     ema = EMA(model, decay=ema_decay) if enable_ema else None
     checkpoint_avg = CheckpointAveraging(window_size=checkpoint_averaging_window) if enable_checkpoint_averaging else None
+
+    if _loaded_checkpoint is not None:
+        ckpt = _loaded_checkpoint
+        if "optimizer_state_dict" in ckpt:
+            optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        if "scheduler_state_dict" in ckpt:
+            scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+        if "scaler_state_dict" in ckpt and hasattr(scaler, "load_state_dict"):
+            scaler.load_state_dict(ckpt["scaler_state_dict"])
+        if "history" in ckpt:
+            history = ckpt["history"]
+        if "best_model_state" in ckpt and ckpt["best_model_state"]:
+            best_model_state = ckpt["best_model_state"]
+        if "best_val_f1" in ckpt:
+            best_val_f1 = float(ckpt["best_val_f1"])
+        if "early_stopping_state" in ckpt:
+            es_state = ckpt["early_stopping_state"]
+            if isinstance(es_state, dict):
+                early_stopping.best_score = es_state.get("best_score")
+                early_stopping.counter = int(es_state.get("counter", 0))
+                early_stopping.early_stop = bool(es_state.get("early_stop", False))
+        if ema is not None and "ema_shadow" in ckpt:
+            ema.shadow = ckpt["ema_shadow"]
+
     original_state = {k: v.clone() for k, v in model.state_dict().items()}
 
     print(
@@ -712,7 +748,7 @@ def train_cnn_classifier(
     best_model_state: dict[str, Any] | None = None
     best_val_f1 = 0.0
 
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         print(f"[train] --- epoch {epoch + 1}/{num_epochs} ---", flush=True)
         model.train()
         total_loss = 0.0
@@ -860,6 +896,30 @@ def train_cnn_classifier(
             + (" [early-stop]" if early_stopping.early_stop else ""),
             flush=True,
         )
+
+        if checkpoint_path is not None:
+            ckpt = {
+                "model_state_dict": {k: v.cpu() for k, v in model.state_dict().items()},
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "scaler_state_dict": scaler.state_dict() if hasattr(scaler, "state_dict") else None,
+                "epoch": epoch + 1,
+                "history": history,
+                "best_model_state": best_model_state,
+                "best_val_f1": best_val_f1,
+                "early_stopping_state": {
+                    "best_score": early_stopping.best_score,
+                    "counter": early_stopping.counter,
+                    "early_stop": early_stopping.early_stop,
+                },
+                "effective_batch": effective_batch,
+            }
+            if ema is not None:
+                ckpt["ema_shadow"] = {k: v.cpu() for k, v in ema.shadow.items()}
+            try:
+                torch.save(ckpt, checkpoint_path, _use_new_zipfile_serialization=False)
+            except Exception:
+                pass
 
     if checkpoint_avg is not None and checkpoint_avg.checkpoints:
         avg_state = checkpoint_avg.average()

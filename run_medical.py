@@ -170,7 +170,7 @@ def main() -> int:
                 error_code = "UNKNOWN_ERROR"
                 error_message = message
             print(f"Loi: [{error_code}] {error_message}")
-            print("Vui long tai len dung loai anh y khoa duoc ho tro.")
+            print("Vui lòng tải lên đúng loại ảnh y khoa được hỗ trợ.")
             return 1
         case_id = db.save_case(
             patient_code=result.patient_code,
@@ -187,7 +187,7 @@ def main() -> int:
         print(f"Ma ca benh: {case_id}")
         print(f"Muc do sang loc nguy co: {result.risk_level}")
         if result.risk_level == "uncertain":
-            print("LOI: Ket qua khong du tin tuong de dua ra chan doan.")
+            print("LỖI: Kết quả không đủ tin tưởng để đưa ra chẩn đoán.")
         if result.quality_warnings:
             print("Canh bao chat luong anh:")
             for warning in result.quality_warnings:
@@ -327,7 +327,7 @@ def main() -> int:
         print(f"Da export ca benh #{item.case_id} ra: {bundle_path}")
         if args.pdf:
             pdf_path = Path(args.output_dir) / f"case_{item.case_id}.pdf"
-            print(f"Bao cao PDF: {pdf_path if pdf_path.exists() else '(chua tao duoc)'}")
+            print(f"Báo cáo PDF: {pdf_path if pdf_path.exists() else '(chưa tạo được)'}")
         return 0
 
     def handle_active_learning() -> int:
@@ -526,7 +526,7 @@ def main() -> int:
 
     handler = handlers.get(args.command)
     if handler is None:
-        parser.error("Lenh chua duoc ho tro")
+        parser.error("Lệnh chưa được hỗ trợ")
         return 1
     return handler()
 

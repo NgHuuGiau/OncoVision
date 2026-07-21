@@ -181,3 +181,23 @@ Runtime advisor giúp team:
 - giảm bug do chọn sai mode,
 - dễ hướng dẫn máy mới,
 - dễ debug vấn đề nặng / lag / FPS thấp một cách có hệ thống.
+
+## 11. Web Chat UI
+
+Ngoài camera realtime, OncoVision có giao diện web chat:
+
+```powershell
+python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
+```
+
+Mở trình duyệt: `http://localhost:8000`
+
+Tính năng:
+
+- Chat với medical pipeline
+- Upload ảnh y khoa để phân tích
+- Lịch sử chat lưu vào SQLite (`output/chat_history.db`)
+- Xem/xóa lịch sử từ sidebar
+- Admin DB viewer: `http://localhost:8000/admin/db`
+
+Lưu ý: web app dùng `0.0.0.0` nên mọi thiết bị trong mạng LAN đều vào được bằng IP máy chủ.

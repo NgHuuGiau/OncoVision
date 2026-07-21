@@ -105,7 +105,7 @@ class RunMedicalTests(unittest.TestCase):
                 {
                     "label": "Ung thư gan",
                     "local_image_count": 900,
-                    "local_status": "co_anh_local",
+                    "local_status": "có_ảnh_local",
                     "model_ready": True,
                     "local_sources": [
                         {

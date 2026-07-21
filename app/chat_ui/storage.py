@@ -76,6 +76,7 @@ class ChatDatabase:
             )
             self._ensure_column(conn, "messages", "metadata_json", "TEXT")
             self._ensure_indexes(conn)
+            self._ensure_web_tables(conn)
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -95,6 +96,108 @@ class ChatDatabase:
             ON messages (text)
             """
         )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_messages_sender
+            ON messages (sender)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_messages_attachment_kind
+            ON messages (attachment_kind)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_messages_created_at
+            ON messages (created_at)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_conversations_created_at
+            ON conversations (created_at)
+            """
+        )
+
+    def _ensure_web_tables(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT,
+                stored_path TEXT,
+                size_bytes INTEGER,
+                mime_type TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT UNIQUE,
+                ip_address TEXT,
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_uploads_created_at
+            ON web_uploads (created_at)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_sessions_session_id
+            ON web_sessions (session_id)
+            """
+        )
+
+    def add_web_upload(self, *, filename: str, stored_path: str, size_bytes: int, mime_type: str) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "INSERT INTO web_uploads (filename, stored_path, size_bytes, mime_type) VALUES (?, ?, ?, ?)",
+                (filename, stored_path, size_bytes, mime_type),
+            )
+            return cursor.lastrowid
+
+    def get_recent_uploads(self, limit: int = 100):
+        try:
+            with self._connect() as conn:
+                return conn.execute(
+                    "SELECT id, filename, stored_path, size_bytes, mime_type, created_at FROM web_uploads ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+        except sqlite3.Error:
+            logger.exception("Failed to load web uploads")
+            return []
+
+    def get_db_stats(self) -> dict:
+        try:
+            with self._connect() as conn:
+                conversations = conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]
+                messages = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+                uploads = conn.execute("SELECT COUNT(*) FROM web_uploads").fetchone()[0]
+                settings = conn.execute("SELECT COUNT(*) FROM settings").fetchone()[0]
+                first_msg = conn.execute("SELECT MIN(created_at) FROM messages").fetchone()[0]
+                last_msg = conn.execute("SELECT MAX(created_at) FROM messages").fetchone()[0]
+                return {
+                    "conversations": conversations,
+                    "messages": messages,
+                    "uploads": uploads,
+                    "settings": settings,
+                    "first_message_at": first_msg,
+                    "last_message_at": last_msg,
+                }
+        except sqlite3.Error:
+            logger.exception("Failed to get DB stats")
+            return {}
 
     def get_setting(self, key: str, default: str) -> str:
         try:

@@ -29,7 +29,7 @@ class CancerOverviewTests(unittest.TestCase):
 
         cancers = {item["label"]: item for item in overview["cancers"]}
         self.assertEqual(len(cancers), 7)
-        self.assertEqual(cancers["Ung thư gan"]["local_status"], "co_anh_local")
+        self.assertEqual(cancers["Ung thư gan"]["local_status"], "có_ảnh_local")
         self.assertGreater(cancers["Ung thư gan"]["local_image_count"], 0)
         self.assertTrue(all(item["model_ready"] for item in overview["cancers"]))
 
