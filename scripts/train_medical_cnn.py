@@ -1,13 +1,13 @@
 """Train CNN classifier THAT tren dataset medical 7 ung thu, roi danh gia test set.
 
 Day la script chay CHU DONG (can GPU + nhieu gio) de thay the centroid classifier
-bang mo hinh CNN hoc sau that su. Vi train la hanh dong chu dong, script tu dong
-cho phep tai trong so ImageNet pretrained (dat ONCOVISION_ALLOW_WEIGHT_DOWNLOAD=1)
-tru khi truyen --no-pretrained.
+bang mô hình CNN học sâu thật sự. Vì train là hành động chủ động, script tự động
+cho phép tải trọng số ImageNet pretrained (dat ONCOVISION_ALLOW_WEIGHT_DOWNLOAD=1)
+trừ khi truyền --no-pretrained.
 
-Sau khi train xong, script tu dong danh gia tren TEST split va cong bo metric
+Sau khi train xong, script tự động đánh giá tren TEST split va cong bo metric
 per-class (accuracy, sensitivity, specificity, precision, recall, F1, ROC-AUC,
-PR-AUC), ghi bao cao JSON + Markdown vao output/medical/reports/.
+PR-AUC), ghi báo cáo JSON + Markdown vao output/medical/reports/.
 
 Vi du:
 
@@ -37,7 +37,7 @@ def main() -> int:
     parser.add_argument("--fresh", action="store_true", help="Bo qua checkpoint cu va train tu dau.")
     args = parser.parse_args()
 
-    # Train la hanh dong chu dong: cho phep tai ImageNet pretrained tru khi tat.
+    # Train là hành động chủ động: cho phép tải ImageNet pretrained trừ khi tắt.
     if not args.no_pretrained:
         os.environ.setdefault("ONCOVISION_ALLOW_WEIGHT_DOWNLOAD", "1")
 

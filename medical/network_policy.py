@@ -22,7 +22,7 @@ _ENV_REQUIRE = "ONCOVISION_REQUIRE_PRETRAINED"
 
 
 def weight_download_allowed() -> bool:
-    """Tra ve True neu cho phep tai trong so pretrained (ngoai YOLO)."""
+    """Tra ve True neu cho phép tải trọng số pretrained (ngoai YOLO)."""
     value = os.environ.get(_ENV_ALLOW, "").strip().lower()
     return value in {"1", "true", "yes", "on"}
 
@@ -33,14 +33,14 @@ def _require_pretrained() -> bool:
 
 
 def resolve_pretrained(requested: bool, *, context: str = "backbone") -> bool:
-    """Ap dung chinh sach offline cho co pretrained.
+    """Áp dụng chính sách offline cho cờ pretrained.
 
-    Neu goi yeu cau pretrained=True nhung chinh sach offline dang bat, ha ve
-    False va in canh bao mot lan de nguoi dung biet model khoi tao voi trong so
-    ngau nhien (can train tu dau hoac cung cap checkpoint local).
+    Nếu gọi yêu cầu pretrained=True nhưng chính sách offline đang bật, hạ về
+    False và in cảnh báo một lần để người dùng biết model khởi tạo với trọng số
+    ngẫu nhiên (cần train từ đầu hoặc cung cấp checkpoint local).
 
-    Neu dat ONCOVISION_REQUIRE_PRETRAINED=1 (danh cho serving/production), thay
-    vi ha thang lang se raise RuntimeError de fail-loud, tranh degrade thang lang.
+    Nếu đặt ONCOVISION_REQUIRE_PRETRAINED=1 (dành cho serving/production), thay
+    vì hạ thầy lang sẽ raise RuntimeError để fail-loud, tránh degrade thầy lang.
     """
     if not requested:
         return False
@@ -48,8 +48,8 @@ def resolve_pretrained(requested: bool, *, context: str = "backbone") -> bool:
         return True
     if _require_pretrained():
         raise RuntimeError(
-            f"Yeu cau pretrained cho '{context}' nhung tai trong so bi chan. "
-            f"Dat {_ENV_ALLOW}=1 de cho phep tai, hoac cung cap checkpoint local."
+            f"Yêu cầu pretrained cho '{context}' nhưng tải trọng số bị chặn. "
+            f"Đặt {_ENV_ALLOW}=1 để cho phép tải, hoặc cung cấp checkpoint local."
         )
     _warn_once(context)
     return False

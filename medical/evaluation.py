@@ -178,7 +178,7 @@ def write_evaluation_report(
     report: dict[str, Any],
     reports_dir: str | Path = "output/medical/reports",
 ) -> tuple[Path, Path]:
-    """Ghi bao cao ra JSON + Markdown, tra ve (json_path, md_path)."""
+    """Ghi báo cáo ra JSON + Markdown, trả về (json_path, md_path)."""
     out_dir = Path(reports_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -249,7 +249,7 @@ dataset/medical_modality/
   mri/       200 anh  (OrganMNIST3D - MRI)
   xray/      200 anh  (ChestMNIST - X-quang nguc)
   mammogram/ 200 anh  (BreastMNIST - nhu anh mammography)
-  endoscopy/ 200 anh  (PathMNIST - mo beneficiary hoc duong tieu hoa/colon)
+  endoscopy/ 200 anh  (PathMNIST - mô học đường tiêu hóa/colon)
   ultrasound/200 anh  (BloodMNIST - anh mau, gan the closest)
   pet_ct/    200 anh  (OrganMNIST3D + augment, synthetic)
   eus/       200 anh  (PathMNIST + augment, synthetic)
