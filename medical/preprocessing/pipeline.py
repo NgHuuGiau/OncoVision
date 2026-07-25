@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,8 @@ from medical.preprocessing.mammogram import preprocess_mammogram
 from medical.preprocessing.pet import preprocess_pet_ct
 from medical.preprocessing.endoscopy import preprocess_endoscopy
 from medical.preprocessing.ultrasound import preprocess_ultrasound
+
+logger = logging.getLogger(__name__)
 
 
 _MODALITY_PREPROCESSORS: dict[str, Any] = {
@@ -69,14 +72,15 @@ def _load_image_array(path: Path) -> np.ndarray:
             array = ds.pixel_array.astype(np.float32)
             try:
                 array = apply_voi_lut(array, ds)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("[Preprocess] apply_voi_lut failed: %s", exc, exc_info=True)
             if getattr(ds, "PhotometricInterpretation", "").upper() == "MONOCHROME1":
                 array = np.max(array) - array
             array = array / max(array.max(), 1e-6) * 255
             return np.clip(array, 0, 255).astype(np.uint8)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("[Preprocess] DICOM load failed: %s", exc, exc_info=True)
+            raise
     with Image.open(path) as img:
         return np.array(img.convert("RGB"))
 

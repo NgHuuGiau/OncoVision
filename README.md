@@ -96,10 +96,12 @@ run_menu.py      -> menu tổng hợp
 run_app.py       -> runtime advisor / camera realtime
 run_chat.py      -> chat UI / medical preflight / cleanup output
 run_doctor.py    -> doctor scan toàn hệ thống
-run_train.py     -> train YOLO object detection
 run_medical.py   -> CLI quản lý luồng medical
 run_smoke.py     -> smoke check entrypoint
 run_tests.py     -> dashboard unit test
+scripts/
+  scripts_run_yolo_train.py -> train YOLO detection
+  train_medical_cnn.py      -> train CNN classifier
 ```
 
 ## Khi Nào Dùng File Nào
@@ -114,7 +116,7 @@ run_tests.py     -> dashboard unit test
 | Mở web chat UI | `python -m uvicorn web_app:app --host 0.0.0.0 --port 8000` rồi mở `http://localhost:8000` |
 | Xem lịch sử chat web | `http://localhost:8000/admin/db` |
 | Kiểm tra tổng thể môi trường | `python run_doctor.py --skip-camera-check` |
-| Train YOLO object detection | `python run_train.py` |
+| Train YOLO object detection | `python scripts/scripts_run_yolo_train.py` |
 | Kiểm tra nhanh luồng y dược | `python run_medical.py status` |
 | Train classifier nhận diện modality | `python run_medical.py train-modality` |
 | Chạy smoke check an toàn | `python run_smoke.py` |
@@ -143,13 +145,8 @@ models/trained/
 Luồng cơ bản:
 
 ```powershell
-python run_train.py --check-only
-python training\prepare_dataset.py
-python training\validate_dataset.py
-python training\split_dataset.py
-python run_train.py
-python training\validate_model.py
-python run_app.py --model models/trained/best.pt
+python scripts/scripts_run_yolo_train.py
+python run_app.py --model models/trained/medical_yolo_detect.pt
 ```
 
 ![Runtime advisor](images/Ảnh%20run_app.py%20--advisor-only.png)
@@ -177,6 +174,7 @@ python run_medical.py init-dataset
 python run_medical.py status
 python run_medical.py sources
 python run_medical.py ready
+python run_medical.py train-cancer --epochs 30 --batch-size 6 --backbone efficientnet_b2
 python run_chat.py --check-only
 ```
 
@@ -230,7 +228,8 @@ python run_menu.py
 
 ### Cải tiến nhận diện ảnh
 - **Validator ảnh đầu vào** (`medical/validator.py`): kiểm tra định dạng, đọc được, phân loại modality + body region, reject ảnh không hợp lệ.
-- **Classifier mới** (`medical/cnn_classifier.py`): ResNet/EfficientNet backbone, pretrained ImageNet, dropout, cosine annealing scheduler. Lưu `.pt` format.
+- **YOLO detection**: YOLO11s, training 50 epochs với imgsz=512, AdamW optimizer, augmentation mạnh (mosaic 0.3, mixup 0.1, copy-paste 0.1, rotate 15°, flip ngang 50%). Resume tự động từ `runs/detect/medical_yolo/weights/last.pt`.
+- **CNN classifier**: EfficientNet-B2 backbone, 288px, batch=6, 30 epochs, Focal Loss, gradient accumulation 4, class weights tự động. Ưu tiên recall bằng cách hạ ngưỡng: high-risk 0.35, medium 0.25, certainty 0.30.
 - **Backward compatible**: cũ centroid classifier vẫn hoạt động, load CNN tự động khi đúng format.
 - **CLI validate**: `python run_medical.py validate-image --image <path> --min-confidence 0.30`
 

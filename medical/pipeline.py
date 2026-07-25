@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -26,6 +27,8 @@ from medical.validator import (
 )
 from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
+
+logger = logging.getLogger(__name__)
 
 
 class DetectorBackend(Protocol):
@@ -144,7 +147,13 @@ def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
 
 
 def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
-    settings = load_yaml("config/medical_settings.yaml").get("medical", {})
+    try:
+        settings = load_yaml("config/medical_settings.yaml").get("medical", {})
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            "Khong tim thay config/medical_settings.yaml. "
+            "Hay chay tu thu muc goc cua project OncoVision."
+        )
     if not isinstance(settings, dict):
         settings = {}
     advanced = settings.get("advanced", {})
@@ -265,7 +274,7 @@ class MedicalImageAnalyzer:
             try:
                 self._detector_backend = self._load_default_backend()
             except Exception as exc:
-                print(f"[Ensemble] Bo qua YOLO backend: {exc}")
+                logger.warning("[Ensemble] Bo qua YOLO backend", exc_info=True)
         resolved_source = Path(image_path)
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
@@ -553,7 +562,7 @@ class MedicalImageAnalyzer:
             }
             return cropped, roi_info
         except Exception as exc:
-            print(f"[Segmentation] Bo qua ROI crop: {exc}")
+            logger.warning("[Segmentation] Bo qua ROI crop", exc_info=True)
             return image, None
 
     def _load_roi_extractor(self):
@@ -577,7 +586,7 @@ class MedicalImageAnalyzer:
                 return None
             return processed
         except Exception as exc:
-            print(f"[Preprocess] Bo qua advanced preprocessing: {exc}")
+            logger.warning("[Preprocess] Bo qua advanced preprocessing", exc_info=True)
             return None
 
     def _estimate_uncertainty(self, image: np.ndarray) -> dict[str, Any] | None:
@@ -613,10 +622,10 @@ class MedicalImageAnalyzer:
                 "entropy": entropy,
                 "mutual_information": float(result.mutual_information[0]) if len(result.mutual_information) else 0.0,
                 "num_samples": self.config.mc_dropout_samples,
-                "high_uncertainty": bool(high_uncertainty),
-            }
+                 "high_uncertainty": bool(high_uncertainty),
+             }
         except Exception as exc:
-            print(f"[Uncertainty] Bo qua MC Dropout: {exc}")
+            logger.warning("[Uncertainty] Bo qua MC Dropout", exc_info=True)
             return None
 
     def _evaluate_image_quality(self, image: np.ndarray) -> list[str]:
@@ -739,18 +748,22 @@ class MedicalImageAnalyzer:
         try:
             manifest = read_model_manifest(model_path)
             if manifest is not None:
-                print(
-                    f"[ModelManifest] {manifest.model_name} v{manifest.version} "
-                    f"(backbone={manifest.backbone}, classes={manifest.num_classes}, "
-                    f"size={manifest.image_size}, git={manifest.git_commit[:8]})"
+                logger.info(
+                    "[ModelManifest] %s v%s (backbone=%s, classes=%s, size=%s, git=%s)",
+                    manifest.model_name,
+                    manifest.version,
+                    manifest.backbone,
+                    manifest.num_classes,
+                    manifest.image_size,
+                    manifest.git_commit[:8],
                 )
             else:
-                print(
-                    f"[ModelManifest] Warning: no manifest found for {model_path.name} "
-                    f"(old model without versioning)"
+                logger.warning(
+                    "[ModelManifest] Warning: no manifest found for %s (old model without versioning)",
+                    model_path.name,
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("[ModelManifest] Khong doc duoc manifest", exc_info=True)
 
     def _ensemble_detections(self, image: np.ndarray, yolo_detections: list[DetectionFinding]) -> list[DetectionFinding]:
         if not yolo_detections:
@@ -765,6 +778,7 @@ class MedicalImageAnalyzer:
             cnn_label = str(cnn_prediction.get("label", ""))
             cnn_confidence = float(cnn_prediction.get("confidence", 0.0))
         except Exception:
+            logger.warning("[Ensemble] Khong the predict CNN cho ensemble", exc_info=True)
             cnn_label = ""
             cnn_confidence = 0.0
 
@@ -893,6 +907,7 @@ class MedicalImageAnalyzer:
             if dicom_modality:
                 modality = dicom_modality.upper()
         except Exception:
+            logger.warning("[DICOM] Khong doc duoc Modality tu %s", source, exc_info=True)
             modality = None
 
         self._dicom_modality_cache[source] = modality
@@ -930,7 +945,7 @@ class MedicalImageAnalyzer:
 
                 return YOLO(str(self.config.yolo_model_path))
             except Exception as exc:
-                print(f"[Ensemble] Khong the tai YOLO backend: {exc}")
+                logger.warning("[Ensemble] Khong the tai YOLO backend", exc_info=True)
         raise RuntimeError("Medical pipeline hiện tại dùng classifier local, không cần backend YOLO.")
 
     def _load_classifier(self) -> MedicalClassifierModel:
@@ -1045,10 +1060,10 @@ class MedicalImageAnalyzer:
                     report.record_error(str(exc))
                     report.record_skipped(source)
                     return None
-            print(f"[Compliance] {report.summary}")
+            logger.info("[Compliance] %s", report.summary)
             return target if target.exists() else None
         except Exception as exc:
-            print(f"[Compliance] De-identification failed: {exc}")
+            logger.warning("[Compliance] De-identification failed", exc_info=True)
             return None
 
     def _run_gradcam_if_possible(self, prepared_image: np.ndarray, detections: list[DetectionFinding], validation: ValidationResult) -> list[str]:
@@ -1063,6 +1078,7 @@ class MedicalImageAnalyzer:
 
                 explainer = MedicalGradCAMExplainer(cnn_wrapper, image_size=self.config.image_size, device=getattr(cnn_wrapper, "device", None))
             except Exception:
+                logger.warning("[GradCAM] Khong khoi tao duoc explainer", exc_info=True)
                 return overlays
             if explainer is None or not explainer.is_supported:
                 return overlays

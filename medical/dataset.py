@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -12,6 +13,20 @@ from medical.cancer_catalog import COMMON_CANCER_TARGETS
 from medical.classifier import iter_medical_image_paths
 from medical.reporting import build_artifact_stamp
 from utils.file_utils import save_yaml
+
+logger = logging.getLogger(__name__)
+
+
+def _limit_volume_slices(volume: np.ndarray, max_slices: int = 256) -> np.ndarray:
+    if volume.ndim < 3:
+        return volume
+    slices = volume.shape[0]
+    if slices <= max_slices:
+        return volume
+    logger.warning("[Dataset] Volume co %s slices, gioi han ve %s slices", slices, max_slices)
+    step = max(1, slices / max_slices)
+    indices = [min(int(i * step), slices - 1) for i in range(max_slices)]
+    return volume[indices]
 
 
 MEDICAL_DATASET_ROOT = Path("dataset/medical")
@@ -411,7 +426,7 @@ def _load_nifti_volume(source: Path) -> np.ndarray:
     volume = np.asanyarray(image.dataobj)  # type: ignore[attr-defined]
     if volume.ndim == 4:
         volume = volume[..., 0]
-    return np.asarray(volume)
+    return _limit_volume_slices(np.asarray(volume), max_slices=256)
 
 
 def _load_mha_volume(source: Path) -> np.ndarray:
@@ -421,7 +436,8 @@ def _load_mha_volume(source: Path) -> np.ndarray:
         raise RuntimeError("Không đọc được MHA/MHD. Hãy cài đặt SimpleITK để mở file .mha/.mhd.") from exc
 
     image = sitk.ReadImage(str(source))
-    return sitk.GetArrayFromImage(image)
+    volume = sitk.GetArrayFromImage(image)
+    return _limit_volume_slices(np.asarray(volume), max_slices=256)
 
 
 def _load_dicom_series_volume(source: Path) -> np.ndarray:
@@ -460,7 +476,8 @@ def _load_dicom_series_volume(source: Path) -> np.ndarray:
             if array.ndim > 2:
                 array = array[..., 0]
         slices.append(np.asarray(array, dtype=np.float32))
-    return np.stack(slices, axis=0)
+    volume = np.stack(slices, axis=0)
+    return _limit_volume_slices(volume, max_slices=256)
 
 
 def _load_medical_volume_image(source: Path) -> Image.Image:

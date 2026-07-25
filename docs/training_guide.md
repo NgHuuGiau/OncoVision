@@ -10,12 +10,12 @@ Tài liệu này mô tả đầy đủ luồng train YOLO object detection trong
 
 | Bước | Script chính |
 |---|---|
-| Chuẩn bị dữ liệu | `training/prepare_dataset.py` |
-| Kiểm tra dữ liệu | `training/validate_dataset.py` |
-| Chia tập | `training/split_dataset.py` |
-| Huấn luyện | `run_train.py` / `training/train_model.py` |
-| Đánh giá | `training/validate_model.py` |
-| Xuất model | `training/export_model.py` |
+| Chuẩn bị dữ liệu | `scripts/scripts_run_yolo_train.py` |
+| Kiểm tra dữ liệu | `scripts/scripts_run_yolo_train.py` |
+| Chia tập | Đã có sẵn trong `dataset/processed/` |
+| Huấn luyện | `scripts/scripts_run_yolo_train.py` |
+| Đánh giá | `python -m ultralytics yolo detect val model=models/trained/medical_yolo_detect.pt data=dataset/processed/data.yaml` |
+| Xuất model | Tự động lưu vào `models/trained/medical_yolo_detect.pt` |
 
 ## 1. Mục Tiêu
 
@@ -31,46 +31,42 @@ Nhánh training được dùng để:
 ## 2. Thư Mục Và Tệp Liên Quan
 
 ```text
-dataset/object_detection/raw/
-  images/
-  labels/
-
-dataset/object_detection/processed/
+dataset/processed/
   images/
     train/
     val/
     test/
-
-training/
+  labels/
+    train/
+    val/
+    test/
   data.yaml
-  train_config.yaml
-  prepare_dataset.py
-  validate_dataset.py
-  split_dataset.py
-  train_model.py
-  validate_model.py
-  export_model.py
+
+scripts/
+  scripts_run_yolo_train.py
+
+runs/detect/medical_yolo/
+  weights/
+    best.pt
+    last.pt
+
+models/
+  pretrained/
+    yolo11s.pt
+  trained/
+    medical_yolo_detect.pt
 ```
 
 ## 3. Đầu Vào Chuẩn
 
 ### Ảnh gốc
 
-- đặt trong `dataset/object_detection/raw/images/`
+- đặt trong `dataset/processed/images/`
 
 ### Label YOLO
 
-- đặt trong `dataset/object_detection/raw/labels/`
+- đặt trong `dataset/processed/labels/`
 - tên file phải khớp tên ảnh
-
-Ví dụ:
-
-```text
-images/
-  sample_001.jpg
-labels/
-  sample_001.txt
-```
 
 ## 4. Định Dạng Label YOLO
 
@@ -87,7 +83,7 @@ Trong đó:
 
 ## 5. File Cấu Hình Quan Trọng
 
-### `training/data.yaml`
+### `dataset/processed/data.yaml`
 
 Dùng để:
 
@@ -102,97 +98,49 @@ Nếu đổi class map, phải đổi đồng thời:
 - `data.yaml`,
 - logic train / validate liên quan.
 
-### `training/train_config.yaml`
-
-Dùng để:
-
-- chọn model mặc định,
-- fallback model,
-- epoch, batch, image size, output setup nếu dự án đang sử dụng.
-
-## 6. Các Script Trong `training/`
+## 6. Các Script Trong `scripts/`
 
 | Script | Vai trò |
 |---|---|
-| `prepare_dataset.py` | Tạo / đảm bảo khung dataset |
-| `validate_dataset.py` | Soát lỗi ảnh, label, class id |
-| `split_dataset.py` | Chia train / val / test |
-| `train_model.py` | Logic train nội bộ |
-| `validate_model.py` | Đánh giá model sau train |
-| `export_model.py` | Đồng bộ / xuất model sau train |
-| `download_models.py` | Tải pretrained models nếu cần |
+| `scripts_run_yolo_train.py` | Huấn luyện YOLO detection với config tối ưu |
 
 ## 7. Luồng Training Khuyến Nghị
 
 ```powershell
-python run_train.py --check-only
-python training\prepare_dataset.py
-python training\validate_dataset.py
-python training\split_dataset.py
-python run_train.py
-python training\validate_model.py
-python training\export_model.py
+python scripts/scripts_run_yolo_train.py
 ```
 
-## 8. Ý Nghĩa Từng Bước
+Script sẽ:
 
-### Bước 1. `run_train.py --check-only`
+- Tự động resume từ `runs/detect/medical_yolo/weights/last.pt` nếu có
+- Train 50 epochs với imgsz=512, batch=4, AdamW optimizer
+- Lưu best model vào `models/trained/medical_yolo_detect.pt`
 
-Dùng để trả lời:
+## 8. Cấu Hình Training Hiện Tại
 
-- dependency `ultralytics` / `torch` có sẵn không,
-- pretrained model có tồn tại không,
-- raw data đã có chưa,
-- processed train/val đã sẵn sàng chưa.
-
-### Bước 2. `prepare_dataset.py`
-
-Dùng để:
-
-- tạo khung thư mục dataset cần thiết,
-- đồng bộ layout local.
-
-### Bước 3. `validate_dataset.py`
-
-Dùng để:
-
-- phát hiện ảnh thiếu label,
-- phát hiện label sai format,
-- phát hiện `class_id` không hợp lệ,
-- phát hiện dữ liệu xấu trước khi train.
-
-### Bước 4. `split_dataset.py`
-
-Dùng để:
-
-- chia dữ liệu sang `train`, `val`, `test`,
-- đưa dữ liệu vào layout mà YOLO có thể dùng.
-
-### Bước 5. `run_train.py`
-
-Dùng để:
-
-- kích hoạt training pipeline chính,
-- sinh artifact train trong `runs/`,
-- tạo model custom mới.
-
-### Bước 6. `validate_model.py`
-
-Dùng để:
-
-- đánh giá model sau train,
-- xác minh model mới có dùng được cho deployment / runtime hay không.
-
-### Bước 7. `export_model.py`
-
-Dùng để:
-
-- xuất model được chọn,
-- đồng bộ về `models/trained/best.pt` nếu quy trình dự án cần.
+| Tham số | Giá trị | Mục đích |
+|---------|---------|----------|
+| Model | yolo11s | Nhẹ, phù hợp 4GB VRAM |
+| Epochs | 50 | Train sâu để hội tụ tốt |
+| Imgsz | 512 | Tăng chi tiết, cải thiện mAP |
+| Batch | 4 | An toàn với 4GB VRAM |
+| Optimizer | AdamW | Ổn định hơn SGD |
+| LR0 | 0.001 | Learning rate khởi đầu |
+| LRF | 0.0001 | Learning rate cuối |
+| Warmup | 5 epochs | Tránh shock ở đầu |
+| Mosaic | 0.3 | Giảm nhiễu, giữ giải phẫu |
+| Mixup | 0.1 | Tăng diversity nhẹ |
+| Copy-paste | 0.1 | Tăng diversity nhẹ |
+| Flip LR | 0.5 | Lật ngang 50% |
+| Flip UD | 0.0 | Giữ hướng giải phẫu |
+| Degrees | 15 | Xoay ảnh |
+| HSV-H | 0.015 | Màu nhẹ |
+| HSV-S | 0.5 | Saturation vừa |
+| HSV-V | 0.3 | Brightness vừa |
 
 ## 9. Model Nào Nên Dùng
 
-### `models/pretrained/*.pt`
+### `models/pretrained/yolo11s.pt`
 
 Dùng khi:
 
@@ -200,7 +148,7 @@ Dùng khi:
 - chưa có dataset custom đủ tốt,
 - đang debug pipeline runtime.
 
-### `models/trained/best.pt`
+### `models/trained/medical_yolo_detect.pt`
 
 Dùng khi:
 
@@ -211,13 +159,7 @@ Dùng khi:
 ## 10. Cách Đưa Model Vào Runtime
 
 ```powershell
-python run_app.py --model models/trained/best.pt
-```
-
-Có thể kết hợp với mode:
-
-```powershell
-python run_app.py --model models/trained/best.pt --mode medium
+python run_app.py --model models/trained/medical_yolo_detect.pt
 ```
 
 ## 11. Dấu Hiệu Dataset Chưa Tốt
@@ -244,9 +186,9 @@ Thường gặp:
 Sau khi train xong, nên chạy:
 
 ```powershell
-python training\validate_model.py
+python scripts/scripts_run_yolo_train.py
 python run_doctor.py --skip-camera-check
-python run_app.py --model models/trained/best.pt
+python run_app.py --model models/trained/medical_yolo_detect.pt
 ```
 
 Mục đích:
@@ -267,10 +209,9 @@ Mục đích:
 
 | Triệu chứng | Nơi nên debug |
 |---|---|
-| `run_train.py --check-only` fail | `training/train_config.yaml`, `training/model_paths.py`, dependency local |
-| Dataset split xong nhưng count sai | `training/split_dataset.py`, `training/dataset_ops.py` |
+| `scripts/scripts_run_yolo_train.py` fail | `dataset/processed/data.yaml`, dependency local, VRAM |
 | Train chạy nhưng model kém | dataset raw, class map, điều kiện chụp, `data.yaml` |
-| Runtime camera nhận diện khác training kỳ vọng | `run_app.py`, `config/settings.yaml`, model đã nạp, image size |
+| Runtime camera nhận diện khác training kỳ vọng | `run_app.py`, `config/medical_settings.yaml`, model đã nạp, image size |
 
 ## 16. Liên Quan Tới Nhánh Medical
 

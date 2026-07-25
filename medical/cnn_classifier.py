@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -18,6 +20,7 @@ from medical.dashboard import write_training_progress
 from medical.losses import ASLLoss, BalancedSoftmaxLoss, FocalLoss, FocalTverskyLoss, LDAMLoss
 from medical.network_policy import resolve_pretrained
 
+logger = logging.getLogger(__name__)
 
 _BACKBONE_REGISTRY: dict[str, tuple[Any, int]] = {}
 
@@ -448,7 +451,12 @@ class MedicalCNNClassifierWrapper:
 
     @classmethod
     def load(cls, path: str | Path, device: str | None = None) -> "MedicalCNNClassifierWrapper":
-        checkpoint = torch.load(Path(path), map_location="cpu", weights_only=False)
+        path = Path(path)
+        logger.warning(
+            "[CNN] Dang load model tu %s. Chi load file tin cay tu he thong training cua ban.",
+            path,
+        )
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
         model = MedicalCNNClassifier(
             num_classes=checkpoint["num_classes"],
             backbone=checkpoint.get("backbone", "resnet50"),
@@ -647,16 +655,24 @@ def train_cnn_classifier(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=0,
+        num_workers=min(4, max(1, os.cpu_count() // 2)),
         pin_memory=True,
         drop_last=len(train_dataset) > batch_size,
+        persistent_workers=True,
+        prefetch_factor=2,
     )
 
     val_loader = None
     if val_samples:
         val_dataset = MedicalImageDataset(val_samples, class_labels, image_size=image_size, augment=False)
         val_loader = torch.utils.data.DataLoader(
-            val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=min(4, max(1, os.cpu_count() // 2)),
+            pin_memory=True,
+            persistent_workers=True,
+            prefetch_factor=2,
         )
 
     num_classes = len(class_labels)

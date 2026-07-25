@@ -7,9 +7,9 @@ medical:
   image_size: 320
   feature_size: 32
   conf_threshold: 0.25
-  classify_high_risk_threshold: 0.75
-  classify_medium_risk_threshold: 0.45
-  certainty_threshold: 0.55
+  classify_high_risk_threshold: 0.35
+  classify_medium_risk_threshold: 0.25
+  certainty_threshold: 0.30
   validation_min_confidence: 0.7
   validation_allowed_extensions:
   - .jpg
@@ -19,9 +19,9 @@ medical:
   - .nii
   - .nii.gz
   classifier_backend: cnn
-  cnn_backbone: convnext_tiny
-  cnn_image_size: 320
-  cnn_batch_size: 16
+  cnn_backbone: efficientnet_b2
+  cnn_image_size: 288
+  cnn_batch_size: 6
   cnn_num_epochs: 30
   cnn_learning_rate: 0.0001
   cnn_dropout: 0.25
@@ -158,65 +158,65 @@ medical:
     asl_gamma_pos: 0.0
     asl_gamma_neg: 4.0
     asl_clip: 0.05
-    use_focal_loss: false
-    use_focal_tversky: false
-    use_ldam: false
-    use_asl: false
-    use_balanced_softmax: false
-    loss_function: cross_entropy
-    scheduler: cosine_warmup_restart
-    weight_decay: 0.0001
-    optimizer: adamw
-    adamw_beta1: 0.9
-    adamw_beta2: 0.999
-    patient_leakage_prevention: true
-    enable_duplicate_detection: true
-    enable_noisy_label_detection: true
-    enable_modality_imbalance_handling: true
-    modality_reweight_factor: 1.5
-    hard_example_mining: true
-    hard_example_k: 0.3
-    active_learning_enabled: false
-    pseudo_label_threshold: 0.95
-    explainability_methods:
-      - gradcam
-      - gradcam_pp
-      - eigen_cam
-      - score_cam
-      - attention_rollout
-    uncertainty_methods:
-      - mc_dropout
-      - deep_ensemble
-      - temperature_scaling
-    validation_metrics:
-      - accuracy
-      - sensitivity
-      - specificity
-      - precision
-      - recall
-      - f1
-      - roc_auc
-      - pr_auc
-      - matthews_correlation
-      - balanced_accuracy
-      - calibration_error
-      - ece
-    early_stopping_metric: val_f1
-    kfold_num_folds: 5
-    nested_cross_validation: false
-    checkpoint_dir: output/medical/checkpoints
-    tensorboard_dir: output/medical/tensorboard
-    wandb_project: oncovision-medical
-    seed: 42
-    deterministic: true
-    num_workers: 4
-    pin_memory: true
-    prefetch_factor: 2
-    enable_progressive_resizing: false
-    progressive_resizing_schedule:
-      - 128
-      - 224
-      - 320
-    enable_stochastic_weight_averaging: false
-    swa_start_epoch: 10
-    swa_lr: 0.00005
+  use_focal_loss: true
+  use_focal_tversky: false
+  use_ldam: false
+  use_asl: false
+  use_balanced_softmax: false
+  loss_function: focal_loss
+  scheduler: cosine_warmup_restart
+  weight_decay: 0.0001
+  optimizer: adamw
+  adamw_beta1: 0.9
+  adamw_beta2: 0.999
+  patient_leakage_prevention: true
+  enable_duplicate_detection: true
+  enable_noisy_label_detection: true
+  enable_modality_imbalance_handling: true
+  modality_reweight_factor: 1.5
+  hard_example_mining: true
+  hard_example_k: 0.3
+  active_learning_enabled: false
+  pseudo_label_threshold: 0.95
+  explainability_methods:
+    - gradcam
+    - gradcam_pp
+    - eigen_cam
+    - score_cam
+    - attention_rollout
+  uncertainty_methods:
+    - mc_dropout
+    - deep_ensemble
+    - temperature_scaling
+  validation_metrics:
+    - accuracy
+    - sensitivity
+    - specificity
+    - precision
+    - recall
+    - f1
+    - roc_auc
+    - pr_auc
+    - matthews_correlation
+    - balanced_accuracy
+    - calibration_error
+    - ece
+  early_stopping_metric: val_f1
+  kfold_num_folds: 5
+  nested_cross_validation: false
+  checkpoint_dir: output/medical/checkpoints
+  tensorboard_dir: output/medical/tensorboard
+  wandb_project: oncovision-medical
+  seed: 42
+  deterministic: true
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 2
+  enable_progressive_resizing: false
+  progressive_resizing_schedule:
+    - 128
+    - 224
+    - 320
+  enable_stochastic_weight_averaging: false
+  swa_start_epoch: 10
+  swa_lr: 0.00005

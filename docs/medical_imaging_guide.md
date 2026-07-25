@@ -116,17 +116,61 @@ python run_chat.py --cleanup-output --older-than-days 30
 
 - `run_medical.py status` là lệnh xem trạng thái tổng quan nhanh nhất.
 - `run_medical.py ready` cho biết luồng medical đã đủ điều kiện train hay chưa.
-- `run_medical.py train-all` chạy split, train và validate theo luồng medical.
+- `run_medical.py train-cancer --epochs 30 --batch-size 6 --backbone efficientnet_b2` chạy train CNN classification với config tối ưu.
+- `scripts/train_medical_cnn.py` là script train trực tiếp, hỗ trợ resume từ checkpoint.
+- `scripts/scripts_run_yolo_train.py` là script train YOLO detection, hỗ trợ resume từ last.pt.
 - `run_medical.py` không tự bịa dữ liệu, nên dataset thiếu thì sẽ báo thiếu rõ ràng.
 
-## 10. Khi Nào Nên Debug Module Nào
+## 10. Cấu Hình Training Hiện Tại
+
+### CNN Classification
+
+| Tham số | Giá trị | Mục đích |
+|---------|---------|----------|
+| Backbone | efficientnet_b2 | Hiệu năng cao, nhẹ hơn ResNet50 |
+| Image size | 288px | Tăng chi tiết ROI, vừa với 4GB VRAM |
+| Batch size | 6 | An toàn với RTX 3050 Ti 4GB |
+| Epochs | 30 | Đủ để hội tụ |
+| Loss | Focal Loss | Tập trung vào hard examples |
+| LR | 0.0001 | Ổn định |
+| Warmup | 4 epochs | Tránh shock |
+| Grad Accum | 4 | Effective batch = 24 |
+| Class weights | Auto | Cân bằng class imbalance |
+| EMA | True | Stabilize training |
+| TTA | True | Test time augmentation |
+
+### Ngưỡng Quyết Định
+
+| Ngưỡng | Giá trị | Mục đích |
+|--------|---------|----------|
+| High risk | 0.35 | Ưu tiên recall, tránh bỏ sót ung thư |
+| Medium risk | 0.25 | Cảnh báo sớm |
+| Certainty | 0.30 | Threshold phân loại chung |
+
+### YOLO Detection
+
+| Tham số | Giá trị | Mục đích |
+|---------|---------|----------|
+| Model | yolo11s | Nhẹ, phù hợp 4GB VRAM |
+| Epochs | 50 | Train sâu |
+| Imgsz | 512 | Tăng chi tiết |
+| Batch | 4 | An toàn VRAM |
+| Optimizer | AdamW | Ổn định |
+| Mosaic | 0.3 | Giảm nhiễu giải phẫu |
+| Mixup | 0.1 | Tăng diversity |
+| Copy-paste | 0.1 | Tăng diversity |
+| Flip UD | 0.0 | Giữ hướng giải phẫu |
+
+## 11. Khi Nào Nên Debug Module Nào
 
 | Triệu chứng | Mở đầu tiên |
 |---|---|
 | `run_chat.py --check-only` fail | `utils/entrypoint_checks.py`, `medical/system_status.py` |
 | Medical status sai | `medical/system_status.py`, `medical/model_policy.py`, `medical/storage.py` |
 | Counts raw/train/val không đúng | `medical/training.py`, `medical/status_helpers.py` |
-| Train medical fail | `medical/training.py`, `training/train_model.py` |
+| Train medical fail | `medical/training.py`, `scripts/train_medical_cnn.py` |
+| Train YOLO fail | `scripts/scripts_run_yolo_train.py`, `dataset/processed/data.yaml` |
+| CNN ảnh đầu vào lỗi | `medical/validator.py`, `medical/preprocessing/pipeline.py` |
 ## 11. Medical Inputs Hỗ Trợ
 
 | Nhóm | Ảnh/volume thường dùng |

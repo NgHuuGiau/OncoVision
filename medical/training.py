@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +41,7 @@ from medical.router import (
 )
 from utils.file_utils import load_yaml
 
+logger = logging.getLogger(__name__)
 
 DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
 DEFAULT_TRAINED_MODEL_PATH = Path("medical_7_cancers.pt")
@@ -333,8 +335,8 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
     if backend == "cnn" and _should_use_cnn_backend(paths, train_samples, settings):
         try:
             return train_cnn_medical_model(paths, prepare_dataset=False, verbose=verbose, resume_path=resume_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("[Training] CNN backend failed, fallback to centroid: %s", exc, exc_info=True)
     train_samples = _samples_for_split(paths, "train")
     if not train_samples:
         raise FileNotFoundError("Khong co du lieu train medical.")
@@ -386,6 +388,15 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         verbose=verbose,
         resume_path=resume_path,
         checkpoint_path=checkpoint_path,
+        loss_function=str(settings.get("loss_function", "cross_entropy")),
+        focal_gamma=float(settings.get("focal_loss_gamma", 2.0)),
+        focal_tversky_alpha=float(settings.get("focal_tversky_alpha", 0.7)),
+        focal_tversky_beta=float(settings.get("focal_tversky_beta", 0.3)),
+        ldam_cls_num_list=settings.get("ldam_cls_num_list"),
+        asl_gamma_pos=float(settings.get("asl_gamma_pos", 0.0)),
+        asl_gamma_neg=float(settings.get("asl_gamma_neg", 4.0)),
+        asl_clip=float(settings.get("asl_clip", 0.05)),
+        balanced_softmax_beta=float(settings.get("balanced_softmax_beta", 0.5)),
     )
     # Luu CNN vao path rieng de KHONG ghi de model centroid cu (medical_7_cancers.pt).
     target_path = Path(output_model_path) if output_model_path else paths.cnn_model_path
