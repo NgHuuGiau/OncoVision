@@ -55,12 +55,16 @@ def launch_detached() -> int:
 
 def run_train_preflight(print_fn=print) -> int:
     ensure_project_directories()
-    paths = medical_training_paths()
-    audit = audit_medical_raw_dataset(paths)
-    train_count = _count_split_items(audit["train_images"])
-    val_count = _count_split_items(audit["val_images"])
-    test_count = _count_split_items(audit["test_images"])
-    missing_classes = audit["missing_classes"]
+    try:
+        paths = medical_training_paths()
+        audit = audit_medical_raw_dataset(paths)
+    except Exception as exc:
+        print_fn(f"Lỗi kiểm tra dataset medical: {exc}")
+        return 1
+    train_count = _count_split_items(audit.get("train_images", []))
+    val_count = _count_split_items(audit.get("val_images", []))
+    test_count = _count_split_items(audit.get("test_images", []))
+    missing_classes = audit.get("missing_classes", [])
     ready = train_count > 0 and val_count > 0 and not missing_classes
 
     print_fn("Medical 7-cancer training preflight")
@@ -84,17 +88,24 @@ def main() -> int:
         return run_train_preflight()
 
     start = time.perf_counter()
-    result = run_full_medical_training_pipeline()
-    metrics = result["validation_metrics"]
+    try:
+        result = run_full_medical_training_pipeline()
+    except Exception as exc:
+        print(f"Lỗi training: {exc}")
+        return 1
+    if not isinstance(result, dict):
+        print("Lỗi: training pipeline trả về kết quả không hợp lệ.")
+        return 1
+    metrics = result.get("validation_metrics", {})
     print("Medical 7-cancer training complete")
-    print(f"- Trained model: {result['trained_model_path']}")
-    print(f"- Train/val/test: {result['train_count']}/{result['val_count']}/{result['test_count']}")
-    print(f"- Prepare: {result['prepare_seconds']:.2f}s")
-    print(f"- Train: {result['train_seconds']:.2f}s")
-    print(f"- Validate: {result['validate_seconds']:.2f}s")
+    print(f"- Trained model: {result.get('trained_model_path', 'N/A')}")
+    print(f"- Train/val/test: {result.get('train_count', 0)}/{result.get('val_count', 0)}/{result.get('test_count', 0)}")
+    print(f"- Prepare: {result.get('prepare_seconds', 0):.2f}s")
+    print(f"- Train: {result.get('train_seconds', 0):.2f}s")
+    print(f"- Validate: {result.get('validate_seconds', 0):.2f}s")
     print(f"- Total: {time.perf_counter() - start:.2f}s")
-    print(f"- Validation accuracy: {metrics['accuracy']:.4f}")
-    print(f"- Validation model: {metrics['model_path']}")
+    print(f"- Validation accuracy: {metrics.get('accuracy', 'N/A')}")
+    print(f"- Validation model: {metrics.get('model_path', 'N/A')}")
     return 0
 
 

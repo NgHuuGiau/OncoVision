@@ -144,7 +144,7 @@ class MedicalTrainingTests(unittest.TestCase):
         paths = medical_training_paths()
 
         self.assertEqual(paths.dataset_root, Path("dataset/custom_medical"))
-        self.assertEqual(paths.trained_model_path, Path("medical_7_cancers.pt"))
+        self.assertEqual(paths.trained_model_path, Path("medical_8_cancers.pt"))
         self.assertEqual(paths.feature_size, 24)
 
     @patch("medical.training.train_cnn_classifier")

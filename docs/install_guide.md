@@ -1,23 +1,27 @@
 # Hướng Dẫn Cài Đặt
 
-Tài liệu này hướng dẫn cài đặt OncoVision trên Windows, khởi tạo thư mục dự án và kiểm tra môi trường trước khi đưa vào sử dụng.
+Tài liệu hướng dẫn cài đặt OncoVision trên Windows và kiểm tra môi trường trước khi sử dụng.
 
-## 1. Yêu Cầu Hệ Thống
+---
+
+## 1. Yêu cầu hệ thống
 
 ### Bắt buộc
 
-- Windows 10 hoặc Windows 11
+- Windows 10 hoặc 11
 - Python 3.10 trở lên
 - Quyền tạo virtual environment
 - Quyền ghi trong thư mục dự án
 
 ### Khuyến nghị
 
-- GPU NVIDIA nếu muốn tối ưu train và inference
-- Webcam nếu muốn chạy `run_app.py`
-- Windows Terminal hoặc PowerShell 7 để hiển thị Unicode tốt hơn
+- GPU NVIDIA (CUDA) — tối ưu train và inference
+- Webcam — nếu sử dụng camera realtime
+- PowerShell 7 — hiển thị Unicode tốt hơn
 
-## 2. Tạo Môi Trường Ảo
+---
+
+## 2. Cài đặt
 
 ```powershell
 cd D:\OncoVision
@@ -27,189 +31,89 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Nếu bị chặn script trong PowerShell:
+Nếu bị chặn script PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-## 3. Khởi Tạo Thư Mục Dự Án
+---
 
-Lần chạy đầu tiên nên dùng:
+## 3. Kiểm tra sau cài đặt
 
-```powershell
-python run_menu.py
-```
-
-Lệnh này giúp tạo và đồng bộ các nhóm thư mục như:
-
-```text
-dataset/
-models/
-output/
-runs/
-```
-
-Sau đó các luồng `medical`, `training`, `chat`, `camera` sẽ tự bổ sung những thư mục còn cần thiết.
-
-## 4. Kiểm Tra Sau Cài Đặt
-
-### Kiểm tra tổng quát an toàn
+### Quét tổng thể
 
 ```powershell
 python run_doctor.py --skip-camera-check
 ```
 
-Mục đích:
-
-- kiểm tra dependency quan trọng,
-- kiểm tra model,
-- kiểm tra dataset,
-- kiểm tra output directories,
-- không yêu cầu webcam thật.
-
-### Kiểm tra chuỗi entrypoint
+### Smoke check
 
 ```powershell
 python run_smoke.py
-```
-
-Nếu đang chạy trong CI hoặc muốn check nhẹ:
-
-```powershell
 python run_smoke.py --ci-safe --stop-on-fail
 ```
 
-### Kiểm tra unit test
+### Unit test
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## 5. Chạy Thử Từng Chức Năng
+---
 
-### Menu tổng
+## 4. Chạy thử
 
-```powershell
-python run_menu.py
-```
-
-### Runtime advisor
-
-```powershell
-python run_app.py --advisor-only
-```
-
-### Camera realtime
-
-```powershell
-python run_app.py
-python run_app.py --mode medium --camera-index 0
-python run_app.py --model models/trained/best.pt
-```
-
-### Chat UI
-
-```powershell
-python run_chat.py --check-only
-python run_chat.py
-```
-
-### Training
-
-```powershell
-python run_train.py --check-only
-python run_train.py
-```
-
-### Medical CLI
-
-```powershell
-python run_medical.py status
-python run_medical.py ready
-python run_medical.py sources
-```
-
-## 6. Cấu Trúc Dependency
-
-Repo hiện có một bộ dependency chính để vận hành:
-
-| File | Mục đích |
+| Mục đích | Lệnh |
 |---|---|
-| `requirements.txt` | Bộ dependency duy nhất cho runtime, dev và CI |
+| Menu tổng | `python run_menu.py` |
+| Gợi ý runtime | `python run_app.py --advisor-only` |
+| Camera realtime | `python run_app.py` |
+| Chat UI desktop | `python run_chat.py` |
+| Chat UI web | `python -m uvicorn web_app:app --host 0.0.0.0 --port 8000` |
+| Medical CLI | `python run_medical.py status` |
 
-## 7. Xử Lý Lỗi Thường Gặp
+---
+
+## 5. Checklist sẵn sàng
+
+1. `python run_doctor.py --skip-camera-check` — không còn lỗi nghiêm trọng
+2. `python run_smoke.py` — pass
+3. `python run_app.py --advisor-only` — in được gợi ý runtime
+4. `python run_chat.py --check-only` — báo sẵn sàng
+5. Web chat mở được tại `http://localhost:8000`
+
+---
+
+## 6. Xử lý lỗi cài đặt
 
 ### Không mở được camera
-
-Thử:
 
 ```powershell
 python run_app.py --mode low --camera-index 1
 ```
 
-Nếu vẫn lỗi:
-
-- kiểm tra app khác có đang giữ webcam không,
-- chạy `run_doctor.py --skip-camera-check` để xem cảnh báo hệ thống,
-- đổi `camera-index` sang `0`, `1`, `2`.
-
-Nếu lỗi liên quan CI hoặc smoke, xem thêm [ci_and_quality.md](ci_and_quality.md).
+Kiểm tra app khác có đang dùng webcam, đổi `camera-index` (0, 1, 2).
 
 ### Thiếu model
 
-Kiểm tra:
+Kiểm tra `models/pretrained/` và `models/trained/`. Chạy `training/download_models.py` nếu cần tải pretrained.
 
-```text
-models/pretrained/
-models/trained/
-```
+### Lỗi CUDA / torch
 
-Nếu cần pretrained model, xem các script trong `training/download_models.py`.
+Chạy `python run_app.py --advisor-only` và `python run_doctor.py --skip-camera-check` để xem GPU/CUDA có được nhận không.
 
-### Lỗi CUDA hoặc torch
-
-Kiểm tra:
-
-```powershell
-python run_app.py --advisor-only
-python run_doctor.py --skip-camera-check
-```
-
-Hai lệnh này sẽ cho biết:
-
-- GPU có được nhận không,
-- CUDA có sẵn sàng không,
-- torch đang build theo CPU hay CUDA.
-
-### Giao diện chat chưa sẵn sàng
-
-Dùng:
+### Chat UI chưa sẵn sàng
 
 ```powershell
 python run_chat.py --check-only --auto-fix-icons
 ```
 
-Lệnh này giúp:
+---
 
-- check icon,
-- check module bắt buộc,
-- check medical model status,
-- tự tạo icon nếu đang thiếu.
+## 7. Khuyến nghị
 
-## 8. Checklist Sau Khi Cài Đặt Xong
-
-Môi trường có thể xem là sẵn sàng khi các mục sau đều ổn:
-
-1. `python run_doctor.py --skip-camera-check` chạy xong không có lỗi nghiêm trọng.
-2. `python run_smoke.py` hoặc `python run_smoke.py --ci-safe` pass.
-3. `python run_app.py --advisor-only` in được khuyến nghị runtime.
-4. `python run_chat.py --check-only` báo trạng thái sẵn sàng.
-5. `python run_train.py --check-only` không bị fail do thiếu dependency.
-
-## 9. Khuyến Nghị Cho Team
-
-- Không chạy thẳng training hoặc camera trên máy mới mà chưa chạy doctor/smoke.
-- Mọi môi trường đều dùng `requirements.txt`.
-- Nếu gặp lỗi chưa rõ nguyên nhân, mở [troubleshooting.md](troubleshooting.md) trước khi đổi cấu hình lớn.
+- Luôn chạy `run_doctor.py` hoặc `run_smoke.py` trên máy mới trước khi train hoặc chạy camera.
+- Mọi môi trường đều dùng `requirements.txt` duy nhất.
+- Nếu gặp lỗi chưa rõ, xem [troubleshooting.md](troubleshooting.md) trước khi thay đổi cấu hình.

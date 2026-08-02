@@ -19,7 +19,6 @@ def subtle_icon_color(window) -> str:
 
 def apply_theme_assets(window) -> None:
     strong = icon_color(window)
-    window.sidebar_app_button.setIcon(themed_icon("sidebar_app.svg", strong, 28))
     window.sidebar_toggle_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
     window.sidebar_collapsed_button.setIcon(themed_icon("sidebar_app.svg", strong, 18))
     window.new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 22))
@@ -54,9 +53,9 @@ def refresh_topbar_buttons(window) -> None:
         "base": "#0f172a" if dark_mode else "#ffffff",
         "border": "rgba(255, 255, 255, 0.08)" if dark_mode else "#e2e8f0",
         "text": "#f8fafc" if dark_mode else "#0f172a",
-        "selected_bg": "rgba(37, 99, 255, 0.22)" if dark_mode else "#eef4ff",
-        "selected_text": "#f8fbff" if dark_mode else "#2563ff",
-        "selected_border": "#2563ff",
+        "selected_bg": "rgba(26, 86, 219, 0.22)" if dark_mode else "#e9edf7",
+        "selected_text": "#f8fbff" if dark_mode else "#1a56db",
+        "selected_border": "#1a56db",
     }
     for button, mode in ((window.light_mode_button, "light"), (window.dark_mode_button, "dark")):
         is_active = active == mode

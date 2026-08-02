@@ -73,6 +73,9 @@ _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Siêu âm", ("sieu am", "ultrasound", "sonography")),
     ("CT", (" computed tomography ", " ct ", "ct scan", "ctscan")),
     ("MRI", (" magnetic resonance ", " mri ", "mri scan")),
+    ("MRI não", ("mri nao", "brain mri", "mri brain", "head mri", "mri head", "neuro mri", "cranial mri")),
+    ("CT sọ não", ("ct so nao", "brain ct", "ct brain", "head ct", "ct head", "ct neuro", "cranial ct")),
+    ("PET/CT não", ("pet ct nao", "brain pet", "pet brain", "pet/ct brain")),
 )
 
 _TARGET_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -83,6 +86,7 @@ _TARGET_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("colorectal", ("đại trực tràng", "colorectal", "colon", "rectal", "trực tràng", "colonoscopy", "colorectal cancer", "colon cancer", "rectal cancer", "colon lesion", "rectal lesion", "colon tumor", "rectal tumor")),
     ("prostate", ("tuyến tiền liệt", "prostate", "prostatic", "prostate cancer", "prostate lesion", "prostate tumor", "prostate mass")),
     ("cervical", ("cổ tử cung", "cervical", "cervix", "pap", "hpv", "colposcopy", "cervical cancer", "cervix cancer", "cervical lesion", "cervical tumor")),
+    ("brain", ("não", "brain", "cranial", "skull", "neuro", "intracranial", "cerebral", "glioma", "meningioma", "pituitary", "brain tumor", "brain cancer", "brain lesion", "brain mass", "head tumor")),
 )
 
 _MODALITY_TO_TARGET_KEY: dict[str, str] = {
@@ -116,6 +120,9 @@ _MODALITY_TO_TARGET_KEY: dict[str, str] = {
     "PET gan": "liver",
     "PET phổi": "lung",
     "PET đại trực tràng": "colorectal",
+    "MRI não": "brain",
+    "CT sọ não": "brain",
+    "PET/CT não": "brain",
 }
 
 _DICOM_MODALITY_MAP: dict[str, str] = {
@@ -147,6 +154,11 @@ _DICOM_BODY_PART_TO_TARGET: dict[str, str] = {
     "UTERUS": "cervical",
     "PELVISNECK": "cervical",
     "WHOLEBODY": "lung",
+    "BRAIN": "brain",
+    "HEAD": "brain",
+    "NEURO": "brain",
+    "SKULL": "brain",
+    "CSPINE": "brain",
 }
 
 SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
@@ -157,6 +169,7 @@ SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
     "colorectal": ("colonoscopy", "ct", "mri", "pet_ct"),
     "prostate": ("mri", "ultrasound", "pet_ct"),
     "cervical": ("ct", "mri", "pet_ct"),
+    "brain": ("mri", "ct", "pet_ct"),
 }
 
 
@@ -181,7 +194,7 @@ class MedicalDatasetSummary:
 def create_default_medical_dataset_config(dataset_root: str | Path = MEDICAL_DATASET_ROOT) -> MedicalDatasetConfig:
     root = Path(dataset_root)
     return MedicalDatasetConfig(
-        disease_name="medical_7_cancers",
+        disease_name=f"medical_{len(COMMON_CANCER_TARGETS)}_cancers",
         dataset_root=root,
         data_yaml_path=root / "data.yaml",
         metadata_dir=root / "metadata",
@@ -329,6 +342,42 @@ def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:
                     return mapped
             except Exception:
                 pass
+    return None
+
+
+def guess_modality_from_pixels(image_path: str | Path) -> str | None:
+    source = Path(image_path)
+    if not source.exists():
+        return None
+    try:
+        from PIL import Image
+        import numpy as np
+        img = Image.open(source).convert("L")
+        arr = np.array(img, dtype=np.float32)
+        mean, std = float(np.mean(arr)), float(np.std(arr))
+        hist, _ = np.histogram(arr, bins=256, range=(0, 255))
+        hist = hist.astype(float)
+        hist /= hist.sum() if hist.sum() > 0 else 1
+        peak_ratio = float(hist.max())
+        low_bin_ratio = float(hist[:32].sum())
+        high_bin_ratio = float(hist[224:].sum())
+        mid_bin_ratio = float(hist[64:192].sum())
+        if std > 60 and mid_bin_ratio > 0.6 and 30 < mean < 200:
+            if peak_ratio < 0.08:
+                return "CT"
+        if std < 30 and low_bin_ratio > 0.3 and high_bin_ratio > 0.3:
+            return "X-quang ngực"
+        if std > 50 and peak_ratio > 0.15 and mean > 80:
+            if low_bin_ratio < 0.1:
+                return "MRI"
+        if std < 35 and mean > 80 and peak_ratio > 0.1:
+            return "Siêu âm"
+        if std > 40 and high_bin_ratio > 0.2 and low_bin_ratio > 0.15:
+            return "X-quang ngực"
+        if std < 20:
+            return "Siêu âm"
+    except Exception:
+        pass
     return None
 
 
@@ -562,10 +611,42 @@ def is_medical_volume_source(path: str | Path) -> bool:
     return _medical_upload_suffix(source) in {".dcm", ".nii", ".nii.gz", ".mha", ".mhd"}
 
 
+def _load_dicom_with_window(source: Path) -> Image.Image:
+    try:
+        import pydicom
+        import numpy as np
+        ds = pydicom.dcmread(str(source), force=True)
+        arr = ds.pixel_array.astype(np.float32)
+        intercept = float(getattr(ds, "RescaleIntercept", 0))
+        slope = float(getattr(ds, "RescaleSlope", 1))
+        arr = arr * slope + intercept
+        wc = getattr(ds, "WindowCenter", None)
+        ww = getattr(ds, "WindowWidth", None)
+        if wc is not None and ww is not None:
+            wc = float(wc) if isinstance(wc, (int, float)) else float(wc[0])
+            ww = float(ww) if isinstance(ww, (int, float)) else float(ww[0])
+            low = wc - ww / 2
+            high = wc + ww / 2
+            arr = np.clip((arr - low) / (high - low) * 255.0, 0, 255)
+        else:
+            arr_min, arr_max = float(arr.min()), float(arr.max())
+            if arr_max > arr_min:
+                arr = (arr - arr_min) / (arr_max - arr_min) * 255.0
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+        if arr.ndim == 2:
+            return Image.fromarray(arr, mode="L").convert("RGB")
+        return Image.fromarray(arr).convert("RGB")
+    except Exception:
+        with Image.open(source) as image:
+            return image.convert("RGB")
+
+
 def load_medical_source_image(source_path: str | Path) -> Image.Image:
     source = Path(source_path)
     if is_medical_volume_source(source):
         return _load_medical_volume_image(source)
+    if source.suffix.lower() == ".dcm":
+        return _load_dicom_with_window(source)
     with Image.open(source) as image:
         normalized = ImageOps.exif_transpose(image)
         if normalized.mode not in {"RGB", "L"}:

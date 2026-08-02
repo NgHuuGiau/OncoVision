@@ -246,6 +246,17 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
     doc.build(story)
 
 
+def _dicom_section(payload: dict[str, Any]) -> str:
+    dicom = payload.get("dicom_info")
+    if not dicom or not isinstance(dicom, dict) or not dicom.get("Modality"):
+        return ""
+    rows = "".join(
+        f"<tr><td>{html.escape(k)}</td><td>{html.escape(str(v))}</td></tr>"
+        for k, v in dicom.items() if v
+    )
+    return f'<div class="card"><h2>DICOM Info</h2><table><thead><tr><th>Tag</th><th>Value</th></tr></thead><tbody>{rows}</tbody></table></div>'
+
+
 def _html_report(payload: dict[str, Any]) -> str:
     detections = payload.get("detections", [])
     quality_warnings = payload.get("quality_warnings", [])
@@ -268,42 +279,105 @@ def _html_report(payload: dict[str, Any]) -> str:
         if processed_uri
         else f'<div class="image-card"><h3>Ảnh đã xử lý / overlay</h3><p><strong>Đường dẫn:</strong> {html.escape(str(processed_path))}</p><p>Ảnh đã xử lý không có sẵn để hiển thị.</p></div>'
     )
+    gradcam_paths = payload.get("gradcam_overlays") or []
+    gradcam_sections = ""
+    for idx, gpath in enumerate(gradcam_paths):
+        g_uri = _as_file_uri(gpath)
+        if g_uri:
+            gsection = (
+                f'<div class="image-card"><h3>Grad-CAM heatmap #{idx+1}</h3>'
+                f'<p><strong>Đường dẫn:</strong> {html.escape(str(gpath))}</p>'
+                f'<img src="{html.escape(g_uri)}" alt="GradCAM heatmap" /></div>'
+            )
+            gradcam_sections += gsection
+    gradcam_block = (
+        f'<div class="card"><h2>Grad-CAM Heatmap</h2><div class="image-grid">{gradcam_sections}</div></div>'
+        if gradcam_sections else ""
+    )
+    risk = payload.get('risk_level', 'unknown')
+    risk_colors = {"high": "#dc2626", "medium": "#f59e0b", "low": "#16a34a", "uncertain": "#6b7280"}
+    risk_color = risk_colors.get(risk, "#6b7280")
+    risk_bg = {"high": "#fef2f2", "medium": "#fffbeb", "low": "#f0fdf4", "uncertain": "#f9fafb"}
+    risk_bg_color = risk_bg.get(risk, "#f9fafb")
     return f"""<!DOCTYPE html>
 <html lang=\"vi\">
 <head>
   <meta charset=\"utf-8\" />
-  <title>Medical Imaging Case Report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OncoVision - Case Report</title>
   <style>
-    body {{ font-family: Arial, sans-serif; margin: 24px; color: #1f2937; }}
-    h1, h2 {{ color: #0f172a; }}
-    .summary {{ background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; }}
-    table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
-    th, td {{ border: 1px solid #e2e8f0; padding: 8px; text-align: left; }}
-    th {{ background: #eff6ff; }}
-    .image-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }}
-    .image-card {{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }}
-    img {{ width: 100%; height: auto; border-radius: 6px; }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }}
+    .container {{ max-width: 960px; margin: 0 auto; padding: 24px 16px; }}
+    .header {{ background: linear-gradient(135deg, #0f172a, #1e3a5f); color: white; padding: 24px; border-radius: 12px; margin-bottom: 20px; }}
+    .header h1 {{ font-size: 20px; margin: 0; }}
+    .header p {{ font-size: 13px; opacity: 0.8; margin-top: 4px; }}
+    .risk-badge {{ display: inline-block; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; color: white; background: {risk_color}; }}
+    .card {{ background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 16px; }}
+    .card h2 {{ font-size: 15px; color: #0f172a; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #f1f5f9; }}
+    .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
+    .stat {{ background: #f8fafc; border-radius: 8px; padding: 14px; text-align: center; }}
+    .stat-value {{ font-size: 24px; font-weight: 700; }}
+    .stat-label {{ font-size: 12px; color: #64748b; margin-top: 2px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    th, td {{ padding: 10px 8px; text-align: left; border-bottom: 1px solid #f1f5f9; }}
+    th {{ color: #64748b; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }}
+    .conf-bar {{ display: inline-block; height: 6px; border-radius: 3px; background: #e2e8f0; width: 80px; vertical-align: middle; margin-right: 6px; }}
+    .conf-fill {{ height: 100%; border-radius: 3px; background: {risk_color}; }}
+    .image-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }}
+    .image-card {{ border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }}
+    .image-card h3 {{ font-size: 12px; padding: 8px 10px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }}
+    .image-card img {{ width: 100%; display: block; }}
+    .warning-list {{ list-style: none; padding: 0; }}
+    .warning-list li {{ padding: 6px 0; font-size: 13px; color: #92400e; }}
+    .warning-list li::before {{ content: '⚠️ '; }}
+    .disclaimer {{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px; font-size: 12px; color: #991b1b; }}
+    .disclaimer h2 {{ font-size: 13px; color: #991b1b; border: none; padding: 0; margin-bottom: 6px; }}
+    @media (max-width: 640px) {{ .grid-2 {{ grid-template-columns: 1fr; }} }}
   </style>
 </head>
 <body>
-  <h1>Medical Imaging Case Report</h1>
-  <div class=\"summary\">
-    <p><strong>Case ID:</strong> {html.escape(str(payload.get('case_id', '-')))}</p>
-    <p><strong>Risk level:</strong> {html.escape(str(payload.get('risk_level', '-')))}</p>
-    <p><strong>Suspected malignant:</strong> {html.escape(str(payload.get('suspected_malignant', False)))}</p>
-    <p><strong>Model:</strong> {html.escape(str(payload.get('model_name', '-')))}</p>
-    <p><strong>Recommendation:</strong> {html.escape(str(payload.get('recommendation', '-')))}</p>
+  <div class="container">
+    <div class="header">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1>OncoVision &mdash; Case Report</h1>
+          <p>Patient: {html.escape(str(payload.get('patient_code', '-')))}
+             &middot; Case ID: {html.escape(str(payload.get('case_id', '-')))}
+             &middot; Model: {html.escape(str(payload.get('model_name', '-')))}</p>
+        </div>
+        <div class="risk-badge">{risk.upper()}</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Summary</h2>
+      <div class="grid-2">
+        <div class="stat"><div class="stat-value" style="color:{risk_color}">{risk.upper()}</div><div class="stat-label">Risk Level</div></div>
+        <div class="stat"><div class="stat-value">{payload.get('average_confidence', 0):.0%}</div><div class="stat-label">Avg Confidence</div></div>
+        <div class="stat"><div class="stat-value">{'Yes' if payload.get('suspected_malignant') else 'No'}</div><div class="stat-label">Suspected Malignant</div></div>
+        <div class="stat"><div class="stat-value">{len(detections)}</div><div class="stat-label">Findings</div></div>
+      </div>
+      <p style="margin-top:12px;font-size:13px;"><strong>Recommendation:</strong> {html.escape(str(payload.get('recommendation', '')))}</p>
+    </div>
+    <div class="card">
+      <h2>Findings</h2>
+      <table>
+        <thead><tr><th>Label</th><th>Confidence</th><th>BBox</th></tr></thead>
+        <tbody>{findings_rows}</tbody>
+      </table>
+    </div>
+    {_dicom_section(payload)}
+    <div class="card">
+      <h2>Images</h2>
+      <div class="image-grid">{source_section}{processed_section}</div>
+    </div>
+    {gradcam_block}
+    <div class="card">
+      <h2>Quality Warnings</h2>
+      <ul class="warning-list">{warning_rows}</ul>
+    </div>
+    <div class="disclaimer"><h2>Legal Notice</h2><p>{html.escape(str(payload.get('disclaimer', '')))}</p></div>
   </div>
-  <h2>Findings</h2>
-  <table>
-    <thead><tr><th>Label</th><th>Confidence</th><th>BBox</th></tr></thead>
-    <tbody>{findings_rows}</tbody>
-  </table>
-  <h2>Image Quality</h2>
-  <ul>{warning_rows}</ul>
-  <div class=\"image-grid\">{source_section}{processed_section}</div>
-  <h2>Legal Notice</h2>
-  <p>{html.escape(str(payload.get('disclaimer', '')))}</p>
 </body>
 </html>
 """
@@ -330,6 +404,21 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
         f'<div class="image-card"><h3>Ảnh đã xử lý / overlay</h3><p><strong>Đường dẫn:</strong> {html.escape(str(processed_path))}</p><img src="{html.escape(processed_uri)}" alt="Processed image" /></div>'
         if processed_uri
         else f'<div class="image-card"><h3>Ảnh đã xử lý / overlay</h3><p><strong>Đường dẫn:</strong> {html.escape(str(processed_path))}</p><p>Ảnh đã xử lý không có sẵn để hiển thị.</p></div>'
+    )
+    gradcam_paths = payload.get("gradcam_overlays") or []
+    gradcam_sections = ""
+    for idx, gpath in enumerate(gradcam_paths):
+        g_uri = _as_file_uri(gpath)
+        if g_uri:
+            gsection = (
+                f'<div class="image-card"><h3>Grad-CAM heatmap #{idx+1}</h3>'
+                f'<p><strong>Đường dẫn:</strong> {html.escape(str(gpath))}</p>'
+                f'<img src="{html.escape(g_uri)}" alt="GradCAM heatmap" /></div>'
+            )
+            gradcam_sections += gsection
+    gradcam_block = (
+        f'<h2>Grad-CAM Heatmap</h2><div class="image-grid">{gradcam_sections}</div>'
+        if gradcam_sections else ""
     )
     disclaimer_text = html.escape(str(payload.get("disclaimer", MEDICAL_DISCLAIMER)))
     return f"""<!DOCTYPE html>
@@ -382,6 +471,7 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
   <h2>Image Quality</h2>
   <ul>{warning_rows}</ul>
   <div class=\"image-grid\">{source_section}{processed_section}</div>
+  {gradcam_block}
   <div class=\"page-break\"></div>
   <div class=\"disclaimer\">
     <h2>Legal Notice</h2>

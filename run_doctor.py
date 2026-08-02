@@ -96,10 +96,12 @@ def parse_args() -> argparse.Namespace:
 def _run_autofix() -> None:
     print(line(rule("-"), CYAN))
     print(section("AUTO-FIX", YELLOW))
-    if not ICONS_DIR.exists() or sum(1 for _ in ICONS_DIR.iterdir()) < ICON_AUTOFIX_THRESHOLD:
+    icon_ok = ICONS_DIR.is_dir() and sum(1 for _ in ICONS_DIR.iterdir()) >= ICON_AUTOFIX_THRESHOLD
+    if not icon_ok:
         print(row("Icons", "Đang tạo bộ icon mặc định...", YELLOW))
         from utils.icons import create_default_icons
 
+        ICONS_DIR.mkdir(parents=True, exist_ok=True)
         create_default_icons()
     print(row("Trạng thái", "Đã chạy xong Auto-fix!", GREEN))
 
@@ -140,9 +142,10 @@ def _print_config_health() -> None:
             print(row("Vấn đề", issue, RED, bounded=False))
 
 
-def main() -> None:
+def main() -> int:
     args = parse_args()
     ensure_project_directories()
+    exit_code = 0
 
     if args.fix:
         _run_autofix()
@@ -217,13 +220,25 @@ def main() -> None:
 
     print(line(rule("-"), CYAN))
     ready = bool(present_models) and dataset_ok and medical_status.model_ready
-    print(section("KẾT LUẬN", GREEN if ready else YELLOW))
+    issues: list[str] = []
     if not present_models:
-        print(row("Lý do", "Chưa có model local trong models/pretrained.", RED, bounded=False))
-    elif missing_models:
-        print(row("Lý do", "Máy vẫn chạy được, nhưng chưa có đủ 5 model để chọn hết mọi mức.", YELLOW, bounded=False))
+        issues.append("Chưa có model local")
+    if not dataset_ok:
+        issues.append("Chưa có dataset raw")
+    if medical_status.model_ready is False:
+        issues.append("Model medical chưa sẵn sàng")
+    if icon_count < ICON_WARNING_THRESHOLD:
+        issues.append("Thiếu icon UI")
+    if camera_probe is not None and camera_probe.level != "PASS":
+        issues.append("Camera chưa sẵn sàng")
+    if issues:
+        exit_code = 1
+        print(section("KẾT LUẬN", YELLOW))
+        for issue in issues:
+            print(row("⚠", issue, RED, bounded=False))
     else:
-        print(row("Model", "Đã sẵn sàng để chạy đủ các mức YOLO11.", GREEN, bounded=False))
+        print(section("KẾT LUẬN", GREEN))
+        print(row("", "Hệ thống đã sẵn sàng!", GREEN, bounded=False))
 
     if camera_probe is not None and camera_probe.level != "PASS":
         print(row("Camera", camera_probe.detail.replace("Lý do không chạy  ", ""), YELLOW, bounded=False))
@@ -245,6 +260,7 @@ def main() -> None:
         icon_warning_threshold=ICON_WARNING_THRESHOLD,
     )
     print(line(rule("="), CYAN))
+    return exit_code
 
 
 if __name__ == "__main__":

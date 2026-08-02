@@ -10,6 +10,7 @@ from medical.dataset import MEDICAL_DATASET_ROOT
 
 
 TARGET_KEY_TO_CANCER_TYPE = {
+    "brain": "ung_thu_nao",
     "liver": "ung_thu_gan",
     "lung": "ung_thu_phổi",
     "breast": "ung_thu_vu",

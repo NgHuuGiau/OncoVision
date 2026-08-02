@@ -19,10 +19,11 @@ class CancerCatalogTests(unittest.TestCase):
         ):
             self.assertIn(expected, labels)
 
-    def test_catalog_has_seven_supported_targets(self) -> None:
-        targets = COMMON_CANCER_TARGETS
-        self.assertEqual(len(targets), 7)
-        self.assertTrue(all(item.model_ready for item in targets))
+    def test_catalog_has_eight_supported_targets(self) -> None:
+        targets = list(COMMON_CANCER_TARGETS)
+        self.assertEqual(len(targets), 8)
+        model_ready_count = sum(1 for item in targets if item.model_ready)
+        self.assertEqual(model_ready_count, 8)
 
     def test_catalog_includes_common_modalities(self) -> None:
         modalities = supported_cancer_modalities()

@@ -7,7 +7,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = PROJECT_ROOT / "output"
-CHAT_HISTORY_DB_PATH = OUTPUT_DIR / "chat_history.db"
+ONCO_DB_PATH = OUTPUT_DIR / "onco.db"
+CHAT_HISTORY_DB_PATH = ONCO_DB_PATH
 CHAT_CAPTURES_DIR = OUTPUT_DIR / "chat_captures"
 
 

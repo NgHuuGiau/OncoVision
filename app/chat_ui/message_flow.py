@@ -52,7 +52,7 @@ def refresh_image_previews(window) -> None:
 
     has_attachments = bool(window.pending_image_attachments)
     window.image_preview_area.setVisible(has_attachments)
-    window.composer.setMinimumHeight(152 if has_attachments else 82)
+    window.composer.setMinimumHeight(82)
 
     if not has_attachments:
         return

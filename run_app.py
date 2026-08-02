@@ -43,23 +43,31 @@ def main() -> int:
     if getattr(args, "advisor_only", False):
         return run_runtime_advisor()
 
-    start_options = resolve_start_bundle(
-        requested_mode=args.mode,
-        requested_model=args.model,
-        requested_target="camera",
-        preferred_target="camera",
-        prompt_runtime_mode_fn=prompt_runtime_mode,
-    )
-    return run_camera_launch_flow(
-        dashboard_title="OncoVision Camera Realtime",
-        runtime=start_options.runtime,
-        hardware=start_options.hardware,
-        camera_index=args.camera_index,
-        launch_target="camera",
-        print_runtime_dashboard_fn=print_runtime_dashboard,
-        run_camera_session_fn=run_camera_session,
-        boot_progress_cls=BootProgress,
-    )
+    try:
+        start_options = resolve_start_bundle(
+            requested_mode=args.mode,
+            requested_model=args.model,
+            requested_target="camera",
+            preferred_target="camera",
+            prompt_runtime_mode_fn=prompt_runtime_mode,
+        )
+    except Exception as exc:
+        print(f"Lỗi khởi tạo runtime: {exc}")
+        return 1
+    try:
+        return run_camera_launch_flow(
+            dashboard_title="OncoVision Camera Realtime",
+            runtime=start_options.runtime,
+            hardware=start_options.hardware,
+            camera_index=args.camera_index,
+            launch_target="camera",
+            print_runtime_dashboard_fn=print_runtime_dashboard,
+            run_camera_session_fn=run_camera_session,
+            boot_progress_cls=BootProgress,
+        )
+    except Exception as exc:
+        print(f"Lỗi khi chạy camera: {exc}")
+        return 1
 
 
 if __name__ == "__main__":

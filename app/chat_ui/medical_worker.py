@@ -17,6 +17,7 @@ def create_medical_worker_base(QThread, Signal):
     class MedicalAnalysisWorker(QThread):
         result_ready = Signal(object)
         error = Signal(str)
+        progress = Signal(str, float)
         finished = Signal()
 
         def __init__(self, service: MedicalChatService, *, image_path: str, patient_code: str, user_prompt: str):
@@ -28,10 +29,13 @@ def create_medical_worker_base(QThread, Signal):
 
         def run(self) -> None:
             try:
+                def _on_progress(stage: str, pct: float) -> None:
+                    self.progress.emit(stage, pct)
                 response: MedicalChatResponse = self.service.analyze_attachment(
                     image_path=self.image_path,
                     patient_code=self.patient_code,
                     user_prompt=self.user_prompt,
+                    progress_callback=_on_progress,
                 )
                 self.result_ready.emit(response)
             except Exception as exc:

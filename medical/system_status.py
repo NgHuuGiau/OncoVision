@@ -85,7 +85,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
     normalized_dir = Path(config.working_dir) / "normalized_images"
     overlay_dir = Path(config.working_dir) / "processed_images"
     export_dir = Path(config.working_dir) / "exports"
-    case_db_path = config.working_dir / "medical_cases.db"
+    case_db_path = Path(config.working_dir).parent / "onco.db"
 
     try:
         resolved_model_path = resolve_medical_runtime_model_path(config)

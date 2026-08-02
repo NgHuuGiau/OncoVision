@@ -71,5 +71,6 @@ class MedicalReportingTests(unittest.TestCase):
 
             self.assertTrue(report_html.exists())
             html_text = report_html.read_text(encoding="utf-8")
-            self.assertIn("Medical Imaging Case Report", html_text)
+            self.assertIn("OncoVision", html_text)
+            self.assertIn("Case Report", html_text)
             self.assertIn("overlay.jpg", html_text)

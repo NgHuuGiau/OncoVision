@@ -1,308 +1,160 @@
 # OncoVision
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Windows](https://img.shields.io/badge/Windows-11%2B-0078D6?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
-[![PowerShell](https://img.shields.io/badge/PowerShell-7%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB)](https://www.python.org/)
+[![Windows](https://img.shields.io/badge/Windows-11%2B-0078D6)](https://www.microsoft.com/windows)
+[![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C)](https://pytorch.org/)
 [![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO11-111111)](https://www.ultralytics.com/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
-[![NumPy](https://img.shields.io/badge/NumPy-Array%20Computing-013243?logo=numpy&logoColor=white)](https://numpy.org/)
-[![Pillow](https://img.shields.io/badge/Pillow-Image%20Processing-8CAAE6)](https://python-pillow.org/)
-[![YAML](https://img.shields.io/badge/YAML-Config-CB171E?logo=yaml&logoColor=white)](https://yaml.org/)
-[![Medical](https://img.shields.io/badge/Medical-Screening%20%26%20Reports-00A6A6)](docs/medical_imaging_guide.md)
-[![Training](https://img.shields.io/badge/Training-YOLO%20Pipeline-FFB000)](docs/training_guide.md)
-[![Chat UI](https://img.shields.io/badge/Chat%20UI-Desktop%20Assistant-6C5CE7)](docs/runtime_tool_guide.md)
+[![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8)](https://opencv.org/)
+[![PySide6](https://img.shields.io/badge/PySide6-Desktop%20UI-41CD52)](https://www.qt.io/qt-for-python)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Web%20Chat-009688)](https://fastapi.tiangolo.com/)
+[![Medical](https://img.shields.io/badge/Medical-Screening-00A6A6)](docs/medical_imaging_guide.md)
+[![Training](https://img.shields.io/badge/Training-YOLO-FFB000)](docs/training_guide.md)
 
-> OncoVision gom camera realtime, training YOLO và nhánh medical vào một repo duy nhất, nên README này là bản đồ nhanh nhất để vào hệ thống.
+**OncoVision** là nền tảng hỗ trợ chẩn đoán hình ảnh y khoa tích hợp: từ quản lý dữ liệu y tế, huấn luyện mô hình YOLO/CNN đến giao diện chat AI cho bác sĩ và nhân viên y tế. Hệ thống chạy hoàn toàn trên máy local (Windows), hỗ trợ xử lý đa dạng định dạng ảnh y khoa (DICOM, NIfTI, JPG, PNG).
 
-## Medical Quick Map
+---
 
-| Nhóm | Ảnh/volume thường dùng |
+## Tính năng chính
+
+| Nhóm | Mô tả |
 |---|---|
-| Gan | Siêu âm, CT, MRI, PET/CT |
-| Phổi | X-quang ngực, CT ngực, PET/CT |
-| Vú | Mammogram, siêu âm vú, MRI vú |
-| Dạ dày | Nội soi, CT, MRI, PET, EUS |
-| Đại trực tràng | Nội soi đại tràng, CT ngực-bụng-chậu, MRI trực tràng, PET |
-| Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
-| Cổ tử cung | MRI, CT, PET/CT |
+| **Chat AI Y khoa** | Giao diện desktop (PySide6) và web (FastAPI) để đặt câu hỏi, tải ảnh y khoa và nhận phân tích tự động |
+| **Phân tích ảnh y tế** | Hỗ trợ 7 nhóm ung thư (gan, phổi, vú, dạ dày, đại trực tràng, tuyến tiền liệt, cổ tử cung) với đa modality (CT, MRI, X-quang, siêu âm, nội soi, PET/CT, mammogram) |
+| **Camera thông minh** | Chạy realtime object detection với nhiều chế độ (auto/high/medium/low), tự động gợi ý cấu hình runtime phù hợp với máy |
+| **Huấn luyện mô hình** | Pipeline train YOLO detection và CNN classifier đầy đủ, hỗ trợ resume, augment dữ liệu, export model |
+| **YOLO Detection** | Phát hiện vật thể trong ảnh y khoa |
+| **CNN Classifier** | Phân loại modality, nhóm ung thư |
 
-## Start Here
+---
 
-1. Xem [Tóm Tắt Nhanh](#tóm-tắt-nhanh) để hiểu repo làm gì trong 30 giây.
-2. Mở [Bản Đồ Entrypoint](#bản-đồ-entrypoint) để biết dùng file nào cho việc nào.
-3. Chọn một nhánh:
-   - [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md) nếu bạn làm camera realtime.
-   - [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md) nếu bạn làm medical.
-   - [docs/training_guide.md](docs/training_guide.md) nếu bạn train model.
+## Bắt đầu nhanh
 
-> Model medical mặc định được tìm theo thứ tự: `medical_7_cancers.pt` ở root, `medical/medical_7_cancers.pt`, rồi file `fallback_model` nếu bật trong `config/medical_settings.yaml`.
-> Hệ thống hỗ trợ 2 backend classifier: centroid (legacy) và CNN (PyTorch). Đổi qua CNN bằng `classifier_backend: cnn` trong `config/medical_settings.yaml`.
+### Yêu cầu hệ thống
 
-## Demo / Screenshots
+- Windows 10/11
+- Python 3.10+
+- GPU NVIDIA khuyến nghị cho train và inference
 
-| Màn hình | Ý nghĩa |
-|---|---|
-| ![Menu tổng OncoVision](images/Ảnh%20run_menu.py.png) | Cửa vào tổng hợp để chọn luồng phù hợp |
-| ![Runtime advisor](images/Ảnh%20run_app.py%20--advisor-only.png) | Chọn mode trước khi mở camera thật |
-| ![Doctor scan hệ thống](images/Ảnh%20run_doctor.py%20--skip-camera-check%201.png) | Kiểm tra tổng quan hệ thống |
-| ![Medical status chi tiết](images/Ảnh%20run_doctor.py%20--skip-camera-check%202.png) | Xem trạng thái medical và dataset |
-| ![Chat preflight](images/Ảnh%20run_chat.py%20--check-only.png) | Kiểm tra chat UI và phụ thuộc |
-| ![Luồng training](images/Ảnh%20luồng%20training.png) | Minh hoạ pipeline training |
-
-## Mục Lục Nhanh
-
-- [Tóm Tắt Nhanh](#tóm-tắt-nhanh)
-- [Ngôn Ngữ Và Thư Viện](#ngôn-ngữ-và-thư-viện)
-- [Bản Đồ Entrypoint](#bản-đồ-entrypoint)
-- [Khi Nào Dùng File Nào](#khi-nào-dùng-file-nào)
-- [Luồng Nghiệp Vụ](#luồng-nghiệp-vụ)
-- [Cài Đặt Nhanh](#cài-đặt-nhanh)
-- [Tài Liệu Trong docs](#tài-liệu-trong-docs)
-- [Dành Cho Người Mới](#dành-cho-người-mới)
-
-## Tóm Tắt Nhanh
-
-| Nhóm | Giá trị |
-|---|---|
-| Realtime camera | Chạy camera desktop với các mode `auto`, `high`, `medium`, `low` |
-| Medical workflow | Quản lý skin lesion dataset, report, status model và output medical |
-| Entrypoint rõ ràng | Mỗi tác vụ lớn có `run_*.py` riêng |
-| Kiểm tra sớm | Có `run_doctor.py`, `run_smoke.py`, `run_tests.py` để rà lỗi nhanh |
-| Tài liệu vận hành | Có bộ `docs/` cho cài đặt, training, runtime, medical và kiến trúc |
-
-> Mục tiêu của README là cho bạn nắm được hệ thống trong vài phút, rồi đi đúng file thay vì phải lần mò cả repo.
-
-## Ngôn Ngữ Và Thư Viện
-
-| Ký hiệu | Thành phần |
-|---|---|
-| 🐍 | Python |
-| 🧠 | PyTorch / Ultralytics |
-| 📷 | OpenCV |
-| 🪟 | PySide6 |
-| 🗃️ | SQLite |
-| 📄 | YAML / JSON |
-| 🧰 | `utils/` helper nội bộ |
-
-> Nếu chỉ nhìn một chỗ, hãy nhìn bảng này cùng badge phía trên để hiểu repo đang dựa vào những gì.
-
-## Bản Đồ Entrypoint
-
-![Menu tổng OncoVision](images/Ảnh%20run_menu.py.png)
-
-```text
-run_menu.py      -> menu tổng hợp
-run_app.py       -> runtime advisor / camera realtime
-run_chat.py      -> chat UI / medical preflight / cleanup output
-run_doctor.py    -> doctor scan toàn hệ thống
-run_medical.py   -> CLI quản lý luồng medical
-run_smoke.py     -> smoke check entrypoint
-run_tests.py     -> dashboard unit test
-scripts/
-  scripts_run_yolo_train.py -> train YOLO detection
-  train_medical_cnn.py      -> train CNN classifier
-```
-
-## Khi Nào Dùng File Nào
-
-| Bạn muốn làm gì | Entrypoint nên dùng |
-|---|---|
-| Xem toàn bộ chức năng | `python run_menu.py` |
-| Kiểm tra máy nên chạy runtime nào | `python run_app.py --advisor-only` |
-| Mở camera realtime | `python run_app.py` |
-| Kiểm tra chat UI sẵn sàng chưa | `python run_chat.py --check-only` |
-| Mở chat UI desktop | `python run_chat.py` |
-| Mở web chat UI | `python -m uvicorn web_app:app --host 0.0.0.0 --port 8000` rồi mở `http://localhost:8000` |
-| Xem lịch sử chat web | `http://localhost:8000/admin/db` |
-| Kiểm tra tổng thể môi trường | `python run_doctor.py --skip-camera-check` |
-| Train YOLO object detection | `python scripts/scripts_run_yolo_train.py` |
-| Kiểm tra nhanh luồng y dược | `python run_medical.py status` |
-| Train classifier nhận diện modality | `python run_medical.py train-modality` |
-| Chạy smoke check an toàn | `python run_smoke.py` |
-| Chạy unit test | `python -m unittest discover -s tests -p "test_*.py"` |
-
-## Luồng Nghiệp Vụ
-
-### 1. Nhánh Vật Thể
-
-Mục tiêu:
-
-- quản lý dataset object detection,
-- train model YOLO custom,
-- validate model,
-- đưa model vào camera realtime.
-
-Thư mục liên quan:
-
-```text
-dataset/object_detection/raw/
-dataset/object_detection/processed/
-models/pretrained/
-models/trained/
-```
-
-Luồng cơ bản:
-
-```powershell
-python scripts/scripts_run_yolo_train.py
-python run_app.py --model models/trained/medical_yolo_detect.pt
-```
-
-![Runtime advisor](images/Ảnh%20run_app.py%20--advisor-only.png)
-
-### 2. Nhánh Y Dược
-
-Mục tiêu:
-
-- tổ chức dataset skin lesion,
-- theo dõi model medical,
-- chạy các lệnh khởi tạo, status, ready, sources, verify,
-- phục vụ chat UI và pipeline phân tích medical.
-
-Thư mục liên quan:
-
-```text
-dataset/medical/skin_lesion/
-output/medical/
-```
-
-Luồng cơ bản:
-
-```powershell
-python run_medical.py init-dataset
-python run_medical.py status
-python run_medical.py sources
-python run_medical.py ready
-python run_medical.py train-cancer --epochs 30 --batch-size 6 --backbone efficientnet_b2
-python run_chat.py --check-only
-```
-
-![Doctor scan hệ thống](images/Ảnh%20run_doctor.py%20--skip-camera-check%201.png)
-
-![Medical status chi tiết](images/Ảnh%20run_doctor.py%20--skip-camera-check%202.png)
-
-![Chat preflight](images/Ảnh%20run_chat.py%20--check-only.png)
-
-![Luồng training](images/Ảnh%20luồng%20training.png)
-
-## Cài Đặt Nhanh
+### Cài đặt
 
 ```powershell
 git clone <repo-url>
 cd OncoVision
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python run_menu.py
 ```
 
-## Tài Liệu Trong docs
+### Database
 
-- [docs/project_overview.md](docs/project_overview.md): bản đồ kiến trúc tổng thể
-- [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md): giải thích runtime advisor
-- [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md): luồng y dược
-- [docs/training_guide.md](docs/training_guide.md): luồng training object detection
-- [docs/ci_and_quality.md](docs/ci_and_quality.md): cách đọc CI, smoke và quality gate
-- [docs/troubleshooting.md](docs/troubleshooting.md): lỗi thường gặp và cách khoanh vùng
+Hệ thống dùng **SQLite** tập trung tại `output/onco.db` — lưu hội thoại chat + case y tế trong 1 file. Không cần cài DB server.
 
-## Dành Cho Người Mới
-
-1. Mở [docs/project_overview.md](docs/project_overview.md) để hiểu cấu trúc tổng thể.
-2. Mở [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md) nếu bạn muốn chạy camera realtime.
-3. Mở [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md) nếu bạn làm nhánh medical.
-4. Mở [docs/training_guide.md](docs/training_guide.md) nếu bạn chuẩn bị train model.
-5. Mở [docs/ci_and_quality.md](docs/ci_and_quality.md) nếu bạn đang debug CI hoặc quality gate.
-6. Mở [docs/troubleshooting.md](docs/troubleshooting.md) nếu gặp lỗi cụ thể.
-## Medical Inputs Hỗ Trợ
-
-| Nhóm | Ảnh/volume thường dùng |
-|---|---|
-| Gan | Siêu âm, CT, MRI, đôi khi PET/CT |
-| Phổi | X-quang ngực, CT ngực, PET/CT |
-| Vú | Mammogram, siêu âm vú, MRI vú |
-| Dạ dày | Nội soi, CT, MRI, PET, EUS |
-| Đại trực tràng | Nội soi đại tràng, CT ngực-bụng-chậu, MRI trực tràng, PET |
-| Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
-| Cổ tử cung | MRI, CT, PET/CT |
-
-### Cải tiến nhận diện ảnh
-- **Validator ảnh đầu vào** (`medical/validator.py`): kiểm tra định dạng, đọc được, phân loại modality + body region, reject ảnh không hợp lệ.
-- **YOLO detection**: YOLO11s, training 50 epochs với imgsz=512, AdamW optimizer, augmentation mạnh (mosaic 0.3, mixup 0.1, copy-paste 0.1, rotate 15°, flip ngang 50%). Resume tự động từ `runs/detect/medical_yolo/weights/last.pt`.
-- **CNN classifier**: EfficientNet-B2 backbone, 288px, batch=6, 30 epochs, Focal Loss, gradient accumulation 4, class weights tự động. Ưu tiên recall bằng cách hạ ngưỡng: high-risk 0.35, medium 0.25, certainty 0.30.
-- **Backward compatible**: cũ centroid classifier vẫn hoạt động, load CNN tự động khi đúng format.
-- **CLI validate**: `python run_medical.py validate-image --image <path> --min-confidence 0.30`
-
-- `Pap/HPV`, soi cổ tử cung và sinh thiết là đầu vào lâm sàng, không phải file ảnh để upload trực tiếp.
-- Chat UI có preset chọn nhóm bệnh để lọc nguồn ảnh ngay từ đầu.
-- Chat UI có thêm chọn modality theo nhóm bệnh để file picker bám đúng loại ảnh cần dùng.
-- File picker sẽ ưu tiên đuôi ảnh/volume phù hợp với modality đã chọn.
-- Folder DICOM series và volume `.nii/.nii.gz` có thể xem từng lát trong preview.
-
-### Dataset nhận diện modality (`dataset/medical_modality`)
-
-Dùng để train classifier phân loại modality ảnh y khoa (CT/MRI/X-ray/...). Cấu trúc:
-
-```text
-dataset/medical_modality/
-  ct/        200 anh  (OrganMNIST3D - CT)
-  mri/       200 anh  (OrganMNIST3D - MRI)
-  xray/      200 anh  (ChestMNIST - X-quang nguc)
-  mammogram/ 200 anh  (BreastMNIST - nhu anh mammography)
-  endoscopy/ 200 anh  (PathMNIST - mô học đường tiêu hóa/colon)
-  ultrasound/200 anh  (BloodMNIST - anh mau, gan the closest)
-  pet_ct/    200 anh  (OrganMNIST3D + augment, synthetic)
-  eus/       200 anh  (PathMNIST + augment, synthetic)
-```
-
-- Nguồn: [MedMNIST](https://medmnist.com/) (BSD license), ảnh chuẩn hóa, resize **224×224 RGB**.
-- Tổng: **1600 ảnh** (200/class × 8 modality).
-- Sinh lại bằng: `python scripts/build_modality_dataset.py` (tự động tải MedMNIST và tạo dataset).
-- `pet_ct`/`eus` là ảnh augment tổng hợp (MedMNIST không có bộ gốc); cần bộ lâm sàng thật nếu muốn 100% ảnh thật.
-- Train: `python run_medical.py train-modality` (tự chia 80/20 train/val stratified). Model ra `models/pretrained/modality_classifier.pt`.
-- Hiện tại: train 12 epoch đạt `val_acc ≈ 0.74`.
-
-### Ảnh unlabeled cho Active Learning
-
-`dataset/medical/unlabeled/` chứa ảnh y khoa thật (từ MedMNIST test split) dùng cho `active-learning` gợi ý ảnh cần dán nhãn. Sinh bằng:
+### Kiểm tra môi trường
 
 ```powershell
-python scripts/build_unlabeled_dataset.py
+python run_doctor.py --skip-camera-check
+python run_smoke.py
 ```
 
-Mỗi lần chạy tải ~160 ảnh (224×224 RGB) từ BloodMNIST, PathMNIST, OrganMNIST3D, ChestMNIST. Ảnh có prefix `unlabeled_` để không nhầm với ảnh đã dán nhãn.
-
-### 3. Nhánh Web Chat
-
-Mục tiêu:
-
-- giao diện chat web giống desktop,
-- lưu lịch sử vào SQLite,
-- xem và xóa lịch sử từ sidebar,
-- upload ảnh y khoa phân tích trực tiếp.
-
-Thư mục liên quan:
-
-```text
-web_app.py
-templates/index.html
-output/web_uploads/
-output/chat_history.db
-```
-
-Luồng cơ bản:
+### Chạy chat AI
 
 ```powershell
+# Giao diện desktop
+python run_chat.py
+
+# Giao diện web (optional)
 python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
 ```
 
-Mở trình duyệt: `http://localhost:8000`
+---
 
-Tính năng:
+## Bản đồ entrypoint
 
-- Chat realtime với medical pipeline
-- Upload ảnh y khoa (JPG, PNG, DICOM, NIfTI)
-- Phân tích ảnh + hiển thị kết quả
-- Lịch sử chat lưu vào `output/chat_history.db`
-- Sidebar xem/xóa lịch sử
-- Admin DB viewer: `http://localhost:8000/admin/db`
+| Entrypoint | Vai trò |
+|---|---|---|
+| `run_chat.py` | Giao diện chat AI desktop — kiểm tra trạng thái, mở chat, dọn dẹp output |
+| `run_app.py` | Camera realtime — gợi ý cấu hình runtime, chạy object detection trực tiếp |
+| `run_menu.py` | Menu tổng hợp, cửa vào cho người vận hành |
+| `run_doctor.py` | Quét tổng thể hệ thống — dependency, model, dataset, output |
+| `run_medical.py` | CLI quản lý luồng y dược — dataset, model, training, modality, phân tích |
+| `run_smoke.py` | Kiểm tra nhanh chuỗi entrypoint (CI-friendly) |
+| `run_tests.py` | Dashboard chạy unit test |
+
+### Luồng dữ liệu cơ bản
+
+```
+Camera:  run_app.py → core/camera_runner.py → output/captures/
+Chat:    run_chat.py → app/chat_ui/ → medical/phân tích → output/chat/
+Medical: run_medical.py → medical/dataset.py → output/medical/
+Train:   run_train.py → models/trained/*.pt
+Web:     web_app.py → SQLite → output/chat_history.db
+```
+
+---
+
+## Huấn luyện mô hình
+
+```powershell
+# YOLO detection
+python run_train.py
+
+# CNN classifier modality
+python run_medical.py train-modality
+
+# CNN phân loại ung thư
+python run_medical.py train-cancer
+```
+
+---
+
+## Cấu trúc thư mục
+
+```text
+OncoVision/
+├── app/                    # Giao diện và runtime
+│   ├── camera_runtime/     # Bootstrap và launch camera
+│   └── chat_ui/            # Chat desktop, theme, storage, widgets
+├── core/                   # Xử lý camera, model loader, hardware info
+├── medical/                # Luồng y dược — dataset, model, pipeline, chat, report
+├── training/               # Pipeline huấn luyện object detection
+├── utils/                  # Helper dùng chung
+├── config/                 # Cấu hình YAML
+├── dataset/                # Dữ liệu
+│   ├── medical/            # Dataset y tế
+│   ├── medical_modality/   # Dataset modality (8 loại)
+│   └── object_detection/   # Dataset detection
+├── models/                 # Mô hình
+│   ├── pretrained/         # Model tiền huấn luyện
+│   └── trained/            # Model đã train
+├── output/                 # Kết quả đầu ra
+├── docs/                   # Tài liệu
+└── tests/                  # Unit test
+```
+
+---
+
+## Medical Pipeline (OncoVision AI)
+
+Hệ thống phân tích ảnh y khoa với CNN classifier (EfficientNet-B2), hỗ trợ 7 nhóm ung thư:
+
+| Bước | Module | Mô tả |
+|---|---|---|
+| Validate | `medical/validator.py` | Kiểm tra ảnh đầu vào, modality, body region |
+| DICOM parse | `medical/dataset.py` | Parse DICOM header, window/level rendering |
+| CNN inference | `medical/cnn_classifier.py` | FP16 trên GPU, TTA, confidence calibration |
+| Grad-CAM | `medical/explainability.py` | Heatmap vùng CNN tập trung |
+| Chat UI | `app/chat_ui/` | Desktop (PySide6) + Web (FastAPI) |
+| Báo cáo | `medical/reporting.py` | JSON/MD/HTML dashboard |
+
+## Tài liệu tham khảo
+
+| File | Nội dung |
+|---|---|
+| [docs/project_overview.md](docs/project_overview.md) | Tổng quan kiến trúc và cây thư mục |
+| [docs/install_guide.md](docs/install_guide.md) | Hướng dẫn cài đặt chi tiết |
+| [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md) | Luồng y dược — dataset, model, training |
+| [docs/training_guide.md](docs/training_guide.md) | Huấn luyện object detection YOLO |
+| [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md) | Runtime advisor và camera realtime |
+| [docs/quick_commands.md](docs/quick_commands.md) | Lệnh nhanh hàng ngày |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Lỗi thường gặp và cách xử lý |
+| [docs/ci_and_quality.md](docs/ci_and_quality.md) | CI pipeline và quality gate |

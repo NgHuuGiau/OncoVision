@@ -79,7 +79,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
             (normalized_dir / "normalized.jpg").write_text("x", encoding="utf-8")
             (overlay_dir / "overlay.jpg").write_text("x", encoding="utf-8")
             (exports_dir / "case.zip").write_text("x", encoding="utf-8")
-            db_path = root / "output" / "medical" / "medical_cases.db"
+            db_path = root / "output" / "onco.db"
             conn = sqlite3.connect(db_path)
             try:
                 conn.execute("CREATE TABLE medical_cases (id INTEGER PRIMARY KEY AUTOINCREMENT)")

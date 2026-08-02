@@ -172,18 +172,22 @@ def main() -> int:
             print(f"Loi: [{error_code}] {error_message}")
             print("Vui lòng tải lên đúng loại ảnh y khoa được hỗ trợ.")
             return 1
+        except Exception as exc:
+            print(f"Lỗi phân tích ảnh: {exc}")
+            return 1
         case_id = db.save_case(
             patient_code=result.patient_code,
-            image_path=str(result.source_image),
-            processed_image_path=str(result.processed_image),
-            report_json_path=str(result.report_json_path),
-            report_md_path=str(result.report_md_path),
+            image_path=str(result.source_image) if result.source_image else "",
+            processed_image_path=str(result.processed_image) if result.processed_image else "",
+            report_json_path=str(result.report_json_path) if result.report_json_path else "",
+            report_md_path=str(result.report_md_path) if result.report_md_path else "",
             suspected_malignant=result.suspected_malignant,
             risk_level=result.risk_level,
             recommendation=result.recommendation,
             metadata=build_detection_metadata(result),
         )
-        update_case_report_case_id(result.report_json_path, result.report_md_path, case_id=case_id)
+        if result.report_json_path and result.report_md_path:
+            update_case_report_case_id(result.report_json_path, result.report_md_path, case_id=case_id)
         print(f"Ma ca benh: {case_id}")
         print(f"Muc do sang loc nguy co: {result.risk_level}")
         if result.risk_level == "uncertain":
@@ -388,8 +392,15 @@ def main() -> int:
         return 0
 
     def handle_metrics() -> int:
-        truths = json.loads(args.truths)
-        predictions = json.loads(args.predictions)
+        try:
+            truths = json.loads(args.truths)
+            predictions = json.loads(args.predictions)
+        except json.JSONDecodeError as exc:
+            print(f"Lỗi: JSON đầu vào không hợp lệ — {exc}")
+            return 1
+        if not isinstance(truths, list) or not isinstance(predictions, list):
+            print("Lỗi: truths và predictions phải là mảng JSON.")
+            return 1
         metrics = compute_medical_metrics(truths, predictions)
         print(json.dumps(metrics.__dict__, indent=2, ensure_ascii=False))
         print(MEDICAL_DISCLAIMER)

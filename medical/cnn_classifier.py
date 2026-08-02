@@ -370,10 +370,14 @@ class MedicalCNNClassifierWrapper:
     ) -> None:
         self.model = model
         self.class_labels = class_labels
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        device_str = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device_str)
         self.temperature = float(temperature)
         self.model.to(self.device)
         self.model.eval()
+        self._use_fp16 = self.device.type == "cuda"
+        if self._use_fp16:
+            self.model.half()
 
     @torch.inference_mode()
     def predict(
@@ -388,6 +392,8 @@ class MedicalCNNClassifierWrapper:
         else:
             image_tensor = _load_image_as_tensor(source, assume_bgr=True)
             image_tensor = image_tensor.unsqueeze(0).to(self.device)
+            if self._use_fp16:
+                image_tensor = image_tensor.half()
             probs = self.model.predict_proba(image_tensor).cpu().numpy()[0]
         probs = self._apply_temperature(probs)
         ranked = np.argsort(-probs)
@@ -425,6 +431,8 @@ class MedicalCNNClassifierWrapper:
         all_probs = []
         for transform in tta_transforms:
             augmented = transform(base_tensor)
+            if self._use_fp16:
+                augmented = augmented.half()
             probs = self.model.predict_proba(augmented).cpu().numpy()[0]
             all_probs.append(probs)
         return np.mean(all_probs, axis=0)
@@ -655,11 +663,7 @@ def train_cnn_classifier(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=min(4, max(1, os.cpu_count() // 2)),
-        pin_memory=True,
-        drop_last=len(train_dataset) > batch_size,
-        persistent_workers=True,
-        prefetch_factor=2,
+        num_workers=0,
     )
 
     val_loader = None
@@ -669,10 +673,7 @@ def train_cnn_classifier(
             val_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=min(4, max(1, os.cpu_count() // 2)),
-            pin_memory=True,
-            persistent_workers=True,
-            prefetch_factor=2,
+            num_workers=0,
         )
 
     num_classes = len(class_labels)

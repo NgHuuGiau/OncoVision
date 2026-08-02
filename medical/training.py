@@ -44,8 +44,9 @@ from utils.file_utils import load_yaml
 logger = logging.getLogger(__name__)
 
 DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
-DEFAULT_TRAINED_MODEL_PATH = Path("medical_7_cancers.pt")
-DEFAULT_CNN_MODEL_PATH = Path("medical_7_cancers_cnn.pt")
+_CANCER_COUNT = len(COMMON_CANCER_TARGETS)
+DEFAULT_TRAINED_MODEL_PATH = Path(f"medical_{_CANCER_COUNT}_cancers.pt")
+DEFAULT_CNN_MODEL_PATH = Path(f"medical_{_CANCER_COUNT}_cancers_cnn.pt")
 DEFAULT_SPLITS = ("train", "val", "test")
 
 

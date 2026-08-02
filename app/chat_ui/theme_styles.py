@@ -61,7 +61,7 @@ _BASE_SHARED = """
         max-height: 32px;
         border-radius: 16px;
         border: none;
-        background: #4db8ff;
+        background: #1a56db;
         color: {avatar_text};
         font-weight: 700;
         qproperty-alignment: AlignCenter;
@@ -198,11 +198,11 @@ _BASE_SHARED = """
     QFrame#HistoryItem[selected="true"] {{
         background: {history_selected_bg};
         border: 1px solid {history_selected_border};
-        border-left: 3px solid #2563ff;
+        border-left: 3px solid #1a56db;
     }}
     QFrame#BubbleUser {{
-        background: rgba(77, 184, 255, 0.14);
-        border: 1px solid rgba(77, 184, 255, 0.12);
+        background: rgba(26, 86, 219, 0.10);
+        border: 1px solid rgba(26, 86, 219, 0.08);
         border-top-left-radius: 24px;
         border-top-right-radius: 8px;
         border-bottom-left-radius: 24px;
@@ -396,7 +396,7 @@ _BASE_SHARED = """
         max-height: 40px;
         border-radius: 18px;
         border: none;
-        background: #2563ff;
+        background: #1a56db;
         color: #ffffff;
         font-size: 16px;
         font-weight: 700;
@@ -404,7 +404,7 @@ _BASE_SHARED = """
         text-align: center;
     }}
     QPushButton#SendButton:hover {{
-        background: #1d4ed8;
+        background: #1442b0;
     }}
     QPushButton#SidebarFooterButton {{
         min-height: 40px;
@@ -439,6 +439,37 @@ _BASE_SHARED = """
     QPushButton#SettingsCloseButton:hover {{
         color: {button_text};
         background: transparent;
+    }}
+    QFrame#MedicalRow {{
+        background: transparent;
+        border: none;
+        padding: 0;
+    }}
+    QFrame#MedicalRow QComboBox {{
+        min-width: 160px;
+        min-height: 32px;
+        padding: 4px 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: {combo_text};
+        background: {combo_bg};
+        border: 1px solid {combo_border};
+        border-radius: 14px;
+    }}
+    QFrame#MedicalRow QComboBox::drop-down {{
+        border: none;
+        width: 0px;
+    }}
+    QFrame#MedicalRow QComboBox::down-arrow {{
+        image: none;
+    }}
+    QFrame#MedicalRow QComboBox QAbstractItemView {{
+        background: {menu_bg};
+        color: {menu_text};
+        selection-background-color: {combo_selection_bg};
+        selection-color: {combo_selection_text};
+        border: 1px solid {menu_border};
+        outline: none;
     }}
     QComboBox#SettingsCombo {{
         min-width: 220px;
@@ -525,8 +556,8 @@ DARK_STYLESHEET = _build_stylesheet(
     avatar_background="rgba(255, 255, 255, 0.03)",
     attachment_color="#d7e0ff",
     avatar_text="#ffffff",
-    sidebar_bg="#0f172a",
-    sidebar_border="rgba(255, 255, 255, 0.08)",
+    sidebar_bg="#0c1428",
+    sidebar_border="rgba(255, 255, 255, 0.06)",
     divider_color="rgba(255, 255, 255, 0.06)",
     composer_bg="rgba(255, 255, 255, 0.06)",
     composer_border="rgba(255, 255, 255, 0.08)",
@@ -539,8 +570,8 @@ DARK_STYLESHEET = _build_stylesheet(
     history_panel_border="rgba(255, 255, 255, 0.05)",
     search_bg="rgba(255, 255, 255, 0.03)",
     search_border="rgba(255, 255, 255, 0.06)",
-    dialog_shell_bg="#0f172a",
-    dialog_shell_border="rgba(255, 255, 255, 0.08)",
+    dialog_shell_bg="#0c1428",
+    dialog_shell_border="rgba(255, 255, 255, 0.06)",
     settings_nav_bg="rgba(255, 255, 255, 0.02)",
     settings_card_bg="rgba(255, 255, 255, 0.03)",
     settings_card_border="rgba(255, 255, 255, 0.06)",
@@ -575,14 +606,14 @@ DARK_STYLESHEET = _build_stylesheet(
     menu_bg="#1b1c20",
     menu_text="#ffffff",
     menu_border="#3a3a3a",
-    combo_selection_bg="rgba(77, 184, 255, 0.2)",
+    combo_selection_bg="rgba(26, 86, 219, 0.25)",
     combo_selection_text="#ffffff",
     menu_hover="#242424",
 )
 
 
 LIGHT_STYLESHEET = _build_stylesheet(
-    root_bg="#f7f9fd",
+    root_bg="#f2f5fa",
     text_color="#111827",
     subtle_color="#64748b",
     heading_color="#000000",
@@ -606,7 +637,7 @@ LIGHT_STYLESHEET = _build_stylesheet(
     search_border="rgba(17, 24, 39, 0.06)",
     dialog_shell_bg="#ffffff",
     dialog_shell_border="#e2e8f0",
-    settings_nav_bg="rgba(37, 99, 255, 0.03)",
+    settings_nav_bg="rgba(26, 86, 219, 0.03)",
     settings_card_bg="#ffffff",
     settings_card_border="#e2e8f0",
     history_hover="rgba(17, 24, 39, 0.05)",
@@ -631,8 +662,8 @@ LIGHT_STYLESHEET = _build_stylesheet(
     footer_button_bg="#ffffff",
     footer_button_border="#e2e8f0",
     footer_button_hover="#f8fbff",
-    settings_nav_button_bg="#eef4ff",
-    settings_nav_button_border="#dbe7ff",
+    settings_nav_button_bg="#e9edf7",
+    settings_nav_button_border="#d3dcee",
     settings_nav_button_text="#111827",
     combo_text="#000000",
     combo_bg="#ffffff",
@@ -640,7 +671,7 @@ LIGHT_STYLESHEET = _build_stylesheet(
     menu_bg="#ffffff",
     menu_text="#111827",
     menu_border="#d9d9df",
-    combo_selection_bg="#dbeafe",
+    combo_selection_bg="rgba(26, 86, 219, 0.12)",
     combo_selection_text="#000000",
     menu_hover="#f7f7f8",
 )

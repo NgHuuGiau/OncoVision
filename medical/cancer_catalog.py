@@ -70,6 +70,14 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
         model_ready=True,
         notes="Pap/HPV, soi cổ tử cung và sinh thiết là đầu vào lâm sàng; phần ảnh staging thường dùng MRI, CT, PET/CT.",
     ),
+    CancerScreeningTarget(
+        key="brain",
+        label="Ung thư não",
+        description="Nhóm dữ liệu hình ảnh cho ung thư não (u não, glioma, meningioma, pituitary).",
+        modalities=("MRI não", "CT sọ não", "PET/CT não"),
+        model_ready=True,
+        notes="Dữ liệu từ Figshare (708) + Kaggle (13,511) = 14,219 ảnh MRI não.",
+    ),
 )
 
 

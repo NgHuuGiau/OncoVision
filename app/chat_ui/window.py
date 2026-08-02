@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import time
 import random
@@ -54,6 +55,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         from PySide6.QtSvg import QSvgRenderer  # noqa: F401
         from PySide6.QtWidgets import (  # noqa: F401
             QApplication,
+            QComboBox,
             QDialog,
             QFrame,
             QHBoxLayout,
@@ -98,7 +100,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         model = voice_model_cache.get(cache_key)
         if model is None:
             compute_type = "int8" if device == "cpu" else "float16"
-            model = WhisperModel("base", device=device, compute_type=compute_type)
+            model = WhisperModel("small", device=device, compute_type=compute_type)
             voice_model_cache[cache_key] = model
         return model
 
@@ -337,32 +339,19 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             header.setContentsMargins(0, 0, 0, 0)
             header.setSpacing(10)
             self.sidebar_header_layout = header
-            self.sidebar_header_left_spacer = QWidget()
-            self.sidebar_header_left_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-            self.sidebar_app_button = QPushButton()
-            self.sidebar_app_button.setObjectName("SidebarAppButton")
-            self.sidebar_app_button.setIconSize(QSize(28, 28))
-            self.sidebar_app_button.setLayoutDirection(Qt.LeftToRight)
-            self.sidebar_app_button.setCursor(Qt.PointingHandCursor)
-            self.sidebar_app_button.clicked.connect(self.toggle_sidebar)
             self.brand_text = QLabel(tr(self.language, "app_name"))
             self.brand_text.setObjectName("BrandText")
-            self.brand_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-            self.brand_text.setStyleSheet("font-size: 12px; font-weight: 700;")
+            self.brand_text.setStyleSheet("font-size: 18px; font-weight: 700; color: #1a56db;")
             self.brand_text.setWordWrap(False)
-            self.sidebar_header_right_spacer = QWidget()
-            self.sidebar_header_right_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             self.sidebar_toggle_button = QPushButton()
             self.sidebar_toggle_button.setObjectName("SidebarToggleButton")
-            self.sidebar_toggle_button.setFixedSize(28, 28)
+            self.sidebar_toggle_button.setFixedSize(32, 32)
             self.sidebar_toggle_button.clicked.connect(self.toggle_sidebar)
             self.sidebar_collapsed_button = QPushButton()
             self.sidebar_collapsed_button.setObjectName("SidebarCompactButton")
             self.sidebar_collapsed_button.setFixedSize(40, 40)
             self.sidebar_collapsed_button.clicked.connect(self.toggle_sidebar)
-            header.addWidget(self.brand_text, 0, Qt.AlignVCenter | Qt.AlignLeft)
-            header.addWidget(self.sidebar_header_right_spacer, 1)
-            header.addWidget(self.sidebar_header_left_spacer, 1)
+            header.addWidget(self.brand_text, 1)
             header.addWidget(self.sidebar_toggle_button, 0, Qt.AlignRight)
             open_layout.addWidget(header_frame)
 
@@ -478,19 +467,27 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.light_mode_button.setMinimumSize(80, 38)
             self.light_mode_button.setLayoutDirection(Qt.LeftToRight)
             self.light_mode_button.clicked.connect(lambda: self.set_theme_mode("light"))
+            self.light_mode_button.setVisible(False)
             top_row.addWidget(self.light_mode_button)
             self.dark_mode_button = QPushButton()
             self.dark_mode_button.setObjectName("ModeButton")
             self.dark_mode_button.setMinimumSize(70, 38)
             self.dark_mode_button.setLayoutDirection(Qt.LeftToRight)
             self.dark_mode_button.clicked.connect(lambda: self.set_theme_mode("dark"))
+            self.dark_mode_button.setVisible(False)
             top_row.addWidget(self.dark_mode_button)
             self.desktop_button = QPushButton()
             self.desktop_button.setObjectName("ModeButton")
             self.desktop_button.setMinimumSize(190, 38)
             self.desktop_button.setLayoutDirection(Qt.LeftToRight)
+            self.desktop_button.setVisible(False)
             top_row.addWidget(self.desktop_button)
             chat_layout.addLayout(top_row)
+
+            self.medical_row = QFrame()
+            self.medical_row.setObjectName("MedicalRow")
+            self.medical_row.setVisible(False)
+            chat_layout.addWidget(self.medical_row)
 
             self.greeting_card = QFrame()
             self.greeting_card.setObjectName("GreetingCard")
@@ -822,19 +819,18 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def generate_system_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
             source = attach_kind or "chat"
             if source in {"image", "camera"} and attach_path:
-                analysis_prompt = prompt.strip()
-                target_context = self.medical_target_context()
-                if target_context:
-                    analysis_prompt = f"{analysis_prompt} {target_context}".strip()
-                self._start_medical_analysis(prompt=analysis_prompt, attach_path=attach_path)
+                self._start_medical_analysis(prompt=prompt, attach_path=attach_path, attach_kind=source)
             else:
                 self.add_message(ChatMessage(sender="assistant", text=self.build_system_reply(text=prompt, source=source)))
-            self.scroll_to_bottom()
+                self.scroll_to_bottom()
 
-        def _start_medical_analysis(self, *, prompt: str, attach_path: str) -> None:
+        def _start_medical_analysis(self, *, prompt: str, attach_path: str, attach_kind: str = "") -> None:
             if self.medical_controller.active:
                 self.add_message(ChatMessage(sender="assistant", text=tr(self.language, "medical_pending")))
                 return
+            self._pending_attach_path = attach_path
+            self._pending_attach_kind = attach_kind
+            self._pending_prompt = prompt
             self.send_button.setEnabled(False)
             self.plus_button.setEnabled(False)
             self.micro_button.setEnabled(False)
@@ -850,6 +846,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             )
             self.medical_worker.result_ready.connect(self._on_medical_analysis_success)
             self.medical_worker.error.connect(self._on_medical_analysis_error)
+            self.medical_worker.progress.connect(self._on_medical_analysis_progress)
             self.medical_worker.finished.connect(self._on_medical_analysis_finished)
             self.medical_worker.start()
 
@@ -863,10 +860,40 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                     metadata_json=medical_response.metadata_json,
                 )
             )
+            try:
+                meta = json.loads(medical_response.metadata_json)
+                gradcam = meta.get("gradcam_overlays") or []
+                dicom_info = meta.get("dicom_info") or {}
+                if gradcam:
+                    heatmap_text = "📊 Heatmap Grad-CAM - vùng CNN tập trung khi phân tích"
+                    for gpath in gradcam:
+                        self.add_message(
+                            ChatMessage(sender="assistant", text=heatmap_text, attachment_path=gpath, attachment_kind="image")
+                        )
+                        heatmap_text = ""
+                if dicom_info and dicom_info.get("Modality"):
+                    dcm_summary = "📋 Thông tin DICOM: " + " | ".join(f"{k}={v}" for k, v in dicom_info.items() if v)
+                    self.add_message(ChatMessage(sender="assistant", text=dcm_summary))
+            except Exception:
+                pass
             self.scroll_to_bottom()
 
         def _on_medical_analysis_error(self, err: str) -> None:
-            self.add_message(ChatMessage(sender="assistant", text=self._format_error(err)))
+            if "does not support image input" in err or "Cannot read" in err:
+                kind = getattr(self, '_pending_attach_kind', "image")
+                path = getattr(self, '_pending_attach_path', "")
+                text = self.build_system_reply(text=self._pending_prompt, source=kind)
+                self.add_message(ChatMessage(sender="assistant", text=text, attachment_path=path, attachment_kind=kind))
+            else:
+                self.add_message(ChatMessage(sender="assistant", text=self._format_error(err)))
+            self.scroll_to_bottom()
+
+        def _on_medical_analysis_progress(self, stage: str, pct: float) -> None:
+            bar = "▓" * int(pct * 20) + "░" * (20 - int(pct * 20))
+            text = f"⏳ Đang xử lý... {bar} {pct*100:.0f}%\n{stage}"
+            state = self.medical_controller.get_state()
+            if state and hasattr(state, 'placeholder'):
+                self.message_input.setPlaceholderText(f"⏳ {stage}")
             self.scroll_to_bottom()
 
         def _on_medical_analysis_finished(self) -> None:
@@ -1032,7 +1059,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
         def _format_error(self, err: str) -> str:
             if "does not support image input" in err or "Cannot read" in err:
-                return tr(self.language, "image_model_error")
+                return tr(self.language, "system_reply_image")
             return f"Phân tích lỗi: {err}"
 
         def pick_image(self) -> None:

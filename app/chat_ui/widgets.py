@@ -377,7 +377,7 @@ class ChatBubble(QWidget):
         if text == "[TYPING]":
             self.text_label.hide()
             if not self.typing_indicator:
-                self.typing_indicator = TypingIndicator(QColor("#4db8ff"))
+                self.typing_indicator = TypingIndicator(QColor("#1a56db"))
                 self.bubble_layout.addWidget(self.typing_indicator)
             self.typing_indicator.show()
             return

@@ -7,7 +7,11 @@ from pathlib import Path
 from medical.case_payloads import build_detection_metadata
 from medical.cancer_catalog import supported_cancer_labels, supported_cancer_modalities
 from medical.compliance import MEDICAL_DISCLAIMER
+from typing import Callable
+
 from medical.pipeline import MedicalImageAnalyzer
+
+ProgressCallback = Callable[[str, float], None] | None
 from medical.reporting import update_case_report_case_id
 from medical.storage import MedicalCaseDatabase
 
@@ -32,9 +36,9 @@ class MedicalChatService:
     def check_ready(self) -> Path:
         return self.analyzer.ensure_ready()
 
-    def analyze_attachment(self, *, image_path: str | Path, patient_code: str, user_prompt: str = "") -> MedicalChatResponse:
+    def analyze_attachment(self, *, image_path: str | Path, patient_code: str, user_prompt: str = "", progress_callback: ProgressCallback = None) -> MedicalChatResponse:
         try:
-            result = self.analyzer.analyze_image(image_path, patient_code=patient_code)
+            result = self.analyzer.analyze_image(image_path, patient_code=patient_code, progress_callback=progress_callback)
         except ValueError as exc:
             message = str(exc)
             if ": " in message:
@@ -43,10 +47,11 @@ class MedicalChatService:
                 error_code = "UNKNOWN_ERROR"
                 error_message = message
             reply_text = (
-                f"Đã phân tích ảnh y khoa cho mã bệnh nhân {patient_code}. "
-                f"Loi: [{error_code}] {error_message} "
-                f"Vui lòng tải lên đúng loại ảnh y khoa được hỗ trợ: CT, MRI, PET/CT, X-quang ngực, mammogram, siêu âm, nội soi hoặc EUS. "
-                f"Lưu ý: {MEDICAL_DISCLAIMER}"
+                f"❌ **Lỗi phân tích** — Mã BN: {patient_code}\n\n"
+                f"Mã lỗi: {error_code}\n"
+                f"Chi tiết: {error_message}\n\n"
+                f"Vui lòng tải lên ảnh y khoa hợp lệ (CT, MRI, PET/CT, X-quang, siêu âm, mammogram...).\n\n"
+                f"*{MEDICAL_DISCLAIMER}*"
             )
             return MedicalChatResponse(
                 reply_text=reply_text,
@@ -70,12 +75,16 @@ class MedicalChatService:
             result.report_md_path,
             case_id=case_id,
         )
+        gradcam_paths = list(result.gradcam_overlays) if result.gradcam_overlays else []
+        dicom_info = result.dicom_info or {}
         metadata = {
             "medical_case_id": case_id,
             "source_image_path": str(result.source_image),
             "risk_level": result.risk_level,
             "suspected_malignant": result.suspected_malignant,
             "processed_image_path": str(result.processed_image),
+            "gradcam_overlays": gradcam_paths,
+            "dicom_info": dicom_info,
             "report_json_path": str(result.report_json_path),
             "report_md_path": str(result.report_md_path),
             "report_html_path": str(result.report_json_path.with_suffix(".html")),
@@ -87,39 +96,35 @@ class MedicalChatService:
             "supported_modalities": supported_cancer_modalities(),
             "predicted_labels": [item.label for item in result.detections],
         }
-        detection_summary = ", ".join(
-            f"{item.label} {item.confidence:.2f}" for item in result.detections[:5]
-        ) or "không ghi nhận vùng nghi ngờ rõ ràng"
-        target_summary = ", ".join(supported_cancer_labels())
-        modality_summary = ", ".join(supported_cancer_modalities())
+        top_detections = result.detections[:3]
+        if result.detections:
+            detection_summary = "\n".join(
+                f"• {item.label}: {item.confidence*100:.1f}%" for item in top_detections
+            )
+        else:
+            detection_summary = "không ghi nhận vùng nghi ngờ rõ ràng"
         quality_text = (
-            " Cảnh báo chất lượng ảnh: " + "; ".join(result.quality_warnings)
+            f"\n⚠️ Cảnh báo: {'; '.join(result.quality_warnings)}"
             if result.quality_warnings
             else ""
         )
-        if result.risk_level == "uncertain":
-            risk_text = (
-                "KẾT QUẢ KHÔNG ĐỦ TIN TƯỞNG. "
-                "Hệ thống không được tự tin để phân loại 7 loại ung thư. "
-                "Cần khám chuyên khoa để bảo đảm. "
-            )
-        else:
-            risk_text = f"Muc do sang loc nguy co: {result.risk_level}. "
+        risk_icon = {"high": "🔴", "medium": "🟡", "low": "🟢", "uncertain": "⚪"}
+        risk_text = f"{risk_icon.get(result.risk_level, '⚪')} Mức nguy cơ: {result.risk_level}"
+        grad_summary = ""
+        if result.gradcam_overlays:
+            grad_summary = f"\n📊 Heatmap: {len(result.gradcam_overlays)} ảnh"
+        elapsed = result.analysis_time_seconds
+        time_str = f"{elapsed:.1f}s" if elapsed > 0 else ""
         reply_text = (
-            f"Đã phân tích ảnh y khoa cho mã bệnh nhân {patient_code}. "
-            f"{risk_text}"
-            f"Số vùng tổn thương ghi nhận: {len(result.detections)}. "
-            f"Tóm tắt phát hiện: {detection_summary}. "
-            f"Hệ thống hiện hỗ trợ danh mục sàng lọc: {target_summary}. "
-            f"Các kiểu ảnh thường gặp: {modality_summary}. "
-            f"Khuyến nghị: {result.recommendation}."
-            f"{quality_text} "
-            f"Ảnh gốc: {result.source_image}. "
-            f"Đã lưu ảnh đã xử lý tại: {result.processed_image}. "
-            f"Đã lưu báo cáo JSON tại: {result.report_json_path}. "
-            f"Đã lưu báo cáo Markdown tại: {result.report_md_path}. "
-            f"Đã lưu báo cáo HTML tại: {result.report_json_path.with_suffix('.html')}. "
-            f"Lưu ý: {result.disclaimer}"
+            f"📋 **Kết quả phân tích** — Mã BN: {patient_code}\n\n"
+            f"{risk_text}\n"
+            f"🔬 Phát hiện: {len(result.detections)} vùng\n"
+            f"{detection_summary}\n"
+            f"{grad_summary}"
+            f"{quality_text}\n\n"
+            f"💡 {result.recommendation}\n"
+            + (f"⏱ {time_str}\n" if time_str else "")
+            + f"\n*{result.disclaimer}*"
         )
         return MedicalChatResponse(
             reply_text=reply_text,

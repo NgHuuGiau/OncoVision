@@ -75,7 +75,9 @@ def main() -> int:
     args = parser.parse_args()
     if getattr(args, "check_only", False):
         return run_chat_preflight(auto_fix_icons=getattr(args, "auto_fix_icons", False))
-    if args.cleanup_output:
+    if getattr(args, "auto_fix_icons", False):
+        print("Lưu ý: --auto-fix-icons chỉ có tác dụng khi đi kèm --check-only.")
+    if getattr(args, "cleanup_output", False):
         output = io.StringIO()
         output.write("=== Chat output ===\n")
         chat_summary = cleanup_directories([get_chat_capture_dir()], older_than_days=args.older_than_days)

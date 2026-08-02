@@ -92,6 +92,8 @@ class GradCAM:
         x = input_tensor.to(self.device)
         if x.dim() == 3:
             x = x.unsqueeze(0)
+        if x.dtype == torch.float32 and next(self.model.parameters()).dtype == torch.float16:
+            x = x.half()
         self.model.zero_grad(set_to_none=True)
         output = self.model(x)
         if self.activations is None:
@@ -385,6 +387,9 @@ class MedicalGradCAMExplainer:
         top_indices = np.argsort(-probs_vec)[: max(1, top_k)]
         input_tensor = _load_image_as_tensor(image, image_size=self.image_size, assume_bgr=True)
         input_tensor = input_tensor.unsqueeze(0).to(self.device)
+        model_is_fp16 = next(self.wrapper.model.parameters()).dtype == torch.float16
+        if model_is_fp16:
+            input_tensor = input_tensor.half()
         methods = methods or ["gradcam"]
         results = []
         for idx in top_indices:

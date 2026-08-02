@@ -15,7 +15,6 @@ def build_sidebar_ui(window) -> None:
 
 def apply_theme_assets(window) -> None:
     strong = window.icon_color()
-    window.sidebar_app_button.setIcon(themed_icon("sidebar_app.svg", strong, 28))
     window.sidebar_toggle_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
     window.sidebar_collapsed_button.setIcon(themed_icon("sidebar_app.svg", strong, 18))
     window.new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 22))
@@ -115,7 +114,6 @@ def update_sidebar_ui(window) -> None:
         window.sidebar_toggle_button.setVisible(True)
         window.sidebar_collapsed_button.setVisible(False)
         window.brand_text.setVisible(True)
-        window.sidebar_app_button.setVisible(False)
         window.history_title.setVisible(True)
         window.history_panel.setVisible(True)
         window.search_box.setObjectName("SearchBox")
@@ -125,7 +123,6 @@ def update_sidebar_ui(window) -> None:
         window.sidebar_toggle_button.setVisible(False)
         window.sidebar_collapsed_button.setVisible(True)
         window.brand_text.setVisible(False)
-        window.sidebar_app_button.setVisible(False)
         window.history_title.setVisible(False)
         window.history_panel.setVisible(False)
         window.search_box.setObjectName("SidebarCompactSearchButton")

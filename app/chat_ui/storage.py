@@ -232,6 +232,8 @@ class ChatDatabase:
 
         messages_by_conversation: dict[int, list[ChatMessage]] = defaultdict(list)
         for conversation_id, sender, text, path, kind, metadata_json, message_id in message_rows:
+            if sender == "assistant" and ("Cannot read" in text or "does not support image input" in text):
+                continue
             messages_by_conversation[conversation_id].append(
                 ChatMessage(
                     sender=sender,

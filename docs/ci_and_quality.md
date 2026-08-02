@@ -1,44 +1,45 @@
-# CI and Quality
+# CI Và Quality Gate
 
-[![CI](https://img.shields.io/badge/CI-Test%20Python%20Compatibility-2F855A)](../.github/workflows/test.yml)
+Tài liệu tóm tắt cách CI hoạt động và các bước kiểm tra khi pipeline thất bại.
 
-Tep nay tom tat cach CI hoat dong va noi nao can xem khi muon giai thich vi sao pipeline do.
+---
 
-## 1. CI dang chay gi
+## 1. CI chạy những gì
 
-Workflow chinh nam o [`.github/workflows/test.yml`](../.github/workflows/test.yml) va chay tren:
+Workflow chính tại `.github/workflows/test.yml`, chạy trên `ubuntu-latest` và `windows-latest`.
 
-- `ubuntu-latest`
-- `windows-latest`
+**Trình tự các bước:**
 
-Thu tu step:
+1. Checkout code
+2. Setup Python 3.10
+3. Cài đặt dependencies
+4. `compileall` — kiểm tra biên dịch
+5. `ruff` — kiểm tra code style
+6. `mypy` — kiểm tra kiểu dữ liệu
+7. Xác minh entrypoint help
+8. Smoke check (`run_smoke.py`)
+9. Unit test
 
-1. checkout code
-2. setup Python 3.10
-3. install dependencies
-4. `compileall`
-5. `ruff`
-6. `mypy`
-7. verify entrypoint help
-8. smoke check
-9. unit tests
+---
 
-## 2. Step nao la hard fail
+## 2. Bước hard fail
 
-Mac dinh nhung step nay co the lam CI do:
+Các bước có thể làm CI đỏ:
 
-- install dependencies
+- Cài đặt dependencies
 - `compileall`
 - `ruff`
-- verify entrypoint help
-- smoke check
-- unit tests
+- Xác minh entrypoint help
+- Smoke check
+- Unit test
 
-Step `mypy` đang được để `continue-on-error: true` để không chặn CI, nhưng vẫn ghi log trong artifact.
+`mypy` hiện đang để `continue-on-error: true` (không chặn CI) nhưng vẫn ghi log.
 
-## 3. Phạm vi mypy hiện tại
+---
 
-`mypy` chỉ soi các module đang được bảo trì:
+## 3. Phạm vi mypy
+
+Chỉ kiểm tra các module đang bảo trì:
 
 - `core`
 - `medical`
@@ -46,27 +47,27 @@ Step `mypy` đang được để `continue-on-error: true` để không chặn C
 - `utils`
 - `run_*.py`
 
-HieraChain đã bị loại ra khỏi scope CI.
+---
 
 ## 4. Smoke check
 
-`run_smoke.py` có 2 chế độ:
+`run_smoke.py` có hai chế độ:
 
-- mặc định: cảnh báo và fail nếu một check fail
-- `--ci-safe`: chỉ chạy các check nhẹ, phù hợp CI
+- **Mặc định**: cảnh báo và fail nếu check thất bại
+- **`--ci-safe`**: chỉ chạy check nhẹ, phù hợp CI (training-preflight hạ từ fail xuống warn)
 
-Trong `--ci-safe`, `training-preflight` được hạ từ fail sang warn để tránh fail do dataset mẫu không tồn tại trên runner.
+---
 
-## 5. Khi CI do thi xem gi truoc
+## 5. Khi CI đỏ — xem gì trước
 
-Thu tu kiem tra nhanh:
+Kiểm tra theo thứ tự:
 
 1. `ci-logs/04-ruff.txt`
 2. `ci-logs/05-mypy-type-check.txt`
 3. `ci-logs/07-smoke-check.txt`
 4. `ci-logs/08-unit-tests.txt`
 
-## 6. Lenh chay local
+### Lệnh chạy local
 
 ```powershell
 python run_smoke.py --ci-safe --stop-on-fail
@@ -74,7 +75,10 @@ python run_train.py --check-only
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## 7. Ghi chú
+---
 
-- Nếu muốn bật mypy quay lại thành gate cứng, cần dọn type debt trước.
-- Nếu chỉ cần CI xanh và ổn định, cách hiện tại là đúng mục tiêu.
+## 6. Lưu ý
+
+- Nếu muốn bật mypy thành gate cứng, cần dọn type debt trước.
+- Ubuntu và Windows có thể khác biệt do dependency, log Ubuntu là chuẩn để debug.
+- Mục tiêu hiện tại: CI xanh, ổn định, không chặn vì type debt.

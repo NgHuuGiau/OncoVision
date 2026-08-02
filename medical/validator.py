@@ -38,6 +38,9 @@ _MODALITY_LABEL_TO_CANONICAL = {
     "Siêu âm": "ultrasound",
     "CT": "ct",
     "MRI": "mri",
+    "MRI não": "mri",
+    "CT sọ não": "ct",
+    "PET/CT não": "pet_ct",
 }
 
 _TARGET_LABEL_TO_CANONICAL = {
@@ -48,6 +51,7 @@ _TARGET_LABEL_TO_CANONICAL = {
     "colorectal": "colorectal",
     "prostate": "prostate",
     "cervical": "cervix",
+    "brain": "brain",
 }
 
 _MODALITY_TO_TARGET_KEY = {
@@ -67,6 +71,9 @@ _MODALITY_TO_TARGET_KEY = {
     "Siêu âm": "liver",
     "CT": "liver",
     "MRI": "liver",
+    "MRI não": "brain",
+    "CT sọ não": "brain",
+    "PET/CT não": "brain",
 }
 
 _DICOM_MODALITY_MAP = {
@@ -89,6 +96,7 @@ _DEFAULT_MODALITY_TUNING: dict[str, float | str] = {
 }
 
 SUPPORTED_MAPPING = {
+    "brain": supported_medical_modalities_for_target("brain"),
     "liver": supported_medical_modalities_for_target("liver"),
     "lung": supported_medical_modalities_for_target("lung"),
     "breast": supported_medical_modalities_for_target("breast"),
@@ -405,10 +413,12 @@ def _validate_single_file(source, allowed, min_confidence):
 
     canonical_modality = _canonical_modality(modality_label)
     if canonical_modality is None:
+        warnings, quality_score = assess_image_quality(source)
         return ValidationResult(
-            status="error",
+            status="uncertain",
             error_code="UNKNOWN_IMAGE_TYPE",
-            message="Không xác định được ảnh. Vui lòng tải lên đúng loại ảnh y khoa được hỗ trợ.",
+            message="Không xác định được ảnh, pipeline vẫn tiếp tục phân tích nhưng kết quả có thể không chính xác.",
+            quality_warnings=tuple(warnings),
         )
 
     tuning = get_modality_tuning(canonical_modality)
@@ -429,9 +439,9 @@ def _validate_single_file(source, allowed, min_confidence):
     canonical_body = _canonical_body_region(target_key)
     if canonical_body is None:
         return ValidationResult(
-            status="error",
+            status="uncertain",
             error_code="UNKNOWN_BODY_REGION",
-            message="Không xác định được vùng cơ thể trong ảnh.",
+            message="Không xác định được vùng cơ thể trong ảnh, pipeline vẫn tiếp tục phân tích.",
         )
 
     body_confidence = _score_hint_confidence(normalized, _TARGET_HINTS, target_key)
@@ -514,6 +524,16 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         except Exception:
             pass
 
+    if modality_label is None:
+        try:
+            from medical.dataset import guess_modality_from_pixels
+            guessed = guess_modality_from_pixels(source)
+            if guessed:
+                modality_label = guessed
+                modality_confidence = 0.4
+        except Exception:
+            pass
+
     target_key_hint = _find_first_matching_hint(normalized, _TARGET_HINTS)
     if modality_label is None and target_key_hint == "cervical":
         return ValidationResult(
@@ -526,10 +546,21 @@ def _validate_single_file_strict(source, allowed, min_confidence):
 
     canonical_modality = _canonical_modality(modality_label)
     if canonical_modality is None:
+        target_key_hint = _find_first_matching_hint(normalized, _TARGET_HINTS)
+        if target_key_hint == "cervical":
+            return ValidationResult(
+                status="error",
+                error_code="NON_IMAGE_CERVICAL_INPUT",
+                message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
+                body_region="cervical",
+                route=route_input(None, "cervix"),
+            )
+        warnings, quality_score = assess_image_quality(source)
         return ValidationResult(
-            status="error",
+            status="uncertain",
             error_code="UNKNOWN_IMAGE_TYPE",
-            message="Không xác định được loại ảnh. Hãy tải lên đúng loại ảnh y khoa được hỗ trợ.",
+            message="Không xác định được loại ảnh, pipeline vẫn tiếp tục phân tích nhưng kết quả có thể không chính xác.",
+            quality_warnings=tuple(warnings),
         )
 
     tuning = get_modality_tuning(canonical_modality)
@@ -549,9 +580,9 @@ def _validate_single_file_strict(source, allowed, min_confidence):
     canonical_body = _canonical_body_region(target_key)
     if canonical_body is None:
         return ValidationResult(
-            status="error",
+            status="uncertain",
             error_code="UNKNOWN_BODY_REGION",
-            message="Không xác định được vùng cơ thể trong ảnh.",
+            message="Không xác định được vùng cơ thể trong ảnh, pipeline vẫn tiếp tục phân tích.",
         )
 
     if target_key == "cervical" and modality_label is None:
@@ -566,15 +597,15 @@ def _validate_single_file_strict(source, allowed, min_confidence):
     supported_modalities = SUPPORTED_MAPPING.get(canonical_body)
     if not supported_modalities:
         return ValidationResult(
-            status="error",
+            status="uncertain",
             error_code="UNSUPPORTED_BODY_REGION",
-            message="Vùng cơ thể này chưa được hệ thống hỗ trợ.",
+            message="Vùng cơ thể này chưa được hệ thống hỗ trợ, pipeline vẫn tiếp tục phân tích.",
         )
     if canonical_modality not in supported_modalities:
         return ValidationResult(
-            status="error",
+            status="uncertain",
             error_code="UNSUPPORTED_IMAGE_FOR_CANCER_TYPE",
-            message="Loại ảnh này không được hỗ trợ cho nhóm ung thư cần nhận diện.",
+            message="Loại ảnh này không được hỗ trợ cho nhóm ung thư cần nhận diện, pipeline vẫn tiếp tục phân tích.",
         )
 
     body_confidence = _score_hint_confidence(normalized, _TARGET_HINTS, target_key)

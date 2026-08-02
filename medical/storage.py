@@ -33,7 +33,7 @@ class MedicalCaseRecord:
 class MedicalCaseDatabase:
     CONNECT_TIMEOUT_SECONDS = DEFAULT_SQLITE_TIMEOUT_SECONDS
 
-    def __init__(self, db_path: str | Path = "output/medical/medical_cases.db") -> None:
+    def __init__(self, db_path: str | Path = "output/onco.db") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()

@@ -1,215 +1,153 @@
 # Hướng Dẫn Luồng Y Dược
 
-[![Medical](https://img.shields.io/badge/Docs-Medical%20Workflow-00A6A6?logo=readthedocs&logoColor=white)](medical_imaging_guide.md)
+Tài liệu giải thích luồng y tế của OncoVision: dataset, entrypoint, lệnh CLI, cấu hình training và debug.
 
-Tài liệu này giải thích luồng medical của OncoVision: dataset nào được đọc, entrypoint nào điều phối, và khi nào nên đi theo nhánh nào để debug hay huấn luyện.
+---
 
-> Nếu bạn làm phần medical, đây là chỗ nên mở đầu tiên sau README.
+## 1. Tổng quan
 
-## Tóm Tắt Nhanh
+Nhánh y dược phục vụ bốn việc chính:
 
-| Mảng | Vai trò |
-|---|---|
-| `medical/` | Nơi gom logic y dược cốt lõi |
-| `run_medical.py` | CLI chính cho luồng medical |
-| `run_chat.py` | Kiểm tra UI và trạng thái liên quan medical |
-| `run_doctor.py` | Quét tổng quan model, dataset, output |
-| `output/medical/` | Nơi chứa kết quả và dữ liệu đầu ra |
+1. Quản lý dataset y tế (tổ chức, kiểm tra, báo cáo)
+2. Theo dõi trạng thái model và output medical
+3. Phân tích ảnh y khoa và lưu trữ ca bệnh
+4. Hỗ trợ chat AI kiểm tra trạng thái y dược
 
-## 1. Mục Tiêu
+---
 
-Nhánh y dược của OncoVision phục vụ 4 việc chính:
-
-- quản lý dataset skin lesion,
-- theo dõi trạng thái model và output medical,
-- phân tích ảnh y khoa và lưu case,
-- hỗ trợ chat UI kiểm tra trạng thái y dược.
-
-## 2. Thư Mục Chính
-
-```text
-dataset/medical/
-output/medical/
-medical/
-app/chat_ui/
-```
-
-Dataset medical hiện được đọc từ `dataset/medical/`, đặc biệt là nhánh `skin_lesion/`.
-
-## 3. Entrypoint Liên Quan
+## 2. Entrypoint liên quan
 
 | File | Vai trò |
 |---|---|
-| `run_medical.py` | CLI chính cho luồng medical |
-| `run_chat.py` | Chat UI dùng trạng thái medical |
-| `run_doctor.py` | Kiểm tra tổng quan model, dataset, output |
+| `run_medical.py` | CLI chính — dataset, model, training, modality |
+| `run_chat.py` | Chat UI — kiểm tra preflight, tích hợp medical pipeline |
+| `run_doctor.py` | Quét tổng thể model, dataset, output |
 
-## 4. Command Quan Trọng
+---
 
-```powershell
-python run_medical.py init-dataset
-python run_medical.py status
-python run_medical.py ready
-python run_medical.py sources
-python run_medical.py cancer
-python run_medical.py train-all
-python run_chat.py --check-only
-```
-
-`init-dataset` chỉ in layout mong đợi, không tự tạo dữ liệu trong `dataset/`.
-
-## 5. Liên Hệ Với Chat UI
-
-`run_chat.py --check-only` không chỉ kiểm tra giao diện, mà còn xác nhận:
-
-- thư viện bắt buộc đã sẵn sàng,
-- icon UI có đủ,
-- medical model có thể dùng cho chat hay chưa.
-
-Model medical được tìm theo thứ tự: `medical_7_cancers.pt` ở root, `medical/medical_7_cancers.pt`, rồi `fallback_model` nếu bật trong `config/medical_settings.yaml`.
-
-![Medical status chi tiết](../images/Ảnh%20run_doctor.py%20--skip-camera-check%202.png)
-
-## 6. Các Module Chính Trong `medical/`
-
-- `medical/dataset.py`: tạo và kiểm tra layout dataset
-- `medical/system_status.py`: tổng hợp trạng thái medical
-- `medical/training.py`: audit, split, train, validate
-- `medical/output_management.py`: dọn output medical
-- `medical/storage.py`: lưu và truy vấn case DB
-- `medical/cli_helpers.py`: helper in trạng thái dùng chung cho CLI
-
-## 7. Quy Trình Khuyến Nghị
-
-### A. Khởi tạo máy mới
+## 3. Lệnh CLI
 
 ```powershell
-python run_medical.py init-dataset
-python run_medical.py status
-python run_doctor.py --skip-camera-check
-python run_chat.py --check-only
+python run_medical.py status          # Trạng thái tổng quan
+python run_medical.py ready           # Kiểm tra đủ điều kiện train
+python run_medical.py sources         # Liệt kê nguồn ảnh
+python run_medical.py cancer          # Danh sách nhóm ung thư
+python run_medical.py init-dataset    # Khởi tạo layout dataset
+python run_medical.py train-modality  # Train classifier modality
+python run_medical.py train-cancer    # Train CNN classification
 ```
 
-### B. Kiểm tra khả năng đưa vào sử dụng
+Lưu ý: `init-dataset` chỉ in layout mong đợi, không tự tạo dữ liệu.
 
-```powershell
-python run_medical.py ready
-python run_medical.py status
-python run_chat.py --check-only
-```
+---
 
-## 8. Output Và Dọn Dẹp
+## 4. Nhóm bệnh và modality hỗ trợ
 
-Medical output thường nằm trong:
+| Nhóm | Ảnh / volume thường dùng |
+|---|---|
+| Gan | Siêu âm, CT, MRI, PET/CT |
+| Phổi | X-quang ngực, CT ngực, PET/CT |
+| Vú | Mammogram, siêu âm vú, MRI vú |
+| Dạ dày | Nội soi, CT, MRI, PET, EUS |
+| Đại trực tràng | Nội soi đại tràng, CT bụng-chậu, MRI trực tràng, PET |
+| Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
+| Cổ tử cung | MRI, CT, PET/CT |
 
-```text
-output/medical/
-```
+### Định dạng ảnh hỗ trợ
 
-Khi cần dọn nhanh:
+- **JPG / PNG**: ảnh thông thường
+- **DICOM**: file `.dcm` và series DICOM
+- **NIfTI**: volume `.nii` / `.nii.gz`
+- **Pap/HPV, soi cổ tử cung, sinh thiết**: đầu vào lâm sàng, không hỗ trợ upload trực tiếp
 
-```powershell
-python run_chat.py --cleanup-output --older-than-days 30
-```
+Chat UI cho phép chọn nhóm bệnh và modality để lọc file picker phù hợp.
 
-## 9. Lưu Ý Nghiệp Vụ
+---
 
-- `run_medical.py status` là lệnh xem trạng thái tổng quan nhanh nhất.
-- `run_medical.py ready` cho biết luồng medical đã đủ điều kiện train hay chưa.
-- `run_medical.py train-cancer --epochs 30 --batch-size 6 --backbone efficientnet_b2` chạy train CNN classification với config tối ưu.
-- `scripts/train_medical_cnn.py` là script train trực tiếp, hỗ trợ resume từ checkpoint.
-- `scripts/scripts_run_yolo_train.py` là script train YOLO detection, hỗ trợ resume từ last.pt.
-- `run_medical.py` không tự bịa dữ liệu, nên dataset thiếu thì sẽ báo thiếu rõ ràng.
+## 5. Dataset modality
 
-## 10. Cấu Hình Training Hiện Tại
+Dataset `dataset/medical_modality/` dùng để train classifier phân loại modality ảnh y khoa:
 
-### CNN Classification
+| Modality | Số ảnh | Nguồn |
+|---|---|---|
+| CT | 200 | OrganMNIST3D |
+| MRI | 200 | OrganMNIST3D |
+| X-quang | 200 | ChestMNIST |
+| Mammogram | 200 | BreastMNIST |
+| Nội soi | 200 | PathMNIST |
+| Siêu âm | 200 | BloodMNIST |
+| PET/CT | 200 | OrganMNIST3D + augment |
+| EUS | 200 | PathMNIST + augment |
+
+- Tổng: 1.600 ảnh (200 × 8 modality), chuẩn hóa 224×224 RGB
+- Nguồn: [MedMNIST](https://medmnist.com/) (BSD license)
+- Sinh lại: `python scripts/build_modality_dataset.py`
+- Train: `python run_medical.py train-modality --epochs 12`
+
+---
+
+## 6. Module chính trong `medical/`
+
+| Module | Trách nhiệm |
+|---|---|
+| `dataset.py` | Tạo và kiểm tra layout dataset |
+| `system_status.py` | Tổng hợp trạng thái medical |
+| `training.py` | Audit, split, train, validate |
+| `output_management.py` | Quản lý output medical |
+| `storage.py` | Lưu và truy vấn case DB |
+| `validator.py` | Kiểm tra ảnh đầu vào |
+| `cli_helpers.py` | Helper in trạng thái CLI |
+
+---
+
+## 7. Cấu hình training
+
+### CNN Classification (ung thư)
 
 | Tham số | Giá trị | Mục đích |
-|---------|---------|----------|
-| Backbone | efficientnet_b2 | Hiệu năng cao, nhẹ hơn ResNet50 |
-| Image size | 288px | Tăng chi tiết ROI, vừa với 4GB VRAM |
-| Batch size | 6 | An toàn với RTX 3050 Ti 4GB |
-| Epochs | 30 | Đủ để hội tụ |
-| Loss | Focal Loss | Tập trung vào hard examples |
-| LR | 0.0001 | Ổn định |
-| Warmup | 4 epochs | Tránh shock |
-| Grad Accum | 4 | Effective batch = 24 |
-| Class weights | Auto | Cân bằng class imbalance |
-| EMA | True | Stabilize training |
-| TTA | True | Test time augmentation |
+|---|---|---|
+| Backbone | efficientnet_b2 | Nhẹ, hiệu năng cao |
+| Image size | 288px | Chi tiết tốt, vừa VRAM 4GB |
+| Batch size | 6 | An toàn với RTX 3050 Ti |
+| Epochs | 30 | Đủ hội tụ |
+| Loss | Focal Loss | Tập trung hard examples |
+| Learning rate | 0.0001 | Ổn định |
+| Warmup | 4 epochs | Tránh shock đầu train |
+| Gradient accumulation | 4 | Effective batch = 24 |
+| Class weights | Auto | Cân bằng mất cân bằng lớp |
+| EMA | Có | Stabilize training |
+| TTA | Có | Test time augmentation |
 
-### Ngưỡng Quyết Định
+### Ngưỡng quyết định
 
 | Ngưỡng | Giá trị | Mục đích |
-|--------|---------|----------|
-| High risk | 0.35 | Ưu tiên recall, tránh bỏ sót ung thư |
+|---|---|---|
+| High risk | 0.35 | Ưu tiên recall, tránh bỏ sót |
 | Medium risk | 0.25 | Cảnh báo sớm |
 | Certainty | 0.30 | Threshold phân loại chung |
 
 ### YOLO Detection
 
 | Tham số | Giá trị | Mục đích |
-|---------|---------|----------|
+|---|---|---|
 | Model | yolo11s | Nhẹ, phù hợp 4GB VRAM |
 | Epochs | 50 | Train sâu |
-| Imgsz | 512 | Tăng chi tiết |
+| Imgsz | 512 | Chi tiết cao |
 | Batch | 4 | An toàn VRAM |
 | Optimizer | AdamW | Ổn định |
 | Mosaic | 0.3 | Giảm nhiễu giải phẫu |
 | Mixup | 0.1 | Tăng diversity |
 | Copy-paste | 0.1 | Tăng diversity |
-| Flip UD | 0.0 | Giữ hướng giải phẫu |
+| Lật lên-xuống | 0.0 | Giữ hướng giải phẫu |
 
-## 11. Khi Nào Nên Debug Module Nào
+---
+
+## 8. Debug theo triệu chứng
 
 | Triệu chứng | Mở đầu tiên |
 |---|---|
 | `run_chat.py --check-only` fail | `utils/entrypoint_checks.py`, `medical/system_status.py` |
-| Medical status sai | `medical/system_status.py`, `medical/model_policy.py`, `medical/storage.py` |
-| Counts raw/train/val không đúng | `medical/training.py`, `medical/status_helpers.py` |
-| Train medical fail | `medical/training.py`, `scripts/train_medical_cnn.py` |
-| Train YOLO fail | `scripts/scripts_run_yolo_train.py`, `dataset/processed/data.yaml` |
-| CNN ảnh đầu vào lỗi | `medical/validator.py`, `medical/preprocessing/pipeline.py` |
-## 11. Medical Inputs Hỗ Trợ
-
-| Nhóm | Ảnh/volume thường dùng |
-|---|---|
-| Gan | Siêu âm, CT, MRI, đôi khi PET/CT |
-| Phổi | X-quang ngực, CT ngực, PET/CT |
-| Vú | Mammogram, siêu âm vú, MRI vú |
-| Dạ dày | Nội soi, CT, MRI, PET, EUS |
-| Đại trực tràng | Nội soi đại tràng, CT ngực-bụng-chậu, MRI trực tràng, PET |
-| Tuyến tiền liệt | MRI tuyến tiền liệt, siêu âm, PET/CT |
-| Cổ tử cung | MRI, CT, PET/CT |
-
-- `Pap/HPV`, soi cổ tử cung và sinh thiết là đầu vào lâm sàng, không phải file ảnh để upload trực tiếp.
-- Chat UI có preset chọn nhóm bệnh để lọc nguồn ảnh ngay từ đầu.
-- Chat UI có thêm chọn modality theo nhóm bệnh để file picker bám đúng loại ảnh cần dùng.
-- File picker sẽ ưu tiên đuôi ảnh/volume phù hợp với modality đã chọn.
-- Folder DICOM series và volume `.nii/.nii.gz` có thể xem từng lát trong preview.
-
-## 12. Menu Y Dược & Train Modality
-
-Vào menu y dược từ `run_menu.py` → chọn `3` (Y dược). Các mục:
-
-1. **Báo cáo nhanh** → `report`
-2. **Kiểm tra ảnh** → `validate-image`
-3. **Dữ liệu & Huấn luyện** → `train-all`
-4. **Phân tích ảnh** → `analyze`
-5. **Lịch sử ca** → `history`
-6. **Cải tiến (AL + modality)** → gộp `active-learning` → `train-modality` → `calibrate-modality-tuning --apply`
-7. **Train nhận diện ảnh** → `train-modality` (train riêng classifier modality)
-
-### Train classifier nhận diện modality
-
-Classifier phân loại modality (ct/mri/xray/ultrasound/mammogram/endoscopy/pet_ct/eus) đọc từ `dataset/medical_modality/<modality>/*.jpg`.
-
-```powershell
-python run_medical.py train-modality --epochs 12 --verbose
-```
-
-- Dataset: 8 modality × 200 ảnh (224×224 RGB) từ MedMNIST. Sinh lại bằng `python scripts/build_modality_dataset.py`.
-- Tự chia 80/20 train/val (stratified theo class) — không cần tách tay.
-- Model ra `models/pretrained/modality_classifier.pt`.
-- `pet_ct`/`eus` là ảnh augment tổng hợp (MedMNIST không có bộ gốc).
+| Medical status sai | `medical/system_status.py`, `medical/model_policy.py` |
+| Count train/val không đúng | `medical/training.py`, `medical/status_helpers.py` |
+| Train medical fail | `medical/training.py`, `run_medical.py train` |
+| CNN ảnh đầu vào lỗi | `medical/validator.py` |

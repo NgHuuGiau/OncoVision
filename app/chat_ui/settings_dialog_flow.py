@@ -187,13 +187,13 @@ class SettingsDialog(QDialog):
             is_active = mode == active_mode
             if dark_mode:
                 button.setStyleSheet(
-                    "background: rgba(37, 99, 255, 0.22); color: #f8fbff; border: 1px solid #2563ff; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                    "background: rgba(26, 86, 219, 0.22); color: #f8fbff; border: 1px solid #1a56db; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                     if is_active
                     else "background: rgba(15, 23, 42, 0.88); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                 )
             else:
                 button.setStyleSheet(
-                    "background: #eef4ff; color: #0f172a; border: 1px solid #2563ff; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
+                    "background: #e9edf7; color: #0f172a; border: 1px solid #1a56db; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
                     if is_active
                     else "background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                 )
@@ -203,13 +203,13 @@ class SettingsDialog(QDialog):
             is_active = code == active_language
             if dark_mode:
                 button.setStyleSheet(
-                    "background: rgba(37, 99, 255, 0.22); color: #f8fbff; border: 1px solid #2563ff; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
+                    "background: rgba(26, 86, 219, 0.22); color: #f8fbff; border: 1px solid #1a56db; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                     if is_active
                     else "background: rgba(15, 23, 42, 0.88); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                 )
             else:
                 button.setStyleSheet(
-                    "background: #eef4ff; color: #0f172a; border: 1px solid #2563ff; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
+                    "background: #e9edf7; color: #0f172a; border: 1px solid #1a56db; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
                     if is_active
                     else "background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                 )

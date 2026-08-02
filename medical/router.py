@@ -22,6 +22,7 @@ _BODY_REGION_FAMILY: dict[str, str] = {
     "stomach": ENDOSCOPY_FAMILY,
     "colorectal": ENDOSCOPY_FAMILY,
     "breast": XRAY_MAMMO_FAMILY,
+    "brain": CT_VOLUME_FAMILY,
 }
 
 _VOLUME_MODALITIES = frozenset({"ct", "mri", "pet_ct"})
@@ -33,13 +34,13 @@ _MULTIMODAL_FAMILIES = frozenset({ENDOSCOPY_FAMILY})
 _MULTIMODAL_BODY_REGIONS = frozenset({"stomach", "colorectal"})
 
 # Nhóm ung thư có ít ảnh hơn, cần reweight/oversample trước khi kỳ vọng ổn định.
-UNDERREPRESENTED_BODY_REGIONS = frozenset({"liver", "cervix"})
+UNDERREPRESENTED_BODY_REGIONS = frozenset({"liver", "cervix", "brain"})
 
 # Thành viên mỗi family dùng làm nhãn (label set) khi huấn luyện submodel.
 IMAGE_TYPE_FAMILIES: dict[str, dict[str, object]] = {
     CT_VOLUME_FAMILY: {
-        "label": "Ảnh cắt lớp (CT/MRI/PET/CT): gan, phổi, tuyến tiền liệt, cổ tử cung",
-        "members": ("liver", "lung", "prostate", "cervix"),
+        "label": "Ảnh cắt lớp (CT/MRI/PET/CT): gan, phổi, tuyến tiền liệt, cổ tử cung, não",
+        "members": ("liver", "lung", "prostate", "cervix", "brain"),
         "multimodal": False,
     },
     ENDOSCOPY_FAMILY: {

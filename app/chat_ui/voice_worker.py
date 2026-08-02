@@ -51,13 +51,13 @@ def build_voice_worker_class(
                     rms = np_module.sqrt(np_module.mean(audio_data**2)) if len(audio_data) > 0 else 0.0
                     intensity = int(min(100, (rms ** 0.65) * 2.2))
                     self.intensity_changed.emit(intensity)
-                    if rms < 80:
+                    if rms < 50:
                         silent_chunks += 1
                     else:
                         silent_chunks = 0
-                    if silent_chunks > int(fs / chunk * 1.8):
+                    if silent_chunks > int(fs / chunk * 2.0):
                         break
-                    if len(frames) > int(fs / chunk * 12):
+                    if len(frames) > int(fs / chunk * 20):
                         break
 
                 if stream and stream.is_active():
@@ -77,7 +77,7 @@ def build_voice_worker_class(
                     wav_file.close()
                     device = "cuda" if torch_module.cuda.is_available() else "cpu"
                     model = get_cached_whisper_model(language=self.lang_code, device=device)
-                    segments, _ = model.transcribe(tmp_path, language=self.lang_code)
+                    segments, _ = model.transcribe(tmp_path, language=self.lang_code, beam_size=5, vad_filter=True)
                     text = "".join(segment.text for segment in segments)
                     self.result_ready.emit(text.strip())
                 else:

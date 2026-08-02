@@ -88,4 +88,5 @@ def build_composer_section(window, chat_layout) -> None:
         window.medical_status_label = QLabel(window.medical_status_message)
     window.medical_status_label.setObjectName("Subtle")
     window.medical_status_label.setAlignment(Qt.AlignCenter)
+    window.medical_status_label.setVisible(False)
     chat_layout.addWidget(window.medical_status_label)

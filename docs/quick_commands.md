@@ -1,8 +1,10 @@
 # Lệnh Nhanh
 
-Tài liệu này là bảng lệnh dùng hằng ngày. Nếu bạn đã hiểu repo, đây là file mở đầu nhanh nhất.
+Bảng lệnh sử dụng hàng ngày. Nếu đã hiểu hệ thống, đây là file tra cứu nhanh nhất.
 
-## 1. Kiểm Tra Môi Trường
+---
+
+## 1. Kiểm tra môi trường
 
 ```powershell
 python run_doctor.py --skip-camera-check
@@ -11,7 +13,26 @@ python run_smoke.py --ci-safe --stop-on-fail
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## 2. Runtime / Camera
+## 2. Chat AI
+
+### Desktop
+
+```powershell
+python run_chat.py --check-only
+python run_chat.py --check-only --auto-fix-icons
+python run_chat.py
+python run_chat.py --cleanup-output --older-than-days 30
+```
+
+### Web
+
+```powershell
+python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
+# Mở http://localhost:8000
+# Admin DB: http://localhost:8000/admin/db
+```
+
+## 3. Camera realtime
 
 ```powershell
 python run_app.py --advisor-only
@@ -21,51 +42,45 @@ python run_app.py --camera-index 1
 python run_app.py --model models/trained/best.pt
 ```
 
-## 3. Chat UI
-
-```powershell
-python run_chat.py --check-only
-python run_chat.py --check-only --auto-fix-icons
-python run_chat.py
-python run_chat.py --cleanup-output --older-than-days 30
-```
-
 ## 4. Medical CLI
 
 ```powershell
-python run_medical.py init-dataset
 python run_medical.py status
 python run_medical.py ready
 python run_medical.py sources
 python run_medical.py cancer
+python run_medical.py init-dataset
+python run_medical.py train-modality --epochs 12
 ```
 
-`init-dataset` chỉ in layout mong đợi, không tự tạo dữ liệu trong `dataset/`.
+## 5. Huấn luyện
 
-## 5. Training Object Detection
+### YOLO detection
 
 ```powershell
-python run_train.py --check-only
-python training\prepare_dataset.py
-python training\validate_dataset.py
-python training\split_dataset.py
 python run_train.py
-python training\validate_model.py
-python training\export_model.py
 ```
 
-## 6. Giải Thích Nhanh
+### CNN classifier
 
-| Lệnh | Dùng khi nào |
+```powershell
+python run_medical.py train-cancer --epochs 30 --backbone efficientnet_b2
+python run_medical.py train-modality
+```
+
+## 6. Giải thích nhanh
+
+| Lệnh | Mục đích |
 |---|---|
-| `run_doctor.py --skip-camera-check` | Muốn doctor scan an toàn, không cần webcam |
-| `run_smoke.py` | Muốn check nhanh chuỗi entrypoint |
-| `run_smoke.py --ci-safe` | Muốn check nhẹ, phù hợp CI hoặc máy chưa đủ data |
-| `run_app.py --advisor-only` | Muốn biết mode runtime phù hợp trước khi mở camera |
-| `run_chat.py --check-only` | Muốn biết chat UI và medical preflight đã sẵn sàng chưa |
-| `run_train.py --check-only` | Muốn xác minh train pipeline có thể chạy được hay không |
+| `run_doctor.py --skip-camera-check` | Quét tổng thể, không cần webcam |
+| `run_smoke.py` | Kiểm tra nhanh chuỗi entrypoint |
+| `run_smoke.py --ci-safe` | Kiểm tra nhẹ, phù hợp CI |
+| `run_app.py --advisor-only` | Gợi ý runtime trước khi mở camera |
+| `run_chat.py --check-only` | Kiểm tra chat UI và medical sẵn sàng |
+| `run_chat.py --cleanup-output` | Dọn file output cũ |
+| `run_train.py --check-only` | Xác minh pipeline train có thể chạy |
 
-## 7. Trình Tự Khuyến Nghị Trên Máy Mới
+## 7. Trình tự trên máy mới
 
 ```powershell
 python run_menu.py

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 
 import cv2
@@ -29,6 +30,18 @@ from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
 
 logger = logging.getLogger(__name__)
+
+ProgressCallback = Callable[[str, float], None] | None
+
+
+MINIMAL_PROGRESS_STAGES: tuple[tuple[str, float], ...] = (
+    ("Validating image...", 0.05),
+    ("Normalizing image...", 0.10),
+    ("Running CNN inference...", 0.35),
+    ("Generating heatmap...", 0.65),
+    ("Analyzing results...", 0.85),
+    ("Writing report...", 0.95),
+)
 
 
 class DetectorBackend(Protocol):
@@ -81,6 +94,7 @@ class MedicalImageAnalyzerConfig:
     enable_mc_dropout: bool = False
     mc_dropout_samples: int = 20
     enable_advanced_preprocessing: bool = False
+    max_cached_images: int = 100
 
     def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
         return replace(self, model_path=Path(model_path))
@@ -123,6 +137,8 @@ class MedicalAnalysisResult:
     stage_messages: dict[str, str] = field(default_factory=dict)
     gradcam_overlays: list[str] = field(default_factory=list)
     deidentified_source: Path | None = None
+    dicom_info: dict[str, str] = field(default_factory=dict)
+    analysis_time_seconds: float = 0.0
 
 
 def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
@@ -260,7 +276,33 @@ class MedicalImageAnalyzer:
         self._cnn_wrapper_cache_path: Path | None = None
         self._roi_extractor: Any = None
 
-    def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None) -> MedicalAnalysisResult:
+    @staticmethod
+    def _call_progress(cb: ProgressCallback, stage: str, pct: float) -> None:
+        if cb is not None:
+            try:
+                cb(stage, pct)
+            except Exception:
+                pass
+
+    def cleanup_cached_images(self) -> int:
+        """Xoa normalized image cu neu vuot qua max_cached_images."""
+        processed = self.config.processed_dir
+        if not processed.exists():
+            return 0
+        images = sorted(processed.iterdir(), key=lambda p: p.stat().st_mtime if p.is_file() else 0)
+        max_keep = max(self.config.max_cached_images, 10)
+        removed = 0
+        for f in images[:-max_keep] if len(images) > max_keep else []:
+            try:
+                f.unlink(missing_ok=True)
+                removed += 1
+            except Exception:
+                pass
+        return removed
+
+    def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None, progress_callback: ProgressCallback = None) -> MedicalAnalysisResult:
+        _start_t = time.monotonic()
+        self._call_progress(progress_callback, "Validating image...", 0.05)
         try:
             self.ensure_ready()
         except FileNotFoundError as exc:
@@ -270,22 +312,41 @@ class MedicalImageAnalyzer:
                 "hoac kiem tra config/medical_settings.yaml (khoa 'model').\n"
                 f"Chi tiet: {exc}"
             ) from exc
-        if self._detector_backend is None and self.config.yolo_model_path and Path(self.config.yolo_model_path).exists():
-            try:
-                self._detector_backend = self._load_default_backend()
-            except Exception as exc:
-                logger.warning("[Ensemble] Bo qua YOLO backend", exc_info=True)
+        self._call_progress(progress_callback, "Normalizing image...", 0.10)
+        # YOLO: chua train xong, disable tam (se bat khi deploy ensemble)
         resolved_source = Path(image_path)
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
             raise ValueError(f"{validation.error_code}: {validation.message}")
 
         deidentified_source = None
-        if resolved_source.suffix.lower() == ".dcm" or resolved_source.is_dir():
+        dicom_info = {}
+        if resolved_source.suffix.lower() == ".dcm":
+            try:
+                import pydicom
+                ds = pydicom.dcmread(str(resolved_source), stop_before_pixels=True, force=True)
+                dicom_info = {
+                    "Modality": str(getattr(ds, "Modality", "")),
+                    "BodyPart": str(getattr(ds, "BodyPartExamined", "")),
+                    "PatientAge": str(getattr(ds, "PatientAge", "")),
+                    "PatientSex": str(getattr(ds, "PatientSex", "")),
+                    "SeriesDescription": str(getattr(ds, "SeriesDescription", "")),
+                    "StudyDescription": str(getattr(ds, "StudyDescription", "")),
+                    "WindowCenter": str(getattr(ds, "WindowCenter", "")),
+                    "WindowWidth": str(getattr(ds, "WindowWidth", "")),
+                    "RescaleIntercept": str(getattr(ds, "RescaleIntercept", "")),
+                    "RescaleSlope": str(getattr(ds, "RescaleSlope", "")),
+                    "SeriesInstanceUID": str(getattr(ds, "SeriesInstanceUID", "")),
+                }
+            except Exception:
+                pass
+            deidentified_source = self._deidentify_input(resolved_source)
+        elif resolved_source.is_dir():
             deidentified_source = self._deidentify_input(resolved_source)
 
+        self._call_progress(progress_callback, "Running CNN inference...", 0.35)
         normalized_path = normalize_uploaded_image(deidentified_source or resolved_source, self.config.processed_dir, image_size=self.config.image_size)
-        image = cv2.imread(str(normalized_path))
+        image = cv2.imdecode(np.frombuffer(normalized_path.read_bytes(), np.uint8), cv2.IMREAD_COLOR)
         if image is None:
             raise RuntimeError(f"Không đọc được ảnh: {normalized_path}")
         modality_profile = self._get_modality_profile(validation.modality)
@@ -307,6 +368,15 @@ class MedicalImageAnalyzer:
                 f"< {self.config.detection_consistency_threshold:.2f}, "
                 f"conflicting_pairs={len(conflicting_pairs)})."
             )
+        if len(detections) >= 2:
+            top1_conf = detections[0].confidence
+            top2_conf = detections[1].confidence
+            if top1_conf < 0.7 or (top1_conf - top2_conf) < 0.2:
+                labels = [d.label for d in detections[:3]]
+                quality_warnings.append(
+                    f"Độ tin cậy thấp giữa các lớp (top1={top1_conf:.2f}, top2={top2_conf:.2f}, "
+                    f"gap={top1_conf-top2_conf:.2f}). Kết quả có thể không chính xác."
+                )
         risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(
             detections,
             modality=validation.modality,
@@ -318,8 +388,10 @@ class MedicalImageAnalyzer:
                 f"Do bat dinh cao (entropy={uncertainty_info['entropy']:.2f}, "
                 f"confidence={uncertainty_info['confidence']:.2f}). Can bac si xem lai."
             )
-        processed_path = self._render_overlay(prepared_image.copy(), detections, patient_code=patient_code)
+        self._call_progress(progress_callback, "Generating heatmap...", 0.65)
         gradcam_overlays = self._run_gradcam_if_possible(prepared_image, detections, validation)
+        self._call_progress(progress_callback, "Analyzing results...", 0.85)
+        processed_path = self._render_overlay(prepared_image.copy(), detections, patient_code=patient_code, gradcam_overlays=gradcam_overlays)
         payload = {
             "case_id": case_id,
             "patient_code": patient_code,
@@ -341,7 +413,10 @@ class MedicalImageAnalyzer:
             "deidentified": deidentified_source is not None,
             "roi": roi_info,
             "uncertainty": uncertainty_info,
+            "dicom_info": dicom_info if dicom_info else None,
+            "analysis_time_seconds": time.monotonic() - _start_t,
         }
+        self._call_progress(progress_callback, "Writing report...", 0.95)
         report_json_path, report_md_path, _ = write_case_report(self.config.reports_dir, payload)
         dashboard_payload = {
             "patient_code": patient_code,
@@ -354,6 +429,9 @@ class MedicalImageAnalyzer:
             "model_name": self.config.model_path.name,
         }
         write_inference_dashboard(self.config.reports_dir, dashboard_payload)
+        removed = self.cleanup_cached_images()
+        if removed:
+            logger.info("cleanup removed %d old normalized images", removed)
         return MedicalAnalysisResult(
             case_id=case_id,
             patient_code=patient_code,
@@ -374,6 +452,8 @@ class MedicalImageAnalyzer:
             stage_messages={name: item.message for name, item in stage_results.items()},
             gradcam_overlays=gradcam_overlays,
             deidentified_source=deidentified_source,
+            dicom_info=dicom_info,
+            analysis_time_seconds=time.monotonic() - _start_t,
         )
 
     def _run_pipeline_stages(
@@ -561,7 +641,7 @@ class MedicalImageAnalyzer:
                 "offset": [int(x1), int(y1)],
             }
             return cropped, roi_info
-        except Exception as exc:
+        except Exception:
             logger.warning("[Segmentation] Bo qua ROI crop", exc_info=True)
             return image, None
 
@@ -585,7 +665,7 @@ class MedicalImageAnalyzer:
             if processed is None or getattr(processed, "size", 0) == 0:
                 return None
             return processed
-        except Exception as exc:
+        except Exception:
             logger.warning("[Preprocess] Bo qua advanced preprocessing", exc_info=True)
             return None
 
@@ -624,7 +704,7 @@ class MedicalImageAnalyzer:
                 "num_samples": self.config.mc_dropout_samples,
                  "high_uncertainty": bool(high_uncertainty),
              }
-        except Exception as exc:
+        except Exception:
             logger.warning("[Uncertainty] Bo qua MC Dropout", exc_info=True)
             return None
 
@@ -762,7 +842,7 @@ class MedicalImageAnalyzer:
                     "[ModelManifest] Warning: no manifest found for %s (old model without versioning)",
                     model_path.name,
                 )
-        except Exception as exc:
+        except Exception:
             logger.warning("[ModelManifest] Khong doc duoc manifest", exc_info=True)
 
     def _ensemble_detections(self, image: np.ndarray, yolo_detections: list[DetectionFinding]) -> list[DetectionFinding]:
@@ -944,7 +1024,7 @@ class MedicalImageAnalyzer:
                 from ultralytics import YOLO
 
                 return YOLO(str(self.config.yolo_model_path))
-            except Exception as exc:
+            except Exception:
                 logger.warning("[Ensemble] Khong the tai YOLO backend", exc_info=True)
         raise RuntimeError("Medical pipeline hiện tại dùng classifier local, không cần backend YOLO.")
 
@@ -1062,7 +1142,7 @@ class MedicalImageAnalyzer:
                     return None
             logger.info("[Compliance] %s", report.summary)
             return target if target.exists() else None
-        except Exception as exc:
+        except Exception:
             logger.warning("[Compliance] De-identification failed", exc_info=True)
             return None
 
@@ -1094,7 +1174,7 @@ class MedicalImageAnalyzer:
             pass
         return overlays
 
-    def _render_overlay(self, image: np.ndarray, detections: list[DetectionFinding], *, patient_code: str) -> Path:
+    def _render_overlay(self, image: np.ndarray, detections: list[DetectionFinding], *, patient_code: str, gradcam_overlays: list[str] | None = None) -> Path:
         overlay = draw_detection_results(
             image=image,
             detections=detections,
@@ -1102,6 +1182,19 @@ class MedicalImageAnalyzer:
             label_font_scale=0.9,
             show_fps=False,
         )
+        if gradcam_overlays:
+            try:
+                gcam_path = Path(gradcam_overlays[0])
+                gcam_bytes = gcam_path.read_bytes()
+                gcam = cv2.imdecode(np.frombuffer(gcam_bytes, np.uint8), cv2.IMREAD_COLOR)
+                if gcam is not None:
+                    h, w = gcam.shape[:2]
+                    if overlay.shape[:2] != (h, w):
+                        gcam = cv2.resize(gcam, (overlay.shape[1], overlay.shape[0]))
+                    alpha = 0.3
+                    overlay = cv2.addWeighted(overlay, 1.0 - alpha, gcam, alpha, 0)
+            except Exception:
+                pass
         self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
         path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}.jpg"
         cv2.imwrite(str(path), overlay)

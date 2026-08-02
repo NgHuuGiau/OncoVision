@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OncoVision Chat AI</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--root-bg:#07111f;--text:#e3e3e3;--subtle:#94a3b8;--heading:#fff;--sidebar-bg:#0f172a;--sidebar-border:rgba(255,255,255,.08);--composer-bg:rgba(255,255,255,.06);--composer-input-bg:rgba(255,255,255,.04);--composer-input-border:rgba(255,255,255,.07);--bubble-user:rgba(77,184,255,.14);--bubble-user-border:rgba(77,184,255,.12);--bubble-system:rgba(255,255,255,.03);--bubble-system-border:rgba(255,255,255,.06);--history-panel-bg:rgba(255,255,255,.02);--history-panel-border:rgba(255,255,255,.05);--scrollbar:rgba(255,255,255,.18);--button-hover:rgba(255,255,255,.05);--sidebar-hover:rgba(255,255,255,.07);--history-selected:rgba(255,255,255,.08);--history-selected-border:rgba(255,255,255,.06);--combo-bg:rgba(255,255,255,.06);--combo-border:rgba(255,255,255,.08);--combo-text:#f3f4f6;--menu-bg:#1b1c20;--menu-border:#3a3a3a;--menu-hover:#242424;--mode-btn-bg:#3a3d45;--mode-btn-border:#50545e;--mode-btn-text:#ececf1;--mode-btn-hover:#454851;--round-btn-border:rgba(255,255,255,.07);--round-btn-bg:rgba(255,255,255,.04);--round-btn-text:#f2f4f8;--round-btn-hover:rgba(255,255,255,.12);--send-bg:#2563ff;--send-hover:#1d4ed8;--footer-btn-bg:rgba(255,255,255,.04);--footer-btn-border:rgba(255,255,255,.08);--error:#ff5252;--error-bg:rgba(255,82,82,.1);--preview-bg:rgba(255,255,255,.04);--preview-border:rgba(255,255,255,.08);--primary:#2563ff;--avatar-bg:#4db8ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif}
+.light{--root-bg:#f7f9fd;--text:#111827;--subtle:#64748b;--heading:#000;--sidebar-bg:#fff;--sidebar-border:#e8edf5;--composer-bg:#fff;--composer-input-bg:#fff;--composer-input-border:#e2e8f0;--bubble-user:rgba(77,184,255,.14);--bubble-user-border:rgba(77,184,255,.12);--bubble-system:rgba(255,255,255,.9);--bubble-system-border:rgba(17,24,39,.06);--history-panel-bg:rgba(255,255,255,.65);--history-panel-border:rgba(17,24,39,.06);--scrollbar:rgba(17,24,39,.18);--button-hover:rgba(17,24,39,.05);--sidebar-hover:rgba(17,24,39,.06);--history-selected:rgba(17,24,39,.08);--history-selected-border:rgba(17,24,39,.05);--combo-bg:#fff;--combo-border:#e2e8f0;--combo-text:#000;--menu-bg:#fff;--menu-border:#d9d9df;--menu-hover:#f7f7f8;--mode-btn-bg:#e4e7ed;--mode-btn-border:#c8cdd8;--mode-btn-text:#374151;--mode-btn-hover:#d8dbe4;--round-btn-border:rgba(17,24,39,.08);--round-btn-bg:rgba(255,255,255,.92);--round-btn-text:#111827;--round-btn-hover:rgba(17,24,39,.08);--footer-btn-bg:#fff;--footer-btn-border:#e2e8f0;--error:#b00020;--error-bg:rgba(176,0,32,.08);--preview-bg:rgba(255,255,255,.82);--preview-border:rgba(17,24,39,.08)}
+html,body{height:100%}
+body{display:flex;background:var(--root-bg);color:var(--text);overflow:hidden}
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:3px}
+/* Sidebar */
+.sidebar{width:280px;min-width:280px;background:var(--sidebar-bg);border:1px solid var(--sidebar-border);border-radius:20px;display:flex;flex-direction:column;margin:14px 0 14px 14px;overflow:hidden;transition:width .22s cubic-bezier(.4,0,.2,1),min-width .22s cubic-bezier(.4,0,.2,1)}
+.sidebar.collapsed{width:92px;min-width:92px}
+.sidebar-header{display:flex;align-items:center;padding:12px;gap:10px;border-bottom:1px solid var(--sidebar-border)}
+.sidebar-header .brand{font-size:18px;font-weight:700;color:var(--heading);flex:1;white-space:nowrap;overflow:hidden}
+.sidebar.collapsed .sidebar-header .brand{display:none}
+.sidebar.collapsed .sidebar-toggle{display:none}
+.sidebar-toggle,.sidebar-compact-toggle{background:transparent;border:none;color:var(--text);cursor:pointer;border-radius:16px;display:flex;align-items:center;justify-content:center;transition:.2s}
+.sidebar-toggle{width:32px;height:32px}
+.sidebar-compact-toggle{width:40px;height:40px;margin:8px auto}
+.sidebar-toggle:hover,.sidebar-compact-toggle:hover{background:var(--sidebar-hover)}
+.sidebar-compact-toggle{display:none}
+.sidebar.collapsed .sidebar-compact-toggle{display:flex}
+.sidebar-content{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:12px}
+.sidebar.collapsed .sidebar-content{padding:8px;align-items:center}
+.sidebar-content .new-chat-btn{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;background:var(--footer-btn-bg);border:1px solid var(--footer-btn-border);border-radius:14px;color:var(--text);cursor:pointer;font-size:14px;font-weight:600;transition:.2s;margin-bottom:12px}
+.sidebar.collapsed .new-chat-btn span{display:none}
+.sidebar.collapsed .new-chat-btn{width:44px;height:44px;padding:0;justify-content:center}
+.new-chat-btn:hover{background:var(--sidebar-hover)}
+.search-box{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--footer-btn-bg);border:1px solid var(--footer-btn-border);border-radius:16px;margin-bottom:12px}
+.sidebar.collapsed .search-box{display:none}
+.search-box svg{flex-shrink:0}
+.search-box input{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none}
+.search-box input::placeholder{color:var(--subtle)}
+.history-title{font-size:15px;font-weight:600;color:var(--heading);margin-bottom:8px;padding:0 4px}
+.sidebar.collapsed .history-title{display:none}
+.history-panel{flex:1;background:var(--history-panel-bg);border:1px solid var(--history-panel-border);border-radius:24px;overflow-y:auto;padding:8px;margin-bottom:12px}
+.sidebar.collapsed .history-panel{display:none}
+.history-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;cursor:pointer;transition:.15s;margin-bottom:4px}
+.history-item:hover{background:var(--sidebar-hover)}
+.history-item.active{background:var(--history-selected);border:1px solid var(--history-selected-border);border-left:3px solid var(--primary)}
+.history-item-icon{flex-shrink:0;width:20px;height:20px;display:flex;align-items:center;justify-content:center;color:var(--subtle)}
+.history-item-text{flex:1;min-width:0}
+.history-item-title{font-size:15px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-item-subtitle{font-size:13px;color:var(--subtle);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settings-btn{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;background:var(--footer-btn-bg);border:1px solid var(--footer-btn-border);border-radius:14px;color:var(--text);cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
+.sidebar.collapsed .settings-btn span{display:none}
+.sidebar.collapsed .settings-btn{width:44px;height:44px;padding:0;justify-content:center}
+.settings-btn:hover{background:var(--sidebar-hover)}
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;margin:14px;overflow:hidden}
+.top-bar{display:flex;gap:8px;align-items:center;padding:0 4px 8px}
+.top-bar button{padding:6px 16px;border-radius:14px;border:1px solid var(--mode-btn-border);background:var(--mode-btn-bg);color:var(--mode-btn-text);cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
+.top-bar button:hover{background:var(--mode-btn-hover)}
+.top-bar button.active{background:rgba(37,99,255,.22);border-color:var(--primary);color:var(--heading)}
+.top-bar .badge{font-size:13px;color:var(--subtle);margin-left:auto}
+/* Medical Row */
+.medical-row{display:flex;align-items:center;gap:12px;padding:4px 0;margin-bottom:8px;flex-wrap:wrap}
+.medical-row label{font-size:13px;color:var(--subtle);white-space:nowrap}
+.medical-row select{padding:4px 10px;min-width:150px;height:32px;border-radius:14px;border:1px solid var(--combo-border);background:var(--combo-bg);color:var(--combo-text);font-size:13px;font-weight:600;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+.medical-row select:hover{border-color:var(--primary)}
+.medical-hint{font-size:12px;color:var(--subtle)}
+/* Messages */
+.messages-area{flex:1;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.empty-state .robot{font-size:86px}
+.empty-state h2{font-size:20px;font-weight:700;color:var(--heading)}
+.empty-state p{font-size:16px;color:var(--subtle);text-align:center;max-width:400px}
+.greeting-card{margin-bottom:12px}
+.greeting-card h1{font-size:32px;font-weight:700;color:var(--heading);margin-bottom:4px}
+.greeting-card p{font-size:16px;color:var(--subtle)}
+/* Message Bubbles */
+.message-row{display:flex;margin-bottom:8px;animation:msgIn .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes msgIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.message-row.user{justify-content:flex-end}
+.message-row .bubble{max-width:680px;min-width:96px;padding:12px 18px;border-radius:24px 8px 24px 24px;line-height:1.5;font-size:15px;word-wrap:break-word;box-shadow:0 8px 15px rgba(0,0,0,.09)}
+.message-row.user .bubble{background:var(--bubble-user);border:1px solid var(--bubble-user-border);border-top-left-radius:24px;border-top-right-radius:8px;border-bottom-left-radius:24px;border-bottom-right-radius:24px}
+.message-row.assistant .bubble{background:var(--bubble-system);border:1px solid var(--bubble-system-border);border-top-left-radius:8px;border-top-right-radius:24px;border-bottom-left-radius:24px;border-bottom-right-radius:24px;box-shadow:0 4px 10px rgba(0,0,0,.04)}
+.message-row .bubble .attachment-name{font-size:13px;font-weight:600;color:var(--primary);margin-bottom:6px;word-break:break-all}
+.message-row .bubble img{max-width:360px;max-height:240px;border-radius:12px;cursor:pointer;margin-top:4px;object-fit:cover}
+.message-row .bubble .error-text{color:var(--error);font-weight:700;background:var(--error-bg);padding:6px;border-radius:8px;display:inline-block}
+/* Composer */
+.composer{margin-top:auto;background:var(--composer-bg);border-radius:18px;padding:8px}
+.image-preview-area{display:flex;gap:6px;overflow-x:auto;padding:4px 0;min-height:0;margin-bottom:4px}
+.image-preview-area.hidden{display:none}
+.preview-thumb{position:relative;width:72px;height:72px;border-radius:18px;border:1px solid var(--preview-border);background:var(--preview-bg);flex-shrink:0;overflow:hidden}
+.preview-thumb img{width:100%;height:100%;object-fit:cover;border-radius:18px}
+.preview-thumb .remove-btn{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:12px;background:rgba(239,68,68,.92);color:#fff;border:none;cursor:pointer;font-size:14px;font-weight:700;display:none;align-items:center;justify-content:center}
+.preview-thumb:hover .remove-btn{display:flex}
+.composer-row{display:flex;align-items:flex-end;gap:5px;padding:4px 5px;background:var(--composer-input-bg);border:1px solid var(--composer-input-border);border-radius:13px}
+.plus-btn,.mic-btn,.send-btn{width:40px;height:40px;border-radius:18px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.2s}
+.plus-btn,.mic-btn{border:1px solid var(--round-btn-border);background:var(--round-btn-bg);color:var(--round-btn-text)}
+.plus-btn:hover,.mic-btn:hover{background:var(--round-btn-hover)}
+.send-btn{background:var(--send-bg);color:#fff}
+.send-btn:hover{background:var(--send-hover)}
+.composer-input{flex:1;border:none;background:transparent;color:var(--text);font-size:16px;padding:8px 6px;outline:none;resize:none;min-height:24px;max-height:120px;line-height:1.4;font-family:inherit}
+.composer-input::placeholder{color:var(--subtle)}
+.disclaimer{text-align:center;font-size:12px;color:var(--subtle);padding:8px 0 0}
+.medical-status{text-align:center;font-size:12px;color:var(--subtle);padding:4px 0 0}
+/* Recording Panel */
+.recording-panel{display:none;align-items:center;justify-content:center;gap:12px;padding:8px 16px;margin-bottom:8px}
+.recording-panel.active{display:flex}
+.recording-panel .wave{display:flex;align-items:center;gap:3px;height:30px}
+.recording-panel .wave span{width:5px;border-radius:2px;background:#ff5252;animation:wave 1s ease-in-out infinite}
+.recording-panel .wave span:nth-child(2){animation-delay:.1s}
+.recording-panel .wave span:nth-child(3){animation-delay:.2s}
+.recording-panel .wave span:nth-child(4){animation-delay:.3s}
+.recording-panel .wave span:nth-child(5){animation-delay:.4s}
+@keyframes wave{0%,100%{height:4px}50%{height:24px}}
+.recording-label{color:#ff5252;font-weight:700;font-size:14px}
+/* Modal / Settings */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal{background:var(--sidebar-bg);border:1px solid var(--sidebar-border);border-radius:20px;padding:24px;min-width:380px;max-width:500px;max-height:80vh;overflow-y:auto}
+.modal h2{font-size:20px;font-weight:700;color:var(--heading);margin-bottom:16px}
+.modal-close{float:right;background:none;border:none;color:var(--subtle);cursor:pointer;font-size:20px}
+.modal-section{margin-bottom:20px}
+.modal-section label{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
+.modal-section .desc{font-size:13px;color:var(--subtle);margin-bottom:8px}
+.modal-section select{width:100%;padding:8px 12px;border-radius:18px;border:1px solid var(--combo-border);background:var(--combo-bg);color:var(--combo-text);font-size:14px;font-weight:600;outline:none}
+/* Plus Menu */
+.plus-menu{position:absolute;z-index:100;min-width:240px;background:var(--menu-bg);border:1px solid var(--menu-border);border-radius:16px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.plus-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:none;background:transparent;color:var(--text);font-size:15px;font-weight:600;border-radius:14px;cursor:pointer;transition:.15s}
+.plus-menu button:hover{background:var(--menu-hover)}
+/* Responsive */
+@media(max-width:768px){
+  .sidebar{width:220px;min-width:220px;margin:8px 0 8px 8px}
+  .sidebar.collapsed{width:72px;min-width:72px}
+  .main{margin:8px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="brand">OncoVision Chat AI</div>
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Thu gọn thanh bên" id="sidebarToggle">◀</button>
+  </div>
+  <button class="sidebar-compact-toggle" onclick="toggleSidebar()" title="Mở rộng thanh bên" id="sidebarCompactToggle" style="display:none">☰</button>
+  <div class="sidebar-content">
+    <button class="new-chat-btn" onclick="newChat()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>Cuộc trò chuyện mới</span>
+    </button>
+    <div class="search-box">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Tìm kiếm cuộc trò chuyện..." oninput="filterHistory()">
+    </div>
+    <div class="history-title">Lịch sử trò chuyện</div>
+    <div class="history-panel" id="historyPanel"></div>
+    <button class="settings-btn" onclick="openSettings()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Cài đặt</span>
+    </button>
+  </div>
+</div>
+<div class="main">
+  <div class="top-bar">
+    <button onclick="setTheme('light')" id="lightBtn">☼ Sáng</button>
+    <button onclick="setTheme('dark')" id="darkBtn">☾ Tối</button>
+    <button onclick="setTheme('system')" id="systemBtn">Hệ thống</button>
+    <span class="badge" id="modeBadge"></span>
+  </div>
+  <div class="medical-row">
+    <label>Nhóm bệnh</label>
+    <select id="targetSelect"></select>
+    <label>Loại ảnh</label>
+    <select id="modalitySelect"></select>
+    <span class="medical-hint" id="targetHint"></span>
+    <span class="medical-hint" id="modalityHint"></span>
+  </div>
+  <div class="messages-area" id="messagesArea">
+    <div class="greeting-card" id="greetingCard">
+      <h1>Xin chào!</h1>
+      <p>Hôm nay bạn muốn hỏi điều gì?</p>
+    </div>
+    <div class="empty-state" id="emptyState">
+      <div class="robot">🤖</div>
+      <h2>Bác sĩ AI luôn sẵn sàng hỗ trợ bạn</h2>
+      <p>Đặt câu hỏi về sức khỏe, triệu chứng, xét nghiệm, điều trị và nhận thông tin đáng tin cậy từ AI.</p>
+    </div>
+    <div id="messagesContainer"></div>
+  </div>
+  <div class="recording-panel" id="recordingPanel">
+    <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+    <span class="recording-label">Đang lắng nghe...</span>
+  </div>
+  <div class="composer">
+    <div class="image-preview-area hidden" id="imagePreviewArea"></div>
+    <div class="composer-row">
+      <button class="plus-btn" onclick="togglePlusMenu(event)" title="Đính kèm">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <textarea class="composer-input" id="messageInput" placeholder="Nhập tin nhắn của bạn..." rows="1" oninput="autoResize(this)"></textarea>
+      <button class="mic-btn" onclick="toggleVoice()" title="Ghi âm">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+      <button class="send-btn" onclick="sendMessage()" title="Gửi">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+    <div class="disclaimer">Kết quả AI chỉ mang tính hỗ trợ. Hãy kiểm tra lại thông tin quan trọng với bác sĩ chuyên khoa.</div>
+    <div class="medical-status" id="medicalStatus"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeSettings()">✕</button>
+    <h2>Cài đặt</h2>
+    <div class="modal-section">
+      <label>Giao diện</label>
+      <div class="desc">Chọn giao diện hiển thị cho ứng dụng.</div>
+      <select id="themeSetting" onchange="applyThemeSetting(this.value)">
+        <option value="system">Hệ thống</option>
+        <option value="dark">Tối</option>
+        <option value="light">Sáng</option>
+      </select>
+    </div>
+    <div class="modal-section">
+      <label>Ngôn ngữ</label>
+      <div class="desc">Chọn ngôn ngữ hiển thị cho ứng dụng.</div>
+      <select id="langSetting" onchange="applyLanguage(this.value)">
+        <option value="vi">Tiếng Việt</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+  </div>
+</div>
+<div class="plus-menu" id="plusMenu" style="display:none"></div>
+<div class="modal-overlay" id="imagePreviewModal" style="display:none">
+  <div class="modal" style="min-width:auto;max-width:90vw;text-align:center;padding:16px">
+    <button class="modal-close" onclick="document.getElementById('imagePreviewModal').classList.remove('active')">✕</button>
+    <img id="previewFullImg" style="max-width:100%;max-height:80vh;border-radius:12px" src="">
+  </div>
+</div>
+
+<script>
+const CANCER_TARGETS = {{cancer_targets|safe}};
+let conversations = [];
+let activeConvId = null;
+let activeConvIndex = 0;
+let pendingAttachments = [];
+let currentTheme = localStorage.getItem('theme') || 'system';
+let currentLang = localStorage.getItem('lang') || 'vi';
+let isRecording = false;
+let recognition = null;
+
+const TR = {
+  vi: {
+    new_chat:'Cuộc trò chuyện mới',search:'Tìm kiếm cuộc trò chuyện...',history:'Lịch sử trò chuyện',
+    settings:'Cài đặt',app_name:'OncoVision Chat AI',greeting_title:'Xin chào!',
+    greeting_text:'Hôm nay bạn muốn hỏi điều gì?',input_placeholder:'Nhập tin nhắn của bạn...',
+    empty_title:'Bác sĩ AI luôn sẵn sàng hỗ trợ bạn',
+    empty_subtitle:'Đặt câu hỏi về sức khỏe, triệu chứng, xét nghiệm, điều trị và nhận thông tin đáng tin cậy từ AI.',
+    disclaimer:'Kết quả AI chỉ mang tính hỗ trợ. Hãy kiểm tra lại thông tin quan trọng với bác sĩ chuyên khoa.',
+    attach:'Đính kèm',camera:'Mở camera',choose_image:'Chọn ảnh',
+    medical_target:'Nhóm bệnh',medical_modality:'Loại ảnh',
+    light:'Sáng',dark:'Tối',system:'Hệ thống',today:'Hôm nay',
+    medical_analyzing:'Đang phân tích ảnh y khoa...',medical_pending:'Đang chạy pipeline sàng lọc y dược...',
+    system_reply_text:'Tôi đã nhận nội dung và sẽ xử lý trong ngữ cảnh cuộc trò chuyện này.',
+  },
+  en: {
+    new_chat:'New chat',search:'Search conversations...',history:'Chat history',
+    settings:'Settings',app_name:'OncoVision Chat AI',greeting_title:'Hello!',
+    greeting_text:'What would you like to ask today?',input_placeholder:'Enter your message...',
+    empty_title:'AI doctor is ready to help',
+    empty_subtitle:'Ask about health, symptoms, tests, treatment, and get reliable information from AI.',
+    disclaimer:'AI results are for support only. Please verify important information with a specialist.',
+    attach:'Attach',camera:'Open camera',choose_image:'Choose image',
+    medical_target:'Cancer group',medical_modality:'Modality',
+    light:'Light',dark:'Dark',system:'System',today:'Today',
+    medical_analyzing:'Analyzing medical image...',medical_pending:'Medical analysis is running...',
+    system_reply_text:'I received the content and will process it locally in this chat context.',
+  }
+};
+
+function t(key){return (TR[currentLang]||TR.vi)[key]||key}
+
+function applyLanguage(lang){
+  currentLang=lang;
+  localStorage.setItem('lang',lang);
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`language=${lang}&theme=${currentTheme}`});
+  translateUI();
+}
+function translateUI(){
+  document.querySelector('.new-chat-btn span').textContent=t('new_chat');
+  document.getElementById('searchInput').placeholder=t('search');
+  document.querySelector('.history-title').textContent=t('history');
+  document.querySelector('.settings-btn span').textContent=t('settings');
+  document.getElementById('messageInput').placeholder=t('input_placeholder');
+  document.querySelector('.greeting-card h1').textContent=t('greeting_title');
+  document.querySelector('.greeting-card p').textContent=t('greeting_text');
+  document.querySelector('.empty-state h2').textContent=t('empty_title');
+  document.querySelector('.empty-state p').textContent=t('empty_subtitle');
+  document.querySelector('.disclaimer').textContent=t('disclaimer');
+  const labels=document.querySelectorAll('.medical-row label');
+  if(labels.length>=2){labels[0].textContent=t('medical_target');labels[1].textContent=t('medical_modality')}
+}
+
+function setTheme(mode){
+  currentTheme=mode;
+  localStorage.setItem('theme',mode);
+  applyThemeMode();
+  document.getElementById('lightBtn').classList.toggle('active',mode==='light');
+  document.getElementById('darkBtn').classList.toggle('active',mode==='dark');
+  document.getElementById('systemBtn').classList.toggle('active',mode==='system');
+  document.getElementById('modeBadge').textContent=mode==='system'?'Hệ thống':mode==='dark'?t('dark'):t('light');
+}
+function applyThemeMode(){
+  const mode=currentTheme==='system'?(window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark'):currentTheme;
+  document.body.classList.toggle('light',mode==='light');
+}
+window.matchMedia('(prefers-color-scheme:light)').addListener(applyThemeMode);
+
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  const collapsed=document.getElementById('sidebar').classList.contains('collapsed');
+  document.getElementById('sidebarToggle').style.display=collapsed?'none':'flex';
+  document.getElementById('sidebarCompactToggle').style.display=collapsed?'flex':'none';
+}
+
+// Cancer targets
+function initTargets(){
+  const s=document.getElementById('targetSelect');
+  CANCER_TARGETS.forEach(t=>{const o=document.createElement('option');o.value=t.key;o.textContent=t.label;s.appendChild(o)});
+  updateModalities();
+  s.onchange=()=>{
+    const t=CANCER_TARGETS.find(x=>x.key===s.value);
+    if(t){updateModalityList(t.modalities);document.getElementById('targetHint').textContent='Ảnh thường dùng: '+t.modalities.join(', ')}
+  };
+  s.onchange();
+}
+function updateModalities(){
+  const t=CANCER_TARGETS[0];
+  if(t)updateModalityList(t.modalities);
+  document.getElementById('targetHint').textContent='Ảnh thường dùng: '+(t?t.modalities.join(', '):'');
+}
+function updateModalityList(modalities){
+  const s=document.getElementById('modalitySelect');s.innerHTML='';
+  modalities.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;s.appendChild(o)});
+  s.onchange=()=>document.getElementById('modalityHint').textContent='Modality đã chọn: '+s.value;
+  s.onchange();
+}
+function applyThemeSetting(v){setTheme(v)}
+function openSettings(){document.getElementById('settingsModal').classList.add('active')}
+function closeSettings(){document.getElementById('settingsModal').classList.remove('active')}
+document.getElementById('settingsModal').onclick=e=>{if(e.target===e.currentTarget)closeSettings()};
+
+// Conversations
+async function loadConversations(){
+  const r=await fetch('/api/conversations');const d=await r.json();
+  conversations=d.conversations||[];
+  if(!conversations.length)conversations=[{id:null,title:t('new_chat'),subtitle:t('today'),messages:[]}];
+  renderHistory();
+  if(activeConvId===null&&conversations[0])selectConv(0);
+}
+function renderHistory(){
+  const q=document.getElementById('searchInput').value.toLowerCase().trim();
+  const p=document.getElementById('historyPanel');p.innerHTML='';
+  conversations.forEach((c,i)=>{
+    if(q&&!c.title.toLowerCase().includes(q)&&!c.subtitle.toLowerCase().includes(q))return;
+    const d=document.createElement('div');d.className='history-item'+(i===activeConvIndex?' active':'');
+    d.innerHTML=`<div class="history-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="history-item-text"><div class="history-item-title">${c.title||t('new_chat')}</div><div class="history-item-subtitle">${c.subtitle||''}</div></div>`;
+    d.onclick=()=>selectConv(i);
+    d.oncontextmenu=e=>{e.preventDefault();if(confirm('Xóa trò chuyện này?'))deleteConv(i)};
+    p.appendChild(d);
+  });
+}
+function filterHistory(){renderHistory()}
+async function newChat(){
+  const r=await fetch('/api/conversations',{method:'POST'});const d=await r.json();
+  conversations.unshift({id:d.conversation_id,title:t('new_chat'),subtitle:t('today'),messages:[]});
+  selectConv(0);
+}
+async function selectConv(i){
+  if(i<0||i>=conversations.length)return;
+  activeConvIndex=i;
+  const c=conversations[i];
+  if(c.id){
+    const r=await fetch(`/api/conversations/${c.id}`);const d=await r.json();
+    if(d.ok){c.messages=d.conversation.messages}
+  }
+  activeConvId=c.id;
+  renderHistory();
+  renderMessages();
+}
+async function deleteConv(i){
+  const c=conversations[i];
+  if(c.id)await fetch(`/api/conversations/${c.id}`,{method:'DELETE'});
+  conversations.splice(i,1);
+  if(!conversations.length)conversations.push({id:null,title:t('new_chat'),subtitle:t('today'),messages:[]});
+  selectConv(Math.min(activeConvIndex,conversations.length-1));
+}
+
+// Messages
+function renderMessages(){
+  const c=conversations[activeConvIndex];
+  const hasMsg=c&&c.messages&&c.messages.length>0;
+  document.getElementById('greetingCard').style.display=hasMsg?'none':'block';
+  document.getElementById('emptyState').style.display=hasMsg?'none':'flex';
+  document.getElementById('messagesContainer').style.display=hasMsg?'block':'none';
+  if(!hasMsg)return;
+  const container=document.getElementById('messagesContainer');container.innerHTML='';
+  c.messages.forEach(msg=>addBubble(msg,false));
+  document.getElementById('messagesArea').scrollTop=document.getElementById('messagesArea').scrollHeight;
+}
+function addBubble(msg,animate=true){
+  const container=document.getElementById('messagesContainer');
+  const row=document.createElement('div');row.className='message-row '+(msg.sender||'assistant');
+  if(!animate)row.style.animation='none';
+  let html='<div class="bubble">';
+  if(msg.attachment_path&&msg.attachment_kind){
+    const fname=msg.attachment_path.split('/').pop().split('\\').pop();
+    html+=`<div class="attachment-name">📎 ${fname}</div>`;
+    if(msg.attachment_kind==='image'||msg.attachment_kind==='camera'){
+      html+=`<img src="/${msg.attachment_path.replace(/\\/g,'/')}" onclick="previewImage(this.src)" loading="lazy">`;
+    }
+  }
+  const txt=msg.text||'';
+  if(/Cannot read|does not support image/i.test(txt)){
+    html+=escHtml('Đã nhận ảnh: '+(msg.attachment_path||''));
+  }else if(txt.startsWith('Phân tích lỗi:')||txt.startsWith('Error:')){
+    html+=`<div class="error-text">${escHtml(txt)}</div>`;
+  }else{
+    html+=escHtml(txt);
+  }
+  html+='</div>';
+  row.innerHTML=html;
+  container.appendChild(row);
+  if(animate)setTimeout(()=>document.getElementById('messagesArea').scrollTop=document.getElementById('messagesArea').scrollHeight,50);
+}
+function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+  // Upload & Send
+function togglePlusMenu(e){
+  const m=document.getElementById('plusMenu');
+  if(m.style.display==='block'){m.style.display='none';return}
+  m.style.display='block';
+  m.innerHTML=`<button onclick="pickImage()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> ${t('choose_image')}</button><button onclick="openCamera()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> ${t('camera')}</button>`;
+  const rect=e.currentTarget.getBoundingClientRect();
+  m.style.top=(rect.bottom+4)+'px';m.style.left=rect.left+'px';
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.plus-btn')&&!e.target.closest('.plus-menu'))document.getElementById('plusMenu').style.display='none'});
+
+function pickImage(){
+  document.getElementById('plusMenu').style.display='none';
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*,.dcm';
+  inp.onchange=async ()=>{
+    if(!inp.files[0])return;
+    const f=inp.files[0];
+    const fd=new FormData();fd.append('file',f);
+    const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
+    if(d.ok)addAttachment(d.stored_path,'image',f.name);
+  };
+  inp.click();
+}
+
+function addAttachment(path,kind,name){
+  pendingAttachments.push({path,kind,name});
+  renderPreviews();
+}
+function renderPreviews(){
+  const a=document.getElementById('imagePreviewArea');
+  a.classList.add('hidden');a.innerHTML='';
+}
+function removeAttachment(i){
+  pendingAttachments.splice(i,1);
+  renderPreviews();
+}
+async function sendMessage(){
+  const input=document.getElementById('messageInput');
+  const text=input.value.trim();
+  if(!text&&!pendingAttachments.length)return;
+  const c=conversations[activeConvIndex];
+  if(!c.id){
+    const r=await fetch('/api/conversations',{method:'POST'});const d=await r.json();
+    c.id=d.conversation_id;
+  }
+  if(text&&c.title===t('new_chat')){
+    const fl=text.split('\n')[0].trim();
+    if(fl&&fl.length>2)c.title=fl.substring(0,28);
+  }
+  // User message
+  for(let i=0;i<pendingAttachments.length;i++){
+    const att=pendingAttachments[i];
+    const msgText=i===0&&text?text:'';
+    const fd=new URLSearchParams();fd.append('sender','user');fd.append('text',msgText);fd.append('attachment_path',att.path);fd.append('attachment_kind',att.kind);
+    await fetch(`/api/conversations/${c.id}/messages`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd});
+    c.messages.push({sender:'user',text:msgText,attachment_path:att.path,attachment_kind:att.kind});
+  }
+  if(text&&!pendingAttachments.length){
+    const fd=new URLSearchParams();fd.append('sender','user');fd.append('text',text);
+    await fetch(`/api/conversations/${c.id}/messages`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd});
+    c.messages.push({sender:'user',text:text});
+  }
+  input.value='';input.style.height='auto';
+  renderMessages();
+  const atts=[...pendingAttachments];pendingAttachments=[];renderPreviews();
+  // Assistant response
+  if(atts.length>0){
+    const att=atts[0];
+    const prompt=text||`Phân tích ảnh: ${att.name}`;
+    const fd=new URLSearchParams();fd.append('image_path',att.path);fd.append('user_prompt',prompt);
+    let analysisOk=false;
+    try{
+      const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd});const d=await r.json();
+      if(d.ok){
+        addBubble({sender:'assistant',text:d.reply_text,attachment_path:d.attachment_path,attachment_kind:d.attachment_kind},true);
+        const fd2=new URLSearchParams();fd2.append('sender','assistant');fd2.append('text',d.reply_text);fd2.append('attachment_path',d.attachment_path||'');fd2.append('attachment_kind',d.attachment_kind||'');
+        await fetch(`/api/conversations/${c.id}/messages`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd2});
+        c.messages.push({sender:'assistant',text:d.reply_text,attachment_path:d.attachment_path,attachment_kind:d.attachment_kind});
+        analysisOk=true;
+      }
+    }catch(e){/* fallback below */}
+    if(!analysisOk){
+      const fname=att.name||att.path.split('/').pop().split('\\').pop();
+      addBubble({sender:'assistant',text:'Đã nhận ảnh: '+fname,attachment_path:att.path,attachment_kind:att.kind},true);
+      const fd2=new URLSearchParams();fd2.append('sender','assistant');fd2.append('text','Đã nhận ảnh: '+fname);fd2.append('attachment_path',att.path);fd2.append('attachment_kind',att.kind);
+      await fetch(`/api/conversations/${c.id}/messages`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd2});
+      c.messages.push({sender:'assistant',text:'Đã nhận ảnh: '+fname,attachment_path:att.path,attachment_kind:att.kind});
+    }
+  }else{
+    removeLastBubble();
+    addBubble({sender:'assistant',text:t('system_reply_text')},true);
+    const fd2=new URLSearchParams();fd2.append('sender','assistant');fd2.append('text',t('system_reply_text'));
+    await fetch(`/api/conversations/${c.id}/messages`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd2});
+    c.messages.push({sender:'assistant',text:t('system_reply_text')});
+  }
+  renderHistory();
+}
+function removeLastBubble(){
+  const c=document.getElementById('messagesContainer');
+  if(c.lastChild)c.removeChild(c.lastChild);
+}
+
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
+document.getElementById('messageInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
+
+// Voice
+function toggleVoice(){
+  if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
+    alert('Trình duyệt không hỗ trợ nhập giọng nói.');return;
+  }
+  if(isRecording){if(recognition){recognition.stop()}return}
+  isRecording=true;
+  document.getElementById('recordingPanel').classList.add('active');
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  recognition=new SpeechRecognition();recognition.lang=currentLang==='vi'?'vi-VN':'en-US';
+  recognition.interimResults=true;
+  recognition.onresult=e=>{
+    const txt=Array.from(e.results).map(r=>r[0].transcript).join('');
+    document.getElementById('messageInput').value=txt;
+  };
+  recognition.onerror=()=>{stopVoice()};
+  recognition.onend=()=>{
+    stopVoice();
+    const txt=document.getElementById('messageInput').value.trim();
+    if(txt)sendMessage();
+  };
+  recognition.start();
+}
+function stopVoice(){
+  isRecording=false;
+  document.getElementById('recordingPanel').classList.remove('active');
+  if(recognition){try{recognition.stop()}catch(e){}recognition=null}
+}
+
+// Camera
+function openCamera(){
+  document.getElementById('plusMenu').style.display='none';
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';
+  inp.onchange=async ()=>{
+    if(!inp.files[0])return;
+    const fd=new FormData();fd.append('file',inp.files[0]);
+    const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
+    if(d.ok)addAttachment(d.stored_path,'camera','📷 '+inp.files[0].name);
+  };
+  inp.click();
+}
+
+// Image preview
+function previewImage(src){
+  document.getElementById('previewFullImg').src=src;
+  document.getElementById('imagePreviewModal').classList.add('active');
+}
+document.getElementById('imagePreviewModal').onclick=e=>{if(e.target===e.currentTarget)document.getElementById('imagePreviewModal').classList.remove('active')};
+
+// Drag & drop
+document.addEventListener('dragover',e=>{e.preventDefault()});
+document.addEventListener('drop',async e=>{
+  e.preventDefault();
+  for(const f of e.dataTransfer.files){
+    const fd=new FormData();fd.append('file',f);
+    const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
+    if(d.ok)addAttachment(d.stored_path,'image',f.name);
+  }
+});
+
+// Init
+(async function(){
+  const r=await fetch('/api/settings');const d=await r.json();
+  if(d.ok){currentLang=d.language||'vi';currentTheme=d.theme||'system'}
+  localStorage.setItem('lang',currentLang);
+  localStorage.setItem('theme',currentTheme);
+  document.getElementById('themeSetting').value=currentTheme;
+  document.getElementById('langSetting').value=currentLang;
+  initTargets();
+  setTheme(currentTheme);
+  applyLanguage(currentLang);
+  await loadConversations();
+  const r2=await fetch('/api/status');const d2=await r2.json();
+  if(d2.ok){
+    document.getElementById('medicalStatus').textContent='Model medical: '+(d2.model_ready?'✅ Sẵn sàng':'⏳ Chưa sẵn sàng');
+    document.getElementById('modeBadge').textContent='Y khoa • '+(d2.analyzed_cancers||[]).length+' bệnh';
+  }
+})();
+</script>
+</body>
+</html>
