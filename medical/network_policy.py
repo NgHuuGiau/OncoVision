@@ -69,4 +69,4 @@ def _warn_once(context: str) -> None:
     )
 
 
-__all__ = ["weight_download_allowed", "resolve_pretrained"]
+__all__ = ["resolve_pretrained", "weight_download_allowed"]

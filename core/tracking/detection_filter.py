@@ -13,6 +13,7 @@ PHONE_LABEL = "phone"
 
 from core.tracking.bbox_math import _bbox_iou
 
+
 def _dedupe_display_detections(detections: list, iou_threshold: float = DISPLAY_NMS_IOU) -> list:
     selected: list = []
     for detection in sorted(detections, key=lambda item: item.confidence, reverse=True):
@@ -59,15 +60,7 @@ def _filter_person_detections(
     for item in detections:
         label = str(item.label).lower()
 
-        if label == PERSON_LABEL:
-            if (
-                item.confidence >= person_confidence
-                and _person_shape_is_plausible(item.bbox)
-                and not (_touches_frame_edge(item.bbox, frame_shape) and _box_area_ratio(item.bbox, frame_shape) > PERSON_MAX_AREA_RATIO)
-            ):
-                filtered.append(item)
-
-        elif label == FACE_LABEL:
+        if label == PERSON_LABEL or label == FACE_LABEL:
             if (
                 item.confidence >= person_confidence
                 and _person_shape_is_plausible(item.bbox)

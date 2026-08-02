@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Iterable
+from collections.abc import Iterable
 
 import cv2
 import numpy as np
-
 
 _COLOR_PALETTE: tuple[tuple[int, int, int], ...] = (
     (46, 125, 255),
@@ -80,7 +79,7 @@ def _draw_text_tag(
     border_thickness: int = 1,
 ) -> tuple[int, int, int, int]:
     font = cv2.FONT_HERSHEY_SIMPLEX
-    text_width, text_height, baseline, box_width, box_height = _text_box_metrics(
+    _text_width, text_height, _baseline, box_width, box_height = _text_box_metrics(
         text=text,
         font_scale=font_scale,
         thickness=thickness,
@@ -151,7 +150,7 @@ def draw_detection_results(
                 start = trail_points[index - 1]
                 end = trail_points[index]
                 segment_ratio = index / max(1, len(trail_points) - 1)
-                thickness = max(1, int(round(max(1, box_thickness) * (0.6 + (segment_ratio * 0.8)))))
+                thickness = max(1, round(max(1, box_thickness) * (0.6 + (segment_ratio * 0.8))))
                 cv2.line(trail_overlay, start, end, box_color, thickness, cv2.LINE_AA)
                 cv2.circle(trail_overlay, end, max(1, thickness // 2), box_color, -1, cv2.LINE_AA)
         if drew_trail:

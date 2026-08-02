@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from utils.console_ui import BootProgress
 
-
 CAMERA_BOOT_STEPS = (
     (16, "Đang nhận cấu hình khởi động"),
     (42, "Đang kiểm tra CPU / GPU / CUDA"),

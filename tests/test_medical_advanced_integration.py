@@ -5,12 +5,12 @@ import unittest
 import numpy as np
 
 from medical.pipeline import (
+    DetectionFinding,
     MedicalImageAnalyzer,
     MedicalImageAnalyzerConfig,
     build_default_medical_analyzer_config,
     validate_medical_analyzer_config,
 )
-from medical.pipeline import DetectionFinding
 
 
 def _base_config(**overrides) -> MedicalImageAnalyzerConfig:

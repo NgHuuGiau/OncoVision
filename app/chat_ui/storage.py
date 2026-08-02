@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 import os
 import sqlite3
 from collections import defaultdict
+from contextlib import contextmanager
 
 from app.chat_ui.models import ChatMessage, Conversation
 from utils.logger import get_logger
 from utils.sqlite_utils import DEFAULT_SQLITE_TIMEOUT_SECONDS, create_sqlite_connection
-
 
 logger = get_logger(__name__)
 

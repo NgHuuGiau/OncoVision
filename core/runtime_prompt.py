@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import cast
 
 from core.hardware_info import detect_hardware
+from core.model_selector import load_settings
 from core.runtime_advisor import (
     MODE_ORDER,
     YOLO11_VARIANTS,
@@ -16,7 +17,6 @@ from core.runtime_advisor import (
     quality_score,
     stability_score,
 )
-from core.model_selector import load_settings
 from utils.console_ui import (
     CYAN,
     DIM,
@@ -31,7 +31,6 @@ from utils.console_ui import (
     section,
 )
 from utils.file_utils import load_yaml_cached
-
 
 MODEL_CONFIG_PATH = "config/model_config.yaml"
 MODE_PROMPT_CHOICES = {"0": "exit", "1": "high", "2": "medium", "3": "low"}

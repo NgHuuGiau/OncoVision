@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from pathlib import Path
 import re
 import unicodedata
+from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -350,8 +350,8 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
     if not source.exists():
         return None
     try:
-        from PIL import Image
         import numpy as np
+        from PIL import Image
         img = Image.open(source).convert("L")
         arr = np.array(img, dtype=np.float32)
         mean, std = float(np.mean(arr)), float(np.std(arr))
@@ -367,9 +367,8 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
                 return "CT"
         if std < 30 and low_bin_ratio > 0.3 and high_bin_ratio > 0.3:
             return "X-quang ngực"
-        if std > 50 and peak_ratio > 0.15 and mean > 80:
-            if low_bin_ratio < 0.1:
-                return "MRI"
+        if std > 50 and peak_ratio > 0.15 and mean > 80 and low_bin_ratio < 0.1:
+            return "MRI"
         if std < 35 and mean > 80 and peak_ratio > 0.1:
             return "Siêu âm"
         if std > 40 and high_bin_ratio > 0.2 and low_bin_ratio > 0.15:
@@ -613,8 +612,8 @@ def is_medical_volume_source(path: str | Path) -> bool:
 
 def _load_dicom_with_window(source: Path) -> Image.Image:
     try:
-        import pydicom
         import numpy as np
+        import pydicom
         ds = pydicom.dcmread(str(source), force=True)
         arr = ds.pixel_array.astype(np.float32)
         intercept = float(getattr(ds, "RescaleIntercept", 0))

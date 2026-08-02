@@ -4,14 +4,17 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels, supported_cancer_modalities
+from medical.cancer_catalog import (
+    COMMON_CANCER_TARGETS,
+    supported_cancer_labels,
+    supported_cancer_modalities,
+)
+from medical.classifier import iter_medical_image_paths
 from medical.dataset import MEDICAL_CLASS_NAMES
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.pipeline import build_default_medical_analyzer_config
-from medical.training import medical_training_paths
-from medical.classifier import iter_medical_image_paths
 from medical.status_helpers import count_files
-
+from medical.training import medical_training_paths
 
 SCREENING_TARGETS = tuple((target.label, target.model_ready) for target in COMMON_CANCER_TARGETS)
 ANALYZED_CANCERS = tuple(supported_cancer_labels())

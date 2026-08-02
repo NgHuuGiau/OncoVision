@@ -7,7 +7,12 @@ from typing import Any, cast
 
 from medical.dataset import infer_medical_upload_context
 from medical.training import MedicalTrainingPaths, medical_training_paths
-from medical.validator import DEFAULT_MEDICAL_SETTINGS_PATH, assess_image_quality, get_modality_tuning, validate_image
+from medical.validator import (
+    DEFAULT_MEDICAL_SETTINGS_PATH,
+    assess_image_quality,
+    get_modality_tuning,
+    validate_image,
+)
 from utils.file_utils import load_yaml, save_yaml
 
 
@@ -31,7 +36,7 @@ def _score_quantile(values: list[float], fraction: float, fallback: float) -> fl
     ordered = sorted(values)
     if len(ordered) == 1:
         return ordered[0]
-    index = int(round((len(ordered) - 1) * fraction))
+    index = round((len(ordered) - 1) * fraction)
     return ordered[max(0, min(index, len(ordered) - 1))]
 
 

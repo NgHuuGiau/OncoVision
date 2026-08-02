@@ -1,4 +1,19 @@
 [lint]
+# Cac rule tu dong chay "strict" khong phai bug, dac biet trong GUI/camera code
+# noi catch Exception la chu chuong (S110/BLE001), datetime naive duoc chap nhan
+# (DTZ005/DTZ006), va mot so SIM* micro-optimizations khong bat buoc.
+ignore = [
+    "BLE001",  # catch Exception: chu y trong GUI/voicenative code
+    "S110",    # try-except-pass: giu lang o nhung cho khong can log
+    "DTZ005",  # datetime.now() naive: chap nhan trong cac module khong can TZ
+    "DTZ006",  # datetime.fromtimestamp naive
+    "SIM102",  # nested if: de doc hon voi mot so dieu kien
+    "SIM113",  # enumerate(): khong bat buoc
+    "SIM115",  # open() khong context manager: giu lai de tuong thich
+    "SIM117",  # multiple with: tuong duong
+    "RUF059",  # unnecessary concatenation: style tuy chon
+]
+
 # E402 (module import not at top of file) is intentional in these entrypoints:
 # they call ensure_project_root_on_path() to set sys.path before importing
 # project modules, and in core/* to avoid heavy/optional import side effects.

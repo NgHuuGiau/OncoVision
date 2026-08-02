@@ -6,7 +6,6 @@ from typing import Any
 
 import yaml
 
-
 PROJECT_DIRS = tuple(
     Path(directory)
     for directory in (

@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import importlib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 
 from core.model_catalog import is_allowed_model_reference, is_supported_pretrained_model
+
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
 
 from core.model_selector import RuntimeConfig
 from utils.file_utils import load_yaml_cached
 from utils.logger import get_logger
-
 
 logger = get_logger(__name__)
 MODEL_CONFIG_PATH = Path("config/model_config.yaml")
@@ -70,7 +70,7 @@ def _candidate_paths(model_name: str) -> list[str]:
     return list(dict.fromkeys(candidates))
 
 
-def load_yolo_model(runtime: RuntimeConfig) -> Tuple[LoadedModel, str]:
+def load_yolo_model(runtime: RuntimeConfig) -> tuple[LoadedModel, str]:
     yolo_cls = None
     errors = []
     for model_name in runtime.candidate_models:

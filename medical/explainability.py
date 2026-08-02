@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass
-from typing import Callable, Sequence
+from torch import nn
 
 from medical.cnn_classifier import MedicalCNNClassifierWrapper, _load_image_as_tensor
 
@@ -33,9 +34,7 @@ def _get_target_conv_layer(model: nn.Module, backbone_name: str) -> nn.Module:
         raise GradCAMUnsupportedError("Mô hình không có thuộc tính 'backbone'.")
     if backbone_name in {"resnet18", "resnet50"}:
         return backbone.layer4
-    elif backbone_name in {"efficientnet_b0", "efficientnet_b2", "efficientnet_b3"}:
-        return backbone.features[-1]
-    elif backbone_name == "convnext_tiny":
+    elif backbone_name in {"efficientnet_b0", "efficientnet_b2", "efficientnet_b3"} or backbone_name == "convnext_tiny":
         return backbone.features[-1]
     elif backbone_name.startswith("swin_"):
         return backbone.features[-1][-1].mlp
@@ -368,7 +367,7 @@ class MedicalGradCAMExplainer:
                 self.score_cam = ScoreCAM(model, target_layer, device=self.device)
             except Exception:
                 self.score_cam = None
-            if backbone_name.startswith("swin_") or backbone_name.startswith("vit_"):
+            if backbone_name.startswith(("swin_", "vit_")):
                 self.attention_rollout = AttentionRollout(model, device=self.device)
         except GradCAMUnsupportedError as exc:
             self.unsupported_reason = str(exc)
@@ -427,7 +426,17 @@ class MedicalGradCAMExplainer:
 
 
 __all__ = [
-    "GradCAMError", "GradCAMUnsupportedError", "GradCAM", "GradCAMPlusPlus", "EigenCAM", "ScoreCAM", "AttentionRollout",
-    "GradCAMResult", "generate_gradcam_overlay", "MedicalGradCAMExplainer", "_get_target_conv_layer",
-    "_jet_colormap", "_resize_heatmap",
+    "AttentionRollout",
+    "EigenCAM",
+    "GradCAM",
+    "GradCAMError",
+    "GradCAMPlusPlus",
+    "GradCAMResult",
+    "GradCAMUnsupportedError",
+    "MedicalGradCAMExplainer",
+    "ScoreCAM",
+    "_get_target_conv_layer",
+    "_jet_colormap",
+    "_resize_heatmap",
+    "generate_gradcam_overlay",
 ]

@@ -11,15 +11,31 @@ from core.model_catalog import YOLO11_MODELS_ASC
 from core.runtime_advisor import optimized_runtime
 from medical.dataset import create_default_medical_dataset_config
 from medical.status_helpers import count_files
-from medical.system_status import get_medical_system_status, recommended_medical_commands
-from training.terminal_ui import CYAN, GREEN, RED, YELLOW, header, line, row, rule, section
-from utils.doctor_helpers import medical_status_color, print_medical_status, print_recommended_commands
+from medical.system_status import (
+    get_medical_system_status,
+    recommended_medical_commands,
+)
+from training.terminal_ui import (
+    CYAN,
+    GREEN,
+    RED,
+    YELLOW,
+    header,
+    line,
+    row,
+    rule,
+    section,
+)
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
+from utils.doctor_helpers import (
+    medical_status_color,
+    print_medical_status,
+    print_recommended_commands,
+)
 from utils.entrypoint_checks import medical_config_issues, runtime_config_issues
 from utils.entrypoint_common import run_entrypoint
 from utils.file_utils import ensure_project_directories
-
 
 YOLO11_MODELS = YOLO11_MODELS_ASC
 PRETRAINED_DIR = Path("models/pretrained")
@@ -219,7 +235,6 @@ def main() -> int:
     print(row("Chat captures", f"{chat_capture_dir} ({chat_capture_count} file)", CYAN, bounded=False))
 
     print(line(rule("-"), CYAN))
-    ready = bool(present_models) and dataset_ok and medical_status.model_ready
     issues: list[str] = []
     if not present_models:
         issues.append("Chưa có model local")

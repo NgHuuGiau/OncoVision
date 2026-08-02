@@ -7,13 +7,25 @@ from urllib.request import urlretrieve
 try:
     from training._training_bootstrap import ensure_project_root_on_path
 except ModuleNotFoundError:
-    from _training_bootstrap import ensure_project_root_on_path  # type: ignore[import-not-found,no-redef]
+    from _training_bootstrap import (
+        ensure_project_root_on_path,  # type: ignore[import-not-found,no-redef]
+    )
 
 ensure_project_root_on_path()
 
-from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, header, line, row, rule, section
+from training.terminal_ui import (
+    CYAN,
+    GREEN,
+    RED,
+    YELLOW,
+    command_row,
+    header,
+    line,
+    row,
+    rule,
+    section,
+)
 from utils.file_utils import ensure_project_directories
-
 
 BASE_URL = "https://github.com/ultralytics/assets/releases/download/v8.4.0"
 MODEL_URLS = {

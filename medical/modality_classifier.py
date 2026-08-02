@@ -5,7 +5,6 @@ from pathlib import Path
 from medical.cnn_classifier import MedicalCNNClassifier, MedicalCNNClassifierWrapper
 from medical.network_policy import resolve_pretrained
 
-
 _MODALITY_LABELS = [
     "ct",
     "mri",

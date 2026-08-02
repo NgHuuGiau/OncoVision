@@ -4,10 +4,10 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import numpy as np
-from PIL import Image
 import nibabel as nib
+import numpy as np
 import pydicom
+from PIL import Image
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.filewriter import dcmwrite
 
@@ -19,8 +19,8 @@ from medical.dataset import (
     is_medical_volume_source,
     is_supported_medical_upload_path,
     load_medical_volume_slices,
-    resolve_medical_upload_path,
     normalize_uploaded_image,
+    resolve_medical_upload_path,
 )
 
 

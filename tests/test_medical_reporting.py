@@ -66,7 +66,7 @@ class MedicalReportingTests(unittest.TestCase):
                 "detections": [{"label": "lesion", "confidence": 0.92, "bbox": [1, 2, 3, 4]}],
             }
 
-            report_json, report_md, _ = write_case_report(Path(temp_dir), payload)
+            report_json, _report_md, _ = write_case_report(Path(temp_dir), payload)
             report_html = report_json.with_suffix(".html")
 
             self.assertTrue(report_html.exists())

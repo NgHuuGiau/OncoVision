@@ -4,8 +4,8 @@ import unittest
 from unittest.mock import patch
 
 from core.hardware_info import HardwareInfo
-from core.model_selector import select_runtime_config
 from core.model_loader import _candidate_paths, load_yolo_model
+from core.model_selector import select_runtime_config
 
 
 class YoloLoaderTests(unittest.TestCase):

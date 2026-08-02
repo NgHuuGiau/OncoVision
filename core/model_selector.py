@@ -4,9 +4,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.hardware_info import HardwareInfo
-from core.model_catalog import DEFAULT_MODEL_FALLBACK, YOLO11_MODELS_DESC, build_model_backups
+from core.model_catalog import (
+    DEFAULT_MODEL_FALLBACK,
+    YOLO11_MODELS_DESC,
+    build_model_backups,
+)
 from utils.file_utils import load_yaml_cached
-
 
 SETTINGS_PATH = Path("config/settings.yaml")
 VRAM_EPSILON_GB = 0.05

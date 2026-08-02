@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import argparse
 
-from app.camera_runtime.cli import build_camera_arg_parser
 from app.camera_runtime.bootstrap import resolve_start_bundle
+from app.camera_runtime.cli import build_camera_arg_parser
 from app.camera_runtime.launching import run_camera_launch_flow
 from core.hardware_info import detect_hardware
 from core.runtime_advisor import build_recommendations
 from core.runtime_prompt import prompt_runtime_mode
-from utils.entrypoint_common import run_entrypoint
 from utils.console_ui import BootProgress, print_runtime_dashboard
+from utils.entrypoint_common import run_entrypoint
 
 
 def parse_args() -> argparse.Namespace:

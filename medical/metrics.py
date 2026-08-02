@@ -247,6 +247,11 @@ def compute_calibration_curve(y_true: ArrayLike, y_scores: ScoreMatrix, n_bins: 
 
 
 __all__ = [
-    "MedicalMetrics", "PerClassMetrics", "compute_medical_metrics", "compute_multiclass_metrics",
-    "compute_roc_auc", "compute_pr_auc", "compute_calibration_curve",
+    "MedicalMetrics",
+    "PerClassMetrics",
+    "compute_calibration_curve",
+    "compute_medical_metrics",
+    "compute_multiclass_metrics",
+    "compute_pr_auc",
+    "compute_roc_auc",
 ]

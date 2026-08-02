@@ -3,11 +3,12 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from medical.pipeline import build_default_medical_analyzer_config, validate_medical_analyzer_config
-from medical.system_status import get_medical_system_status
-from medical.system_status import MedicalSystemStatus
+from medical.pipeline import (
+    build_default_medical_analyzer_config,
+    validate_medical_analyzer_config,
+)
+from medical.system_status import MedicalSystemStatus, get_medical_system_status
 from utils.file_utils import ensure_project_directories, load_yaml, yaml_file_issues
-
 
 SETTINGS_PATH = Path("config/settings.yaml")
 MODEL_CONFIG_PATH = Path("config/model_config.yaml")

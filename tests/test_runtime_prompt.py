@@ -4,8 +4,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from core.runtime_prompt import prompt_runtime_mode as tool_prompt_runtime_mode, prompt_runtime_model
-from utils.console_ui import mode_to_ui_defaults, prompt_launch_target, prompt_runtime_mode as console_prompt_runtime_mode
+from core.runtime_prompt import prompt_runtime_mode as tool_prompt_runtime_mode
+from core.runtime_prompt import prompt_runtime_model
+from utils.console_ui import mode_to_ui_defaults, prompt_launch_target
+from utils.console_ui import prompt_runtime_mode as console_prompt_runtime_mode
 
 
 class RuntimePromptTests(unittest.TestCase):

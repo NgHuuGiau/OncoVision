@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime
 import html
 import json
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from medical.compliance import MEDICAL_DISCLAIMER
 from medical.cancer_catalog import supported_cancer_labels, supported_cancer_modalities
+from medical.compliance import MEDICAL_DISCLAIMER
 
 
 def build_artifact_stamp() -> str:
@@ -115,18 +115,18 @@ def _try_import(name: str) -> Any | None:
 def _try_import_reportlab() -> dict[str, Any] | None:
     try:
         from reportlab.lib import colors
+        from reportlab.lib.enums import TA_LEFT
         from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
         from reportlab.platypus import (
-            SimpleDocTemplate,
+            PageBreak,
             Paragraph,
+            SimpleDocTemplate,
             Spacer,
             Table,
             TableStyle,
-            PageBreak,
         )
-        from reportlab.lib.enums import TA_LEFT
         return {
             "colors": colors,
             "A4": A4,
@@ -297,8 +297,6 @@ def _html_report(payload: dict[str, Any]) -> str:
     risk = payload.get('risk_level', 'unknown')
     risk_colors = {"high": "#dc2626", "medium": "#f59e0b", "low": "#16a34a", "uncertain": "#6b7280"}
     risk_color = risk_colors.get(risk, "#6b7280")
-    risk_bg = {"high": "#fef2f2", "medium": "#fffbeb", "low": "#f0fdf4", "uncertain": "#f9fafb"}
-    risk_bg_color = risk_bg.get(risk, "#f9fafb")
     return f"""<!DOCTYPE html>
 <html lang=\"vi\">
 <head>

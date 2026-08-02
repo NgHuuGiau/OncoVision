@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from medical.chat_service import MedicalChatService
-from medical.pipeline import MedicalAnalysisResult, DetectionFinding
+from medical.pipeline import DetectionFinding, MedicalAnalysisResult
 from medical.storage import MedicalCaseDatabase
 
 

@@ -5,7 +5,6 @@ from typing import TypeVar
 
 from utils.terminal_encoding import ensure_utf8_console
 
-
 T = TypeVar("T")
 
 def run_entrypoint(main_fn: Callable[[], T]) -> T:

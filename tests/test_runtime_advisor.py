@@ -19,47 +19,47 @@ from core.runtime_advisor import (
 
 
 def _hardware(**overrides):
-    base = dict(
-        cpu_name="Intel",
-        ram_gb=16.0,
-        gpu_name="NVIDIA GeForce RTX 3080",
-        vram_gb=10.0,
-        cuda_available=True,
-        os_name="Windows 11",
-        gpu_count=1,
-        cpu_usage_percent=20.0,
-        ram_usage_percent=25.0,
-        gpu_usage_percent=30.0,
-        vram_usage_percent=35.0,
-    )
+    base = {
+        "cpu_name": "Intel",
+        "ram_gb": 16.0,
+        "gpu_name": "NVIDIA GeForce RTX 3080",
+        "vram_gb": 10.0,
+        "cuda_available": True,
+        "os_name": "Windows 11",
+        "gpu_count": 1,
+        "cpu_usage_percent": 20.0,
+        "ram_usage_percent": 25.0,
+        "gpu_usage_percent": 30.0,
+        "vram_usage_percent": 35.0,
+    }
     base.update(overrides)
     return SimpleNamespace(**base)
 
 
 def _runtime(**overrides) -> RuntimeConfig:
-    base = dict(
-        mode="medium",
-        profile_name="medium",
-        requested_profile_name="medium",
-        requested_device="gpu",
-        resolved_device="cuda:0",
-        requested_model_name="yolo11s.pt",
-        primary_model_name="yolo11s.pt",
-        candidate_models=["yolo11s.pt"],
-        requested_imgsz=640,
-        imgsz=640,
-        conf=0.25,
-        max_det=150,
-        use_half=True,
-        camera_width=800,
-        camera_height=600,
-        font_size=16,
-        box_thickness=2,
-        label_font_scale=0.8,
-        active_model_name="",
-        hardware_tier="strong GPU",
-        fallback_chain=[],
-    )
+    base = {
+        "mode": "medium",
+        "profile_name": "medium",
+        "requested_profile_name": "medium",
+        "requested_device": "gpu",
+        "resolved_device": "cuda:0",
+        "requested_model_name": "yolo11s.pt",
+        "primary_model_name": "yolo11s.pt",
+        "candidate_models": ["yolo11s.pt"],
+        "requested_imgsz": 640,
+        "imgsz": 640,
+        "conf": 0.25,
+        "max_det": 150,
+        "use_half": True,
+        "camera_width": 800,
+        "camera_height": 600,
+        "font_size": 16,
+        "box_thickness": 2,
+        "label_font_scale": 0.8,
+        "active_model_name": "",
+        "hardware_tier": "strong GPU",
+        "fallback_chain": [],
+    }
     base.update(overrides)
     return RuntimeConfig(**base)
 

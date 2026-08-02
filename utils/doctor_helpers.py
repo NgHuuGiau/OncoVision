@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from medical.system_status import MedicalSystemStatus
-from training.terminal_ui import CYAN, GREEN, RED, YELLOW, command_row, line, row, rule, section
+from training.terminal_ui import (
+    CYAN,
+    GREEN,
+    RED,
+    YELLOW,
+    command_row,
+    line,
+    row,
+    rule,
+    section,
+)
 
 
 def medical_status_color(status: MedicalSystemStatus) -> str:

@@ -9,14 +9,18 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from medical.preprocessing.base import PreprocessingResult, _resize_and_pad, _to_uint8_rgb
+from medical.preprocessing.base import (
+    PreprocessingResult,
+    _resize_and_pad,
+    _to_uint8_rgb,
+)
 from medical.preprocessing.ct import preprocess_ct
-from medical.preprocessing.mri import preprocess_mri
-from medical.preprocessing.xray import preprocess_xray
-from medical.preprocessing.mammogram import preprocess_mammogram
-from medical.preprocessing.pet import preprocess_pet_ct
 from medical.preprocessing.endoscopy import preprocess_endoscopy
+from medical.preprocessing.mammogram import preprocess_mammogram
+from medical.preprocessing.mri import preprocess_mri
+from medical.preprocessing.pet import preprocess_pet_ct
 from medical.preprocessing.ultrasound import preprocess_ultrasound
+from medical.preprocessing.xray import preprocess_xray
 
 logger = logging.getLogger(__name__)
 

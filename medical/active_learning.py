@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import csv
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+
+from typing_extensions import Self
 
 from medical.classifier import iter_medical_image_paths, load_medical_classifier
 
@@ -117,10 +120,10 @@ class ActiveLearningLogger:
     def close(self) -> None:
         self._file_handle.close()
 
-    def __enter__(self) -> ActiveLearningLogger:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.close()
 
 

@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QSize, QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, Qt
+from PySide6.QtCore import (
+    QEasingCurve,
+    QParallelAnimationGroup,
+    QPoint,
+    QPropertyAnimation,
+    QSize,
+    Qt,
+)
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import QListWidgetItem, QMenu, QSizePolicy
 
-from app.chat_ui.icons import themed_icon, themed_pixmap
 from app.chat_ui.content import translate as tr
+from app.chat_ui.icons import themed_icon, themed_pixmap
 from app.chat_ui.widgets import HistoryItemWidget
 
 

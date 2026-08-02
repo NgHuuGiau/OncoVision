@@ -27,7 +27,7 @@ def _smooth_bbox(
 ) -> tuple[int, int, int, int]:
     alpha = max(0.0, min(1.0, float(alpha)))
     return tuple(
-        int(round((previous_value * alpha) + (current_value * (1.0 - alpha))))
+        round((previous_value * alpha) + (current_value * (1.0 - alpha)))
         for previous_value, current_value in zip(previous_bbox, current_bbox)
     )  # type: ignore[return-value]
 

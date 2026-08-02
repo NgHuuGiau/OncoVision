@@ -7,8 +7,6 @@ import time
 import unicodedata
 from typing import Any
 
-
-
 MODE_CHOICES = {"0": "exit", "1": "high", "2": "medium", "3": "low"}
 START_TARGET_CHOICES = {"0": "exit", "1": "ui", "2": "camera"}
 MODE_LABELS = {

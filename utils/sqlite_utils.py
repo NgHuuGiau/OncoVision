@@ -3,7 +3,6 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-
 DEFAULT_SQLITE_TIMEOUT_SECONDS = 5.0
 DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000
 

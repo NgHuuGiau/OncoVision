@@ -10,32 +10,32 @@ from typing import Any
 import cv2
 import numpy as np
 
-from core.frame_capture import FrameCapture
 from core.fallback_manager import iter_fallback_configs
+from core.frame_capture import FrameCapture
+from core.frame_processing import (
+    _compose_camera_only_layout,
+    _compute_motion_score,
+    _enhance_low_light_frame,
+    _mean_luminance,
+)
 from core.model_loader import LoadedModel, load_yolo_model
 from core.model_selector import RuntimeConfig
 from core.recorder import VideoRecorder
-from utils.camera_utils import open_camera_capture
-from utils.draw_utils import draw_detection_results
-from utils.file_utils import load_yaml_cached
-from utils.logger import get_logger
 
 # Import helpers from submodules
 from core.tracking.bbox_math import _bbox_center
 from core.tracking.detection_filter import (
-    _filter_person_detections,
-    _dedupe_display_detections,
+    DISPLAY_MIN_CONFIDENCE,
     PERSON_MIN_CONFIDENCE,
     PHONE_MIN_CONFIDENCE,
-    DISPLAY_MIN_CONFIDENCE,
+    _dedupe_display_detections,
+    _filter_person_detections,
 )
 from core.tracking.detection_tracker import _match_and_smooth_detections
-from core.frame_processing import (
-    _compute_motion_score,
-    _mean_luminance,
-    _enhance_low_light_frame,
-    _compose_camera_only_layout,
-)
+from utils.camera_utils import open_camera_capture
+from utils.draw_utils import draw_detection_results
+from utils.file_utils import load_yaml_cached
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 WINDOW_NAME = "OncoVision Camera Realtime"
@@ -456,7 +456,7 @@ class CameraDetector:
         next_trails: dict[int, list[tuple[int, int]]] = {}
         for detection in detections:
             center_x, center_y = _bbox_center(detection.bbox)
-            center = (int(round(center_x)), int(round(center_y)))
+            center = (round(center_x), round(center_y))
             trail = list(self.display_trails.get(detection.track_id, []))
             if not trail:
                 trail.append(center)
@@ -694,9 +694,7 @@ def run_camera_preview_session(runtime: RuntimeConfig, camera_index: int = 0) ->
     def _handle_runtime_key(key: int) -> bool:
         if key == 255:
             return False
-        if _window_escape_requested(key):
-            return True
-        return False
+        return bool(_window_escape_requested(key))
 
     try:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)

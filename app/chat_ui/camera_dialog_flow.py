@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.chat_ui.paths import build_chat_capture_path, get_chat_capture_dir
 from app.chat_ui.content import translate as tr
+from app.chat_ui.paths import build_chat_capture_path, get_chat_capture_dir
 from utils.camera_utils import open_camera_capture_with_fallback
 
 try:
@@ -9,9 +9,18 @@ try:
 except ImportError:
     cv2 = None
 
-from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QImage, QPixmap
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+
 class CameraCaptureDialog(QDialog):
     captured = Signal(str)
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import platform
 from dataclasses import dataclass
-from typing import List
 
 import psutil
 
@@ -87,7 +86,7 @@ def _detect_gpu_from_gputil() -> tuple[str, float, int, float | None, float | No
     if GPUtil is None:
         return "Không phát hiện GPU", 0.0, 0, None, None
     try:
-        gpus: List = GPUtil.getGPUs()
+        gpus: list = GPUtil.getGPUs()
     except Exception:
         return "Không phát hiện GPU", 0.0, 0, None, None
     if not gpus:

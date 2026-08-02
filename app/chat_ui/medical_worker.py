@@ -3,7 +3,6 @@ from __future__ import annotations
 from medical.chat_service import MedicalChatResponse, MedicalChatService
 from utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 

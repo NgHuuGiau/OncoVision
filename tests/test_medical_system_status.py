@@ -6,7 +6,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from medical.system_status import get_medical_system_status, recommended_medical_commands
+from medical.system_status import (
+    get_medical_system_status,
+    recommended_medical_commands,
+)
 
 
 class MedicalSystemStatusTests(unittest.TestCase):
@@ -31,7 +34,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
     def test_get_medical_system_status_returns_zero_cases_when_db_is_unavailable(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            dataset_root, reports_dir, normalized_dir, overlay_dir, exports_dir, model_path = self._seed_medical_layout(root)
+            dataset_root, reports_dir, normalized_dir, overlay_dir, _exports_dir, model_path = self._seed_medical_layout(root)
 
             with patch(
                 "medical.system_status.build_default_medical_analyzer_config",
@@ -154,7 +157,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
     def test_get_medical_system_status_includes_screening_targets(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            dataset_root, reports_dir, normalized_dir, overlay_dir, exports_dir, model_path = self._seed_medical_layout(root)
+            dataset_root, reports_dir, normalized_dir, overlay_dir, _exports_dir, model_path = self._seed_medical_layout(root)
 
             with patch(
                 "medical.system_status.build_default_medical_analyzer_config",

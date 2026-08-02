@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 TRAINING_PROGRESS_PATH = Path("output/medical/reports/training_progress.json")
 
 

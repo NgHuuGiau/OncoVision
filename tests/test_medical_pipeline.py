@@ -11,7 +11,11 @@ import pydicom
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.filewriter import dcmwrite
 
-from medical.pipeline import DetectionFinding, MedicalImageAnalyzer, MedicalImageAnalyzerConfig
+from medical.pipeline import (
+    DetectionFinding,
+    MedicalImageAnalyzer,
+    MedicalImageAnalyzerConfig,
+)
 
 
 class _FakeValue:
@@ -177,7 +181,7 @@ class MedicalPipelineTests(unittest.TestCase):
         )
         findings = [DetectionFinding(label="lesion", confidence=0.5, bbox=(1, 2, 3, 4))]
 
-        risk_level, suspected_malignant, recommendation, average_confidence = analyzer._classify_findings(findings)
+        risk_level, suspected_malignant, recommendation, _average_confidence = analyzer._classify_findings(findings)
 
         self.assertEqual(risk_level, "uncertain")
         self.assertFalse(suspected_malignant)

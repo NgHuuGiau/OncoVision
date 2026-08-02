@@ -6,7 +6,6 @@ from pathlib import Path
 
 from utils.terminal_encoding import ensure_utf8_console
 
-
 LOG_FILE = Path("output/logs/app.log")
 
 

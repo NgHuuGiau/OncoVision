@@ -9,17 +9,18 @@ TRACKING_PREDICTION_MOTION_RATIO = 0.22
 TRACKING_STABLE_MOTION_RATIO = 0.06
 
 from core.tracking.bbox_math import (
-    _bbox_iou,
     _bbox_center_distance,
-    _bbox_reference_size,
+    _bbox_iou,
     _bbox_movement_ratio,
-    _smooth_bbox,
+    _bbox_reference_size,
     _estimate_motion_bbox,
+    _smooth_bbox,
 )
 from core.tracking.face_stabilizer import (
     _is_refined_face_label,
     _stabilize_face_bbox,
 )
+
 
 def _adaptive_tracking_alpha(
     previous_observed_bbox: tuple[int, int, int, int],

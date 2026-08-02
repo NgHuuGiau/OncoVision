@@ -9,9 +9,9 @@ from medical.losses.focal import (
 )
 
 __all__ = [
+    "ASLLoss",
+    "BalancedSoftmaxLoss",
     "FocalLoss",
     "FocalTverskyLoss",
     "LDAMLoss",
-    "ASLLoss",
-    "BalancedSoftmaxLoss",
 ]

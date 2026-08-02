@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from medical.case_payloads import build_case_export_payload, build_detection_metadata
+from medical.active_learning import suggest_active_learning_samples
 from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
 from medical.cancer_overview import build_cancer_overview
+from medical.case_payloads import build_case_export_payload, build_detection_metadata
 from medical.cli_helpers import print_medical_readiness, print_medical_status_block
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dataset import (
@@ -17,15 +18,19 @@ from medical.dataset import (
     ensure_medical_dataset_structure,
 )
 from medical.metrics import compute_medical_metrics
+from medical.modality_calibration import (
+    apply_calibrated_modality_tuning,
+    calibrate_modality_tuning,
+)
+from medical.modality_training import train_modality_classifier
 from medical.output_management import _medical_output_directories
-from medical.modality_calibration import apply_calibrated_modality_tuning, calibrate_modality_tuning
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import export_case_bundle, update_case_report_case_id
-from medical.active_learning import suggest_active_learning_samples
-from medical.modality_training import train_modality_classifier
 from medical.storage import MedicalCaseDatabase
-from medical.validator import validate_image
-from medical.system_status import get_medical_system_status, recommended_medical_commands
+from medical.system_status import (
+    get_medical_system_status,
+    recommended_medical_commands,
+)
 from medical.training import (
     _load_medical_settings,
     audit_medical_raw_dataset,
@@ -35,6 +40,7 @@ from medical.training import (
     train_medical_model,
     validate_medical_model,
 )
+from medical.validator import validate_image
 from utils.cleanup_utils import cleanup_directories
 from utils.entrypoint_common import run_entrypoint
 

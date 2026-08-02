@@ -7,7 +7,10 @@ from tempfile import TemporaryDirectory
 import cv2
 import numpy as np
 
-from medical.modality_calibration import apply_calibrated_modality_tuning, calibrate_modality_tuning
+from medical.modality_calibration import (
+    apply_calibrated_modality_tuning,
+    calibrate_modality_tuning,
+)
 from utils.file_utils import load_yaml, save_yaml
 
 

@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QParallelAnimationGroup, QPropertyAnimation, Qt
-from PySide6.QtWidgets import QDialog, QFrame, QGraphicsBlurEffect, QHBoxLayout, QScrollArea, QSlider, QVBoxLayout, QPushButton, QLabel, QWidget, QSizePolicy
+from PySide6.QtWidgets import (
+    QDialog,
+    QFrame,
+    QGraphicsBlurEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.chat_ui.content import translate as tr
 from app.chat_ui.image_utils import load_medical_volume_pixmaps, load_preview_pixmap
+
 
 class ImagePreviewDialog(QDialog):
     def __init__(self, image_path: str, parent: QWidget | None = None, effective_theme: str = "dark") -> None:

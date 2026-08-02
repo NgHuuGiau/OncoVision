@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class MCDropoutUncertainty:
 
     def _enable_dropout(self) -> None:
         for module in self.model.modules():
-            if isinstance(module, nn.Dropout) or isinstance(module, nn.Dropout2d) or isinstance(module, nn.Dropout3d):
+            if isinstance(module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):
                 module.train()
 
     @torch.no_grad()
@@ -141,9 +141,9 @@ def compute_ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> floa
 
 
 __all__ = [
-    "UncertaintyResult",
-    "MCDropoutUncertainty",
     "DeepEnsembleUncertainty",
+    "MCDropoutUncertainty",
     "TemperatureScaling",
+    "UncertaintyResult",
     "compute_ece",
 ]

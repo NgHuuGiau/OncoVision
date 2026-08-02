@@ -5,7 +5,11 @@ import unittest
 import numpy as np
 
 from core.camera_runner import DetectionRecord
-from utils.draw_utils import _clamp_bbox_to_image, _color_for_label, draw_detection_results
+from utils.draw_utils import (
+    _clamp_bbox_to_image,
+    _color_for_label,
+    draw_detection_results,
+)
 
 
 class VisualizationTests(unittest.TestCase):

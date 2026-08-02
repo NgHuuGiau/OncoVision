@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import textwrap
 
-
 RESET = "\033[0m"
 BOLD = "\033[1m"
 CYAN = "\033[96m"

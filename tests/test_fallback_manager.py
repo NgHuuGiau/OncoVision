@@ -8,33 +8,33 @@ from core.model_selector import RuntimeConfig
 
 
 def _runtime(**overrides) -> RuntimeConfig:
-    base = dict(
-        mode="high",
-        profile_name="high",
-        requested_profile_name="high",
-        requested_device="gpu",
-        resolved_device="cuda:0",
-        requested_model_name="yolo11x.pt",
-        primary_model_name="yolo11x.pt",
-        candidate_models=["yolo11x.pt"],
-        requested_imgsz=960,
-        imgsz=960,
-        conf=0.25,
-        max_det=200,
-        use_half=True,
-        camera_width=800,
-        camera_height=600,
-        font_size=16,
-        box_thickness=2,
-        label_font_scale=0.8,
-        active_model_name="",
-        hardware_tier="strong GPU",
-        fallback_chain=[
+    base = {
+        "mode": "high",
+        "profile_name": "high",
+        "requested_profile_name": "high",
+        "requested_device": "gpu",
+        "resolved_device": "cuda:0",
+        "requested_model_name": "yolo11x.pt",
+        "primary_model_name": "yolo11x.pt",
+        "candidate_models": ["yolo11x.pt"],
+        "requested_imgsz": 960,
+        "imgsz": 960,
+        "conf": 0.25,
+        "max_det": 200,
+        "use_half": True,
+        "camera_width": 800,
+        "camera_height": 600,
+        "font_size": 16,
+        "box_thickness": 2,
+        "label_font_scale": 0.8,
+        "active_model_name": "",
+        "hardware_tier": "strong GPU",
+        "fallback_chain": [
             {"device": "gpu", "model": "yolo11l.pt", "imgsz": 768},
             {"device": "gpu", "model": "yolo11l.pt", "imgsz": 768},
             {"device": "cpu", "model": "yolo11n.pt", "imgsz": 320},
         ],
-    )
+    }
     base.update(overrides)
     return RuntimeConfig(**base)
 

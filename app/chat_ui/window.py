@@ -1,28 +1,27 @@
 from __future__ import annotations
 
 import json
+import platform
+import random
 import sys
 import time
-import random
-import platform
 from pathlib import Path
 
 from app.chat_ui.medical_controller import MedicalChatController
-from app.chat_ui.models import ChatMessage, Conversation
 from app.chat_ui.medical_worker import build_patient_code, create_medical_worker_base
+from app.chat_ui.models import ChatMessage, Conversation
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH
 from app.chat_ui.storage import ChatDatabase
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
 from medical.dataset import is_supported_medical_upload_path
 from utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 try:
     from pygments import highlight  # noqa: F401
-    from pygments.lexers import get_lexer_by_name, guess_lexer  # noqa: F401
     from pygments.formatters import HtmlFormatter  # noqa: F401
+    from pygments.lexers import get_lexer_by_name, guess_lexer  # noqa: F401
     PYGMENTS_AVAILABLE = True
 except ImportError:
     PYGMENTS_AVAILABLE = False
@@ -35,22 +34,22 @@ except ImportError:
 
 def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str = "medium", selected_model: str | None = None) -> int:
     try:
-        from PySide6.QtCore import (  # noqa: F401
-            QPropertyAnimation,
-            Qt,
-            QTimer,
-            Signal,
-            QThread,
-            QVariantAnimation,
+        from PySide6.QtCore import (
             QEasingCurve,
             QPoint,
+            QPropertyAnimation,
             QSize,
+            Qt,
+            QThread,
+            QTimer,
+            QVariantAnimation,
+            Signal,
         )
         from PySide6.QtGui import (  # noqa: F401
-            QPixmap,
             QColor,
-            QShortcut,
             QKeySequence,
+            QPixmap,
+            QShortcut,
         )
         from PySide6.QtSvg import QSvgRenderer  # noqa: F401
         from PySide6.QtWidgets import (  # noqa: F401
@@ -58,6 +57,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             QComboBox,
             QDialog,
             QFrame,
+            QGraphicsDropShadowEffect,
+            QGraphicsOpacityEffect,
             QHBoxLayout,
             QLabel,
             QLineEdit,
@@ -65,14 +66,12 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             QListWidgetItem,
             QMainWindow,
             QMessageBox,
-            QSystemTrayIcon,
             QPushButton,
-            QStackedWidget,
             QScrollArea,
             QSizePolicy,
             QSpacerItem,
-            QGraphicsDropShadowEffect,
-            QGraphicsOpacityEffect,
+            QStackedWidget,
+            QSystemTrayIcon,
             QVBoxLayout,
             QWidget,
         )
@@ -84,10 +83,11 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
     MedicalAnalysisWorker = create_medical_worker_base(QThread, Signal)
 
     try:
-        import numpy as np  # noqa: F401
-        import pyaudio  # noqa: F401
         import wave  # noqa: F401
-        import torch  # noqa: F401
+
+        import numpy as np
+        import pyaudio
+        import torch
         from faster_whisper import WhisperModel
         VOICE_LOCAL_AVAILABLE = True
     except ImportError:
@@ -110,51 +110,94 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         pass
 
     from app.chat_ui.content import translate
-    from app.chat_ui.theme_styles import DARK_STYLESHEET, LIGHT_STYLESHEET
     from app.chat_ui.icons import themed_icon
     from app.chat_ui.theme_flow import (
         apply_dark_theme as apply_dark_theme_flow,
+    )
+    from app.chat_ui.theme_flow import (
         apply_light_theme as apply_light_theme_flow,
+    )
+    from app.chat_ui.theme_flow import (
         apply_theme_assets as apply_theme_assets_flow,
+    )
+    from app.chat_ui.theme_flow import (
         icon_color as icon_color_flow,
+    )
+    from app.chat_ui.theme_flow import (
         refresh_empty_state_theme as refresh_empty_state_theme_flow,
+    )
+    from app.chat_ui.theme_flow import (
         refresh_topbar_buttons as refresh_topbar_buttons_flow,
+    )
+    from app.chat_ui.theme_flow import (
         runtime_badge_text as runtime_badge_text_flow,
+    )
+    from app.chat_ui.theme_flow import (
         subtle_icon_color as subtle_icon_color_flow,
     )
+    from app.chat_ui.theme_styles import DARK_STYLESHEET, LIGHT_STYLESHEET
     from app.chat_ui.voice_worker import build_voice_worker_class
 
     def tr(language: str, key: str) -> str:
         return translate(language, key)
 
     from app.chat_ui.camera_dialog_flow import CameraCaptureDialog
-    from app.chat_ui.settings_dialog_flow import SettingsDialog
-
-    from app.chat_ui.widgets import (
-        ChatBubble,
-    )
+    from app.chat_ui.composer_flow import build_composer_section
+    from app.chat_ui.menu_flow import show_plus_menu as show_plus_menu_flow
     from app.chat_ui.message_flow import (
         clear_pending_image_previews,
+    )
+    from app.chat_ui.message_flow import (
         handle_camera_capture as handle_camera_capture_flow,
+    )
+    from app.chat_ui.message_flow import (
         handle_dropped_image as handle_dropped_image_flow,
+    )
+    from app.chat_ui.message_flow import (
         pick_dicom_folder as pick_dicom_folder_flow,
+    )
+    from app.chat_ui.message_flow import (
         pick_image as pick_image_flow,
+    )
+    from app.chat_ui.message_flow import (
         refresh_image_previews as refresh_image_previews_flow,
+    )
+    from app.chat_ui.message_flow import (
         remove_pending_image_attachment as remove_pending_image_attachment_flow,
+    )
+    from app.chat_ui.message_flow import (
         send_message as send_message_flow,
+    )
+    from app.chat_ui.message_flow import (
         submit_user_message as submit_user_message_flow,
     )
-    from app.chat_ui.menu_flow import show_plus_menu as show_plus_menu_flow
-    from app.chat_ui.composer_flow import build_composer_section
+    from app.chat_ui.settings_dialog_flow import SettingsDialog
     from app.chat_ui.sidebar_flow import (
         clear_all_history as clear_all_history_flow,
+    )
+    from app.chat_ui.sidebar_flow import (
         delete_conversation as delete_conversation_flow,
-        refresh_history as refresh_history_flow,
-        select_conversation as select_conversation_flow,
-        show_history_context_menu as show_history_context_menu_flow,
+    )
+    from app.chat_ui.sidebar_flow import (
         expand_sidebar_and_focus_search as expand_sidebar_and_focus_search_flow,
+    )
+    from app.chat_ui.sidebar_flow import (
+        refresh_history as refresh_history_flow,
+    )
+    from app.chat_ui.sidebar_flow import (
+        select_conversation as select_conversation_flow,
+    )
+    from app.chat_ui.sidebar_flow import (
+        show_history_context_menu as show_history_context_menu_flow,
+    )
+    from app.chat_ui.sidebar_flow import (
         toggle_sidebar as toggle_sidebar_flow,
+    )
+    from app.chat_ui.sidebar_flow import (
         update_sidebar_ui as update_sidebar_ui_flow,
+    )
+    from app.chat_ui.widgets import (
+        ChatBubble,
     )
 
     VoiceWorker = None
@@ -709,7 +752,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             update_sidebar_ui_flow(self)
 
         def update_sidebar_texts(self) -> None:
-            from app.chat_ui.sidebar_flow import update_sidebar_texts as update_sidebar_texts_flow
+            from app.chat_ui.sidebar_flow import (
+                update_sidebar_texts as update_sidebar_texts_flow,
+            )
             update_sidebar_texts_flow(self)
 
         def active_conversation(self) -> Conversation:
@@ -816,7 +861,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def send_message(self) -> None:
             send_message_flow(self)
 
-        def generate_system_response(self, prompt: str, attach_path: str = None, attach_kind: str = None):
+        def generate_system_response(self, prompt: str, attach_path: str | None = None, attach_kind: str | None = None):
             source = attach_kind or "chat"
             if source in {"image", "camera"} and attach_path:
                 self._start_medical_analysis(prompt=prompt, attach_path=attach_path, attach_kind=source)
@@ -889,8 +934,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.scroll_to_bottom()
 
         def _on_medical_analysis_progress(self, stage: str, pct: float) -> None:
-            bar = "▓" * int(pct * 20) + "░" * (20 - int(pct * 20))
-            text = f"⏳ Đang xử lý... {bar} {pct*100:.0f}%\n{stage}"
+            "▓" * int(pct * 20) + "░" * (20 - int(pct * 20))
             state = self.medical_controller.get_state()
             if state and hasattr(state, 'placeholder'):
                 self.message_input.setPlaceholderText(f"⏳ {stage}")
@@ -981,7 +1025,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                         last_bubble = item.widget()
                         if isinstance(last_bubble, ChatBubble):
                             last_bubble.update_display_text(text)
-                            if text.startswith("Error:") or text.startswith("Phân tích lỗi:"):
+                            if text.startswith(("Error:", "Phân tích lỗi:")):
                                 self.shake_bubble(last_bubble)
 
         def shake_bubble(self, bubble: ChatBubble):

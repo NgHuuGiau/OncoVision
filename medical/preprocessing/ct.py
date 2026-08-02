@@ -5,7 +5,11 @@ from typing import Any
 import cv2
 import numpy as np
 
-from medical.preprocessing.base import PreprocessingResult, _resize_and_pad, _to_uint8_rgb
+from medical.preprocessing.base import (
+    PreprocessingResult,
+    _resize_and_pad,
+    _to_uint8_rgb,
+)
 
 
 def preprocess_ct(image: np.ndarray, target_size: int = 320, metadata: dict[str, Any] | None = None) -> PreprocessingResult:

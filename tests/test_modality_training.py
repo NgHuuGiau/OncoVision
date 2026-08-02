@@ -6,7 +6,10 @@ from unittest import mock
 
 from PIL import Image
 
-from medical.modality_training import _collect_modality_samples, train_modality_classifier
+from medical.modality_training import (
+    _collect_modality_samples,
+    train_modality_classifier,
+)
 
 
 def _make_modality_dataset(root: Path, modalities: list[str], count: int = 6) -> None:
@@ -55,10 +58,9 @@ class TestModalityTraining:
     def test_train_modality_classifier_missing_dataset_raises(self) -> None:
         import pytest
 
-        with TemporaryDirectory() as temp_dir:
-            with pytest.raises(FileNotFoundError):
-                train_modality_classifier(
-                    Path(temp_dir) / "missing",
-                    Path(temp_dir) / "out.pt",
-                    pretrained=False,
-                )
+        with TemporaryDirectory() as temp_dir, pytest.raises(FileNotFoundError):
+            train_modality_classifier(
+                Path(temp_dir) / "missing",
+                Path(temp_dir) / "out.pt",
+                pretrained=False,
+            )

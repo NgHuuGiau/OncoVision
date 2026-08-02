@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 import time
 from dataclasses import dataclass
@@ -10,14 +9,20 @@ from typing import Any
 
 import numpy as np
 import torch
-import torch.nn as nn
 from PIL import Image, ImageOps
+from torch import nn
 from torch.utils.data import Dataset
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 
 from medical.dashboard import write_training_progress
-from medical.losses import ASLLoss, BalancedSoftmaxLoss, FocalLoss, FocalTverskyLoss, LDAMLoss
+from medical.losses import (
+    ASLLoss,
+    BalancedSoftmaxLoss,
+    FocalLoss,
+    FocalTverskyLoss,
+    LDAMLoss,
+)
 from medical.network_policy import resolve_pretrained
 
 logger = logging.getLogger(__name__)
@@ -37,7 +42,12 @@ def _get_backbone_builder(name: str) -> tuple[Any, int]:
 
 
 def _build_resnet_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
-    from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights
+    from torchvision.models import (
+        ResNet18_Weights,
+        ResNet50_Weights,
+        resnet18,
+        resnet50,
+    )
     weights = ResNet50_Weights.DEFAULT if pretrained else None
     if name == "resnet18":
         model = resnet18(weights=ResNet18_Weights.DEFAULT if pretrained else None)
@@ -51,11 +61,19 @@ def _build_resnet_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]
 
 
 def _build_efficientnet_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
-    from torchvision.models import efficientnet_b0, efficientnet_b2, efficientnet_b3
-    from torchvision.models import efficientnet_v2_s, efficientnet_v2_m, efficientnet_v2_l
     from torchvision.models import (
-        EfficientNet_B0_Weights, EfficientNet_B2_Weights, EfficientNet_B3_Weights,
-        EfficientNet_V2_S_Weights, EfficientNet_V2_M_Weights, EfficientNet_V2_L_Weights,
+        EfficientNet_B0_Weights,
+        EfficientNet_B2_Weights,
+        EfficientNet_B3_Weights,
+        EfficientNet_V2_L_Weights,
+        EfficientNet_V2_M_Weights,
+        EfficientNet_V2_S_Weights,
+        efficientnet_b0,
+        efficientnet_b2,
+        efficientnet_b3,
+        efficientnet_v2_l,
+        efficientnet_v2_m,
+        efficientnet_v2_s,
     )
     weights_map = {
         "efficientnet_b0": EfficientNet_B0_Weights.DEFAULT if pretrained else None,
@@ -85,28 +103,28 @@ def _build_efficientnet_backbone(name: str, pretrained: bool) -> tuple[nn.Module
 
 def _build_convnext_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
     if name == "convnext_tiny":
-        from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
+        from torchvision.models import ConvNeXt_Tiny_Weights, convnext_tiny
         model = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
     elif name == "convnext_small":
-        from torchvision.models import convnext_small, ConvNeXt_Small_Weights
+        from torchvision.models import ConvNeXt_Small_Weights, convnext_small
         model = convnext_small(weights=ConvNeXt_Small_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
     elif name == "convnext_base":
-        from torchvision.models import convnext_base, ConvNeXt_Base_Weights
+        from torchvision.models import ConvNeXt_Base_Weights, convnext_base
         model = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
     elif name in ("convnextv2_tiny", "convnext_tiny"):
-        from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
+        from torchvision.models import ConvNeXt_Tiny_Weights, convnext_tiny
 
         model = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
         model.classifier = nn.Identity()
     elif name in ("convnextv2_base", "convnext_base"):
-        from torchvision.models import convnext_base, ConvNeXt_Base_Weights
+        from torchvision.models import ConvNeXt_Base_Weights, convnext_base
 
         model = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[2].in_features
@@ -118,27 +136,27 @@ def _build_convnext_backbone(name: str, pretrained: bool) -> tuple[nn.Module, in
 
 def _build_swin_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
     if name == "swin_t":
-        from torchvision.models import swin_t, Swin_T_Weights
+        from torchvision.models import Swin_T_Weights, swin_t
         model = swin_t(weights=Swin_T_Weights.DEFAULT if pretrained else None)
         feature_dim = model.head.in_features
     elif name == "swin_s":
-        from torchvision.models import swin_s, Swin_S_Weights
+        from torchvision.models import Swin_S_Weights, swin_s
         model = swin_s(weights=Swin_S_Weights.DEFAULT if pretrained else None)
         feature_dim = model.head.in_features
     elif name == "swin_b":
-        from torchvision.models import swin_b, Swin_B_Weights
+        from torchvision.models import Swin_B_Weights, swin_b
         model = swin_b(weights=Swin_B_Weights.DEFAULT if pretrained else None)
         feature_dim = model.head.in_features
     elif name == "swinv2_t":
-        from torchvision.models import swin_v2_t, Swin_V2_T_Weights
+        from torchvision.models import Swin_V2_T_Weights, swin_v2_t
         model = swin_v2_t(weights=Swin_V2_T_Weights.DEFAULT if pretrained else None)
         feature_dim = model.head.in_features
     elif name == "swinv2_s":
-        from torchvision.models import swin_v2_s, Swin_V2_S_Weights
+        from torchvision.models import Swin_V2_S_Weights, swin_v2_s
         model = swin_v2_s(weights=Swin_V2_S_Weights.DEFAULT if pretrained else None)
         feature_dim = model.head.in_features
     elif name == "swinv2_b":
-        from torchvision.models import swin_v2_b, Swin_V2_B_Weights
+        from torchvision.models import Swin_V2_B_Weights, swin_v2_b
         model = swin_v2_b(weights=Swin_V2_B_Weights.DEFAULT if pretrained else None)
         feature_dim = model.head.in_features
     else:
@@ -149,13 +167,13 @@ def _build_swin_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
 
 def _build_vit_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
     if name == "vit_b_16":
-        from torchvision.models import vit_b_16, ViT_B_16_Weights
+        from torchvision.models import ViT_B_16_Weights, vit_b_16
         model = vit_b_16(weights=ViT_B_16_Weights.DEFAULT if pretrained else None)
     elif name == "vit_l_16":
-        from torchvision.models import vit_l_16, ViT_L_16_Weights
+        from torchvision.models import ViT_L_16_Weights, vit_l_16
         model = vit_l_16(weights=ViT_L_16_Weights.DEFAULT if pretrained else None)
     elif name == "vit_h_14":
-        from torchvision.models import vit_h_14, ViT_H_14_Weights
+        from torchvision.models import ViT_H_14_Weights, vit_h_14
         model = vit_h_14(weights=ViT_H_14_Weights.DEFAULT if pretrained else None)
     else:
         raise ValueError(f"Unsupported ViT backbone: {name}")
@@ -166,16 +184,16 @@ def _build_vit_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
 
 def _build_regnet_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
     if name == "regnet_y_400mf":
-        from torchvision.models import regnet_y_400mf, RegNet_Y_400MF_Weights
+        from torchvision.models import RegNet_Y_400MF_Weights, regnet_y_400mf
         model = regnet_y_400mf(weights=RegNet_Y_400MF_Weights.DEFAULT if pretrained else None)
     elif name == "regnet_y_800mf":
-        from torchvision.models import regnet_y_800mf, RegNet_Y_800MF_Weights
+        from torchvision.models import RegNet_Y_800MF_Weights, regnet_y_800mf
         model = regnet_y_800mf(weights=RegNet_Y_800MF_Weights.DEFAULT if pretrained else None)
     elif name == "regnet_y_1_6gf":
-        from torchvision.models import regnet_y_1_6gf, RegNet_Y_1_6GF_Weights
+        from torchvision.models import RegNet_Y_1_6GF_Weights, regnet_y_1_6gf
         model = regnet_y_1_6gf(weights=RegNet_Y_1_6GF_Weights.DEFAULT if pretrained else None)
     elif name == "regnet_y_3_2gf":
-        from torchvision.models import regnet_y_3_2gf, RegNet_Y_3_2GF_Weights
+        from torchvision.models import RegNet_Y_3_2GF_Weights, regnet_y_3_2gf
         model = regnet_y_3_2gf(weights=RegNet_Y_3_2GF_Weights.DEFAULT if pretrained else None)
     else:
         raise ValueError(f"Unsupported RegNet backbone: {name}")
@@ -186,7 +204,7 @@ def _build_regnet_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]
 
 def _build_maxvit_backbone(name: str, pretrained: bool) -> tuple[nn.Module, int]:
     if name == "maxvit_t":
-        from torchvision.models import maxvit_t, MaxVit_T_Weights
+        from torchvision.models import MaxVit_T_Weights, maxvit_t
         model = maxvit_t(weights=MaxVit_T_Weights.DEFAULT if pretrained else None)
         feature_dim = model.classifier[3].in_features
         model.classifier = nn.Identity()
@@ -355,7 +373,7 @@ class CheckpointAveraging:
         if not self.checkpoints:
             return {}
         avg_state = {}
-        for key in self.checkpoints[0].keys():
+        for key in self.checkpoints[0]:
             avg_state[key] = torch.stack([c[key].float() for c in self.checkpoints]).mean(dim=0)
         return avg_state
 
@@ -458,7 +476,7 @@ class MedicalCNNClassifierWrapper:
         return target
 
     @classmethod
-    def load(cls, path: str | Path, device: str | None = None) -> "MedicalCNNClassifierWrapper":
+    def load(cls, path: str | Path, device: str | None = None) -> MedicalCNNClassifierWrapper:
         path = Path(path)
         logger.warning(
             "[CNN] Dang load model tu %s. Chi load file tin cay tu he thong training cua ban.",
@@ -726,7 +744,7 @@ def train_cnn_classifier(
             scaler.load_state_dict(ckpt["scaler_state_dict"])
         if "history" in ckpt:
             history = ckpt["history"]
-        if "best_model_state" in ckpt and ckpt["best_model_state"]:
+        if ckpt.get("best_model_state"):
             best_model_state = ckpt["best_model_state"]
         if "best_val_f1" in ckpt:
             best_val_f1 = float(ckpt["best_val_f1"])
@@ -1014,15 +1032,15 @@ def is_cnn_classifier_path(path: str | Path) -> bool:
 
 
 __all__ = [
+    "EMA",
+    "CNNClassifierResult",
+    "CheckpointAveraging",
+    "EarlyStopping",
     "MedicalCNNClassifier",
     "MedicalCNNClassifierWrapper",
-    "CNNClassifierResult",
     "MedicalImageDataset",
-    "train_cnn_classifier",
-    "load_cnn_classifier",
-    "is_cnn_classifier_path",
-    "EarlyStopping",
-    "EMA",
-    "CheckpointAveraging",
     "_build_loss",
+    "is_cnn_classifier_path",
+    "load_cnn_classifier",
+    "train_cnn_classifier",
 ]

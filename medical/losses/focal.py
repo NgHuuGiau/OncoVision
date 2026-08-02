@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class FocalLoss(nn.Module):
@@ -175,9 +175,9 @@ class BalancedSoftmaxLoss(nn.Module):
 
 
 __all__ = [
+    "ASLLoss",
+    "BalancedSoftmaxLoss",
     "FocalLoss",
     "FocalTverskyLoss",
     "LDAMLoss",
-    "ASLLoss",
-    "BalancedSoftmaxLoss",
 ]

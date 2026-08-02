@@ -5,8 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from medical.system_status import MedicalSystemStatus
 import run_doctor
+from medical.system_status import MedicalSystemStatus
 
 
 class DoctorTests(unittest.TestCase):

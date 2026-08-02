@@ -2,26 +2,33 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable, Protocol
-
+from typing import Any, Protocol
 
 import cv2
 import numpy as np
 from PIL import Image
 
 from medical.classifier import MedicalClassifierModel, load_medical_classifier
-from medical.cnn_classifier import MedicalCNNClassifierWrapper, is_cnn_classifier_path, load_cnn_classifier
+from medical.cnn_classifier import (
+    MedicalCNNClassifierWrapper,
+    is_cnn_classifier_path,
+    load_cnn_classifier,
+)
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dashboard import write_inference_dashboard
 from medical.dataset import normalize_uploaded_image
-from medical.model_policy import iter_medical_runtime_model_paths, resolve_medical_runtime_model_path
+from medical.model_policy import (
+    iter_medical_runtime_model_paths,
+    resolve_medical_runtime_model_path,
+)
 from medical.model_versioning import read_model_manifest
 from medical.reporting import build_artifact_stamp, write_case_report
 from medical.validator import (
-    ValidationResult,
     _DICOM_MODALITY_MAP,
+    ValidationResult,
     _load_modality_tuning_from_config,
     get_modality_tuning,
     validate_image,
@@ -96,7 +103,7 @@ class MedicalImageAnalyzerConfig:
     enable_advanced_preprocessing: bool = False
     max_cached_images: int = 100
 
-    def with_model_path(self, model_path: str | Path) -> "MedicalImageAnalyzerConfig":
+    def with_model_path(self, model_path: str | Path) -> MedicalImageAnalyzerConfig:
         return replace(self, model_path=Path(model_path))
 
 
@@ -372,7 +379,6 @@ class MedicalImageAnalyzer:
             top1_conf = detections[0].confidence
             top2_conf = detections[1].confidence
             if top1_conf < 0.7 or (top1_conf - top2_conf) < 0.2:
-                labels = [d.label for d in detections[:3]]
                 quality_warnings.append(
                     f"Độ tin cậy thấp giữa các lớp (top1={top1_conf:.2f}, top2={top2_conf:.2f}, "
                     f"gap={top1_conf-top2_conf:.2f}). Kết quả có thể không chính xác."
@@ -1119,7 +1125,11 @@ class MedicalImageAnalyzer:
         )
 
     def _deidentify_input(self, source: Path) -> Path | None:
-        from medical.compliance import ComplianceReport, deidentify_dicom_series, deidentify_dicom_file
+        from medical.compliance import (
+            ComplianceReport,
+            deidentify_dicom_file,
+            deidentify_dicom_series,
+        )
         from medical.reporting import build_artifact_stamp
 
         try:

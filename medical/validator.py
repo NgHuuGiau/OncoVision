@@ -1,20 +1,20 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-import re
 from typing import Any
 
 import cv2
 import numpy as np
 from PIL import Image
 
-from utils.file_utils import load_yaml
 from medical.compliance import deidentify_dicom_file, deidentify_dicom_series
 from medical.dataset import supported_medical_modalities_for_target
 from medical.reporting import build_artifact_stamp
 from medical.router import InputRoute, route_input
+from utils.file_utils import load_yaml
 
 MEDICAL_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 DEFAULT_MIN_CONFIDENCE = 0.70
@@ -177,7 +177,7 @@ def _canonical_modality(label):
     # Covers specific labels from dataset._MODALITY_HINTS missing in the static map
     # (e.g. "CT gan", "MRI gan", "Siêu âm gan") so valid inputs are not rejected.
     lowered = label.lower()
-    if lowered.startswith("pet/ct") or "pet ct" in lowered or lowered.startswith("pet"):
+    if lowered.startswith(("pet/ct", "pet")) or "pet ct" in lowered:
         return "pet_ct"
     if lowered.startswith("ct"):
         return "ct"
@@ -242,7 +242,11 @@ def get_modality_tuning(modality: str | None, tuning_settings: dict[str, Any] | 
 
 
 def _infer_body_region_from_text(source, normalized_text: str, modality_label: str | None = None):
-    from medical.dataset import _DICOM_BODY_PART_TO_TARGET, _find_first_matching_hint, _TARGET_HINTS
+    from medical.dataset import (
+        _DICOM_BODY_PART_TO_TARGET,
+        _TARGET_HINTS,
+        _find_first_matching_hint,
+    )
 
     target_key = _find_first_matching_hint(normalized_text, _TARGET_HINTS)
     if target_key is not None:
@@ -262,7 +266,9 @@ def _infer_body_region_from_text(source, normalized_text: str, modality_label: s
             pass
 
     if modality_label is not None:
-        from medical.dataset import _MODALITY_TO_TARGET_KEY as DATASET_MODALITY_TO_TARGET_KEY
+        from medical.dataset import (
+            _MODALITY_TO_TARGET_KEY as DATASET_MODALITY_TO_TARGET_KEY,
+        )
 
         mapped = DATASET_MODALITY_TO_TARGET_KEY.get(modality_label)
         if mapped is not None and modality_label not in {"CT", "MRI", "PET", "Siêu âm", "Nội soi"}:
@@ -373,12 +379,12 @@ def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
 
 def _validate_single_file(source, allowed, min_confidence):
     from medical.dataset import (
-        _MODALITY_HINTS,
-        _TARGET_HINTS,
-        _MODALITY_TO_TARGET_KEY,
         _DICOM_MODALITY_MAP,
-        _normalize_medical_text,
+        _MODALITY_HINTS,
+        _MODALITY_TO_TARGET_KEY,
+        _TARGET_HINTS,
         _find_first_matching_hint,
+        _normalize_medical_text,
     )
 
     raw_text = _collect_image_text(source)

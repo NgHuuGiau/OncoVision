@@ -9,8 +9,8 @@ from typing import Any
 import cv2
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 
 @dataclass(frozen=True)
@@ -135,7 +135,7 @@ class SAMROIExtractor:
     def _load_sam(self) -> Any:
         if self._sam is None:
             try:
-                from segment_anything import sam_model_registry, SamPredictor
+                from segment_anything import SamPredictor, sam_model_registry
                 model_type = "vit_b"
                 checkpoint = None
                 for candidate in ["sam_vit_b.pth", "sam_b.pth"]:
@@ -217,9 +217,9 @@ def crop_to_roi(image: np.ndarray, bbox: tuple[int, int, int, int], margin: int 
 
 
 __all__ = [
-    "SegmentationResult",
-    "UNet",
     "AttentionUNet",
     "SAMROIExtractor",
+    "SegmentationResult",
+    "UNet",
     "crop_to_roi",
 ]

@@ -8,7 +8,6 @@ from medical.cancer_dataset_registry import common_cancer_dataset_source_dicts
 from medical.classifier import iter_medical_image_paths
 from medical.dataset import MEDICAL_DATASET_ROOT
 
-
 TARGET_KEY_TO_CANCER_TYPE = {
     "brain": "ung_thu_nao",
     "liver": "ung_thu_gan",

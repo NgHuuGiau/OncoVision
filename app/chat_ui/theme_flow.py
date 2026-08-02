@@ -4,9 +4,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QSize
 
+from app.chat_ui.icons import themed_icon
 from app.chat_ui.theme_styles import DARK_STYLESHEET, LIGHT_STYLESHEET
 from app.chat_ui.widgets import ChatBubble
-from app.chat_ui.icons import themed_icon
 
 
 def icon_color(window) -> str:

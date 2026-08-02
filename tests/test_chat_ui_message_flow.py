@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from app.chat_ui.message_flow import build_modality_file_filter, is_volume_modality, modality_upload_extensions
+from app.chat_ui.message_flow import (
+    build_modality_file_filter,
+    is_volume_modality,
+    modality_upload_extensions,
+)
 
 
 class ChatUiMessageFlowTests(unittest.TestCase):

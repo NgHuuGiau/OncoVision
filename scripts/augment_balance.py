@@ -7,11 +7,10 @@ Chỉ thêm ảnh augment vào train/, giữ val/ test/ là ảnh thật 100%.
 
 import io
 import random
-import shutil
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageEnhance, ImageOps, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 

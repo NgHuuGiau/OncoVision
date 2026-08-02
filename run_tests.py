@@ -11,10 +11,23 @@ from dataclasses import dataclass
 
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
+from utils.console_ui import (
+    BOLD,
+    CYAN,
+    GREEN,
+    MAGENTA,
+    ORANGE,
+    RED,
+    YELLOW,
+    color,
+    meter,
+    pad,
+    rule,
+    section,
+    status_meter,
+)
 from utils.entrypoint_common import run_entrypoint
-from utils.console_ui import BOLD, CYAN, GREEN, MAGENTA, ORANGE, RED, YELLOW, color, meter, pad, rule, section, status_meter
 from utils.file_utils import ensure_project_directories
-
 
 _open_camera_capture = open_camera_capture
 
@@ -251,9 +264,9 @@ class PrettyTestRunner(unittest.TextTestRunner):
             self.output_stream.write("\n" + color(rule("-"), RED) + "\n")
             self.output_stream.write(section("CHI TIET TEST LOI", RED) + "\n")
             self.output_stream.write(color(rule("-"), RED) + "\n")
-            for test, traceback_text in result.failures + result.errors:
-                self.output_stream.write(color(f"{self.resultclass.getDescription(result, test)}\n", RED))
-                captured_output = result.test_outputs.get(test, "").strip()
+            for case, traceback_text in result.failures + result.errors:
+                self.output_stream.write(color(f"{self.resultclass.getDescription(result, case)}\n", RED))
+                captured_output = result.test_outputs.get(case, "").strip()
                 if captured_output:
                     self.output_stream.write(color("Output:\n", ORANGE))
                     self.output_stream.write(captured_output + "\n")

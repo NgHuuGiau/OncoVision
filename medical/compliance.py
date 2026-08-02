@@ -161,7 +161,7 @@ def _blank_tag(ds, tag_name: str) -> None:
     if tag_name in ds:
         tag = ds[tag_name]
         vr = tag.VR if hasattr(tag, "VR") else None
-        if vr in {"PN", "LO", "LT", "SH", "ST", "UT", "PN"}:
+        if vr in {"PN", "LO", "LT", "SH", "ST", "UT"}:
             ds[tag_name].value = "ANONYMOUS"
         elif vr == "DA":
             ds[tag_name].value = "00010101"
@@ -171,9 +171,7 @@ def _blank_tag(ds, tag_name: str) -> None:
             ds[tag_name].value = "00010101000000"
         elif vr == "AS":
             ds[tag_name].value = ""
-        elif vr == "US":
-            ds[tag_name].value = 0
-        elif vr == "UL":
+        elif vr == "US" or vr == "UL":
             ds[tag_name].value = 0
         elif vr == "IS":
             ds[tag_name].value = "0"
@@ -196,7 +194,7 @@ def deidentify_dicom_file(input_path: str | Path, output_path: str | Path) -> No
     ds.save_as(str(output_path), write_like_original=False)
 
 
-def deidentify_dicom_series(input_dir: str | Path, output_dir: str | Path) -> "ComplianceReport":
+def deidentify_dicom_series(input_dir: str | Path, output_dir: str | Path) -> ComplianceReport:
     report = ComplianceReport()
     input_path = Path(input_dir)
     output_path = Path(output_dir)

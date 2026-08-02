@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from dataclasses import replace
+from pathlib import Path
 from unittest.mock import patch
 
-from medical.pipeline import build_default_medical_analyzer_config
-from medical.pipeline import validate_medical_analyzer_config
+from medical.pipeline import (
+    build_default_medical_analyzer_config,
+    validate_medical_analyzer_config,
+)
 
 
 class MedicalConfigTests(unittest.TestCase):

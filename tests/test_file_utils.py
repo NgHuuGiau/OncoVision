@@ -5,7 +5,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from utils.file_utils import ensure_project_directories, load_yaml, load_yaml_cached, save_yaml, yaml_file_issues, yaml_mapping_issues
+from utils.file_utils import (
+    ensure_project_directories,
+    load_yaml,
+    load_yaml_cached,
+    save_yaml,
+    yaml_file_issues,
+    yaml_mapping_issues,
+)
 
 
 class FileUtilsTests(unittest.TestCase):

@@ -11,7 +11,6 @@ from typing import Any
 from utils.logger import get_logger
 from utils.sqlite_utils import DEFAULT_SQLITE_TIMEOUT_SECONDS, create_sqlite_connection
 
-
 logger = get_logger(__name__)
 
 

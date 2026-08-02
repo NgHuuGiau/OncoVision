@@ -6,8 +6,8 @@ from tempfile import TemporaryDirectory
 
 import numpy as np
 
-from medical.cnn_classifier import MedicalCNNClassifier, is_cnn_classifier_path
 from medical.classifier import MedicalClassifierModel
+from medical.cnn_classifier import MedicalCNNClassifier, is_cnn_classifier_path
 
 
 class CNNDummyWrapper:

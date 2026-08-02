@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from app.chat_ui.models import ChatMessage
 from app.chat_ui.content import translate
+from app.chat_ui.models import ChatMessage
 from app.chat_ui.widgets import ComposerPreviewThumb
-from medical.dataset import infer_medical_upload_context, is_supported_medical_upload_path
-
+from medical.dataset import (
+    infer_medical_upload_context,
+    is_supported_medical_upload_path,
+)
 
 STANDARD_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff")
 VOLUME_EXTENSIONS = (".dcm", ".nii", ".nii.gz", ".mha", ".mhd")

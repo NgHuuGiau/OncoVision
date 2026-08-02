@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
 import re
 import shutil
 import time
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -19,13 +19,13 @@ from medical.classifier import (
     train_medical_classifier,
 )
 from medical.cnn_classifier import train_cnn_classifier
+from medical.dashboard import write_training_dashboard
 from medical.dataset import (
-    create_default_medical_dataset_config,
     count_medical_class_split_images,
+    create_default_medical_dataset_config,
     ensure_medical_dataset_structure,
     infer_medical_upload_context,
 )
-from medical.dashboard import write_training_dashboard
 from medical.metrics import compute_multiclass_metrics
 from medical.model_versioning import (
     ModelManifest,
@@ -245,17 +245,15 @@ def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> N
             val_groups: list[list[Path]] = []
             test_groups: list[list[Path]] = []
         else:
-            train_count = max(1, int(round(total_groups * 0.7)))
-            val_count = max(1, int(round(total_groups * 0.15)))
+            train_count = max(1, round(total_groups * 0.7))
+            val_count = max(1, round(total_groups * 0.15))
             if val_count == 0 and total_groups >= 3:
                 val_count = 1
             test_count = total_groups - train_count - val_count
-            if test_count < 0:
-                test_count = 0
+            test_count = max(test_count, 0)
             if total_groups > 2 and test_count == 0 and val_count > 0:
                 test_count = 1
-                if train_count > total_groups - val_count - test_count:
-                    train_count = total_groups - val_count - test_count
+                train_count = min(train_count, total_groups - val_count - test_count)
             train_groups = patient_groups[:train_count]
             val_groups = patient_groups[train_count:train_count + val_count]
             test_groups = patient_groups[train_count + val_count:]
@@ -286,7 +284,7 @@ def prepare_medical_training_dataset(paths: MedicalTrainingPaths | None = None) 
         raise FileNotFoundError("Khong tim thay anh medical hop le trong 7 thu muc ung thu.")
     if audit["missing_classes"]:
         missing_classes = ", ".join(audit["missing_classes"])
-        if len(paths.class_names) > 1 and len(set(audit["class_counts"].values())) == 1 and list(audit["class_counts"].values())[0] == 0:
+        if len(paths.class_names) > 1 and len(set(audit["class_counts"].values())) == 1 and next(iter(audit["class_counts"].values())) == 0:
             raise FileNotFoundError("Thieu du lieu cho cac lop: " + missing_classes)
     return MedicalTrainingSummary(
         train_count=train_count,
@@ -918,7 +916,7 @@ def run_full_medical_training_pipeline(
     print("-" * 60, flush=True)
     print(f"HOAN TAT: {report['total_seconds']:.1f}s", flush=True)
     print(f"Model: {report['trained_model_path']}", flush=True)
-    if "validation_metrics" in report and report["validation_metrics"]:
+    if report.get("validation_metrics"):
         print(f"Accuracy: {report['validation_metrics'].get('accuracy', 0):.4f}", flush=True)
     print("=" * 60, flush=True)
 

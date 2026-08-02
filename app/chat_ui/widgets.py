@@ -4,13 +4,16 @@ import math
 import time
 from pathlib import Path
 
-from app.chat_ui.content import translate
-from app.chat_ui.dialogs import ImagePreviewDialog
-from app.chat_ui.image_utils import load_preview_pixmap
-from app.chat_ui.models import ChatMessage
-from utils.logger import get_logger
-
-from PySide6.QtCore import QEasingCurve, QPoint, QRectF, Qt, QPropertyAnimation, QTimer, QVariantAnimation, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QPoint,
+    QPropertyAnimation,
+    QRectF,
+    Qt,
+    QTimer,
+    QVariantAnimation,
+    Signal,
+)
 from PySide6.QtGui import QColor, QPainter, QPalette, QPixmap, QTextOption
 from PySide6.QtWidgets import (
     QFrame,
@@ -24,6 +27,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from app.chat_ui.content import translate
+from app.chat_ui.dialogs import ImagePreviewDialog
+from app.chat_ui.image_utils import load_preview_pixmap
+from app.chat_ui.models import ChatMessage
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -386,7 +395,7 @@ class ChatBubble(QWidget):
             self.typing_indicator.hide()
         self.text_label.show()
 
-        is_error = text.startswith("Phân tích lỗi:") or text.startswith("Error:")
+        is_error = text.startswith(("Phân tích lỗi:", "Error:"))
         if self.effective_theme == "light" and is_error:
             self.text_label.setStyleSheet(
                 "font-size: 15px; color: #b00020; font-weight: 700; "

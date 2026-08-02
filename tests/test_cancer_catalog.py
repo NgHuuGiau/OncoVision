@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from medical.cancer_catalog import COMMON_CANCER_TARGETS, supported_cancer_labels, supported_cancer_modalities
+from medical.cancer_catalog import (
+    COMMON_CANCER_TARGETS,
+    supported_cancer_labels,
+    supported_cancer_modalities,
+)
 
 
 class CancerCatalogTests(unittest.TestCase):

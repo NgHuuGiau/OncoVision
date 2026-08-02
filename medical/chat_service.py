@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from medical.case_payloads import build_detection_metadata
 from medical.cancer_catalog import supported_cancer_labels, supported_cancer_modalities
+from medical.case_payloads import build_detection_metadata
 from medical.compliance import MEDICAL_DISCLAIMER
-from typing import Callable
-
 from medical.pipeline import MedicalImageAnalyzer
 
 ProgressCallback = Callable[[str, float], None] | None

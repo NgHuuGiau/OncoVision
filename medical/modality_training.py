@@ -36,7 +36,7 @@ def _split_train_val(
     val: list[tuple[Path, int]] = []
     for items in by_class.values():
         rng.shuffle(items)
-        n_val = max(1, int(round(len(items) * val_ratio)))
+        n_val = max(1, round(len(items) * val_ratio))
         val.extend(items[:n_val])
         train.extend(items[n_val:])
     rng.shuffle(train)

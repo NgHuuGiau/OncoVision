@@ -12,6 +12,7 @@ from core.tracking.bbox_math import (
     _smooth_bbox,
 )
 
+
 def _is_refined_face_label(label: str) -> bool:
     return str(label).lower() == FACE_LABEL
 

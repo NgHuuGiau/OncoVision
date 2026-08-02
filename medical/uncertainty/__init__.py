@@ -9,9 +9,9 @@ from medical.uncertainty.quantification import (
 )
 
 __all__ = [
-    "UncertaintyResult",
-    "MCDropoutUncertainty",
     "DeepEnsembleUncertainty",
+    "MCDropoutUncertainty",
     "TemperatureScaling",
+    "UncertaintyResult",
     "compute_ece",
 ]

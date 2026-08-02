@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PIL.ImageQt import ImageQt
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QImageReader, QPixmap
-from PIL.ImageQt import ImageQt
 
-from medical.dataset import is_medical_volume_source, load_medical_source_image, load_medical_volume_slices
+from medical.dataset import (
+    is_medical_volume_source,
+    load_medical_source_image,
+    load_medical_volume_slices,
+)
 
 
 def pil_image_to_pixmap(image) -> QPixmap:

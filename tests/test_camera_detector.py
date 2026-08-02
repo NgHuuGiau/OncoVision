@@ -11,15 +11,15 @@ from core.camera_runner import (
     DetectionRecord,
     run_camera_preview_session,
 )
-from core.tracking.bbox_math import _bbox_iou
 from core.frame_processing import _compute_motion_score
+from core.hardware_info import HardwareInfo
+from core.model_loader import LoadedModel
+from core.model_selector import select_runtime_config
+from core.tracking.bbox_math import _bbox_iou
 from core.tracking.detection_filter import (
     _dedupe_display_detections,
     _filter_person_detections,
 )
-from core.hardware_info import HardwareInfo
-from core.model_selector import select_runtime_config
-from core.model_loader import LoadedModel
 
 
 class _FakeValue:
@@ -256,7 +256,7 @@ class CameraDetectorTests(unittest.TestCase):
         ]
         detector.frame_index = 0
 
-        ok, processed_frame, detections, fps = detector.read_and_detect()
+        ok, processed_frame, detections, _fps = detector.read_and_detect()
 
         self.assertTrue(ok)
         self.assertEqual(processed_frame.shape, moved_frame.shape)
@@ -280,7 +280,7 @@ class CameraDetectorTests(unittest.TestCase):
         ]
         detector.frame_index = 0
 
-        ok, processed_frame, detections, fps = detector.read_and_detect()
+        ok, _processed_frame, detections, _fps = detector.read_and_detect()
 
         self.assertTrue(ok)
         self.assertEqual(len(detections), 1)
@@ -303,7 +303,7 @@ class CameraDetectorTests(unittest.TestCase):
         ]
         detector.frame_index = 0
 
-        ok, processed_frame, detections, fps = detector.read_and_detect()
+        ok, processed_frame, detections, _fps = detector.read_and_detect()
 
         self.assertTrue(ok)
         self.assertEqual(processed_frame.shape, frame.shape)
@@ -327,7 +327,7 @@ class CameraDetectorTests(unittest.TestCase):
         ]
         detector.frame_index = 0
 
-        ok, processed_frame, detections, fps = detector.read_and_detect()
+        ok, processed_frame, detections, _fps = detector.read_and_detect()
 
         self.assertTrue(ok)
         self.assertEqual(processed_frame.shape, frame.shape)
@@ -350,7 +350,7 @@ class CameraDetectorTests(unittest.TestCase):
         detector.loaded_model.model.predict.return_value = [SimpleNamespace(names={1: "car"}, boxes=[])]
         detector.frame_index = 0
 
-        ok, processed_frame, detections, fps = detector.read_and_detect()
+        ok, _processed_frame, detections, _fps = detector.read_and_detect()
 
         self.assertTrue(ok)
         self.assertEqual(detections, [])

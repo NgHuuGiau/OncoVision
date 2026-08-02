@@ -4,22 +4,22 @@ import json
 import time
 import uuid
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.chat_ui.models import ChatMessage
-from app.chat_ui.paths import PROJECT_ROOT, OUTPUT_DIR, CHAT_HISTORY_DB_PATH
+from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, OUTPUT_DIR, PROJECT_ROOT
 from app.chat_ui.storage import ChatDatabase
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
-from medical.chat_service import MedicalChatService, MedicalChatResponse
+from medical.chat_service import MedicalChatResponse, MedicalChatService
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dataset import infer_medical_upload_context
 from medical.system_status import get_medical_system_status
 from utils.logger import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -101,7 +101,7 @@ async def api_status():
 
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: Annotated[UploadFile, File()]):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Khong co file duoc chon.")
     filename = file.filename

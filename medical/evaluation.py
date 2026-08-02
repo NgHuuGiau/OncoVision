@@ -22,7 +22,11 @@ import numpy as np
 from medical.classifier import load_medical_classifier
 from medical.cnn_classifier import is_cnn_classifier_path, load_cnn_classifier
 from medical.metrics import compute_multiclass_metrics, compute_pr_auc, compute_roc_auc
-from medical.training import MedicalTrainingPaths, _samples_for_split, medical_training_paths
+from medical.training import (
+    MedicalTrainingPaths,
+    _samples_for_split,
+    medical_training_paths,
+)
 
 
 def _resolve_model(model_path: Path):

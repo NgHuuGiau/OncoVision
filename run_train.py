@@ -6,11 +6,14 @@ import sys
 import time
 from pathlib import Path
 
-from medical.training import audit_medical_raw_dataset, medical_training_paths, run_full_medical_training_pipeline
+from medical.training import (
+    audit_medical_raw_dataset,
+    medical_training_paths,
+    run_full_medical_training_pipeline,
+)
 from utils.entrypoint_common import run_entrypoint
 from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
-
 
 _DETACHED_PROCESS = 0x00000008
 _CREATE_NEW_PROCESS_GROUP = 0x00000200

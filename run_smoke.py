@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import argparse
-from functools import lru_cache
 import subprocess
 import sys
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path
 
 from utils.entrypoint_common import run_entrypoint
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
