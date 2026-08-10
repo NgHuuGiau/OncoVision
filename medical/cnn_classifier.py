@@ -345,11 +345,15 @@ class CNNClassifierResult:
 class EMA:
     def __init__(self, model: nn.Module, decay: float = 0.999) -> None:
         self.decay = decay
-        self.shadow = {name: param.data.clone() for name, param in model.state_dict().items()}
+        self.shadow = {
+            name: param.data.clone() for name, param in model.state_dict().items() if param.dtype.is_floating_point
+        }
 
     @torch.no_grad()
     def update(self, model: nn.Module) -> None:
         for name, param in model.state_dict().items():
+            if name not in self.shadow:
+                continue
             self.shadow[name].mul_(self.decay).add_(param.data, alpha=1 - self.decay)
 
     def apply(self, model: nn.Module) -> None:
@@ -614,7 +618,13 @@ def _training_progress_line(epoch: int, num_epochs: int, batch_idx: int, total_b
     filled = int(width * batch_idx / total_batches)
     bar = "#" * filled + "." * (width - filled)
     pct = int(100 * batch_idx / total_batches)
-    return f"[train:{phase}] ep {epoch}/{num_epochs} [{bar}] {batch_idx}/{total_batches} ({pct}%) loss={running_loss:.4f} {elapsed:.0f}s"
+    line = f"[train:{phase}] ep {epoch}/{num_epochs} [{bar}] {batch_idx}/{total_batches} ({pct}%) loss={running_loss:.4f} {elapsed:.0f}s"
+    try:
+        with open("output/medical/live_progress.txt", "a", encoding="utf-8") as _f:
+            _f.write(line + "\n")
+    except Exception:
+        pass
+    return line
 
 
 def _compute_gradient_norm(model: nn.Module) -> float:
@@ -755,7 +765,9 @@ def train_cnn_classifier(
                 early_stopping.counter = int(es_state.get("counter", 0))
                 early_stopping.early_stop = bool(es_state.get("early_stop", False))
         if ema is not None and "ema_shadow" in ckpt:
-            ema.shadow = ckpt["ema_shadow"]
+            ema.shadow = {
+                k: v.to(device_obj) for k, v in ckpt["ema_shadow"].items() if v.dtype.is_floating_point
+            }
 
     original_state = {k: v.clone() for k, v in model.state_dict().items()}
 
@@ -782,6 +794,35 @@ def train_cnn_classifier(
 
     best_model_state: dict[str, Any] | None = None
     best_val_f1 = 0.0
+
+    def _write_ckpt(done_epoch: int) -> None:
+        if checkpoint_path is None:
+            return
+        ckpt = {
+            "model_state_dict": {k: v.cpu() for k, v in model.state_dict().items()},
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "scaler_state_dict": scaler.state_dict() if hasattr(scaler, "state_dict") else None,
+            "epoch": done_epoch,
+            "history": history,
+            "best_model_state": best_model_state,
+            "best_val_f1": best_val_f1,
+            "early_stopping_state": {
+                "best_score": early_stopping.best_score,
+                "counter": early_stopping.counter,
+                "early_stop": early_stopping.early_stop,
+            },
+            "effective_batch": effective_batch,
+        }
+        if ema is not None:
+            ckpt["ema_shadow"] = {k: v.cpu() for k, v in ema.shadow.items()}
+        try:
+            torch.save(ckpt, checkpoint_path, _use_new_zipfile_serialization=False)
+        except Exception:
+            pass
+
+    _last_ckpt_ts = time.time()
+    _CKPT_INTERVAL = 900
 
     for epoch in range(start_epoch, num_epochs):
         print(f"[train] --- epoch {epoch + 1}/{num_epochs} ---", flush=True)
@@ -818,6 +859,9 @@ def train_cnn_classifier(
                     print(f"\r{line}", end="", flush=True)
                 else:
                     print(line, flush=True)
+            if checkpoint_path is not None and time.time() - _last_ckpt_ts >= _CKPT_INTERVAL:
+                _write_ckpt(epoch)
+                _last_ckpt_ts = time.time()
 
         if accumulated_steps > 0:
             if gradient_clip_norm > 0:
@@ -933,28 +977,8 @@ def train_cnn_classifier(
         )
 
         if checkpoint_path is not None:
-            ckpt = {
-                "model_state_dict": {k: v.cpu() for k, v in model.state_dict().items()},
-                "optimizer_state_dict": optimizer.state_dict(),
-                "scheduler_state_dict": scheduler.state_dict(),
-                "scaler_state_dict": scaler.state_dict() if hasattr(scaler, "state_dict") else None,
-                "epoch": epoch + 1,
-                "history": history,
-                "best_model_state": best_model_state,
-                "best_val_f1": best_val_f1,
-                "early_stopping_state": {
-                    "best_score": early_stopping.best_score,
-                    "counter": early_stopping.counter,
-                    "early_stop": early_stopping.early_stop,
-                },
-                "effective_batch": effective_batch,
-            }
-            if ema is not None:
-                ckpt["ema_shadow"] = {k: v.cpu() for k, v in ema.shadow.items()}
-            try:
-                torch.save(ckpt, checkpoint_path, _use_new_zipfile_serialization=False)
-            except Exception:
-                pass
+            _write_ckpt(epoch + 1)
+            _last_ckpt_ts = time.time()
 
     if checkpoint_avg is not None and checkpoint_avg.checkpoints:
         avg_state = checkpoint_avg.average()

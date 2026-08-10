@@ -110,3 +110,7 @@ COMPLETE_PROJECT_AUDIT.md
 
 # Nested repo (do not touch)
 HieraChain/
+
+# Dataset archive (large binary, khong commit)
+medical_7_cancers.zip
+

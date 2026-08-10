@@ -81,6 +81,14 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
 )
 
 
+EXCLUDED_FROM_SHARED_MODEL_KEYS = frozenset({"brain"})
+
+
+def shared_cancer_targets() -> tuple[CancerScreeningTarget, ...]:
+    """Các loại ung thư gộp chung vào model chung (loại bỏ não dùng brain_model riêng)."""
+    return tuple(target for target in COMMON_CANCER_TARGETS if target.key not in EXCLUDED_FROM_SHARED_MODEL_KEYS)
+
+
 def supported_cancer_labels() -> list[str]:
     return [target.label for target in COMMON_CANCER_TARGETS]
 
