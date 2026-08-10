@@ -19,7 +19,7 @@ from medical.cnn_classifier import (
 )
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dashboard import write_inference_dashboard
-from medical.dataset import normalize_uploaded_image
+from medical.dataset import infer_medical_upload_context, normalize_uploaded_image
 from medical.model_policy import (
     iter_medical_runtime_model_paths,
     resolve_medical_runtime_model_path,
@@ -29,6 +29,7 @@ from medical.reporting import build_artifact_stamp, write_case_report
 from medical.validator import (
     _DICOM_MODALITY_MAP,
     ValidationResult,
+    _canonical_body_region,
     _load_modality_tuning_from_config,
     get_modality_tuning,
     validate_image,
@@ -39,6 +40,28 @@ from utils.file_utils import load_yaml
 logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str, float], None] | None
+
+
+def _canonical_body_region_key(target_key: str) -> str | None:
+    """Chuyen target_key tu dataset (vd 'brain', 'cervical') sang body_region."""
+    return _canonical_body_region(target_key)
+
+
+_BENIGN_LABELS = frozenset(
+    {
+        "no_tumor",
+        "notumor",
+        "notumor",
+        "benign",
+        "normal",
+        "non_malignant",
+        "nonmalignant",
+        "healthy",
+        "no_cancer",
+        "no_cancer_finding",
+        "control",
+    }
+)
 
 
 MINIMAL_PROGRESS_STAGES: tuple[tuple[str, float], ...] = (
@@ -63,6 +86,8 @@ class MedicalImageAnalyzerConfig:
     reports_dir: Path
     processed_dir: Path
     overlay_dir: Path
+    brain_model_path: Path | None = None
+    modality_model_path: Path | None = None
     fallback_model_path: Path | None = None
     allow_fallback_model: bool = False
     image_size: int = 320
@@ -183,12 +208,15 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     if not isinstance(advanced, dict):
         advanced = {}
     configured_model = Path(settings.get("model", "medical_7_cancers.pt"))
+    brain_model = settings.get("brain_model")
     return MedicalImageAnalyzerConfig(
         model_path=configured_model,
         working_dir=Path(settings.get("output_root", "output/medical")),
         reports_dir=Path(settings.get("reports_dir", "output/medical/reports")),
         processed_dir=Path(settings.get("processed_dir", "output/medical/normalized_images")),
         overlay_dir=Path(settings.get("overlay_dir", "output/medical/processed_images")),
+        brain_model_path=Path(brain_model) if brain_model else None,
+        modality_model_path=Path(settings["modality_model"]) if settings.get("modality_model") else None,
         fallback_model_path=Path(settings["fallback_model"]) if settings.get("fallback_model") else None,
         allow_fallback_model=bool(settings.get("allow_fallback_model", False)),
         image_size=int(settings.get("image_size", 320)),
@@ -281,6 +309,10 @@ class MedicalImageAnalyzer:
         self._dicom_modality_cache: dict[Path, str | None] = {}
         self._cnn_wrapper_cache: MedicalCNNClassifierWrapper | None = None
         self._cnn_wrapper_cache_path: Path | None = None
+        self._brain_wrapper_cache: MedicalCNNClassifierWrapper | None = None
+        self._brain_wrapper_cache_path: Path | None = None
+        self._modality_wrapper_cache: MedicalCNNClassifierWrapper | None = None
+        self._modality_wrapper_cache_path: Path | None = None
         self._roi_extractor: Any = None
 
     @staticmethod
@@ -290,6 +322,11 @@ class MedicalImageAnalyzer:
                 cb(stage, pct)
             except Exception:
                 pass
+
+    def _active_model_path(self, body_region: str | None = None) -> Path:
+        if self._uses_brain_model(body_region):
+            return Path(self.config.brain_model_path)
+        return Path(self.config.model_path)
 
     def cleanup_cached_images(self) -> int:
         """Xoa normalized image cu neu vuot qua max_cached_images."""
@@ -369,7 +406,7 @@ class MedicalImageAnalyzer:
         detections = _coerce_detections(raw_detections) if detect_stage.status == "success" else []
         report_detections = self._detections_in_source_frame(detections, roi_info)
         consistency_score, conflicting_pairs = self._compute_detection_consistency(detections)
-        if consistency_score < self.config.detection_consistency_threshold:
+        if self._detector_backend is not None and consistency_score < self.config.detection_consistency_threshold:
             quality_warnings.append(
                 f"Phát hiện không nhất quán giữa các vùng (consistency={consistency_score:.2f} "
                 f"< {self.config.detection_consistency_threshold:.2f}, "
@@ -404,7 +441,7 @@ class MedicalImageAnalyzer:
             "source_image": str(resolved_source),
             "normalized_image": str(normalized_path),
             "processed_image": str(processed_path),
-            "model_name": self.config.model_path.name,
+            "model_name": self._active_model_path(validation.body_region).name,
             "risk_level": risk_level,
             "suspected_malignant": suspected_malignant,
             "average_confidence": average_confidence,
@@ -432,7 +469,7 @@ class MedicalImageAnalyzer:
             "average_confidence": average_confidence,
             "detection_count": len(detections),
             "quality_warnings": quality_warnings,
-            "model_name": self.config.model_path.name,
+            "model_name": self._active_model_path(validation.body_region).name,
         }
         write_inference_dashboard(self.config.reports_dir, dashboard_payload)
         removed = self.cleanup_cached_images()
@@ -452,7 +489,7 @@ class MedicalImageAnalyzer:
             recommendation=recommendation,
             disclaimer=MEDICAL_DISCLAIMER,
             average_confidence=average_confidence,
-            model_name=self.config.model_path.name,
+            model_name=self._active_model_path(validation.body_region).name,
             quality_warnings=quality_warnings,
             stage_confidences={name: item.confidence for name, item in stage_results.items()},
             stage_messages={name: item.message for name, item in stage_results.items()},
@@ -503,7 +540,7 @@ class MedicalImageAnalyzer:
                 details={},
             )
         else:
-            detections = self._detect_findings(image)
+            detections = self._detect_findings(image, body_region=validation.body_region)
             if detections:
                 confidence = float(np.mean([item.confidence for item in detections]))
                 detect_stage = PipelineStageResult(
@@ -730,14 +767,23 @@ class MedicalImageAnalyzer:
             warnings.append("Anh qua sang, co nguy co mat chi tiet ton thuong.")
         return warnings
 
-    def _detect_findings(self, image: np.ndarray) -> list[DetectionFinding]:
+    def _uses_brain_model(self, body_region: str | None) -> bool:
+        if self.config.brain_model_path is None:
+            return False
+        brain_model_path = Path(self.config.brain_model_path)
+        if not brain_model_path.exists():
+            return False
+        if body_region == "brain":
+            return True
+        return not Path(self.config.model_path).exists()
+
+    def _detect_findings(self, image: np.ndarray, *, body_region: str | None = None) -> list[DetectionFinding]:
+        cnn_wrapper = self._load_brain_wrapper() if self._uses_brain_model(body_region) else self._load_cnn_wrapper()
         if self._detector_backend is not None:
             yolo_detections = self._detect_with_backend(image)
-            cnn_wrapper = self._load_cnn_wrapper()
             if cnn_wrapper is not None and yolo_detections:
                 return self._ensemble_detections(image, yolo_detections)
             return yolo_detections
-        cnn_wrapper = self._load_cnn_wrapper()
         if cnn_wrapper is not None:
             cnn_predictions = cnn_wrapper.predict(image, top_k=max(1, self.config.analyze_topk), tta=self.config.cnn_tta)
             height, width = image.shape[:2]
@@ -817,6 +863,17 @@ class MedicalImageAnalyzer:
         try:
             model_path = resolve_medical_runtime_model_path(self.config)
         except FileNotFoundError:
+            brain_model_path = Path(self.config.brain_model_path) if self.config.brain_model_path else None
+            if brain_model_path is not None and brain_model_path.exists():
+                logger.warning(
+                    "[Medical] Chua co model tong quat, chi co brain model (%s). "
+                    "Chi phan tich duoc anh vung dau (body_region=brain).",
+                    brain_model_path.name,
+                )
+                issues = validate_medical_analyzer_config(self.config)
+                if issues:
+                    raise ValueError("Cấu hình medical không hợp lệ: " + "; ".join(issues))
+                return brain_model_path
             candidates = ", ".join(str(p) for p in iter_medical_runtime_model_paths(self.config))
             raise FileNotFoundError(
                 "Thieu model medical de phan tich. Da thu cac duong dan: "
@@ -1022,7 +1079,49 @@ class MedicalImageAnalyzer:
                     modality=canonical,
                     modality_confidence=max(base_result.modality_confidence, 0.9),
                 )
+
+        # Neu chua xac dinh duoc loai anh (modality None hoac tin cay thap),
+        # dung modality model (CNN 8 loai anh) de du doan.
+        if base_result.modality is None or base_result.modality_confidence < self.config.validation_min_confidence:
+            cnn_modality = self._predict_modality_with_cnn(source)
+            if cnn_modality is not None:
+                updated = replace(
+                    base_result,
+                    modality=cnn_modality,
+                    modality_confidence=max(base_result.modality_confidence, 0.9),
+                )
+                # Neu van chua biet body_region, thu suy tu ten file/duong dan
+                # (vi du 'pituitary_tumor', 'glioma' -> brain) de dinh tuyen dung model.
+                if updated.body_region is None:
+                    inferred_target, _ = infer_medical_upload_context(source)
+                    if inferred_target is not None:
+                        canonical_body = _canonical_body_region_key(inferred_target)
+                        if canonical_body is not None:
+                            updated = replace(
+                                updated,
+                                body_region=canonical_body,
+                                body_region_confidence=max(updated.body_region_confidence, 0.8),
+                            )
+                return updated
         return base_result
+
+    def _predict_modality_with_cnn(self, image_path: str | Path) -> str | None:
+        wrapper = self._load_modality_wrapper()
+        if wrapper is None:
+            return None
+        try:
+            predictions = wrapper.predict(image_path, top_k=1, tta=self.config.cnn_tta)
+            if not predictions:
+                return None
+            top = predictions[0]
+            label = str(top.get("label", "")).lower()
+            confidence = float(top.get("confidence", 0.0))
+            if confidence < self.config.validation_min_confidence:
+                return None
+            return label
+        except Exception:
+            logger.warning("[ModalityCNN] Khong du doan duoc modality", exc_info=True)
+            return None
 
     def _load_default_backend(self) -> DetectorBackend:
         if self.config.yolo_model_path and Path(self.config.yolo_model_path).exists():
@@ -1047,6 +1146,30 @@ class MedicalImageAnalyzer:
             wrapper = load_cnn_classifier(model_path)
             self._cnn_wrapper_cache = wrapper
             self._cnn_wrapper_cache_path = model_path
+            return wrapper
+        return None
+
+    def _load_brain_wrapper(self) -> MedicalCNNClassifierWrapper | None:
+        model_path = Path(self.config.brain_model_path)
+        if self._brain_wrapper_cache is not None and self._brain_wrapper_cache_path == model_path:
+            return self._brain_wrapper_cache
+        if is_cnn_classifier_path(model_path):
+            wrapper = load_cnn_classifier(model_path)
+            self._brain_wrapper_cache = wrapper
+            self._brain_wrapper_cache_path = model_path
+            return wrapper
+        return None
+
+    def _load_modality_wrapper(self) -> MedicalCNNClassifierWrapper | None:
+        if self.config.modality_model_path is None:
+            return None
+        model_path = Path(self.config.modality_model_path)
+        if self._modality_wrapper_cache is not None and self._modality_wrapper_cache_path == model_path:
+            return self._modality_wrapper_cache
+        if is_cnn_classifier_path(model_path):
+            wrapper = load_cnn_classifier(model_path)
+            self._modality_wrapper_cache = wrapper
+            self._modality_wrapper_cache_path = model_path
             return wrapper
         return None
 
@@ -1101,6 +1224,14 @@ class MedicalImageAnalyzer:
                 "uncertain",
                 False,
                 f"Kết quả chưa đủ tin tưởng (max_confidence={max_confidence:.2f} < {certainty_threshold:.2f}). Không được phân loại bệnh nhân. Cần khám chuyên khoa để bảo đảm doanh nghiệp.",
+                average_confidence,
+            )
+        top_detection = max(detections, key=lambda item: item.confidence)
+        if _BENIGN_LABELS.intersection(str(top_detection.label).lower().split()):
+            return (
+                "low",
+                False,
+                "Không phát hiện dấu hiệu u ác tính rõ ràng trên ảnh. Kết quả mang tính hỗ trợ, vẫn nên khám chuyên khoa nếu có triệu chứng lâm sàng.",
                 average_confidence,
             )
         if max_confidence >= self.config.classify_high_risk_threshold or len(detections) >= 3:
@@ -1159,7 +1290,7 @@ class MedicalImageAnalyzer:
     def _run_gradcam_if_possible(self, prepared_image: np.ndarray, detections: list[DetectionFinding], validation: ValidationResult) -> list[str]:
         overlays: list[str] = []
         try:
-            cnn_wrapper = self._load_cnn_wrapper()
+            cnn_wrapper = self._load_brain_wrapper() if self._uses_brain_model(validation.body_region) else self._load_cnn_wrapper()
             if cnn_wrapper is None or not detections:
                 return overlays
             explainer = None

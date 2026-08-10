@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from medical.cancer_catalog import COMMON_CANCER_TARGETS
+from medical.cancer_catalog import COMMON_CANCER_TARGETS, shared_cancer_targets
 from medical.classifier import (
     iter_medical_image_paths,
     load_medical_classifier,
@@ -44,7 +44,7 @@ from utils.file_utils import load_yaml
 logger = logging.getLogger(__name__)
 
 DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
-_CANCER_COUNT = len(COMMON_CANCER_TARGETS)
+_CANCER_COUNT = len(shared_cancer_targets())
 DEFAULT_TRAINED_MODEL_PATH = Path(f"medical_{_CANCER_COUNT}_cancers.pt")
 DEFAULT_CNN_MODEL_PATH = Path(f"medical_{_CANCER_COUNT}_cancers_cnn.pt")
 DEFAULT_SPLITS = ("train", "val", "test")
@@ -82,7 +82,7 @@ class MedicalTrainingPaths:
             "cnn_model_path",
             Path(cnn_model_path or legacy.get("cnn_model_path") or DEFAULT_CNN_MODEL_PATH),
         )
-        object.__setattr__(self, "class_names", tuple(class_names or legacy.get("class_names") or tuple(target.label for target in COMMON_CANCER_TARGETS)))
+        object.__setattr__(self, "class_names", tuple(class_names or legacy.get("class_names") or tuple(target.label for target in shared_cancer_targets())))
         object.__setattr__(self, "feature_size", int(feature_size))
 
 
@@ -109,7 +109,7 @@ def medical_training_paths() -> MedicalTrainingPaths:
         data_yaml_path=dataset_root / "data.yaml",
         trained_model_path=DEFAULT_TRAINED_MODEL_PATH,
         cnn_model_path=DEFAULT_CNN_MODEL_PATH,
-        class_names=tuple(target.label for target in COMMON_CANCER_TARGETS),
+        class_names=tuple(target.label for target in shared_cancer_targets()),
         feature_size=feature_size,
     )
 

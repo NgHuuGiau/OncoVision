@@ -164,7 +164,9 @@ medical:
       medium_threshold: 0.45
       normalize: xray
       quality_threshold: 0.45
-  model: models/trained/medical_8_cancers_cnn.pt
+  model: medical_7_cancers_cnn.pt
+  brain_model: models/pretrained/brain_classifier.pt
+  modality_model: models/pretrained/modality_classifier.pt
   yolo_model_path: models/trained/medical_yolo_detect.pt
   nested_cross_validation: false
   num_workers: 4

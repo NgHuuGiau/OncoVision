@@ -16,6 +16,7 @@ Khi đó pretrained=True sẽ tải trọng số ImageNet như bình thường.
 from __future__ import annotations
 
 import os
+import sys
 
 _ENV_ALLOW = "ONCOVISION_ALLOW_WEIGHT_DOWNLOAD"
 _ENV_REQUIRE = "ONCOVISION_REQUIRE_PRETRAINED"
@@ -62,11 +63,20 @@ def _warn_once(context: str) -> None:
     if context in _warned_contexts:
         return
     _warned_contexts.add(context)
-    print(
+    _safe_print(
         f"[NetworkPolicy] Chặn tải trọng số pretrained cho '{context}' (offline). "
-        f"Đặt {_ENV_ALLOW}=1 để cho phép tải. YOLO không bị ảnh hưởng.",
-        flush=True,
+        f"Đặt {_ENV_ALLOW}=1 để cho phép tải. YOLO không bị ảnh hưởng."
     )
+
+
+def _safe_print(message: str) -> None:
+    try:
+        print(message, flush=True)
+    except UnicodeEncodeError:
+        encoded = message.encode(sys.stdout.encoding or "ascii", errors="replace").decode(
+            sys.stdout.encoding or "ascii"
+        )
+        print(encoded, flush=True)
 
 
 __all__ = ["resolve_pretrained", "weight_download_allowed"]

@@ -81,7 +81,6 @@ Dataset `dataset/medical_modality/` dùng để train classifier phân loại mo
 
 - Tổng: 1.600 ảnh (200 × 8 modality), chuẩn hóa 224×224 RGB
 - Nguồn: [MedMNIST](https://medmnist.com/) (BSD license)
-- Sinh lại: `python scripts/build_modality_dataset.py`
 - Train: `python run_medical.py train-modality --epochs 12`
 
 ---
