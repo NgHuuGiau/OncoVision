@@ -118,6 +118,7 @@ def run_8cancers_training(args) -> int:
         gradient_clip_norm=1.0,
         loss_function="focal_loss",
         focal_gamma=2.0,
+        mixup_alpha=0.2,
         checkpoint_path=ckpt_path,
         progress_tag="train",
     )

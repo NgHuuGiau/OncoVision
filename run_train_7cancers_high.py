@@ -141,6 +141,7 @@ def run_high_training(args) -> int:
         gradient_clip_norm=1.0,
         loss_function="focal_loss",
         focal_gamma=float(config.get("focal_loss_gamma", 2.0)),
+        mixup_alpha=0.2,
         checkpoint_path=ckpt_path,
         progress_tag="train",
         verbose=bool(getattr(args, "verbose", False)),

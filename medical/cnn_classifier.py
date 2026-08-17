@@ -676,6 +676,7 @@ def train_cnn_classifier(
     asl_gamma_neg: float = 4.0,
     asl_clip: float = 0.05,
     balanced_softmax_beta: float = 0.5,
+    mixup_alpha: float = 0.0,
 ) -> tuple[MedicalCNNClassifierWrapper, dict[str, Any]]:
     if not samples:
         raise FileNotFoundError("Khong co du lieu train cho CNN classifier.")
@@ -834,9 +835,22 @@ def train_cnn_classifier(
         for images, labels in train_loader:
             images = images.to(device_obj, non_blocking=True)
             labels = labels.to(device_obj, non_blocking=True)
+            mixup_lam = 1.0
+            labels_shuffled = labels
+            if mixup_alpha > 0:
+                mixup_lam = float(np.random.beta(mixup_alpha, mixup_alpha))
+                shuffled_idx = torch.randperm(images.size(0), device=images.device)
+                images = mixup_lam * images + (1.0 - mixup_lam) * images[shuffled_idx]
+                labels_shuffled = labels[shuffled_idx]
             with torch.amp.autocast(device_obj.type, enabled=scaler.is_enabled()):
                 outputs = model(images)
-                loss = criterion(outputs, labels) / max(1, gradient_accumulation_steps)
+                if mixup_lam >= 1.0:
+                    loss = criterion(outputs, labels) / max(1, gradient_accumulation_steps)
+                else:
+                    loss = (
+                        mixup_lam * criterion(outputs, labels)
+                        + (1.0 - mixup_lam) * criterion(outputs, labels_shuffled)
+                    ) / max(1, gradient_accumulation_steps)
             scaler.scale(loss).backward()
             accumulated_steps += 1
             if accumulated_steps >= gradient_accumulation_steps:

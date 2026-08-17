@@ -91,6 +91,7 @@ def train_modality_classifier(
         mixed_precision=True,
         warmup_epochs=max(1, num_epochs // 5),
         progress_tag="modality",
+        mixup_alpha=0.2,
         verbose=verbose,
     )
     save_modality_classifier(wrapper, output_path)
