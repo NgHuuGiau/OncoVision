@@ -50,7 +50,7 @@ def train_modality_classifier(
     *,
     image_size: int = 320,
     batch_size: int = 16,
-    num_epochs: int = 10,
+    num_epochs: int = 20,
     learning_rate: float = 1e-4,
     pretrained: bool = True,
     verbose: bool = False,

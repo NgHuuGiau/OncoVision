@@ -70,12 +70,12 @@ def build_high_override(args) -> dict:
     if args.epochs is not None:
         override["cnn_num_epochs"] = args.epochs
     else:
-        override["cnn_num_epochs"] = int(settings.get("cnn_num_epochs", 15))
+        override["cnn_num_epochs"] = 30
     if args.learning_rate is not None:
         override["cnn_learning_rate"] = args.learning_rate
     else:
         override["cnn_learning_rate"] = float(settings.get("cnn_learning_rate", 0.00005))
-    override["cnn_early_stopping_patience"] = int(settings.get("cnn_early_stopping_patience", 10))
+    override["cnn_early_stopping_patience"] = int(settings.get("cnn_early_stopping_patience", 15))
     return override
 
 
@@ -88,7 +88,7 @@ def run_high_training(args) -> int:
     print("=" * 60, flush=True)
     print("TRAIN 7 UNG THU - PRODUCTION CONFIG (resnet50 pretrained)", flush=True)
     print("=" * 60, flush=True)
-    print(f"[1/3] Chuan bi dataset...", flush=True)
+    print("[1/3] Chuan bi dataset...", flush=True)
     prepare_medical_training_dataset(paths)
 
     train_samples = _samples_for_split(paths, "train")

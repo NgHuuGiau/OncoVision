@@ -9,12 +9,10 @@ from pathlib import Path
 
 from medical.training import (
     _compute_class_weights,
-    _load_medical_settings,
     medical_training_paths,
     prepare_medical_training_dataset,
 )
 from medical.cnn_classifier import train_cnn_classifier
-from medical.cancer_catalog import COMMON_CANCER_TARGETS
 from utils.entrypoint_common import run_entrypoint
 from utils.terminal_encoding import ensure_utf8_console
 
@@ -48,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"Batch GPU (mac dinh: {DEFAULT_BATCH_SIZE}, giam xuong 1 neu OOM).")
     parser.add_argument("--accum-steps", type=int, default=DEFAULT_ACCUM_STEPS,
                         help=f"Gradient accumulation (mac dinh: {DEFAULT_ACCUM_STEPS}).")
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=35)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--max-train-samples", type=int, default=None)
     parser.add_argument("--detached", action="store_true")
@@ -90,7 +88,7 @@ def run_brain_training(args) -> int:
     print("=" * 60, flush=True)
     print("TRAIN UNG THU NAO (4 sub-labels) - PRODUCTION CONFIG", flush=True)
     print("=" * 60, flush=True)
-    print(f"[1/3] Quet dataset brain (4 sub-labels)...", flush=True)
+    print("[1/3] Quet dataset brain (4 sub-labels)...", flush=True)
     prepare_medical_training_dataset(paths)
 
     train_samples = _samples_for(root, label, "train")
@@ -130,7 +128,7 @@ def run_brain_training(args) -> int:
         num_epochs=args.epochs,
         learning_rate=args.learning_rate,
         val_samples=val_samples or None,
-        early_stopping_patience=12,
+        early_stopping_patience=15,
         label_smoothing=0.1,
         mixed_precision=True,
         warmup_epochs=3,

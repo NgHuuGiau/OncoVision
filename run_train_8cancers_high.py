@@ -9,7 +9,6 @@ from pathlib import Path
 
 from medical.training import (
     _compute_class_weights,
-    _load_medical_settings,
     medical_training_paths,
     prepare_medical_training_dataset,
 )
@@ -54,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"Batch GPU (mac dinh: {DEFAULT_BATCH_SIZE}, giam xuong 1 neu OOM).")
     parser.add_argument("--accum-steps", type=int, default=DEFAULT_ACCUM_STEPS,
                         help=f"Gradient accumulation (mac dinh: {DEFAULT_ACCUM_STEPS}).")
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=35)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--max-train-samples", type=int, default=None)
     parser.add_argument("--detached", action="store_true")
@@ -69,7 +68,7 @@ def run_8cancers_training(args) -> int:
     print("=" * 60, flush=True)
     print("TRAIN 8 UNG THU (bao gom nao) - PRODUCTION CONFIG (resnet50 pretrained)", flush=True)
     print("=" * 60, flush=True)
-    print(f"[1/3] Quet dataset 8 lop...", flush=True)
+    print("[1/3] Quet dataset 8 lop...", flush=True)
     prepare_medical_training_dataset(paths)
 
     train_samples = _samples_for(root, "train")
@@ -104,7 +103,7 @@ def run_8cancers_training(args) -> int:
         num_epochs=args.epochs,
         learning_rate=args.learning_rate,
         val_samples=val_samples or None,
-        early_stopping_patience=12,
+        early_stopping_patience=15,
         label_smoothing=0.1,
         mixed_precision=True,
         warmup_epochs=3,
