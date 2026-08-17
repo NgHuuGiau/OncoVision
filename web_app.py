@@ -103,12 +103,12 @@ async def api_status():
 @app.post("/api/upload")
 async def upload_file(file: Annotated[UploadFile, File()]):
     if not file.filename:
-        raise HTTPException(status_code=400, detail="Khong co file duoc chon.")
+        raise HTTPException(status_code=400, detail="Không có file được chọn.")
     filename = file.filename
     lower_name = filename.lower()
     allowed_ext = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".dcm"}
     if Path(filename).suffix.lower() not in allowed_ext and not lower_name.endswith((".nii", ".nii.gz")):
-        raise HTTPException(status_code=400, detail=f"Dinh dang file khong duoc ho tro: {filename}")
+        raise HTTPException(status_code=400, detail=f"Định dạng file không được hỗ trợ: {filename}")
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     token = uuid.uuid4().hex[:10]
     safe_name = f"{timestamp}_{token}_{filename}"
@@ -145,7 +145,7 @@ async def analyze_image(
         raise HTTPException(status_code=400, detail="Thieu file anh.")
     stored = _safe_path(PROJECT_ROOT, image_path)
     if stored is None:
-        raise HTTPException(status_code=400, detail=f"Khong tim thay file: {image_path}")
+        raise HTTPException(status_code=400, detail=f"Không tìm thấy file: {image_path}")
     pc = patient_code or f"WEB-{uuid.uuid4().hex[:8].upper()}"
     try:
         service = get_medical_service()
@@ -155,14 +155,14 @@ async def analyze_image(
             user_prompt=user_prompt,
         )
     except Exception as exc:
-        logger.exception("Phan tich anh that bai: %s", stored)
-        raise HTTPException(status_code=500, detail=f"Loi phan tich: {exc}")
+        logger.exception("Phân tích ảnh thất bại: %s", stored)
+        raise HTTPException(status_code=500, detail=f"Lỗi phân tích: {exc}")
     metadata = json.loads(response.metadata_json) if response.metadata_json else {}
     fname = Path(image_path).name
-    title = f"Phan tich {fname}"
+    title = f"Phân tích {fname}"
     db = get_db()
     conv_id = db.create_conversation(title=title, subtitle=pc)
-    user_msg = ChatMessage(sender="user", text=user_prompt or f"Phan tich anh: {fname}")
+    user_msg = ChatMessage(sender="user", text=user_prompt or f"Phân tích ảnh: {fname}")
     db.add_message(conv_id, user_msg)
     assistant_msg = ChatMessage(
         sender="assistant",
@@ -238,7 +238,7 @@ async def get_conversation(conv_id: int):
                     "messages": msgs,
                 },
             }
-    raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
+    raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
 
 
 @app.post("/api/conversations/{conv_id}/messages")
@@ -246,7 +246,7 @@ async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""
     db = get_db()
     convs = db.get_all_conversations()
     if not any(c.id == conv_id for c in convs):
-        raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
+        raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
     msg = ChatMessage(
         sender=sender,
         text=text,
@@ -267,7 +267,7 @@ async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""
 async def delete_conversation(conv_id: int):
     db = get_db()
     if not any(c.id == conv_id for c in db.get_all_conversations()):
-        raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
+        raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
     db.delete_conversation(conv_id)
     return {"ok": True}
 

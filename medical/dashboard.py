@@ -10,7 +10,7 @@ TRAINING_PROGRESS_PATH = Path("output/medical/reports/training_progress.json")
 
 
 def write_training_progress(*, backend: str | None = None, tag: str | None = None, **fields: Any) -> None:
-    """Ghi tien do huan luyen ra file JSON de theo doi tu ben ngoai.
+    """Ghi tiến độ huấn luyện ra file JSON để theo dõi từ bên ngoài.
 
     Ho tro ca hai backend:
     - cnn: theo epoch (truyen epoch, num_epochs, train_loss, val_loss, val_acc, lr, best_val_acc).

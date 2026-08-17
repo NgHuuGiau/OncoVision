@@ -13,11 +13,11 @@ class BootProgressTests(unittest.TestCase):
     def test_progress_line_includes_title_and_status_label(self, fake_stdout, _sleep_mock) -> None:
         progress = BootProgress("YOLO Camera Realtime", enabled=True)
 
-        progress.advance_to(42, "Dang kiem tra CUDA")
+        progress.advance_to(42, "Đang kiểm tra CUDA")
 
         rendered = fake_stdout.getvalue()
         self.assertIn("YOLO Camera Realtime", rendered)
-        self.assertIn("Dang kiem tra CUDA", rendered)
+        self.assertIn("Đang kiểm tra CUDA", rendered)
         self.assertIn("Mức sẵn sàng", rendered)
         self.assertIn("0 [", rendered)
 

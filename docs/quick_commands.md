@@ -50,7 +50,7 @@ python run_medical.py ready
 python run_medical.py sources
 python run_medical.py cancer
 python run_medical.py init-dataset
-python run_medical.py train-modality --epochs 12
+python run_medical.py train-modality
 ```
 
 ## 5. Huấn luyện
@@ -64,7 +64,13 @@ python run_train.py
 ### CNN classifier
 
 ```powershell
-python run_medical.py train-cancer --epochs 30 --backbone efficientnet_b2
+# 7 ung thư (cấu hình cao: convnext_tiny @512, epochs 30) — GPU 4GB, ~190k ảnh
+python run_train_7cancers_high.py
+
+# Não (4 sub-label, convnext_tiny @512, epochs 35)
+python run_train_brain_high.py
+
+# Modality (8 loại hình ảnh, resnet18 @320, epochs 20)
 python run_medical.py train-modality
 ```
 

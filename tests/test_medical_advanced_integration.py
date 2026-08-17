@@ -32,7 +32,7 @@ class SegmentationROIIntegrationTests(unittest.TestCase):
     def test_roi_enabled_crops_with_fallback_otsu(self) -> None:
         analyzer = self._analyzer(enable_segmentation_roi=True, segmentation_roi_margin=4)
         image = np.zeros((128, 128, 3), dtype=np.uint8)
-        image[40:90, 40:90] = 255  # vung sang de Otsu tach ra
+        image[40:90, 40:90] = 255  # vùng sáng để Otsu tách ra
         out, roi_info = analyzer._apply_segmentation_roi(image)
         self.assertIsNotNone(roi_info)
         self.assertIn("bbox", roi_info)

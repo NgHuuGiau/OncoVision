@@ -183,7 +183,7 @@ def audit_medical_raw_dataset(paths: MedicalTrainingPaths | None = None) -> dict
 
 
 def _patient_id_from_path(path: Path) -> str:
-    """Trich id benh nhan tu duong dan de tranh leak giua cac split.
+    """Trích id bệnh nhân từ đường dẫn để tránh leak giữa các split.
 
     Thu tu uu tien:
     1. Ten thu muc cha (vi du: .../BN001/scan_01.dcm -> 'bn001').
@@ -240,7 +240,7 @@ def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> N
         patient_groups = _group_images_by_patient(raw_images)
         total_groups = len(patient_groups)
         if total_groups < 2:
-            # Qua it benh nhan de phan tang: gom tat ca vao train nhu cu.
+            # Quá ít bệnh nhân để phân tầng: gom tất cả vào train như cũ.
             train_groups = patient_groups
             val_groups: list[list[Path]] = []
             test_groups: list[list[Path]] = []
@@ -281,11 +281,11 @@ def prepare_medical_training_dataset(paths: MedicalTrainingPaths | None = None) 
     test_count = sum(len(items) for items in audit["test_images"].values())
     total_count = train_count + val_count + test_count
     if total_count <= 0:
-        raise FileNotFoundError("Khong tim thay anh medical hop le trong 7 thu muc ung thu.")
+        raise FileNotFoundError("Không tìm thấy ảnh medical hợp lệ trong 7 thư mục ung thư.")
     if audit["missing_classes"]:
         missing_classes = ", ".join(audit["missing_classes"])
         if len(paths.class_names) > 1 and len(set(audit["class_counts"].values())) == 1 and next(iter(audit["class_counts"].values())) == 0:
-            raise FileNotFoundError("Thieu du lieu cho cac lop: " + missing_classes)
+            raise FileNotFoundError("Thiếu dữ liệu cho các lớp: " + missing_classes)
     return MedicalTrainingSummary(
         train_count=train_count,
         val_count=val_count,
@@ -329,7 +329,7 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
         prepare_medical_training_dataset(paths)
     train_samples = _samples_for_split(paths, "train")
     if not train_samples:
-        raise FileNotFoundError("Khong co du lieu train medical.")
+        raise FileNotFoundError("Không có dữ liệu train medical.")
     backend = str(settings.get("classifier_backend", "centroid")).lower()
     if backend == "cnn" and _should_use_cnn_backend(paths, train_samples, settings):
         try:
@@ -338,7 +338,7 @@ def train_medical_model(paths: MedicalTrainingPaths | None = None, *, prepare_da
             logger.warning("[Training] CNN backend failed, fallback to centroid: %s", exc, exc_info=True)
     train_samples = _samples_for_split(paths, "train")
     if not train_samples:
-        raise FileNotFoundError("Khong co du lieu train medical.")
+        raise FileNotFoundError("Không có dữ liệu train medical.")
     classifier_model = train_medical_classifier(
         train_samples,
         class_labels=paths.class_names,
@@ -362,7 +362,7 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         train_samples = train_samples[:max_train_samples]
     val_samples = _samples_for_split(paths, "val")
     if not train_samples:
-        raise FileNotFoundError("Khong co du lieu train medical.")
+        raise FileNotFoundError("Không có dữ liệu train medical.")
     class_weights = None
     if bool(settings.get("cnn_class_weighting", True)):
         class_weights = _compute_class_weights(train_samples, paths.class_names)
@@ -397,7 +397,7 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         asl_clip=float(settings.get("asl_clip", 0.05)),
         balanced_softmax_beta=float(settings.get("balanced_softmax_beta", 0.5)),
     )
-    # Luu CNN vao path rieng de KHONG ghi de model centroid cu (medical_7_cancers.pt).
+    # Lưu CNN vào path riêng để KHÔNG ghi đè model centroid cũ (medical_7_cancers.pt).
     target_path = Path(output_model_path) if output_model_path else paths.cnn_model_path
     wrapper.save(target_path)
     _write_training_manifest(target_path, paths, settings, _history)
@@ -415,7 +415,7 @@ def validate_medical_model(paths: MedicalTrainingPaths | None = None):
     classifier_model = load_medical_classifier(resolved_model_path)
     validation_samples = _samples_for_split(paths, "val")
     if not validation_samples:
-        raise FileNotFoundError("Khong co du lieu val medical.")
+        raise FileNotFoundError("Không có dữ liệu val medical.")
 
     correct = 0
     confidences: list[float] = []
@@ -517,7 +517,7 @@ def _stratify_samples_by_family(
     từng fold.
     """
     if num_folds < 2:
-        raise ValueError("num_folds phai >= 2 de thuc hien cross-validation.")
+        raise ValueError("num_folds phải >= 2 để thực hiện cross-validation.")
     if not samples:
         return [([], []) for _ in range(num_folds)]
 
@@ -531,7 +531,7 @@ def _stratify_samples_by_family(
 
     rng = np.random.default_rng(seed)
     fold_buckets: list[list[tuple[Path, int]]] = [[] for _ in range(num_folds)]
-    # Duyet nhom theo thu tu on dinh de ket qua co the tai lap.
+    # Duyệt nhóm theo thứ tự ổn định để kết quả có thể tái lập.
     for key in sorted(groups.keys(), key=lambda item: (item[0], str(item[1]))):
         items = list(groups[key])
         rng.shuffle(items)
@@ -578,7 +578,7 @@ def _train_fold_model(
     verbose: bool = False,
     resume_path: str | Path | None = None,
 ) -> Any:
-    """Huan luyen mot model cho mot fold dung cung logic voi train_cnn_classifier."""
+    """Huấn luyện một model cho một fold dùng cùng logic với train_cnn_classifier."""
     fold_tag = f"fold:{fold_index}" if fold_index is not None else "fold"
     backend = str(config.get("classifier_backend", "cnn")).lower()
     if backend == "cnn" and _should_use_cnn_backend(paths, train_samples, config):
@@ -720,7 +720,7 @@ def train_with_stratified_kfold(
     verbose: bool = False,
     resume_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Huan luyen voi stratified K-Fold cross-validation.
+    """Huấn luyện với stratified K-Fold cross-validation.
 
     - Phan tang theo nhan lop VA image family (ct_volume, xray_mammo, ...).
     - Moi fold: train tren k-1 fold, validate tren fold giu lai.
@@ -728,7 +728,7 @@ def train_with_stratified_kfold(
     - Tra ve dict gom fold_metrics, mean_metrics, std_metrics.
     """
     if not samples:
-        raise FileNotFoundError("Khong co du lieu de chay stratified K-Fold.")
+        raise FileNotFoundError("Không có dữ liệu để chạy stratified K-Fold.")
 
     paths = paths or medical_training_paths()
     config = dict(config or _load_medical_settings())
@@ -746,7 +746,7 @@ def train_with_stratified_kfold(
                 {
                     "fold": fold_index,
                     "skipped": True,
-                    "reason": "fold rong (thieu du lieu train hoac val)",
+                    "reason": "fold rỗng (thiếu dữ liệu train hoặc val)",
                     "train_count": len(train_samples),
                     "val_count": len(val_samples),
                 }
@@ -771,7 +771,7 @@ def train_with_stratified_kfold(
                 {
                     "fold": fold_index,
                     "skipped": True,
-                    "reason": f"loi khi huan luyen/danh gia fold: {error}",
+                    "reason": f"lỗi khi huấn luyện/đánh giá fold: {error}",
                     "train_count": len(train_samples),
                     "val_count": len(val_samples),
                 }
@@ -824,7 +824,7 @@ def _train_final_model_on_all_data(
     verbose: bool = False,
     resume_path: str | Path | None = None,
 ) -> Path:
-    """Huan luyen model cuoi cung tren toan bo du lieu voi hyperparam tot nhat tu CV."""
+    """Huấn luyện model cuối cùng trên toàn bộ dữ liệu với hyperparam tốt nhất từ CV."""
     best_config = _select_best_hyperparams(config, cv_results)
     model = _train_fold_model(samples, paths.class_names, best_config, paths, val_samples=None, verbose=verbose, resume_path=resume_path)
     _save_fold_model(model, paths.trained_model_path)
@@ -844,9 +844,9 @@ def run_full_medical_training_pipeline(
         run_kfold = bool(settings.get("nested_cross_validation", False))
     total_start = time.perf_counter()
     print("=" * 60, flush=True)
-    print("BAT DAU TRAINING MEDICAL 7 UNG THU", flush=True)
+    print("BẮT ĐẦU TRAINING MEDICAL 7 UNG THƯ", flush=True)
     print("=" * 60, flush=True)
-    print("[1/4] Dang chuan bi du lieu (quet dataset, tao split)...", flush=True)
+    print("[1/4] Đang chuẩn bị dữ liệu (quét dataset, tạo split)...", flush=True)
     prepare_start = time.perf_counter()
     split_summary = prepare_medical_training_dataset(paths)
     prepare_seconds = time.perf_counter() - prepare_start
@@ -855,17 +855,17 @@ def run_full_medical_training_pipeline(
         f"val={split_summary.val_count} test={split_summary.test_count} ({prepare_seconds:.1f}s)",
         flush=True,
     )
-    print("[2/4] Dang huan luyen model...", flush=True)
+    print("[2/4] Đang huấn luyện model...", flush=True)
     train_start = time.perf_counter()
     trained_model_path = train_medical_model(paths, prepare_dataset=False, verbose=verbose, resume_path=resume_path)
     train_seconds = time.perf_counter() - train_start
-    print(f"[2/4] Xong huan luyen: {trained_model_path} ({train_seconds:.1f}s)", flush=True)
-    print("[3/4] Dang danh gia model...", flush=True)
+    print(f"[2/4] Xong huấn luyện: {trained_model_path} ({train_seconds:.1f}s)", flush=True)
+    print("[3/4] Đang đánh giá model...", flush=True)
     validate_start = time.perf_counter()
     validation_metrics = validate_medical_model(paths)
     validate_seconds = time.perf_counter() - validate_start
     print(
-        f"[3/4] Xong danh gia: accuracy={validation_metrics.get('accuracy', 0):.4f} ({validate_seconds:.1f}s)",
+        f"[3/4] Xong đánh giá: accuracy={validation_metrics.get('accuracy', 0):.4f} ({validate_seconds:.1f}s)",
         flush=True,
     )
     report = {
@@ -896,7 +896,7 @@ def run_full_medical_training_pipeline(
         report["cv_results"] = cv_results
         report["cv_seconds"] = time.perf_counter() - cv_start
         print(f"[4/4] Xong K-Fold ({report['cv_seconds']:.1f}s)", flush=True)
-        print("[bonus] Dang huan luyen model cuoi cung tren toan bo du lieu...", flush=True)
+        print("[bonus] Đang huấn luyện model cuối cùng trên toàn bộ dữ liệu...", flush=True)
         final_start = time.perf_counter()
         final_model_path = _train_final_model_on_all_data(
             paths, all_samples, settings, cv_results, verbose=verbose, resume_path=resume_path
@@ -906,7 +906,7 @@ def run_full_medical_training_pipeline(
         report["trained_model_path"] = final_model_path
         report["best_hyperparams"] = _select_best_hyperparams(settings, cv_results)
         print(f"[bonus] Xong model cuoi cung ({report['final_train_seconds']:.1f}s)", flush=True)
-        print("[bonus] Dang danh gia lai model cuoi cung...", flush=True)
+        print("[bonus] Đang đánh giá lại model cuối cùng...", flush=True)
         try:
             report["validation_metrics"] = validate_medical_model(paths)
         except FileNotFoundError:

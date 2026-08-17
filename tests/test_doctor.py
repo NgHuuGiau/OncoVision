@@ -101,8 +101,8 @@ class DoctorTests(unittest.TestCase):
             export_files=0,
             case_db_path=Path("output/medical/medical_cases.db"),
             case_count=0,
-            screening_targets=(("Ung thu da", True), ("Ung thu vu", False)),
-            analyzed_cancers=("Ung thu da", "Ung thu vu"),
+            screening_targets=(("Ung thư da", True), ("Ung thư vú", False)),
+            analyzed_cancers=("Ung thư da", "Ung thư vú"),
             analyzed_modalities=("CT", "MRI"),
         )
 
@@ -143,7 +143,7 @@ class DoctorTests(unittest.TestCase):
             cpu_name="Intel Core i7",
             ram_gb=16.0,
             os_name="Windows 11",
-            gpu_name="Khong phat hien GPU",
+            gpu_name="Không phát hiện GPU",
             gpu_count=0,
             vram_gb=0.0,
             torch_version="2.0",
@@ -171,8 +171,8 @@ class DoctorTests(unittest.TestCase):
             export_files=0,
             case_db_path=Path("output/medical/medical_cases.db"),
             case_count=0,
-            screening_targets=(("Ung thu da", True), ("Ung thu vu", False)),
-            analyzed_cancers=("Ung thu da", "Ung thu vu"),
+            screening_targets=(("Ung thư da", True), ("Ung thư vú", False)),
+            analyzed_cancers=("Ung thư da", "Ung thư vú"),
             analyzed_modalities=("CT", "MRI"),
         )
 

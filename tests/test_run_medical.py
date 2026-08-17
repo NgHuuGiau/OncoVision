@@ -20,7 +20,7 @@ class RunMedicalTests(unittest.TestCase):
                 code = run_medical.main()
 
         self.assertEqual(code, 0)
-        self.assertIn("Da tao cau truc medical", stdout.getvalue())
+        self.assertIn("Đã tạo cấu trúc medical", stdout.getvalue())
 
     def test_metrics_command_prints_json_metrics(self) -> None:
         with patch(
@@ -81,7 +81,7 @@ class RunMedicalTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("Trang thai he thong medical", output)
         self.assertIn("missing model", output)
-        self.assertIn("He thong dang phan tich cac ung thu:", output)
+        self.assertIn("Hệ thống đang phân tích các ung thư:", output)
         self.assertIn("python run_medical.py train-all", output)
         recommended_mock.assert_called_once()
 
@@ -122,9 +122,9 @@ class RunMedicalTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         output = stdout.getvalue()
-        self.assertIn("Tong anh ung thu local: 27726", output)
+        self.assertIn("Tổng ảnh ung thư local: 27726", output)
         self.assertIn("Ung thư gan", output)
-        self.assertIn("train: 900 anh", output)
+        self.assertIn("train: 900 ảnh", output)
 
     def test_ready_command_prints_training_readiness(self) -> None:
         with patch(
@@ -189,12 +189,12 @@ class RunMedicalTests(unittest.TestCase):
                 "report_md_path": Path("report.md"),
                 "suspected_malignant": True,
                 "risk_level": "high",
-                "recommendation": "Can kham chuyen khoa",
+                "recommendation": "Cần khám chuyên khoa",
                 "detections": [],
                 "quality_warnings": [],
                 "average_confidence": 0.88,
                 "model_name": "medical_best.pt",
-                "disclaimer": "Khong thay the bac si",
+                "disclaimer": "Không thay thế bác sĩ",
             },
         )()
         case_db = case_db_cls_mock.return_value
@@ -257,7 +257,7 @@ class RunMedicalTests(unittest.TestCase):
             code = run_medical.main()
 
         self.assertEqual(code, 0)
-        self.assertIn("Da xoa", stdout.getvalue())
+        self.assertIn("Đã xóa", stdout.getvalue())
 
     def test_delete_case_command_can_remove_files(self) -> None:
         fake_db = type(
@@ -276,7 +276,7 @@ class RunMedicalTests(unittest.TestCase):
             code = run_medical.main()
 
         self.assertEqual(code, 0)
-        self.assertIn("Da xoa cac file lien quan", stdout.getvalue())
+        self.assertIn("Đã xóa các file liên quan", stdout.getvalue())
 
 
 if __name__ == "__main__":

@@ -59,7 +59,7 @@ def train_modality_classifier(
     samples = _collect_modality_samples(root)
     if not samples:
         raise FileNotFoundError(
-            "Khong tim thay anh modality. Hay tao cau truc dataset/medical_modality/"
+            "Không tìm thấy ảnh modality. Hãy tạo cấu trúc dataset/medical_modality/"
             "<modality>/... voi cac thu muc: " + ", ".join(_MODALITY_LABELS)
         )
 
@@ -92,6 +92,7 @@ def train_modality_classifier(
         warmup_epochs=max(1, num_epochs // 5),
         progress_tag="modality",
         mixup_alpha=0.2,
+        num_workers=2,
         verbose=verbose,
     )
     save_modality_classifier(wrapper, output_path)

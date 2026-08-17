@@ -62,7 +62,7 @@ def _dataset_split_counts(dataset_root: Path) -> dict[str, int]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Medical CLI: quan ly 7 ung thu da co san trong dataset/medical.")
+    parser = argparse.ArgumentParser(description="Medical CLI: quản lý 7 ung thư đã có sẵn trong dataset/medical.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init-dataset", help="Kiểm tra dataset medical và tạo data.yaml nếu thiếu.")
@@ -91,9 +91,9 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument("--verbose", action="store_true", help="In chi tiết từng batch kể cả khi chạy qua pipe (menu).")
     train_parser.add_argument("--resume", default=None, help="Đường dẫn checkpoint .pt để tiếp tục train.")
     subparsers.add_parser("validate", help="Validate medical classifier.")
-    evaluate_parser = subparsers.add_parser("evaluate", help="Danh gia model tren TEST set, cong bo metric per-class (AUC/sensitivity/specificity).")
-    evaluate_parser.add_argument("--model", default=None, help="Duong dan model .pt (mac dinh: model da train).")
-    evaluate_parser.add_argument("--split", default="test", choices=["test", "val", "train"], help="Split de danh gia (mac dinh: test).")
+    evaluate_parser = subparsers.add_parser("evaluate", help="Đánh giá model trên TEST set, công bố metric per-class (AUC/sensitivity/specificity).")
+    evaluate_parser.add_argument("--model", default=None, help="Đường dẫn model .pt (mặc định: model đã train).")
+    evaluate_parser.add_argument("--split", default="test", choices=["test", "val", "train"], help="Split để đánh giá (mặc định: test).")
     train_all_parser = subparsers.add_parser("train-all", help="Split/validate/train theo dataset medical hiện có.")
     train_all_parser.add_argument("--verbose", action="store_true", help="In chi tiết từng batch kể cả khi chạy qua pipe (menu).")
     train_all_parser.add_argument("--resume", default=None, help="Đường dẫn checkpoint .pt để tiếp tục train.")
@@ -156,7 +156,7 @@ def main() -> int:
         print(f"Data yaml: {config.data_yaml_path}")
         print(f"Metadata: {config.metadata_dir}")
         print(f"Reports: {config.reports_dir}")
-        print("Da tao cau truc medical cho 7 ung thu da co san.")
+        print("Đã tạo cấu trúc medical cho 7 ung thư đã có sẵn.")
         print(MEDICAL_DISCLAIMER)
         return 0
 
@@ -195,14 +195,14 @@ def main() -> int:
         if result.report_json_path and result.report_md_path:
             update_case_report_case_id(result.report_json_path, result.report_md_path, case_id=case_id)
         print(f"Ma ca benh: {case_id}")
-        print(f"Muc do sang loc nguy co: {result.risk_level}")
+        print(f"Mức độ sàng lọc nguy cơ: {result.risk_level}")
         if result.risk_level == "uncertain":
             print("LỖI: Kết quả không đủ tin tưởng để đưa ra chẩn đoán.")
         if result.quality_warnings:
-            print("Canh bao chat luong anh:")
+            print("Cảnh báo chất lượng ảnh:")
             for warning in result.quality_warnings:
                 print(f"- {warning}")
-        print(f"Anh da xu ly: {result.processed_image}")
+        print(f"Ảnh đã xử lý: {result.processed_image}")
         print(f"Report JSON: {result.report_json_path}")
         print(f"Report MD: {result.report_md_path}")
         print(MEDICAL_DISCLAIMER)
@@ -235,14 +235,14 @@ def main() -> int:
         db = MedicalCaseDatabase()
         item = db.get_case(args.case_id)
         if item is None:
-            print(f"Khong tim thay ca benh #{args.case_id}.")
+            print(f"Không tìm thấy ca bệnh #{args.case_id}.")
             return 1
         print(f"Ca benh #{item.case_id}")
-        print(f"Ma benh nhan: {item.patient_code}")
-        print(f"Thoi gian: {item.created_at}")
+        print(f"Mã bệnh nhân: {item.patient_code}")
+        print(f"Thời gian: {item.created_at}")
         print(f"Nguy co: {item.risk_level}")
-        print(f"Anh goc: {item.image_path}")
-        print(f"Anh xu ly: {item.processed_image_path}")
+        print(f"Ảnh gốc: {item.image_path}")
+        print(f"Ảnh xử lý: {item.processed_image_path}")
         print(f"Report JSON: {item.report_json_path}")
         print(f"Report MD: {item.report_md_path}")
         print(f"Metadata: {json.dumps(item.metadata, ensure_ascii=False, indent=2)}")
@@ -275,7 +275,7 @@ def main() -> int:
         return 0
 
     def handle_sources() -> int:
-        print("Nguon 7 ung thu da co san:")
+        print("Nguồn 7 ung thư đã có sẵn:")
         for source in common_cancer_dataset_source_dicts():
             print(f"- {source['source_name']} | {source['cancer_type']} | {source['status']}")
             print(f"  {source['official_url']}")
@@ -286,17 +286,17 @@ def main() -> int:
         overview = build_cancer_overview()
         summary = cast(dict[str, Any], overview["summary"])
         cancers = cast(list[dict[str, Any]], overview["cancers"])
-        print("Tong quan ung thu")
-        print(f"Tong anh ung thu local: {summary['total_cancer_images']}")
-        print("Theo tung nhom ung thu:")
+        print("Tổng quan ung thư")
+        print(f"Tổng ảnh ung thư local: {summary['total_cancer_images']}")
+        print("Theo từng nhóm ung thư:")
         for item in cancers:
             print(
-                f"- {item['label']}: {item['local_image_count']} anh | "
+                f"- {item['label']}: {item['local_image_count']} ảnh | "
                 f"local_status={item['local_status']} | model_ready={item['model_ready']}"
             )
             for source in item["local_sources"]:
                 print(
-                    f"  {source['collection_name']}: {source['image_count']} anh | "
+                    f"  {source['collection_name']}: {source['image_count']} ảnh | "
                     f"dir={source['collection_root']}"
                 )
         return 0
@@ -325,7 +325,7 @@ def main() -> int:
         db = MedicalCaseDatabase()
         item = db.get_case(args.case_id)
         if item is None:
-            print(f"Khong tim thay ca benh #{args.case_id}.")
+            print(f"Không tìm thấy ca bệnh #{args.case_id}.")
             return 1
         payload = build_case_export_payload(item)
         bundle_path = export_case_bundle(
@@ -357,13 +357,13 @@ def main() -> int:
         try:
             model_path = resolve_medical_runtime_model_path(model_config)
         except FileNotFoundError as exc:
-            print(f"Khong the chay active-learning: {exc}")
+            print(f"Không thể chạy active-learning: {exc}")
             return 1
         candidates = suggest_active_learning_samples(args.image_dir, config=config, model_path=model_path)
         if not candidates:
-            print("Khong co anh nao can dan nhan them (hoac chua co model / thu muc anh).")
+            print("Không có ảnh nào cần dán nhãn thêm (hoặc chưa có model / thư mục ảnh).")
             return 0
-        print(f"Goi y {len(candidates)} anh can dan nhan them tu {args.image_dir}:")
+        print(f"Gợi ý {len(candidates)} ảnh cần dán nhãn thêm từ {args.image_dir}:")
         for path, confidence, uncertainty in candidates:
             print(f"- {path} (conf={confidence:.3f}, uncertainty={uncertainty:.3f})")
         print(f"Danh sach chi tiet: {config.output_dir / 'active_learning_candidates.csv'}")
@@ -388,11 +388,11 @@ def main() -> int:
             deleted = db.delete_case(args.case_id)
             deleted_paths = []
         if not deleted:
-            print(f"Khong tim thay ca benh #{args.case_id}.")
+            print(f"Không tìm thấy ca bệnh #{args.case_id}.")
             return 1
-        print(f"Da xoa ban ghi ca benh #{args.case_id}.")
+        print(f"Đã xóa bản ghi ca bệnh #{args.case_id}.")
         if deleted_paths:
-            print("Da xoa cac file lien quan:")
+            print("Đã xóa các file liên quan:")
             for path in deleted_paths:
                 print(f"- {path}")
         return 0
@@ -452,7 +452,7 @@ def main() -> int:
 
         report = evaluate_on_test_set(model_path=args.model, split=args.split)
         print(f"Model: {report['model_path']}")
-        print(f"Split: {report['split']} | So mau: {report['num_samples']}")
+        print(f"Split: {report['split']} | Số mẫu: {report['num_samples']}")
         print(f"Accuracy: {report['accuracy']:.4f}")
         print(f"Macro F1: {report['macro_f1']:.4f} | Macro ROC-AUC: {report['macro_roc_auc']:.4f}")
         print("Per-class (label | sensitivity | specificity | f1 | roc_auc):")
@@ -500,7 +500,7 @@ def main() -> int:
         report_path = Path(args.report_path)
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"{action} modality_tuning cho {report['sample_count']} anh.")
+        print(f"{action} modality_tuning cho {report['sample_count']} ảnh.")
         print(f"Report: {report_path}")
         for modality, tuning in report["modality_tuning"].items():
             if modality == "default":

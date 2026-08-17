@@ -145,7 +145,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(risk_level, "low")
         self.assertFalse(suspected_malignant)
         self.assertEqual(average_confidence, 0.0)
-        self.assertIn("Khong ghi nhan", recommendation)
+        self.assertIn("Không ghi nhận", recommendation)
 
     def test_classify_findings_returns_medium_for_mid_confidence(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -204,7 +204,7 @@ class MedicalPipelineTests(unittest.TestCase):
         warnings = analyzer._evaluate_image_quality(np.zeros((128, 128, 3), dtype=np.uint8))
 
         self.assertTrue(warnings)
-        self.assertTrue(any("qua toi" in warning for warning in warnings))
+        self.assertTrue(any("quá tối" in warning for warning in warnings))
 
     def test_prepare_image_for_analysis_uses_modality_specific_preprocessing(self) -> None:
         analyzer = MedicalImageAnalyzer(

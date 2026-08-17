@@ -394,10 +394,10 @@ def resolve_medical_upload_path(path: str | Path) -> Path:
     source = Path(path)
     if source.is_file():
         if not is_supported_medical_upload_path(source):
-            raise ValueError(f"Khong ho tro file upload: {source}")
+            raise ValueError(f"Không hỗ trợ file upload: {source}")
         return source
     if not source.is_dir():
-        raise FileNotFoundError(f"Khong tim thay duong dan upload: {source}")
+        raise FileNotFoundError(f"Không tìm thấy đường dẫn upload: {source}")
 
     candidates = sorted(
         candidate
@@ -540,7 +540,7 @@ def _load_medical_volume_image(source: Path) -> Image.Image:
         elif suffix == ".dcm":
             return _load_dicom_slice(source)
         else:
-            raise ValueError(f"Khong ho tro dinh dang volume: {source}")
+            raise ValueError(f"Không hỗ trợ định dạng volume: {source}")
 
     volume = np.asarray(volume, dtype=np.float32)
     if volume.ndim == 2:
@@ -668,7 +668,7 @@ def normalize_uploaded_image(
 ) -> Path:
     source = Path(source_path)
     if not is_supported_medical_upload_path(source):
-        raise ValueError(f"Khong ho tro file upload: {source}")
+        raise ValueError(f"Không hỗ trợ file upload: {source}")
     destination_dir = Path(target_dir)
     destination_dir.mkdir(parents=True, exist_ok=True)
     normalized = load_medical_source_image(source)

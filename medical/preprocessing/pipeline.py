@@ -60,7 +60,7 @@ def preprocess_image(
                 with Image.open(image_path) as img:
                     image = np.array(img.convert("RGB"))
         else:
-            raise FileNotFoundError(f"Khong tim thay anh: {image}")
+            raise FileNotFoundError(f"Không tìm thấy ảnh: {image}")
     if image is None or image.size == 0:
         raise ValueError("Anh dau vao rong hoac None.")
     preprocessor = get_preprocessor(modality)

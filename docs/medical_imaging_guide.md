@@ -34,7 +34,11 @@ python run_medical.py sources         # Liệt kê nguồn ảnh
 python run_medical.py cancer          # Danh sách nhóm ung thư
 python run_medical.py init-dataset    # Khởi tạo layout dataset
 python run_medical.py train-modality  # Train classifier modality
-python run_medical.py train-cancer    # Train CNN classification
+python run_medical.py train-cancer    # Train CNN classification (chế độ cũ)
+
+# Train cấu hình cao (khuyến nghị cho GPU 4GB):
+python run_train_7cancers_high.py     # 7 ung thư — convnext_tiny @512, epochs 30
+python run_train_brain_high.py        # Não (4 sub-label) — convnext_tiny @512, epochs 35
 ```
 
 Lưu ý: `init-dataset` chỉ in layout mong đợi, không tự tạo dữ liệu.
@@ -68,20 +72,10 @@ Chat UI cho phép chọn nhóm bệnh và modality để lọc file picker phù 
 
 Dataset `dataset/medical_modality/` dùng để train classifier phân loại modality ảnh y khoa:
 
-| Modality | Số ảnh | Nguồn |
-|---|---|---|
-| CT | 200 | OrganMNIST3D |
-| MRI | 200 | OrganMNIST3D |
-| X-quang | 200 | ChestMNIST |
-| Mammogram | 200 | BreastMNIST |
-| Nội soi | 200 | PathMNIST |
-| Siêu âm | 200 | BloodMNIST |
-| PET/CT | 200 | OrganMNIST3D + augment |
-| EUS | 200 | PathMNIST + augment |
-
-- Tổng: 1.600 ảnh (200 × 8 modality), chuẩn hóa 224×224 RGB
-- Nguồn: [MedMNIST](https://medmnist.com/) (BSD license)
-- Train: `python run_medical.py train-modality --epochs 12`
+- **Tổng: ~120.000 ảnh JPG** (8 modality × ~15.000/lớp), đã split thành `processed/images/{train,val,test}`
+- 8 modality: CT, MRI, X-quang, Mammogram, Nội soi, Siêu âm, PET/CT, EUS
+- Model: resnet18 @320px, batch 16, epochs 20, mixup 0.2, `num_workers=2`
+- Train: `python run_medical.py train-modality`
 
 ---
 
@@ -101,21 +95,43 @@ Dataset `dataset/medical_modality/` dùng để train classifier phân loại mo
 
 ## 7. Cấu hình training
 
-### CNN Classification (ung thư)
+### CNN 7 ung thư / não (cấu hình cao — GPU 4GB VRAM)
 
-| Tham số | Giá trị | Mục đích |
+Script: `run_train_7cancers_high.py` (7 ung thư) và `run_train_brain_high.py` (não, 4 sub-label).
+
+| Tham số | 7 ung thư | Não |
 |---|---|---|
-| Backbone | efficientnet_b2 | Nhẹ, hiệu năng cao |
-| Image size | 288px | Chi tiết tốt, vừa VRAM 4GB |
-| Batch size | 6 | An toàn với RTX 3050 Ti |
-| Epochs | 30 | Đủ hội tụ |
-| Loss | Focal Loss | Tập trung hard examples |
-| Learning rate | 0.0001 | Ổn định |
-| Warmup | 4 epochs | Tránh shock đầu train |
-| Gradient accumulation | 4 | Effective batch = 24 |
-| Class weights | Auto | Cân bằng mất cân bằng lớp |
-| EMA | Có | Stabilize training |
-| TTA | Có | Test time augmentation |
+| Backbone | convnext_tiny (pretrained) | convnext_tiny (pretrained) |
+| Image size | 512px | 512px |
+| Batch size | 4 (accum 4 → eff 16) | 4 (accum 4 → eff 16) |
+| Epochs | 30 | 35 |
+| Early-stop patience | 15 | 15 |
+| Learning rate | 5e-5 | 3e-5 |
+| Loss | Focal Loss γ=2 | Focal Loss γ=2 |
+| Mixup | 0.2 | 0.2 |
+| Label smoothing | 0.1 | 0.1 |
+| EMA | 0.999 | 0.999 |
+| Checkpoint averaging | Có (window 5) | Có (window 5) |
+| Class weights | Có | Có |
+| num_workers | 2 | 2 |
+| Scheduler | cosine warmup restart | cosine warmup restart |
+| fp16 + gradient clip 1.0 | Có | Có |
+| Checkpoint mỗi 15 phút + resume | Có | Có |
+
+**Thời gian ước tính:** não ~36 phút/epoch, 7 ung thư ~4.1h/epoch (đo trên RTX 3050 Ti, ảnh 512px, `num_workers=2`). Early-stop thường cắt ngắn đáng kể.
+
+### CNN Modality (8 loại hình ảnh)
+
+Script: `python run_medical.py train-modality` → `medical/modality_training.py`.
+
+| Tham số | Giá trị |
+|---|---|
+| Backbone | resnet18 @320px |
+| Batch size | 16 |
+| Epochs | 20 |
+| Learning rate | 1e-4 |
+| Mixup | 0.2 |
+| num_workers | 2 |
 
 ### Ngưỡng quyết định
 

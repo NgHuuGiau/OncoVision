@@ -324,7 +324,7 @@ class MedicalCNNClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.backbone(x)
         if features.dim() > 2:
-            # Gop khong gian: global average pool ve [B, C] de tuong thich moi backbone.
+            # Gộp không gian: global average pool về [B, C] để tương thích mọi backbone.
             features = features.mean(dim=(-2, -1)) if features.dim() == 4 else features.flatten(start_dim=1)
         return self.classifier(features)
 
@@ -677,9 +677,10 @@ def train_cnn_classifier(
     asl_clip: float = 0.05,
     balanced_softmax_beta: float = 0.5,
     mixup_alpha: float = 0.0,
+    num_workers: int = 0,
 ) -> tuple[MedicalCNNClassifierWrapper, dict[str, Any]]:
     if not samples:
-        raise FileNotFoundError("Khong co du lieu train cho CNN classifier.")
+        raise FileNotFoundError("Không có dữ liệu train cho CNN classifier.")
 
     _set_deterministic_seed()
     device_obj = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -692,7 +693,9 @@ def train_cnn_classifier(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=0,
+        num_workers=num_workers,
+        prefetch_factor=2 if num_workers > 0 else None,
+        pin_memory=True,
     )
 
     val_loader = None
@@ -702,7 +705,9 @@ def train_cnn_classifier(
             val_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=num_workers,
+            prefetch_factor=2 if num_workers > 0 else None,
+            pin_memory=True,
         )
 
     num_classes = len(class_labels)

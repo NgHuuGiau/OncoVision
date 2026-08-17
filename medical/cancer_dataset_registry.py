@@ -20,7 +20,7 @@ COMMON_CANCER_DATASET_SOURCES: tuple[CancerDatasetSourceSpec, ...] = (
         source_name="ISIC skin cancer dataset",
         status="ready",
         official_url="https://www.isic-archive.com/",
-        notes="Nguon san co cho nhom ung thu da.",
+        notes="Nguồn sẵn có cho nhóm ung thư da.",
     ),
     CancerDatasetSourceSpec(
         source_id="tcia_liver",

@@ -7,14 +7,14 @@ import sys
 import time
 from pathlib import Path
 
+from medical.cnn_classifier import train_cnn_classifier
 from medical.training import (
     _compute_class_weights,
     _load_medical_settings,
+    _samples_for_split,
     medical_training_paths,
     prepare_medical_training_dataset,
-    _samples_for_split,
 )
-from medical.cnn_classifier import train_cnn_classifier
 from utils.entrypoint_common import run_entrypoint
 from utils.terminal_encoding import ensure_utf8_console
 
@@ -22,8 +22,8 @@ _DETACHED_PROCESS = 0x00000008
 _CREATE_NEW_PROCESS_GROUP = 0x00000200
 _TRAIN_LOG_PATH = Path("output/medical/train_log.txt")
 
-# Cau hinh MAX cho GPU 4GB VRAM (RTX 3050 Ti Laptop).
-# convnext_tiny (ImageNet pretrained, co san 109MB trong torch cache) @ 512x512 bs=4 = ~1.5GB peak.
+# Cấu hình MAX cho GPU 4GB VRAM (RTX 3050 Ti Laptop).
+# convnext_tiny (ImageNet pretrained, có sẵn 109MB trong torch cache) @ 512x512 bs=4 = ~1.5GB peak.
 DEFAULT_IMAGE_SIZE = 512
 DEFAULT_BATCH_SIZE = 4
 DEFAULT_ACCUM_STEPS = 4
@@ -32,22 +32,22 @@ EFFECTIVE_BATCH = DEFAULT_BATCH_SIZE * DEFAULT_ACCUM_STEPS
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Train 7 ung thu voi cau hinh cao (512x512) dap ung GPU 4GB VRAM."
+        description="Train 7 ung thư với cấu hình cao (512x512) đáp ứng GPU 4GB VRAM."
     )
     parser.add_argument("--image-size", type=int, default=DEFAULT_IMAGE_SIZE,
-                        help=f"Kich thuoc anh train (mac dinh: {DEFAULT_IMAGE_SIZE}, giam xuong 448/384/320 neu OOM).")
+                        help=f"Kích thước ảnh train (mặc định: {DEFAULT_IMAGE_SIZE}, giảm xuống 448/384/320 nếu OOM).")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
-                        help=f"Batch size GPU (mac dinh: {DEFAULT_BATCH_SIZE}, giam xuong 1 neu OOM).")
+                        help=f"Batch size GPU (mặc định: {DEFAULT_BATCH_SIZE}, giảm xuống 1 nếu OOM).")
     parser.add_argument("--accum-steps", type=int, default=DEFAULT_ACCUM_STEPS,
-                        help=f"Gradient accumulation steps, effective batch = batch*accum (mac dinh: {DEFAULT_ACCUM_STEPS}).")
+                        help=f"Gradient accumulation steps, effective batch = batch*accum (mặc định: {DEFAULT_ACCUM_STEPS}).")
     parser.add_argument("--epochs", type=int, default=None,
-                        help="So epochs (mac dinh: tu cau hinh trong config/medical_settings.yaml).")
+                        help="Số epochs (mặc định: từ cấu hình trong config/medical_settings.yaml).")
     parser.add_argument("--learning-rate", type=float, default=None,
-                        help="Learning rate (mac dinh: tu cau hinh config/medical_settings.yaml).")
+                        help="Learning rate (mặc định: từ cấu hình config/medical_settings.yaml).")
     parser.add_argument("--max-train-samples", type=int, default=None,
-                        help="Gioi han so anh train (dung de test nhanh pipeline).")
+                        help="Giới hạn số ảnh train (dùng để test nhanh pipeline).")
     parser.add_argument("--detached", action="store_true",
-                        help="Chay detached, ghi log ra output/medical/train_log.txt.")
+                        help="Chạy detached, ghi log ra output/medical/train_log.txt.")
     return parser
 
 
@@ -86,7 +86,7 @@ def run_high_training(args) -> int:
     config = {**settings, **override}
 
     print("=" * 60, flush=True)
-    print("TRAIN 7 UNG THU - PRODUCTION CONFIG (resnet50 pretrained)", flush=True)
+    print("TRAIN 7 UNG THƯ - PRODUCTION CONFIG (convnext_tiny pretrained)", flush=True)
     print("=" * 60, flush=True)
     print("[1/3] Chuan bi dataset...", flush=True)
     prepare_medical_training_dataset(paths)
@@ -96,7 +96,7 @@ def run_high_training(args) -> int:
     if args.max_train_samples:
         train_samples = train_samples[: args.max_train_samples]
     if not train_samples:
-        raise FileNotFoundError("Khong co du lieu train medical.")
+        raise FileNotFoundError("Không có dữ liệu train medical.")
 
     class_weights = None
     if bool(config.get("cnn_class_weighting", True)):
@@ -111,7 +111,7 @@ def run_high_training(args) -> int:
         f"[2/3] Train CNN: backbone=convnext_tiny(pretrained) image={config['cnn_image_size']}x{config['cnn_image_size']} "
         f"batch={args.batch_size} accum={args.accum_steps} (effective={effective_batch}) "
         f"epochs={config['cnn_num_epochs']} lr={config['cnn_learning_rate']} loss=focal_loss gamma=2.0 "
-        f"train={len(train_samples)} anh val={len(val_samples) if val_samples else 0} anh",
+        f"train={len(train_samples)} ảnh val={len(val_samples) if val_samples else 0} ảnh",
         flush=True,
     )
 
@@ -142,6 +142,7 @@ def run_high_training(args) -> int:
         loss_function="focal_loss",
         focal_gamma=float(config.get("focal_loss_gamma", 2.0)),
         mixup_alpha=0.2,
+        num_workers=2,
         checkpoint_path=ckpt_path,
         progress_tag="train",
         verbose=bool(getattr(args, "verbose", False)),
@@ -211,7 +212,7 @@ def main() -> int:
 
         traceback.print_exc()
         return 1
-    print(f"Tong thoi gian: {time.perf_counter() - start:.2f}s", flush=True)
+    print(f"Tổng thời gian: {time.perf_counter() - start:.2f}s", flush=True)
     return code
 
 

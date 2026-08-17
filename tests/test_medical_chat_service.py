@@ -38,8 +38,8 @@ class MedicalChatServiceTests(unittest.TestCase):
                         "model_name": "best.pt",
                         "source_image": str(source),
                         "processed_image": str(overlay),
-                        "recommendation": "Can kham chuyen khoa",
-                        "quality_warnings": ["Anh hoi mo"],
+                        "recommendation": "Cần khám chuyên khoa",
+                        "quality_warnings": ["Ảnh hơi mờ"],
                         "detections": [{"label": "lesion", "confidence": 0.91, "bbox": [1, 2, 3, 4]}],
                     },
                     ensure_ascii=False,
@@ -60,16 +60,16 @@ class MedicalChatServiceTests(unittest.TestCase):
                 detections=[DetectionFinding(label="lesion", confidence=0.91, bbox=(1, 2, 3, 4))],
                 risk_level="high",
                 suspected_malignant=True,
-                recommendation="Can kham chuyen khoa",
-                disclaimer="Khong thay the bac si",
+                recommendation="Cần khám chuyên khoa",
+                disclaimer="Không thay thế bác sĩ",
                 average_confidence=0.91,
                 model_name="best.pt",
-                quality_warnings=["Anh hoi mo"],
+                quality_warnings=["Ảnh hơi mờ"],
             )
             db = MedicalCaseDatabase(Path(temp_dir) / "cases.db")
             service = MedicalChatService(analyzer=_FakeAnalyzer(result), case_db=db)
 
-            response = service.analyze_attachment(image_path=source, patient_code="BN777", user_prompt="kiem tra")
+            response = service.analyze_attachment(image_path=source, patient_code="BN777", user_prompt="kiểm tra")
 
             metadata = json.loads(response.metadata_json)
             self.assertIn("medical_case_id", metadata)
@@ -78,10 +78,10 @@ class MedicalChatServiceTests(unittest.TestCase):
             self.assertEqual(metadata["report_html_path"], str(report_json.with_suffix(".html")))
             self.assertEqual(response.attachment_path, str(overlay))
             self.assertIn("BN777", response.reply_text)
-            self.assertIn("Anh hoi mo", response.reply_text)
+            self.assertIn("Ảnh hơi mờ", response.reply_text)
             self.assertIn("lesion", response.reply_text)
             self.assertIn("91.0%", response.reply_text)
             self.assertIn("high", response.reply_text)
-            self.assertIn("Can kham chuyen khoa", response.reply_text)
+            self.assertIn("Cần khám chuyên khoa", response.reply_text)
             synced_payload = json.loads(report_json.read_text(encoding="utf-8"))
             self.assertEqual(synced_payload["case_id"], metadata["medical_case_id"])

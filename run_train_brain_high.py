@@ -7,12 +7,12 @@ import sys
 import time
 from pathlib import Path
 
+from medical.cnn_classifier import train_cnn_classifier
 from medical.training import (
     _compute_class_weights,
     medical_training_paths,
     prepare_medical_training_dataset,
 )
-from medical.cnn_classifier import train_cnn_classifier
 from utils.entrypoint_common import run_entrypoint
 from utils.terminal_encoding import ensure_utf8_console
 
@@ -22,13 +22,13 @@ _TRAIN_LOG_PATH = Path("output/medical/train_log.txt")
 _CKPT_DIR = Path("output/medical/checkpoints")
 
 MODEL_NAME = "brain"
-# Cau hinh MAX cho GPU 4GB VRAM (RTX 3050 Ti Laptop).
-# convnext_tiny (ImageNet pretrained, co san 109MB trong torch cache) @ 512x512 bs=4 = ~1.5GB peak.
+# Cấu hình MAX cho GPU 4GB VRAM (RTX 3050 Ti Laptop).
+# convnext_tiny (ImageNet pretrained, có sẵn 109MB trong torch cache) @ 512x512 bs=4 = ~1.5GB peak.
 DEFAULT_IMAGE_SIZE = 512
 DEFAULT_BATCH_SIZE = 4
 DEFAULT_ACCUM_STEPS = 4
 
-# 4 sub-labels cua ung thu nao (khop brain model goc + ten file trong dataset).
+# 4 sub-labels của ung thư não (khớp brain model gốc + tên file trong dataset).
 BRAIN_SUBLABELS = ("glioma", "meningioma", "pituitary", "no_tumor")
 
 
@@ -38,14 +38,14 @@ def _class_names() -> tuple[str, ...]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Train ung thu nao (1 lop) - cau hinh cao cho GPU 4GB VRAM."
+        description="Train ung thư não (1 lớp) - cấu hình cao cho GPU 4GB VRAM."
     )
     parser.add_argument("--image-size", type=int, default=DEFAULT_IMAGE_SIZE,
-                        help=f"Kich thuoc anh train (mac dinh: {DEFAULT_IMAGE_SIZE}).")
+                        help=f"Kích thước ảnh train (mặc định: {DEFAULT_IMAGE_SIZE}).")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
-                        help=f"Batch GPU (mac dinh: {DEFAULT_BATCH_SIZE}, giam xuong 1 neu OOM).")
+                        help=f"Batch GPU (mặc định: {DEFAULT_BATCH_SIZE}, giảm xuống 1 nếu OOM).")
     parser.add_argument("--accum-steps", type=int, default=DEFAULT_ACCUM_STEPS,
-                        help=f"Gradient accumulation (mac dinh: {DEFAULT_ACCUM_STEPS}).")
+                        help=f"Gradient accumulation (mặc định: {DEFAULT_ACCUM_STEPS}).")
     parser.add_argument("--epochs", type=int, default=35)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--max-train-samples", type=int, default=None)
@@ -86,7 +86,7 @@ def run_brain_training(args) -> int:
     label = "Ung thư não"
 
     print("=" * 60, flush=True)
-    print("TRAIN UNG THU NAO (4 sub-labels) - PRODUCTION CONFIG", flush=True)
+    print("TRAIN UNG THƯ NÃO (4 sub-labels) - PRODUCTION CONFIG", flush=True)
     print("=" * 60, flush=True)
     print("[1/3] Quet dataset brain (4 sub-labels)...", flush=True)
     prepare_medical_training_dataset(paths)
@@ -96,7 +96,7 @@ def run_brain_training(args) -> int:
     if args.max_train_samples:
         train_samples = train_samples[: args.max_train_samples]
     if not train_samples:
-        raise FileNotFoundError("Khong co du lieu train ung thu nao.")
+        raise FileNotFoundError("Không có dữ liệu train ung thư não.")
 
     print(f"  Train ({len(train_samples)}):", flush=True)
     _print_brain_distribution(train_samples)
@@ -113,7 +113,7 @@ def run_brain_training(args) -> int:
         f"[2/3] Train CNN 4 lop: backbone=convnext_tiny(pretrained) image={args.image_size}x{args.image_size} "
         f"batch={args.batch_size} accum={args.accum_steps} (effective={args.batch_size * args.accum_steps}) "
         f"epochs={args.epochs} lr={args.learning_rate} loss=focal_loss gamma=2.0 "
-        f"train={len(train_samples)} anh val={len(val_samples)} anh",
+        f"train={len(train_samples)} ảnh val={len(val_samples)} ảnh",
         flush=True,
     )
 
@@ -144,6 +144,7 @@ def run_brain_training(args) -> int:
         loss_function="focal_loss",
         focal_gamma=2.0,
         mixup_alpha=0.2,
+        num_workers=2,
         checkpoint_path=ckpt_path,
         progress_tag="train",
     )
@@ -193,7 +194,7 @@ def main() -> int:
 
         traceback.print_exc()
         return 1
-    print(f"Tong thoi gian: {time.perf_counter() - start:.2f}s", flush=True)
+    print(f"Tổng thời gian: {time.perf_counter() - start:.2f}s", flush=True)
     return code
 
 

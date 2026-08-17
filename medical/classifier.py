@@ -114,7 +114,7 @@ def train_medical_classifier(
             )
 
     if centroid_sums is None:
-        raise FileNotFoundError("Khong co anh hop le de huan luyen medical classifier.")
+        raise FileNotFoundError("Không có ảnh hợp lệ để huấn luyện medical classifier.")
     if np.any(counts == 0):
         missing = ", ".join(class_labels[index] for index, count in enumerate(counts) if count == 0)
         raise FileNotFoundError(f"Thiếu dữ liệu cho các lớp: {missing}")

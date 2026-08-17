@@ -61,7 +61,7 @@ class MedicalReportingTests(unittest.TestCase):
                 "model_name": "best.pt",
                 "source_image": "source.jpg",
                 "processed_image": "overlay.jpg",
-                "recommendation": "Can kham chuyen khoa",
+                "recommendation": "Cần khám chuyên khoa",
                 "quality_warnings": ["Anh mo"],
                 "detections": [{"label": "lesion", "confidence": 0.92, "bbox": [1, 2, 3, 4]}],
             }

@@ -79,6 +79,8 @@ python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
 | `run_medical.py` | CLI quản lý luồng y dược — dataset, model, training, modality, phân tích |
 | `run_smoke.py` | Kiểm tra nhanh chuỗi entrypoint (CI-friendly) |
 | `run_tests.py` | Dashboard chạy unit test |
+| `run_train_brain_high.py` | Train CNN não (4 sub-label) — cấu hình cao, checkpoint 15 phút |
+| `run_train_7cancers_high.py` | Train CNN 7 ung thư — cấu hình cao, checkpoint 15 phút |
 
 ### Luồng dữ liệu cơ bản
 
@@ -98,12 +100,19 @@ Web:     web_app.py → SQLite → output/chat_history.db
 # YOLO detection
 python run_train.py
 
-# CNN classifier modality
+# CNN modality (8 loại hình ảnh y tế) — resnet18 @320, epochs 20
 python run_medical.py train-modality
 
-# CNN phân loại ung thư
-python run_medical.py train-cancer
+# CNN 7 ung thư (cấu hình cao, convnext_tiny @512, epochs 30) — cần ~190k ảnh, GPU 4GB
+python run_train_7cancers_high.py
+
+# CNN não (4 sub-label, convnext_tiny @512, epochs 35)
+python run_train_brain_high.py
 ```
+
+> **Cấu hình train nâng cao:** các script `run_train_*_high.py` dùng convnext_tiny pretrained @512px, focal loss,
+> mixup 0.2, EMA 0.999, checkpoint averaging, checkpoint tự lưu mỗi 15 phút (resume được), `num_workers=2`.
+> Model chưa train xong sẽ được `run_doctor.py` báo là chưa sẵn sàng.
 
 ---
 
@@ -135,7 +144,7 @@ OncoVision/
 
 ## Medical Pipeline (OncoVision AI)
 
-Hệ thống phân tích ảnh y khoa với CNN classifier (EfficientNet-B2), hỗ trợ 7 nhóm ung thư:
+Hệ thống phân tích ảnh y khoa với CNN classifier (convnext_tiny pretrained @512px cho ung thư/não, resnet18 @320px cho modality), hỗ trợ 7 nhóm ung thư:
 
 | Bước | Module | Mô tả |
 |---|---|---|

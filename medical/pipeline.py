@@ -51,7 +51,6 @@ _BENIGN_LABELS = frozenset(
     {
         "no_tumor",
         "notumor",
-        "notumor",
         "benign",
         "normal",
         "non_malignant",
@@ -199,7 +198,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         settings = load_yaml("config/medical_settings.yaml").get("medical", {})
     except FileNotFoundError:
         raise FileNotFoundError(
-            "Khong tim thay config/medical_settings.yaml. "
+            "Không tìm thấy config/medical_settings.yaml. "
             "Hay chay tu thu muc goc cua project OncoVision."
         )
     if not isinstance(settings, dict):
@@ -351,9 +350,9 @@ class MedicalImageAnalyzer:
             self.ensure_ready()
         except FileNotFoundError as exc:
             raise FileNotFoundError(
-                "Chua co model medical de phan tich. Hay train truoc bang lenh:\n"
+                "Chưa có model medical để phân tích. Hãy train trước bằng lệnh:\n"
                 "  python run_train.py\n"
-                "hoac kiem tra config/medical_settings.yaml (khoa 'model').\n"
+                "hoặc kiểm tra config/medical_settings.yaml (khóa 'model').\n"
                 f"Chi tiet: {exc}"
             ) from exc
         self._call_progress(progress_callback, "Normalizing image...", 0.10)
@@ -758,13 +757,13 @@ class MedicalImageAnalyzer:
         brightness = float(np.mean(gray))
         height, width = gray.shape[:2]
         if min(height, width) < 256:
-            warnings.append("Anh co do phan giai thap, ket qua co the kem on dinh.")
+            warnings.append("Ảnh có độ phân giải thấp, kết quả có thể kém ổn định.")
         if blur_score < 45:
-            warnings.append("Anh co dau hieu mo, nen chup lai ro hon va lay net vao vung ton thuong.")
+            warnings.append("Ảnh có dấu hiệu mờ, nên chụp lại rõ hơn và lấy nét vào vùng tổn thương.")
         if brightness < 45:
-            warnings.append("Anh qua toi, nen bo sung anh sang deu truoc khi phan tich.")
+            warnings.append("Ảnh quá tối, nên bổ sung ánh sáng đều trước khi phân tích.")
         if brightness > 220:
-            warnings.append("Anh qua sang, co nguy co mat chi tiet ton thuong.")
+            warnings.append("Ảnh quá sáng, có nguy cơ mất chi tiết tổn thương.")
         return warnings
 
     def _uses_brain_model(self, body_region: str | None) -> bool:
@@ -867,7 +866,7 @@ class MedicalImageAnalyzer:
             if brain_model_path is not None and brain_model_path.exists():
                 logger.warning(
                     "[Medical] Chua co model tong quat, chi co brain model (%s). "
-                    "Chi phan tich duoc anh vung dau (body_region=brain).",
+                    "Chỉ phân tích được ảnh vùng đầu (body_region=brain).",
                     brain_model_path.name,
                 )
                 issues = validate_medical_analyzer_config(self.config)
@@ -876,7 +875,7 @@ class MedicalImageAnalyzer:
                 return brain_model_path
             candidates = ", ".join(str(p) for p in iter_medical_runtime_model_paths(self.config))
             raise FileNotFoundError(
-                "Thieu model medical de phan tich. Da thu cac duong dan: "
+                "Thiếu model medical để phân tích. Đã thử các đường dẫn: "
                 f"{candidates}. Hay train model bang 'python run_train.py' "
                 "hoac cap nhat 'model' trong config/medical_settings.yaml."
             )
@@ -906,7 +905,7 @@ class MedicalImageAnalyzer:
                     model_path.name,
                 )
         except Exception:
-            logger.warning("[ModelManifest] Khong doc duoc manifest", exc_info=True)
+            logger.warning("[ModelManifest] Không đọc được manifest", exc_info=True)
 
     def _ensemble_detections(self, image: np.ndarray, yolo_detections: list[DetectionFinding]) -> list[DetectionFinding]:
         if not yolo_detections:
@@ -921,7 +920,7 @@ class MedicalImageAnalyzer:
             cnn_label = str(cnn_prediction.get("label", ""))
             cnn_confidence = float(cnn_prediction.get("confidence", 0.0))
         except Exception:
-            logger.warning("[Ensemble] Khong the predict CNN cho ensemble", exc_info=True)
+            logger.warning("[Ensemble] Không thể predict CNN cho ensemble", exc_info=True)
             cnn_label = ""
             cnn_confidence = 0.0
 
@@ -1050,7 +1049,7 @@ class MedicalImageAnalyzer:
             if dicom_modality:
                 modality = dicom_modality.upper()
         except Exception:
-            logger.warning("[DICOM] Khong doc duoc Modality tu %s", source, exc_info=True)
+            logger.warning("[DICOM] Không đọc được Modality từ %s", source, exc_info=True)
             modality = None
 
         self._dicom_modality_cache[source] = modality
@@ -1120,7 +1119,7 @@ class MedicalImageAnalyzer:
                 return None
             return label
         except Exception:
-            logger.warning("[ModalityCNN] Khong du doan duoc modality", exc_info=True)
+            logger.warning("[ModalityCNN] Không dự đoán được modality", exc_info=True)
             return None
 
     def _load_default_backend(self) -> DetectorBackend:
@@ -1130,7 +1129,7 @@ class MedicalImageAnalyzer:
 
                 return YOLO(str(self.config.yolo_model_path))
             except Exception:
-                logger.warning("[Ensemble] Khong the tai YOLO backend", exc_info=True)
+                logger.warning("[Ensemble] Không thể tải YOLO backend", exc_info=True)
         raise RuntimeError("Medical pipeline hiện tại dùng classifier local, không cần backend YOLO.")
 
     def _load_classifier(self) -> MedicalClassifierModel:
@@ -1211,7 +1210,7 @@ class MedicalImageAnalyzer:
             return (
                 "low",
                 False,
-                "Khong ghi nhan vung ton thuong ro rang tren anh nay. Neu benh nhan co trieu chung hoac ton thuong ton tai, van nen kham chuyen khoa.",
+                "Không ghi nhận vùng tổn thương rõ ràng trên ảnh này. Nếu bệnh nhân có triệu chứng hoặc tổn thương tồn tại, vẫn nên khám chuyên khoa.",
                 0.0,
             )
         average_confidence = sum(item.confidence for item in detections) / len(detections)
@@ -1299,7 +1298,7 @@ class MedicalImageAnalyzer:
 
                 explainer = MedicalGradCAMExplainer(cnn_wrapper, image_size=self.config.image_size, device=getattr(cnn_wrapper, "device", None))
             except Exception:
-                logger.warning("[GradCAM] Khong khoi tao duoc explainer", exc_info=True)
+                logger.warning("[GradCAM] Không khởi tạo được explainer", exc_info=True)
                 return overlays
             if explainer is None or not explainer.is_supported:
                 return overlays

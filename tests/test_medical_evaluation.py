@@ -116,7 +116,7 @@ class PredictScoresTests(unittest.TestCase):
 
         idx, scores = evaluation._predict_scores(_ForeignModel(), Path("0_a.jpg"), ("A", "B"))
         self.assertEqual(idx, -1)
-        # Khong nhan nao khop nen scores van la vector 0.
+        # Không nhãn nào khớp nên scores vẫn là vector 0.
         self.assertEqual(float(scores.sum()), 0.0)
 
     def test_in_vocab_label_maps_correctly(self) -> None:

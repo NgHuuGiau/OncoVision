@@ -29,7 +29,7 @@ def print_medical_status_block(status, dataset_root: Path) -> None:
     print(f"Fallback allowed: {status.allow_fallback_model}")
     print(f"Model ready: {status.model_ready}")
     print(f"Model detail: {status.model_message}")
-    print("He thong dang phan tich cac ung thu:")
+    print("Hệ thống đang phân tích các ung thư:")
     for name in status.analyzed_cancers:
         print(f"- {name}")
     print(f"Dataset root: {status.dataset_root}")

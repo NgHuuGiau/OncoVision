@@ -1,6 +1,6 @@
-"""Danh gia model medical tren TEST SET giu rieng, cong bo metric per-class.
+"""Đánh giá model medical trên TEST SET giữ riêng, công bố metric per-class.
 
-Module nay tao bao cao day du cho model phan loai ung thu:
+Module này tạo báo cáo đầy đủ cho model phân loại ung thư:
 - Metric tong hop: accuracy, macro/micro precision/recall/F1, macro ROC-AUC, PR-AUC.
 - Metric per-class: precision, recall (=sensitivity), specificity, F1, support,
   ROC-AUC, PR-AUC.
@@ -66,16 +66,16 @@ def evaluate_on_test_set(
     model_path: str | Path | None = None,
     split: str = "test",
 ) -> dict[str, Any]:
-    """Danh gia model tren split giu rieng va tra ve bao cao metric per-class."""
+    """Đánh giá model trên split giữ riêng và trả về báo cáo metric per-class."""
     paths = paths or medical_training_paths()
     resolved_model_path = Path(model_path) if model_path else paths.trained_model_path
     if not resolved_model_path.exists():
-        raise FileNotFoundError(f"Khong tim thay model: {resolved_model_path}")
+        raise FileNotFoundError(f"Không tìm thấy model: {resolved_model_path}")
 
     samples = _samples_for_split(paths, split)
     if not samples:
         raise FileNotFoundError(
-            f"Khong co du lieu '{split}' de danh gia. Hay chay split-dataset truoc."
+            f"Không có dữ liệu '{split}' để đánh giá. Hãy chạy split-dataset trước."
         )
 
     model, _is_cnn = _resolve_model(resolved_model_path)
@@ -145,12 +145,12 @@ def evaluate_on_test_set(
 
 def _format_markdown(report: dict[str, Any]) -> str:
     lines: list[str] = []
-    lines.append("# Bao Cao Danh Gia Model Medical (Test Set)")
+    lines.append("# Báo Cáo Đánh Giá Model Medical (Test Set)")
     lines.append("")
     lines.append(f"- Model: `{report['model_path']}`")
     lines.append(f"- Split: `{report['split']}`")
-    lines.append(f"- So mau: {report['num_samples']}")
-    lines.append(f"- Danh gia luc: {report['evaluated_at']}")
+    lines.append(f"- Số mẫu: {report['num_samples']}")
+    lines.append(f"- Đánh giá lúc: {report['evaluated_at']}")
     lines.append("")
     lines.append("## Metric Tong Hop")
     lines.append("")

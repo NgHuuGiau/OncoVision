@@ -27,10 +27,10 @@ class MedicalChatControllerTests(unittest.TestCase):
     def test_begin_and_finish_analysis_toggle_state(self) -> None:
         controller = MedicalChatController(_FakeService())
 
-        state, message = controller.begin_analysis("Dang phan tich")
+        state, message = controller.begin_analysis("Đang phân tích")
         self.assertTrue(controller.active)
         self.assertTrue(state.active)
-        self.assertEqual(message.text, "Dang phan tich")
+        self.assertEqual(message.text, "Đang phân tích")
 
         final_state = controller.finish_analysis("Nhap tin nhan")
         self.assertFalse(controller.active)

@@ -491,7 +491,7 @@ def _markdown_report(payload: dict[str, Any]) -> str:
     supported_modalities = ", ".join(supported_cancer_modalities())
     risk_display = payload.get("risk_level", "-")
     if risk_display == "uncertain":
-        risk_display = "uncertain - KET QUA CHUA DU TIN TUONG"
+        risk_display = "uncertain - KẾT QUẢ CHƯA ĐỦ TIN TƯỞNG"
     return (
         "# Medical Imaging Case Report\n\n"
         f"- Case ID: {payload.get('case_id', '-')}\n"
