@@ -39,41 +39,31 @@ tmp*.db
 # Runtime output
 output/
 runs/
-runs/segment/
-runs/classify/
-runs/pose/
-runs/obb/
 
-# Dataset generated locally
+# Dataset generated locally (chỉ giữ .gitkeep + README)
 dataset/**
 !dataset/**/.gitkeep
 !dataset/**/README.md
-
-# Dataset processed data (large generated files)
-dataset/processed/images/
-dataset/processed/labels/
-!dataset/processed/data.yaml
+dataset/cancer_download_plan.json
+dataset/medical/tcia/**
+!dataset/medical/tcia/**/.gitkeep
+!dataset/medical/tcia/**/README.md
 
 # Cache files
 *.cache
 .cache/
 
-# Local model files
+# Local model files (chỉ giữ .gitkeep)
 models/pretrained/**
 models/trained/**
 models/exported/**
 !models/**/.gitkeep
 
-# Root-level model binaries (do not commit directly)
+# Model binaries và artifact training (không commit)
 *.pt
-
-# Model checkpoints and training artifacts
-output/medical/cnn_checkpoint.pt
-output/medical/*.pt
 *checkpoint*.pt
-
-# Model manifest files (generated)
 *manifest.json
+output/medical/
 
 # Jupyter notebooks
 *.ipynb
@@ -86,31 +76,8 @@ output/medical/*.pt
 # Generated config
 training/.generated_data.yaml
 
-# Medical runtime artifacts
-output/medical/
-
-# Generated helper files
-dataset/cancer_download_plan.json
-dataset/medical/tcia/**
-!dataset/medical/tcia/**/.gitkeep
-!dataset/medical/tcia/**/README.md
-
-# One-off audit / inventory artifacts
-analyze_project.py
-project_source_inventory.txt
-file_inventory.json
-COMPLETE_PROJECT_AUDIT.md
-
-# Medical dataset download scripts (one-off, chua nguon du lieu rieng)
-scripts/download_medical_data.py
-scripts/build_modality.py
-project_source_inventory.txt
-file_inventory.json
-COMPLETE_PROJECT_AUDIT.md
-
 # Nested repo (do not touch)
 HieraChain/
 
-# Dataset archive (large binary, khong commit)
+# Dataset archive (large binary, không commit)
 medical_7_cancers.zip
-
