@@ -1,0 +1,46 @@
+name: Báo lỗi
+description: Báo lỗi hệ thống OncoVision.
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã báo lỗi. Vui lòng điền đầy đủ thông tin để dễ tái hiện.
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Các bước tái hiện
+      description: Cách để tái hiện lỗi.
+      placeholder: |
+        1. Chạy `python run_medical.py analyze ...`
+        2. Xem báo cáo
+        3. Lỗi xuất hiện
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Kết quả mong đợi
+      description: Hệ thống đáng lẽ phải làm gì?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Kết quả thực tế
+      description: Hệ thống đã làm gì (kèm stack trace / log)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Môi trường
+      description: Hệ điều hành, Python, GPU (nếu có), phiên bản commit.
+      placeholder: Windows 11, Python 3.10, RTX 3050 Ti, commit abc123
+    validations:
+      required: false

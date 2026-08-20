@@ -11,9 +11,9 @@ OncoVision là monorepo gồm bốn nhánh chính:
 | Nhánh | Vai trò |
 |---|---|
 | **Camera thông minh** | Chạy realtime object detection với YOLO, hỗ trợ nhiều chế độ runtime |
-| **Y dược** | Quản lý dataset y tế, huấn luyện CNN classifier, phân tích ảnh bệnh lý |
+| **Y dược** | Phân tích ảnh bệnh lý bằng model CNN đã train sẵn (không tự train) |
 | **Chat AI** | Giao diện desktop và web cho bác sĩ tương tác với hệ thống phân tích |
-| **Huấn luyện** | Pipeline train YOLO detection từ dữ liệu raw đến model triển khai |
+| **Phân tích model** | Nhận ảnh → nhận diện modality/vùng cơ thể → phân loại ung thư từ `models/pretrained/` |
 
 ---
 
@@ -54,9 +54,9 @@ OncoVision/
 │   ├── chat/                # File chat capture
 │   ├── medical/             # Kết quả phân tích y tế
 │   └── recordings/          # Video ghi từ camera
-├── scripts/                 # Script tiện ích (xóa nếu trống)
+├── scripts/                 # Script tiện ích (đang trống)
 ├── tests/                   # Unit test
-├── training/                # Pipeline object detection
+├── training/                # Model catalog & download models
 ├── utils/                   # Helper dùng chung
 │   ├── entrypoint_checks.py # Kiểm tra trạng thái entrypoint
 │   ├── cleanup_utils.py     # Dọn dẹp output
@@ -71,7 +71,6 @@ OncoVision/
 ├── run_menu.py              # Menu tổng hợp
 ├── run_doctor.py            # Quét hệ thống
 ├── run_medical.py           # CLI y dược
-├── run_train.py             # Entrypoint training
 └── run_smoke.py             # Kiểm tra CI
 ```
 
@@ -88,7 +87,6 @@ Tất cả entrypoint đều là lớp mỏng: gọi module xử lý tương ứ
 | `run_menu.py` | Cửa vào tổng hợp cho người vận hành |
 | `run_doctor.py` | Quét tổng thể hệ thống |
 | `run_medical.py` | CLI quản lý nhánh y dược |
-| `run_train.py` | Pipeline training object detection |
 | `run_smoke.py` | Smoke check (CI-friendly) |
 
 ---
@@ -118,16 +116,14 @@ dataset/medical/
 → run_chat.py (Chat UI)
 ```
 
-### Huấn luyện object detection
+### Phân tích model
 
 ```
-dataset/object_detection/raw/
-→ training/prepare_dataset.py
-→ training/validate_dataset.py
-→ training/split_dataset.py
-→ run_train.py
-→ models/trained/best.pt
-→ run_app.py --model models/trained/best.pt
+models/pretrained/*.pt (model đã train sẵn)
+→ medical/pipeline.py (MedicalImageAnalyzer)
+→ medical/cnn_classifier.py | medical/explainability.py
+→ output/medical/ (report JSON/MD/HTML)
+→ web_app.py | run_chat.py (Chat UI)
 ```
 
 ### Chat AI
@@ -150,5 +146,5 @@ run_chat.py
 | Runtime gợi ý sai | `core/hardware_info.py`, `core/runtime_advisor.py` |
 | Chat UI không sẵn sàng | `run_chat.py`, `utils/entrypoint_checks.py`, `app/chat_ui/` |
 | Medical status sai | `medical/system_status.py`, `medical/model_policy.py` |
-| Train fail | `run_train.py`, `training/train_model.py` |
+| Model chưa sẵn sàng | `medical/model_policy.py`, `config/medical_settings.yaml` |
 | CI fail | `.github/workflows/test.yml`, `run_smoke.py` |

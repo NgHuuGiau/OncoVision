@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -43,12 +43,6 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
         command=("run_chat.py", "--check-only", "--auto-fix-icons"),
         warning_exit_codes=(2,),
         ci_safe=False,
-    ),
-    SmokeCheck(
-        key="training-preflight",
-        title="Training preflight",
-        description="Kiểm tra config, model và dataset cho entrypoint train tổng quát.",
-        command=("run_train.py", "--check-only"),
     ),
     SmokeCheck(
         key="medical-status",
@@ -99,11 +93,6 @@ def parse_args() -> argparse.Namespace:
 @lru_cache(maxsize=8)
 def select_checks(*, include_tests: bool = False, ci_safe: bool = False) -> tuple[SmokeCheck, ...]:
     checks = [check for check in BASE_SMOKE_CHECKS if not ci_safe or check.ci_safe]
-    if ci_safe:
-        checks = [
-            replace(check, warning_exit_codes=(1,)) if check.key == "training-preflight" else check
-            for check in checks
-        ]
     if include_tests:
         checks.append(TEST_SUITE_CHECK)
     return tuple(checks)

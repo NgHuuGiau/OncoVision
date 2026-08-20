@@ -1,0 +1,33 @@
+name: Đề xuất tính năng
+description: Đề xuất tính năng hoặc cải tiến cho OncoVision.
+title: "[feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Mô tả tính năng bạn muốn thêm.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Vấn đề cần giải quyết
+      description: Tính năng này giải quyết nhu cầu gì?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Giải pháp đề xuất
+      description: Bạn hình dung tính năng hoạt động thế nào?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Phương án thay thế
+      description: Có cách nào khác đã cân nhắc không?
+    validations:
+      required: false

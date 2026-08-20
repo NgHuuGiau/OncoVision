@@ -76,11 +76,10 @@ python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
 | `run_app.py` | Camera realtime — gợi ý cấu hình runtime, chạy object detection trực tiếp |
 | `run_menu.py` | Menu tổng hợp, cửa vào cho người vận hành |
 | `run_doctor.py` | Quét tổng thể hệ thống — dependency, model, dataset, output |
-| `run_medical.py` | CLI quản lý luồng y dược — dataset, model, training, modality, phân tích |
+| `run_medical.py` | CLI quản lý luồng y dược — dataset, model, phân tích, modality, báo cáo |
 | `run_smoke.py` | Kiểm tra nhanh chuỗi entrypoint (CI-friendly) |
 | `run_tests.py` | Dashboard chạy unit test |
-| `run_train_brain_high.py` | Train CNN não (4 sub-label) — cấu hình cao, checkpoint 15 phút |
-| `run_train_7cancers_high.py` | Train CNN 7 ung thư — cấu hình cao, checkpoint 15 phút |
+| `web_app.py` | Web app upload ảnh → nhận diện → phân tích (FastAPI) |
 
 ### Luồng dữ liệu cơ bản
 
@@ -88,31 +87,30 @@ python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
 Camera:  run_app.py → core/camera_runner.py → output/captures/
 Chat:    run_chat.py → app/chat_ui/ → medical/phân tích → output/chat/
 Medical: run_medical.py → medical/dataset.py → output/medical/
-Train:   run_train.py → models/trained/*.pt
+Model:   models/pretrained/*.pt (bổ sung file model đã train sẵn)
 Web:     web_app.py → SQLite → output/chat_history.db
 ```
 
 ---
 
-## Huấn luyện mô hình
+## Model & phân tích
+
+Hệ thống **chỉ phân tích ảnh** bằng các model đã train sẵn — không tự huấn luyện:
 
 ```powershell
-# YOLO detection
-python run_train.py
+# Đặt các file model đã train vào models/pretrained/:
+#   medical_7_cancers_cnn.pt   → 7 ung thư (gan, phổi, vú, dạ dày, đại trực tràng, tiền liệt, tử cung)
+#   brain_classifier.pt        → Não (4 sub-label)
+#   modality_classifier.pt     → Modality (8 loại ảnh y tế)
 
-# CNN modality (8 loại hình ảnh y tế) — resnet18 @320, epochs 20
-python run_medical.py train-modality
+# Kiểm tra hệ thống đã nhận đủ model chưa
+python run_doctor.py --skip-camera-check
 
-# CNN 7 ung thư (cấu hình cao, convnext_tiny @512, epochs 30) — cần ~190k ảnh, GPU 4GB
-python run_train_7cancers_high.py
-
-# CNN não (4 sub-label, convnext_tiny @512, epochs 35)
-python run_train_brain_high.py
+# Phân tích 1 ảnh
+python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
 ```
 
-> **Cấu hình train nâng cao:** các script `run_train_*_high.py` dùng convnext_tiny pretrained @512px, focal loss,
-> mixup 0.2, EMA 0.999, checkpoint averaging, checkpoint tự lưu mỗi 15 phút (resume được), `num_workers=2`.
-> Model chưa train xong sẽ được `run_doctor.py` báo là chưa sẵn sàng.
+> Model chưa được bổ sung sẽ được `run_doctor.py` báo là chưa sẵn sàng với hướng dẫn cụ thể.
 
 ---
 
@@ -125,7 +123,7 @@ OncoVision/
 │   └── chat_ui/            # Chat desktop, theme, storage, widgets
 ├── core/                   # Xử lý camera, model loader, hardware info
 ├── medical/                # Luồng y dược — dataset, model, pipeline, chat, report
-├── training/               # Pipeline huấn luyện object detection
+├── training/               # Model catalog & download models (dùng cho menu)
 ├── utils/                  # Helper dùng chung
 ├── config/                 # Cấu hình YAML
 ├── dataset/                # Dữ liệu

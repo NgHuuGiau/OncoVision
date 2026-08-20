@@ -114,7 +114,6 @@ class DoctorTests(unittest.TestCase):
 
         output = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
         self.assertIn("download_models.py", output)
-        self.assertIn("prepare_dataset.py", output)
         self.assertIn("model local", output)
         self.assertIn("run_doctor.py --fix", output)
         self.assertIn("run_medical.py train-all", output)

@@ -269,8 +269,6 @@ def main() -> int:
     print_recommended_commands(
         missing_models=missing_models,
         icon_count=icon_count,
-        dataset_ok=dataset_ok,
-        split_ok=split_ok,
         medical_commands=recommended_medical_commands(medical_status),
         icon_warning_threshold=ICON_WARNING_THRESHOLD,
     )

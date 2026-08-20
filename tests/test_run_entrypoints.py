@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import run_app
 import run_chat
-import run_train
 from utils.console_ui import mode_to_ui_defaults
 
 
@@ -91,40 +90,6 @@ class RunEntrypointsTests(unittest.TestCase):
             launch_target="camera",
         )
         run_camera_session_mock.assert_called_once_with(runtime=runtime, camera_index=2)
-
-    @patch("run_train.main")
-    def test_run_train_module_exposes_training_main(self, train_main_mock) -> None:
-        run_train.main()
-        train_main_mock.assert_called_once()
-
-    @patch("run_train.audit_medical_raw_dataset")
-    @patch("run_train.medical_training_paths")
-    @patch("run_train.ensure_project_directories")
-    def test_run_train_preflight_warns_when_models_missing_but_does_not_fail(
-        self,
-        ensure_dirs_mock,
-        medical_training_paths_mock,
-        audit_medical_raw_dataset_mock,
-    ) -> None:
-        medical_training_paths_mock.return_value = SimpleNamespace(
-            dataset_root=Path("dataset/medical"),
-            trained_model_path=Path("medical_7_cancers.pt"),
-            class_names=("Ung thư gan", "Ung thư phổi"),
-        )
-        audit_medical_raw_dataset_mock.return_value = {
-            "train_images": {"Ung thư gan": [Path("a.jpg")], "Ung thư phổi": [Path("b.jpg")]},
-            "val_images": {"Ung thư gan": [Path("c.jpg")], "Ung thư phổi": [Path("d.jpg")]},
-            "test_images": {"Ung thư gan": [], "Ung thư phổi": []},
-            "missing_classes": [],
-        }
-
-        with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-            result = run_train.run_train_preflight()
-
-        self.assertEqual(result, 0)
-        ensure_dirs_mock.assert_called_once_with()
-        self.assertIn("Medical 7-cancer training preflight", stdout.getvalue())
-        self.assertIn("sẵn sàng train", stdout.getvalue())
 
     @patch("run_chat.launch_chat_app")
     @patch("run_chat.build_chat_arg_parser")

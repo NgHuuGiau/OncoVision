@@ -59,8 +59,6 @@ def print_recommended_commands(
     *,
     missing_models: list[str],
     icon_count: int,
-    dataset_ok: bool,
-    split_ok: bool,
     medical_commands: list[str],
     icon_warning_threshold: int,
 ) -> None:
@@ -72,14 +70,7 @@ def print_recommended_commands(
         commands.append("python training/download_models.py")
     if icon_count < icon_warning_threshold:
         commands.append("python run_doctor.py --fix")
-    if not dataset_ok:
-        commands.append("python training/prepare_dataset.py")
-    elif not split_ok:
-        commands.append("python training/validate_dataset.py")
-        commands.append("python training/split_dataset.py")
-    else:
-        commands.append("python run_chat.py")
-        commands.append("python run_train.py")
+    commands.append("python run_chat.py")
     commands.extend(medical_commands)
     for command in dict.fromkeys(commands):
         print(command_row(command_index, command))

@@ -68,7 +68,7 @@ medical:
   cnn_checkpoint_averaging_window: 5
   cnn_class_weighting: true
   cnn_dropout: 0.25
-  cnn_early_stopping_patience: 7
+  cnn_early_stopping_patience: 15
   cnn_ema: true
   cnn_ema_decay: 0.999
   cnn_gradient_accumulation_steps: 4
@@ -76,14 +76,14 @@ medical:
   cnn_gradient_clip_norm: 1.0
   cnn_image_size: 224
   cnn_label_smoothing: 0.08
-  cnn_learning_rate: 0.0001
+  cnn_learning_rate: 0.00005
   cnn_mixed_precision: true
   cnn_num_epochs: 15
   cnn_optimizer: adamw
   cnn_pretrained: false
   cnn_scheduler: cosine_warmup_restart
   cnn_tta: true
-  cnn_warmup_epochs: 2
+  cnn_warmup_epochs: 3
   cnn_weight_decay: 0.0001
   conf_threshold: 0.25
   dataset_root: dataset/medical
@@ -164,9 +164,9 @@ medical:
       medium_threshold: 0.45
       normalize: xray
       quality_threshold: 0.45
-  model: medical_7_cancers_cnn.pt
+  model: models/pretrained/medical_7_cancers_cnn.pt
   brain_model: models/pretrained/brain_classifier.pt
-  modality_model: models/pretrained/modality_classifier.pt
+  modality_model: D:/OncoVision/modality_classifier.pt
   yolo_model_path: models/trained/medical_yolo_detect.pt
   nested_cross_validation: false
   num_workers: 4

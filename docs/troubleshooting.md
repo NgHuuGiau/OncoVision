@@ -45,13 +45,20 @@ Nếu thất bại, xem:
 
 ---
 
-## 4. Train preflight fail
+## 4. Model medical chưa sẵn sàng
+
+Hệ thống chỉ phân tích bằng model đã train sẵn. Kiểm tra:
 
 ```powershell
-python run_train.py --check-only
+python run_doctor.py --skip-camera-check
+python run_medical.py status
 ```
 
-Nếu fail: kiểm tra dataset raw, dataset split, xem `training/validate_dataset.py` và `training/split_dataset.py`.
+Nếu thiếu model:
+
+- Bổ sung file đã train vào `models/pretrained/` (`medical_7_cancers_cnn.pt`, `brain_classifier.pt`, `modality_classifier.pt`)
+- Hoặc sửa đường dẫn trong `config/medical_settings.yaml`
+- Xem `medical/model_policy.py` để hiểu cách resolve đường dẫn model
 
 ---
 
@@ -78,19 +85,7 @@ Xem theo thứ tự:
 
 ---
 
-## 7. Lỗi Ubuntu nhưng Windows xanh
-
-Nguyên nhân thường gặp:
-
-- Khác biệt dependency giữa hai nền tảng
-- mypy quét type debt cũ
-- Smoke check phụ thuộc dataset mẫu
-
-Luôn xem log Ubuntu trước — đó là chuẩn debug.
-
----
-
-## 8. Web Chat UI không mở được
+## 7. Web Chat UI không mở được
 
 ```powershell
 python -m uvicorn web_app:app --host 0.0.0.0 --port 8000

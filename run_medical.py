@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -110,8 +111,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     modality_parser = subparsers.add_parser("train-modality", help="Train classifier phân loại modality (ct/mri/xray/...).")
     modality_parser.add_argument("--dataset-root", default="dataset/medical_modality")
-    modality_parser.add_argument("--output-path", default="models/pretrained/modality_classifier.pt")
-    modality_parser.add_argument("--epochs", type=int, default=10)
+    modality_parser.add_argument("--output-path", default="D:/OncoVision/modality_classifier.pt")
+    modality_parser.add_argument("--epochs", type=int, default=20)
     modality_parser.add_argument("--batch-size", type=int, default=16)
     modality_parser.add_argument("--verbose", action="store_true", help="In chi tiết từng batch kể cả khi chạy qua pipe (menu).")
 
@@ -146,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    os.environ.setdefault("ONCOVISION_ALLOW_WEIGHT_DOWNLOAD", "1")
     parser = build_parser()
     args = parser.parse_args()
 

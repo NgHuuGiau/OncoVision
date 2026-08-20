@@ -49,29 +49,22 @@ python run_medical.py status
 python run_medical.py ready
 python run_medical.py sources
 python run_medical.py cancer
-python run_medical.py init-dataset
-python run_medical.py train-modality
+python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
+python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
 ```
 
-## 5. Huấn luyện
+## 5. Model & phân tích
 
-### YOLO detection
-
-```powershell
-python run_train.py
-```
-
-### CNN classifier
+Hệ thống chỉ phân tích ảnh bằng model đã train sẵn (đặt trong `models/pretrained/`):
 
 ```powershell
-# 7 ung thư (cấu hình cao: convnext_tiny @512, epochs 30) — GPU 4GB, ~190k ảnh
-python run_train_7cancers_high.py
+# Kiểm tra đã đủ model chưa
+python run_doctor.py --skip-camera-check
 
-# Não (4 sub-label, convnext_tiny @512, epochs 35)
-python run_train_brain_high.py
-
-# Modality (8 loại hình ảnh, resnet18 @320, epochs 20)
-python run_medical.py train-modality
+# Các model cần có trong models/pretrained/:
+#   medical_7_cancers_cnn.pt   → 7 ung thư (gan, phổi, vú, dạ dày, đại trực tràng, tiền liệt, tử cung)
+#   brain_classifier.pt        → Não (4 sub-label)
+#   modality_classifier.pt     → Modality (8 loại ảnh y tế)
 ```
 
 ## 6. Giải thích nhanh
@@ -84,7 +77,7 @@ python run_medical.py train-modality
 | `run_app.py --advisor-only` | Gợi ý runtime trước khi mở camera |
 | `run_chat.py --check-only` | Kiểm tra chat UI và medical sẵn sàng |
 | `run_chat.py --cleanup-output` | Dọn file output cũ |
-| `run_train.py --check-only` | Xác minh pipeline train có thể chạy |
+| `run_medical.py analyze` | Phân tích 1 ảnh y khoa |
 
 ## 7. Trình tự trên máy mới
 
@@ -94,5 +87,4 @@ python run_doctor.py --skip-camera-check
 python run_smoke.py --ci-safe --stop-on-fail
 python run_app.py --advisor-only
 python run_chat.py --check-only
-python run_train.py --check-only
 ```

@@ -261,43 +261,6 @@ class RunMenuTests(unittest.TestCase):
 
     @patch("run_menu.download_models")
     @patch("run_menu.os.path.exists")
-    def test_main_enters_medical_menu_and_runs_train_all(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        run_script = MagicMock(return_value=0)
-        answers = iter(["3", "4", "0", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=lambda _: None,
-            run_script_fn=run_script,
-            clear_terminal_fn=MagicMock(),
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_medical.py", "train-all", env={"PYTHONUNBUFFERED": "1"})
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_enters_medical_menu_and_runs_improvement_flow(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        run_script = MagicMock(return_value=0)
-        answers = iter(["3", "5", "0", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=lambda _: None,
-            run_script_fn=run_script,
-            clear_terminal_fn=MagicMock(),
-        )
-
-        self.assertEqual(result, 0)
-        called = [call.args for call in run_script.call_args_list]
-        self.assertTrue(any("active-learning" in call for call in called))
-        self.assertTrue(any("train-modality" in call for call in called))
-        self.assertTrue(any("calibrate-modality-tuning" in call for call in called))
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
     def test_medical_analyze_prompts_for_path_and_patient_code(self, exists_mock, download_models_mock) -> None:
         exists_mock.return_value = True
         run_script = MagicMock(return_value=0)

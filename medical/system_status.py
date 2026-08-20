@@ -156,7 +156,7 @@ def recommended_medical_commands(status: MedicalSystemStatus) -> list[str]:
     elif not status.raw_dataset_ready:
         commands.append("python run_medical.py audit-dataset")
     if not status.model_ready:
-        commands.append("python run_medical.py train-all")
+        commands.append("Bổ sung file model đã train vào models/pretrained/ (vd: medical_7_cancers_cnn.pt)")
     else:
         commands.append("python run_medical.py validate")
     if any((status.report_files, status.normalized_files, status.overlay_files, status.export_files)):

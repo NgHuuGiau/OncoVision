@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
 _CANCER_COUNT = len(shared_cancer_targets())
 DEFAULT_TRAINED_MODEL_PATH = Path(f"medical_{_CANCER_COUNT}_cancers.pt")
-DEFAULT_CNN_MODEL_PATH = Path(f"medical_{_CANCER_COUNT}_cancers_cnn.pt")
+DEFAULT_CNN_MODEL_PATH = Path(f"models/pretrained/medical_{_CANCER_COUNT}_cancers_cnn.pt")
 DEFAULT_SPLITS = ("train", "val", "test")
 
 

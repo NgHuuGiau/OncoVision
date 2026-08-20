@@ -57,8 +57,6 @@ MEDICAL_OPTIONS: dict[str, MenuOption] = {
     "1": MenuOption("run_medical.py", "Phân tích ca bệnh", "Thực hiện phân tích ảnh y khoa theo ID", "PHÂN TÍCH", CYAN, "🔬", ("analyze",)),
     "2": MenuOption("run_medical.py", "Lịch sử ca bệnh", "Xem danh sách các ca đã phân tích", "KẾT QUẢ", YELLOW, "📋", ("history",)),
     "3": MenuOption("run_medical.py", "Kiểm tra & Báo cáo", "Xem tóm tắt dữ liệu / Kiểm tra tính hợp lệ ảnh", "KIỂM TRA", GREEN, "✅", ("report",)),
-    "4": MenuOption("run_medical.py", "Huấn luyện mô hình", "Khởi tạo split và train pipeline y khoa", "Y DƯỢC", CYAN, "🎓", ("train-all",)),
-    "5": MenuOption("run_medical.py", "Cải tiến & Tuning", "Active learning, train modality & hiệu chỉnh", "CẢI TIẾN", YELLOW, "🔧", ("active-learning", "|", "train-modality", "--epochs", "12", "--verbose", "|", "calibrate-modality-tuning", "--apply")),
     "0": MenuOption("", "Quay lại menu chính", "Trở về menu chính.", "HỆ THỐNG", RED, "↩"),
 }
 MEDICAL_PRIMARY_KEYS = tuple(key for key in MEDICAL_OPTIONS if key != "0")
@@ -210,10 +208,6 @@ def _resolve_medical_args(option: MenuOption, input_fn=input, print_fn=print) ->
     return ("analyze", "--image", image_path, "--patient-code", patient_code)
 
 
-def _is_training_command(args: tuple[str, ...]) -> bool:
-    return bool(args) and args[0] in {"train", "train-all"}
-
-
 def _split_steps(args: tuple[str, ...]) -> list[tuple[str, ...]]:
     if not args:
         return [()]
@@ -249,12 +243,6 @@ def _run_selected_option(
             print_fn(f"{BOLD}{option.color}{'═' * width}{RESET}")
             print_fn(f"{BOLD}{option.color}  BƯỚC {step_index}/{len(steps)}: {' '.join(step_args)}{RESET}")
             print_fn(f"{BOLD}{option.color}{'═' * width}{RESET}")
-        training = _is_training_command(step_args)
-        if training:
-            print_fn(f"{BOLD}{YELLOW}{'═' * width}{RESET}")
-            print_fn(f"{BOLD}{YELLOW}  ĐANG TRAIN ... (quá trình có thể mất vài phút){RESET}")
-            print_fn(f"{BOLD}{YELLOW}  Tiến trình từng epoch/batch sẽ hiển thị bên dưới.{RESET}")
-            print_fn(f"{BOLD}{YELLOW}{'═' * width}{RESET}")
         print_fn(f"{BOLD}{option.color}{'─' * width}{RESET}")
         print_fn(f"{BOLD}{option.color}  ĐANG CHẠY: {option.title}{RESET}")
         command_text = f"python {option.script} {' '.join(step_args)}".strip()
@@ -262,10 +250,7 @@ def _run_selected_option(
         print_fn(f"{option.color}  Ghi chú: {option.description}{RESET}")
         print_fn(f"{BOLD}{option.color}{'─' * width}{RESET}")
         try:
-            if training:
-                exit_code = run_script_fn(option.script, *step_args, env={"PYTHONUNBUFFERED": "1"})
-            else:
-                exit_code = run_script_fn(option.script, *step_args)
+            exit_code = run_script_fn(option.script, *step_args)
         except OSError as exc:
             print_fn(f"{RED}Không thể chạy {option.script}: {exc}{RESET}")
             return

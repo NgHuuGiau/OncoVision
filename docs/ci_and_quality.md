@@ -71,7 +71,6 @@ Kiểm tra theo thứ tự:
 
 ```powershell
 python run_smoke.py --ci-safe --stop-on-fail
-python run_train.py --check-only
 python -m unittest discover -s tests -p "test_*.py"
 ```
 

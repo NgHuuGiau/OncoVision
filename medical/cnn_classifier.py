@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import signal
 import sys
 import time
 from dataclasses import dataclass
@@ -822,13 +824,34 @@ def train_cnn_classifier(
         }
         if ema is not None:
             ckpt["ema_shadow"] = {k: v.cpu() for k, v in ema.shadow.items()}
+        # Ghi vào file tạm rồi rename (atomic) để không hỏng file nếu bị dừng giữa chừng.
+        tmp_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".tmp")
         try:
-            torch.save(ckpt, checkpoint_path, _use_new_zipfile_serialization=False)
+            torch.save(ckpt, tmp_path, _use_new_zipfile_serialization=False)
+            os.replace(tmp_path, checkpoint_path)
         except Exception:
-            pass
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     _last_ckpt_ts = time.time()
     _CKPT_INTERVAL = 900
+
+    def _handle_stop_signal(signum, _frame):
+        # Khi user dừng (Ctrl+C / kill), lưu checkpoint cuối cùng rồi thoát sạch.
+        if checkpoint_path is not None:
+            try:
+                _write_ckpt(epoch)
+            except Exception:
+                pass
+            print(f"[train] Da nhan tin hieu dung ({signum}), da luu checkpoint: {checkpoint_path}", flush=True)
+        raise KeyboardInterrupt
+
+    _old_sigint = signal.getsignal(signal.SIGINT)
+    _old_sigterm = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGINT, _handle_stop_signal)
+    signal.signal(signal.SIGTERM, _handle_stop_signal)
 
     for epoch in range(start_epoch, num_epochs):
         print(f"[train] --- epoch {epoch + 1}/{num_epochs} ---", flush=True)
@@ -998,6 +1021,9 @@ def train_cnn_classifier(
         if checkpoint_path is not None:
             _write_ckpt(epoch + 1)
             _last_ckpt_ts = time.time()
+
+    signal.signal(signal.SIGINT, _old_sigint)
+    signal.signal(signal.SIGTERM, _old_sigterm)
 
     if checkpoint_avg is not None and checkpoint_avg.checkpoints:
         avg_state = checkpoint_avg.average()

@@ -29,17 +29,13 @@ Nhánh y dược phục vụ bốn việc chính:
 
 ```powershell
 python run_medical.py status          # Trạng thái tổng quan
-python run_medical.py ready           # Kiểm tra đủ điều kiện train
+python run_medical.py ready           # Kiểm tra đủ điều kiện phân tích
 python run_medical.py sources         # Liệt kê nguồn ảnh
 python run_medical.py cancer          # Danh sách nhóm ung thư
 python run_medical.py init-dataset    # Khởi tạo layout dataset
-python run_medical.py train-modality  # Train classifier modality
-python run_medical.py train-cancer    # Train CNN classification (chế độ cũ)
-
-# Train cấu hình cao (khuyến nghị cho GPU 4GB):
-python run_train_7cancers_high.py     # 7 ung thư — convnext_tiny @512, epochs 30
-python run_train_brain_high.py        # Não (4 sub-label) — convnext_tiny @512, epochs 35
 ```
+
+Hệ thống **chỉ phân tích ảnh** bằng model đã train sẵn trong `models/pretrained/`. Các lệnh `train*` chỉ dùng khi bạn tự huấn luyện model bên ngoài rồi đặt file kết quả vào `models/pretrained/`.
 
 Lưu ý: `init-dataset` chỉ in layout mong đợi, không tự tạo dữ liệu.
 
@@ -93,11 +89,13 @@ Dataset `dataset/medical_modality/` dùng để train classifier phân loại mo
 
 ---
 
-## 7. Cấu hình training
+## 7. Hồ sơ cấu hình model (dùng khi tự train)
 
 ### CNN 7 ung thư / não (cấu hình cao — GPU 4GB VRAM)
 
-Script: `run_train_7cancers_high.py` (7 ung thư) và `run_train_brain_high.py` (não, 4 sub-label).
+Model 7 ung thư và não từng được train với cấu hình này (các script `run_train_*_high.py` đã gỡ khỏi repo, chỉ giữ hồ sơ tham số):
+
+Model 7 ung thư: `medical_7_cancers_cnn.pt`; model não: `brain_classifier.pt` (đặt trong `models/pretrained/`).
 
 | Tham số | 7 ung thư | Não |
 |---|---|---|
@@ -122,7 +120,7 @@ Script: `run_train_7cancers_high.py` (7 ung thư) và `run_train_brain_high.py` 
 
 ### CNN Modality (8 loại hình ảnh)
 
-Script: `python run_medical.py train-modality` → `medical/modality_training.py`.
+Script modality: `medical/modality_training.py` (giữ lại, model `modality_classifier.pt` đã train sẵn).
 
 | Tham số | Giá trị |
 |---|---|

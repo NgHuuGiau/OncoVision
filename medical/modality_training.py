@@ -46,7 +46,7 @@ def _split_train_val(
 
 def train_modality_classifier(
     dataset_root: str | Path = "dataset/medical_modality",
-    output_path: str | Path = "models/pretrained/modality_classifier.pt",
+    output_path: str | Path = "D:/OncoVision/modality_classifier.pt",
     *,
     image_size: int = 320,
     batch_size: int = 16,
@@ -75,6 +75,8 @@ def train_modality_classifier(
     remapped_val = [(path, label_to_index[_MODALITY_LABELS[idx]]) for path, idx in val_samples] if val_samples else None
 
     model = build_modality_classifier(num_classes=len(class_labels))
+    ckpt_path = Path("output/medical/checkpoints/modality_classifier.pt")
+    ckpt_path.parent.mkdir(parents=True, exist_ok=True)
     wrapper, _history = train_cnn_classifier(
         remapped_train,
         class_labels=class_labels,
@@ -93,8 +95,11 @@ def train_modality_classifier(
         progress_tag="modality",
         mixup_alpha=0.2,
         num_workers=2,
+        checkpoint_path=ckpt_path,
         verbose=verbose,
     )
     save_modality_classifier(wrapper, output_path)
+    if ckpt_path.exists():
+        ckpt_path.unlink()
     return Path(output_path)
 

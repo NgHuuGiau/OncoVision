@@ -83,15 +83,15 @@ Nếu thay đổi danh sách lớp, cần cập nhật đồng thời nhãn raw,
 
 ## 5. Huấn luyện
 
+> `run_train.py` đã gỡ khỏi repo (hệ thống chỉ phân tích bằng model có sẵn). Nếu cần tự train YOLO, dùng ultralytics CLI trực tiếp:
+
 ```powershell
-python run_train.py
+yolo detect train data=dataset/processed/data.yaml model=yolo11s.pt epochs=50 imgsz=512 batch=4
 ```
 
-Script tự động:
-
-- Resume từ `runs/detect/medical_yolo/weights/last.pt` nếu có
+- Resume từ `runs/detect/medical_yolo/weights/last.pt` nếu có (ultralytics tự resume)
 - Train 50 epochs với cấu hình tối ưu
-- Lưu best model vào `models/trained/medical_yolo_detect.pt`
+- Lưu best model vào `runs/detect/medical_yolo/weights/best.pt`, đặt vào `models/trained/`
 
 ### Tham số training
 
@@ -148,7 +148,6 @@ python run_app.py --model models/trained/medical_yolo_detect.pt
 ## 8. Kiểm tra sau training
 
 ```powershell
-python run_train.py
 python run_doctor.py --skip-camera-check
 python run_app.py --model models/trained/medical_yolo_detect.pt
 ```
@@ -173,7 +172,7 @@ python run_app.py --model models/trained/medical_yolo_detect.pt
 
 ### Phân tách nhánh
 
-- **Object detection**: `dataset/object_detection/`, `run_train.py`
+- **Object detection**: `dataset/object_detection/`, train bằng `yolo detect train ...`
 - **Medical**: `dataset/medical/`, `run_medical.py`
 
 Không trộn lẫn hai luồng. Xem `medical_imaging_guide.md` cho nhánh y dược.

@@ -152,7 +152,7 @@ class MedicalSystemStatusTests(unittest.TestCase):
 
         self.assertEqual(commands[0], "python run_medical.py init-dataset")
         self.assertIn("python run_medical.py audit-dataset", commands)
-        self.assertIn("python run_medical.py train-all", commands)
+        self.assertTrue(any("Bổ sung file model" in command for command in commands))
 
     def test_get_medical_system_status_includes_screening_targets(self) -> None:
         with TemporaryDirectory() as temp_dir:

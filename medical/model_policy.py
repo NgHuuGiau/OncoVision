@@ -21,5 +21,6 @@ def resolve_medical_runtime_model_path(config: Any) -> Path:
     raise FileNotFoundError(
         "Chua tim thay model medical. Da thu: "
         + ", ".join(str(path) for path in candidates)
-        + ". Hay chay run_medical.py train-all hoac cap nhat config/medical_settings.yaml."
+        + ". Hay bo sung file model da train vao models/pretrained/ "
+        + "hoac cap nhat config/medical_settings.yaml."
     )

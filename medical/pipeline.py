@@ -350,9 +350,8 @@ class MedicalImageAnalyzer:
             self.ensure_ready()
         except FileNotFoundError as exc:
             raise FileNotFoundError(
-                "Chưa có model medical để phân tích. Hãy train trước bằng lệnh:\n"
-                "  python run_train.py\n"
-                "hoặc kiểm tra config/medical_settings.yaml (khóa 'model').\n"
+                "Chưa có model medical để phân tích. Hãy bổ sung file model đã train vào "
+                "models/pretrained/ hoặc kiểm tra config/medical_settings.yaml (khóa 'model').\n"
                 f"Chi tiet: {exc}"
             ) from exc
         self._call_progress(progress_callback, "Normalizing image...", 0.10)
@@ -772,9 +771,7 @@ class MedicalImageAnalyzer:
         brain_model_path = Path(self.config.brain_model_path)
         if not brain_model_path.exists():
             return False
-        if body_region == "brain":
-            return True
-        return not Path(self.config.model_path).exists()
+        return body_region == "brain"
 
     def _detect_findings(self, image: np.ndarray, *, body_region: str | None = None) -> list[DetectionFinding]:
         cnn_wrapper = self._load_brain_wrapper() if self._uses_brain_model(body_region) else self._load_cnn_wrapper()
@@ -876,7 +873,7 @@ class MedicalImageAnalyzer:
             candidates = ", ".join(str(p) for p in iter_medical_runtime_model_paths(self.config))
             raise FileNotFoundError(
                 "Thiếu model medical để phân tích. Đã thử các đường dẫn: "
-                f"{candidates}. Hay train model bang 'python run_train.py' "
+                f"{candidates}. Hãy bổ sung file model đã train vào models/pretrained/ "
                 "hoac cap nhat 'model' trong config/medical_settings.yaml."
             )
         issues = validate_medical_analyzer_config(self.config)
