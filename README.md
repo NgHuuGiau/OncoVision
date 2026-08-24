@@ -63,7 +63,7 @@ python run_smoke.py
 python run_chat.py
 
 # Giao diện web (optional)
-python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
+python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
 ```
 
 ---
@@ -88,7 +88,7 @@ Camera:  run_app.py → core/camera_runner.py → output/captures/
 Chat:    run_chat.py → app/chat_ui/ → medical/phân tích → output/chat/
 Medical: run_medical.py → medical/dataset.py → output/medical/
 Model:   models/pretrained/*.pt (bổ sung file model đã train sẵn)
-Web:     web_app.py → SQLite → output/chat_history.db
+Web:     web_app.py → SQLite → output/onco.db
 ```
 
 ---

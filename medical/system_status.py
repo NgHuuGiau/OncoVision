@@ -9,11 +9,10 @@ from medical.cancer_catalog import (
     supported_cancer_labels,
     supported_cancer_modalities,
 )
-from medical.classifier import iter_medical_image_paths
 from medical.dataset import MEDICAL_CLASS_NAMES
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.pipeline import build_default_medical_analyzer_config
-from medical.status_helpers import count_files
+from medical.status_helpers import count_files, count_medical_images
 from medical.training import medical_training_paths
 
 SCREENING_TARGETS = tuple((target.label, target.model_ready) for target in COMMON_CANCER_TARGETS)
@@ -74,11 +73,10 @@ def _count_cases(case_db_path: Path) -> int:
 
 
 def _count_split_images(dataset_root: Path, split: str) -> int:
-    total = 0
-    for class_name in MEDICAL_CLASS_NAMES:
-        split_dir = dataset_root / class_name / "processed" / "images" / split
-        total += sum(1 for _ in iter_medical_image_paths(split_dir))
-    return total
+    return sum(
+        count_medical_images(dataset_root / class_name / "processed" / "images" / split)
+        for class_name in MEDICAL_CLASS_NAMES
+    )
 
 
 def get_medical_system_status() -> MedicalSystemStatus:

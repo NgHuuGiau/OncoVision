@@ -3,228 +3,1194 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OncoVision Chat AI</title>
+<title>OncoVision AI Workstation</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--root-bg:#07111f;--text:#e3e3e3;--subtle:#94a3b8;--heading:#fff;--sidebar-bg:#0f172a;--sidebar-border:rgba(255,255,255,.08);--composer-bg:rgba(255,255,255,.06);--composer-input-bg:rgba(255,255,255,.04);--composer-input-border:rgba(255,255,255,.07);--bubble-user:rgba(77,184,255,.14);--bubble-user-border:rgba(77,184,255,.12);--bubble-system:rgba(255,255,255,.03);--bubble-system-border:rgba(255,255,255,.06);--history-panel-bg:rgba(255,255,255,.02);--history-panel-border:rgba(255,255,255,.05);--scrollbar:rgba(255,255,255,.18);--button-hover:rgba(255,255,255,.05);--sidebar-hover:rgba(255,255,255,.07);--history-selected:rgba(255,255,255,.08);--history-selected-border:rgba(255,255,255,.06);--combo-bg:rgba(255,255,255,.06);--combo-border:rgba(255,255,255,.08);--combo-text:#f3f4f6;--menu-bg:#1b1c20;--menu-border:#3a3a3a;--menu-hover:#242424;--mode-btn-bg:#3a3d45;--mode-btn-border:#50545e;--mode-btn-text:#ececf1;--mode-btn-hover:#454851;--round-btn-border:rgba(255,255,255,.07);--round-btn-bg:rgba(255,255,255,.04);--round-btn-text:#f2f4f8;--round-btn-hover:rgba(255,255,255,.12);--send-bg:#2563ff;--send-hover:#1d4ed8;--footer-btn-bg:rgba(255,255,255,.04);--footer-btn-border:rgba(255,255,255,.08);--error:#ff5252;--error-bg:rgba(255,82,82,.1);--preview-bg:rgba(255,255,255,.04);--preview-border:rgba(255,255,255,.08);--primary:#2563ff;--avatar-bg:#4db8ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif}
-.light{--root-bg:#f7f9fd;--text:#111827;--subtle:#64748b;--heading:#000;--sidebar-bg:#fff;--sidebar-border:#e8edf5;--composer-bg:#fff;--composer-input-bg:#fff;--composer-input-border:#e2e8f0;--bubble-user:rgba(77,184,255,.14);--bubble-user-border:rgba(77,184,255,.12);--bubble-system:rgba(255,255,255,.9);--bubble-system-border:rgba(17,24,39,.06);--history-panel-bg:rgba(255,255,255,.65);--history-panel-border:rgba(17,24,39,.06);--scrollbar:rgba(17,24,39,.18);--button-hover:rgba(17,24,39,.05);--sidebar-hover:rgba(17,24,39,.06);--history-selected:rgba(17,24,39,.08);--history-selected-border:rgba(17,24,39,.05);--combo-bg:#fff;--combo-border:#e2e8f0;--combo-text:#000;--menu-bg:#fff;--menu-border:#d9d9df;--menu-hover:#f7f7f8;--mode-btn-bg:#e4e7ed;--mode-btn-border:#c8cdd8;--mode-btn-text:#374151;--mode-btn-hover:#d8dbe4;--round-btn-border:rgba(17,24,39,.08);--round-btn-bg:rgba(255,255,255,.92);--round-btn-text:#111827;--round-btn-hover:rgba(17,24,39,.08);--footer-btn-bg:#fff;--footer-btn-border:#e2e8f0;--error:#b00020;--error-bg:rgba(176,0,32,.08);--preview-bg:rgba(255,255,255,.82);--preview-border:rgba(17,24,39,.08)}
-html,body{height:100%}
-body{display:flex;background:var(--root-bg);color:var(--text);overflow:hidden}
-/* Scrollbar */
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:3px}
-/* Sidebar */
-.sidebar{width:280px;min-width:280px;background:var(--sidebar-bg);border:1px solid var(--sidebar-border);border-radius:20px;display:flex;flex-direction:column;margin:14px 0 14px 14px;overflow:hidden;transition:width .22s cubic-bezier(.4,0,.2,1),min-width .22s cubic-bezier(.4,0,.2,1)}
-.sidebar.collapsed{width:92px;min-width:92px}
-.sidebar-header{display:flex;align-items:center;padding:12px;gap:10px;border-bottom:1px solid var(--sidebar-border)}
-.sidebar-header .brand{font-size:18px;font-weight:700;color:var(--heading);flex:1;white-space:nowrap;overflow:hidden}
-.sidebar.collapsed .sidebar-header .brand{display:none}
-.sidebar.collapsed .sidebar-toggle{display:none}
-.sidebar-toggle,.sidebar-compact-toggle{background:transparent;border:none;color:var(--text);cursor:pointer;border-radius:16px;display:flex;align-items:center;justify-content:center;transition:.2s}
-.sidebar-toggle{width:32px;height:32px}
-.sidebar-compact-toggle{width:40px;height:40px;margin:8px auto}
-.sidebar-toggle:hover,.sidebar-compact-toggle:hover{background:var(--sidebar-hover)}
-.sidebar-compact-toggle{display:none}
-.sidebar.collapsed .sidebar-compact-toggle{display:flex}
-.sidebar-content{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:12px}
-.sidebar.collapsed .sidebar-content{padding:8px;align-items:center}
-.sidebar-content .new-chat-btn{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;background:var(--footer-btn-bg);border:1px solid var(--footer-btn-border);border-radius:14px;color:var(--text);cursor:pointer;font-size:14px;font-weight:600;transition:.2s;margin-bottom:12px}
-.sidebar.collapsed .new-chat-btn span{display:none}
-.sidebar.collapsed .new-chat-btn{width:44px;height:44px;padding:0;justify-content:center}
-.new-chat-btn:hover{background:var(--sidebar-hover)}
-.search-box{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--footer-btn-bg);border:1px solid var(--footer-btn-border);border-radius:16px;margin-bottom:12px}
-.sidebar.collapsed .search-box{display:none}
-.search-box svg{flex-shrink:0}
-.search-box input{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none}
-.search-box input::placeholder{color:var(--subtle)}
-.history-title{font-size:15px;font-weight:600;color:var(--heading);margin-bottom:8px;padding:0 4px}
-.sidebar.collapsed .history-title{display:none}
-.history-panel{flex:1;background:var(--history-panel-bg);border:1px solid var(--history-panel-border);border-radius:24px;overflow-y:auto;padding:8px;margin-bottom:12px}
-.sidebar.collapsed .history-panel{display:none}
-.history-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;cursor:pointer;transition:.15s;margin-bottom:4px}
-.history-item:hover{background:var(--sidebar-hover)}
-.history-item.active{background:var(--history-selected);border:1px solid var(--history-selected-border);border-left:3px solid var(--primary)}
-.history-item-icon{flex-shrink:0;width:20px;height:20px;display:flex;align-items:center;justify-content:center;color:var(--subtle)}
-.history-item-text{flex:1;min-width:0}
-.history-item-title{font-size:15px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.history-item-subtitle{font-size:13px;color:var(--subtle);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.settings-btn{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;background:var(--footer-btn-bg);border:1px solid var(--footer-btn-border);border-radius:14px;color:var(--text);cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
-.sidebar.collapsed .settings-btn span{display:none}
-.sidebar.collapsed .settings-btn{width:44px;height:44px;padding:0;justify-content:center}
-.settings-btn:hover{background:var(--sidebar-hover)}
-/* Main */
-.main{flex:1;display:flex;flex-direction:column;margin:14px;overflow:hidden}
-.top-bar{display:flex;gap:8px;align-items:center;padding:0 4px 8px}
-.top-bar button{padding:6px 16px;border-radius:14px;border:1px solid var(--mode-btn-border);background:var(--mode-btn-bg);color:var(--mode-btn-text);cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
-.top-bar button:hover{background:var(--mode-btn-hover)}
-.top-bar button.active{background:rgba(37,99,255,.22);border-color:var(--primary);color:var(--heading)}
-.top-bar .badge{font-size:13px;color:var(--subtle);margin-left:auto}
-/* Medical Row */
-.medical-row{display:flex;align-items:center;gap:12px;padding:4px 0;margin-bottom:8px;flex-wrap:wrap}
-.medical-row label{font-size:13px;color:var(--subtle);white-space:nowrap}
-.medical-row select{padding:4px 10px;min-width:150px;height:32px;border-radius:14px;border:1px solid var(--combo-border);background:var(--combo-bg);color:var(--combo-text);font-size:13px;font-weight:600;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
-.medical-row select:hover{border-color:var(--primary)}
-.medical-hint{font-size:12px;color:var(--subtle)}
-/* Messages */
-.messages-area{flex:1;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column}
-.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
-.empty-state .robot{font-size:86px}
-.empty-state h2{font-size:20px;font-weight:700;color:var(--heading)}
-.empty-state p{font-size:16px;color:var(--subtle);text-align:center;max-width:400px}
-.greeting-card{margin-bottom:12px}
-.greeting-card h1{font-size:32px;font-weight:700;color:var(--heading);margin-bottom:4px}
-.greeting-card p{font-size:16px;color:var(--subtle)}
-/* Message Bubbles */
-.message-row{display:flex;margin-bottom:8px;animation:msgIn .5s cubic-bezier(.34,1.56,.64,1)}
-@keyframes msgIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-.message-row.user{justify-content:flex-end}
-.message-row .bubble{max-width:680px;min-width:96px;padding:12px 18px;border-radius:24px 8px 24px 24px;line-height:1.5;font-size:15px;word-wrap:break-word;box-shadow:0 8px 15px rgba(0,0,0,.09)}
-.message-row.user .bubble{background:var(--bubble-user);border:1px solid var(--bubble-user-border);border-top-left-radius:24px;border-top-right-radius:8px;border-bottom-left-radius:24px;border-bottom-right-radius:24px}
-.message-row.assistant .bubble{background:var(--bubble-system);border:1px solid var(--bubble-system-border);border-top-left-radius:8px;border-top-right-radius:24px;border-bottom-left-radius:24px;border-bottom-right-radius:24px;box-shadow:0 4px 10px rgba(0,0,0,.04)}
-.message-row .bubble .attachment-name{font-size:13px;font-weight:600;color:var(--primary);margin-bottom:6px;word-break:break-all}
-.message-row .bubble img{max-width:360px;max-height:240px;border-radius:12px;cursor:pointer;margin-top:4px;object-fit:cover}
-.message-row .bubble .error-text{color:var(--error);font-weight:700;background:var(--error-bg);padding:6px;border-radius:8px;display:inline-block}
-/* Composer */
-.composer{margin-top:auto;background:var(--composer-bg);border-radius:18px;padding:8px}
-.image-preview-area{display:flex;gap:6px;overflow-x:auto;padding:4px 0;min-height:0;margin-bottom:4px}
-.image-preview-area.hidden{display:none}
-.preview-thumb{position:relative;width:72px;height:72px;border-radius:18px;border:1px solid var(--preview-border);background:var(--preview-bg);flex-shrink:0;overflow:hidden}
-.preview-thumb img{width:100%;height:100%;object-fit:cover;border-radius:18px}
-.preview-thumb .remove-btn{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:12px;background:rgba(239,68,68,.92);color:#fff;border:none;cursor:pointer;font-size:14px;font-weight:700;display:none;align-items:center;justify-content:center}
-.preview-thumb:hover .remove-btn{display:flex}
-.composer-row{display:flex;align-items:flex-end;gap:5px;padding:4px 5px;background:var(--composer-input-bg);border:1px solid var(--composer-input-border);border-radius:13px}
-.plus-btn,.mic-btn,.send-btn{width:40px;height:40px;border-radius:18px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.2s}
-.plus-btn,.mic-btn{border:1px solid var(--round-btn-border);background:var(--round-btn-bg);color:var(--round-btn-text)}
-.plus-btn:hover,.mic-btn:hover{background:var(--round-btn-hover)}
-.send-btn{background:var(--send-bg);color:#fff}
-.send-btn:hover{background:var(--send-hover)}
-.composer-input{flex:1;border:none;background:transparent;color:var(--text);font-size:16px;padding:8px 6px;outline:none;resize:none;min-height:24px;max-height:120px;line-height:1.4;font-family:inherit}
-.composer-input::placeholder{color:var(--subtle)}
-.disclaimer{text-align:center;font-size:12px;color:var(--subtle);padding:8px 0 0}
-.medical-status{text-align:center;font-size:12px;color:var(--subtle);padding:4px 0 0}
-/* Recording Panel */
-.recording-panel{display:none;align-items:center;justify-content:center;gap:12px;padding:8px 16px;margin-bottom:8px}
-.recording-panel.active{display:flex}
-.recording-panel .wave{display:flex;align-items:center;gap:3px;height:30px}
-.recording-panel .wave span{width:5px;border-radius:2px;background:#ff5252;animation:wave 1s ease-in-out infinite}
+:root {
+  --bg-primary: #090d16;
+  --bg-secondary: #0f172a;
+  --bg-tertiary: #1e293b;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-focus: #0ea5e9;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-light: rgba(14, 165, 233, 0.15);
+  --success: #10b981;
+  --success-light: rgba(16, 185, 129, 0.1);
+  --error: #f43f5e;
+  --error-light: rgba(244, 63, 94, 0.1);
+  --bubble-user: rgba(14, 165, 233, 0.12);
+  --bubble-user-border: rgba(14, 165, 233, 0.25);
+  --bubble-assistant: rgba(30, 41, 59, 0.7);
+  --bubble-assistant-border: rgba(255, 255, 255, 0.05);
+  --pacs-grid: rgba(14, 165, 233, 0.05);
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.light {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --border-color: #e2e8f0;
+  --border-focus: #0ea5e9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-light: rgba(14, 165, 233, 0.1);
+  --success: #10b981;
+  --success-light: rgba(16, 185, 129, 0.08);
+  --error: #ef4444;
+  --error-light: rgba(239, 68, 68, 0.08);
+  --bubble-user: rgba(14, 165, 233, 0.08);
+  --bubble-user-border: rgba(14, 165, 233, 0.18);
+  --bubble-assistant: #ffffff;
+  --bubble-assistant-border: #e2e8f0;
+  --pacs-grid: rgba(14, 165, 233, 0.03);
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: background-color 0.25s, color 0.25s;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* App Header */
+.app-header {
+  height: 60px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-logo {
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.header-title-group h1 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.header-title-group p {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.system-pulse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+}
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse 1.8s infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.theme-selector {
+  display: flex;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 3px;
+}
+.theme-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.theme-btn.active {
+  background: var(--bg-secondary);
+  color: var(--accent);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Container Layout */
+.app-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Column 1: Left Sidebar */
+.sidebar {
+  width: 300px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+.sidebar.collapsed {
+  width: 0;
+  border-right: none;
+}
+.sidebar-action-bar {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+.new-chat-btn:hover {
+  background-color: var(--accent-hover);
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.search-box input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+}
+.search-box input::placeholder {
+  color: var(--text-muted);
+}
+.history-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.history-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  padding-left: 8px;
+  letter-spacing: 0.5px;
+}
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+.history-item:hover {
+  background-color: var(--bg-tertiary);
+}
+.history-item.active {
+  background-color: var(--accent-light);
+  border-color: var(--accent);
+}
+.history-item-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.history-item-text {
+  flex: 1;
+  min-width: 0;
+}
+.history-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-item-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+.settings-btn:hover {
+  background-color: var(--border-color);
+}
+
+/* Column 2: Center Medical Viewer (PACS Simulator) */
+.medical-viewer {
+  flex: 1.2;
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+.viewer-header {
+  padding: 12px 20px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.toggle-sidebar-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.toggle-sidebar-btn:hover {
+  background-color: var(--border-color);
+}
+.viewer-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.control-group label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.control-group select {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+.control-group select:focus {
+  border-color: var(--accent);
+}
+
+/* PACS Screen */
+.pacs-screen {
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --bg-tertiary: #1e293b;
+  --bg-secondary: #0f172a;
+  flex: 1;
+  margin: 16px;
+  border-radius: 16px;
+  border: 2px dashed rgba(14, 165, 233, 0.25);
+  background-color: #040810;
+  background-image: 
+    linear-gradient(var(--pacs-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pacs-grid) 1px, transparent 1px);
+  background-size: 30px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+.pacs-screen.dragover {
+  border-color: var(--accent);
+  background-color: rgba(14, 165, 233, 0.04);
+}
+.pacs-screen-overlay-topleft {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  pointer-events: none;
+}
+.pacs-screen-overlay-topright {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 11px;
+  text-align: right;
+  pointer-events: none;
+}
+.empty-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  text-align: center;
+  padding: 30px;
+}
+.dropzone-radar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.dropzone-radar::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: radar 2s linear infinite;
+  opacity: 0;
+}
+@keyframes radar {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.empty-dropzone h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.empty-dropzone p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 320px;
+}
+.upload-trigger-btn {
+  background-color: var(--bg-tertiary);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.upload-trigger-btn:hover {
+  background-color: var(--accent);
+  color: #fff;
+}
+.pacs-active-image-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.pacs-active-image {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border-radius: 4px;
+}
+.pacs-crosshair {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pacs-crosshair::before {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 1px;
+  background-color: rgba(14, 165, 233, 0.4);
+}
+.pacs-crosshair::after {
+  content: '';
+  position: absolute;
+  width: 1px;
+  height: 30px;
+  background-color: rgba(14, 165, 233, 0.4);
+}
+.pacs-action-overlay {
+  position: absolute;
+  bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+.pacs-btn {
+  background-color: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+.pacs-btn:hover {
+  background-color: var(--accent);
+  color: white;
+}
+
+.viewer-footer {
+  padding: 10px 20px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hints-row {
+  display: flex;
+  gap: 15px;
+}
+
+/* Column 3: Right Panel AI Assistant */
+.ai-assistant {
+  flex: 1;
+  background-color: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.assistant-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.assistant-header h2 {
+  font-size: 15px;
+  font-weight: 700;
+}
+.assistant-header .status-indicator {
+  background-color: var(--success-light);
+  color: var(--success);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.messages-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: auto;
+  text-align: center;
+  padding: 20px;
+}
+.empty-state-icon {
+  font-size: 48px;
+  color: var(--accent);
+}
+.empty-state h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.empty-state p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 280px;
+}
+.greeting-card {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 15px;
+}
+.greeting-card h3 {
+  font-size: 15px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.greeting-card p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Chat Bubbles */
+.message-row {
+  display: flex;
+  width: 100%;
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.message-row.user {
+  justify-content: flex-end;
+}
+.message-row.assistant {
+  justify-content: flex-start;
+}
+.bubble {
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.message-row.user .bubble {
+  background-color: var(--bubble-user);
+  border: 1px solid var(--bubble-user-border);
+  color: var(--text-primary);
+  border-bottom-right-radius: 4px;
+}
+.message-row.assistant .bubble {
+  background-color: var(--bubble-assistant);
+  border: 1px solid var(--bubble-assistant-border);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
+}
+.bubble img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 8px;
+  margin-top: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+}
+.attachment-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.error-text {
+  color: var(--error);
+  font-weight: 600;
+  font-size: 13px;
+  background-color: var(--error-light);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+/* Recording Wave */
+.recording-panel {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: var(--error-light);
+  padding: 10px;
+  border-top: 1px solid var(--border-color);
+}
+.recording-panel.active {
+  display: flex;
+}
+.recording-panel .wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+.recording-panel .wave span {
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--error);
+  animation: wave 1s ease-in-out infinite;
+}
 .recording-panel .wave span:nth-child(2){animation-delay:.1s}
 .recording-panel .wave span:nth-child(3){animation-delay:.2s}
 .recording-panel .wave span:nth-child(4){animation-delay:.3s}
-.recording-panel .wave span:nth-child(5){animation-delay:.4s}
-@keyframes wave{0%,100%{height:4px}50%{height:24px}}
-.recording-label{color:#ff5252;font-weight:700;font-size:14px}
-/* Modal / Settings */
-.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center}
-.modal-overlay.active{display:flex}
-.modal{background:var(--sidebar-bg);border:1px solid var(--sidebar-border);border-radius:20px;padding:24px;min-width:380px;max-width:500px;max-height:80vh;overflow-y:auto}
-.modal h2{font-size:20px;font-weight:700;color:var(--heading);margin-bottom:16px}
-.modal-close{float:right;background:none;border:none;color:var(--subtle);cursor:pointer;font-size:20px}
-.modal-section{margin-bottom:20px}
-.modal-section label{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
-.modal-section .desc{font-size:13px;color:var(--subtle);margin-bottom:8px}
-.modal-section select{width:100%;padding:8px 12px;border-radius:18px;border:1px solid var(--combo-border);background:var(--combo-bg);color:var(--combo-text);font-size:14px;font-weight:600;outline:none}
-/* Plus Menu */
-.plus-menu{position:absolute;z-index:100;min-width:240px;background:var(--menu-bg);border:1px solid var(--menu-border);border-radius:16px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
-.plus-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:none;background:transparent;color:var(--text);font-size:15px;font-weight:600;border-radius:14px;cursor:pointer;transition:.15s}
-.plus-menu button:hover{background:var(--menu-hover)}
-/* Responsive */
-@media(max-width:768px){
-  .sidebar{width:220px;min-width:220px;margin:8px 0 8px 8px}
-  .sidebar.collapsed{width:72px;min-width:72px}
-  .main{margin:8px}
+@keyframes wave{0%,100%{height:4px}50%{height:18px}}
+.recording-label {
+  color: var(--error);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Composer Panel */
+.composer {
+  padding: 16px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+.image-preview-area {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 10px;
+  overflow-x: auto;
+}
+.image-preview-area.hidden {
+  display: none;
+}
+.preview-thumb {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+.preview-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.preview-thumb .remove-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--error);
+  color: #fff;
+  border: none;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 6px 8px;
+}
+.composer-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.composer-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--accent);
+}
+.composer-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  padding: 8px 4px;
+  outline: none;
+  resize: none;
+  min-height: 24px;
+  max-height: 100px;
+  line-height: 1.4;
+  font-family: inherit;
+}
+.composer-input::placeholder {
+  color: var(--text-muted);
+}
+.send-btn {
+  background-color: var(--accent);
+  color: white;
+}
+.send-btn:hover {
+  background-color: var(--accent-hover);
+}
+.disclaimer {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Modals */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.modal-overlay.active {
+  display: flex;
+  opacity: 1;
+}
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 24px;
+  min-width: 320px;
+  max-width: 450px;
+  width: 90%;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  position: relative;
+  transform: translateY(20px);
+  transition: transform 0.2s;
+}
+.modal-overlay.active .modal {
+  transform: translateY(0);
+}
+.modal h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.modal-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+}
+.modal-section {
+  margin-bottom: 18px;
+}
+.modal-section label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.modal-section .desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.modal-section select {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: none;
+}
+
+/* Plus Menu Popup */
+.plus-menu {
+  position: absolute;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  z-index: 100;
+  display: none;
+}
+.plus-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.plus-menu button:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+/* Suggestion Presets */
+.presets-container {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.preset-badge {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.preset-badge:hover {
+  background-color: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Mobile responsive toggle */
+@media (max-width: 992px) {
+  .app-container {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .sidebar.collapsed {
+    height: 0;
+    border-bottom: none;
+  }
 }
 </style>
 </head>
 <body>
-<div class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <div class="brand">OncoVision Chat AI</div>
-    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Thu gọn thanh bên" id="sidebarToggle">◀</button>
-  </div>
-  <button class="sidebar-compact-toggle" onclick="toggleSidebar()" title="Mở rộng thanh bên" id="sidebarCompactToggle" style="display:none">☰</button>
-  <div class="sidebar-content">
-    <button class="new-chat-btn" onclick="newChat()">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span>Cuộc trò chuyện mới</span>
-    </button>
-    <div class="search-box">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="searchInput" placeholder="Tìm kiếm cuộc trò chuyện..." oninput="filterHistory()">
+
+<header class="app-header">
+  <div class="header-left">
+    <div class="header-logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
     </div>
-    <div class="history-title">Lịch sử trò chuyện</div>
-    <div class="history-panel" id="historyPanel"></div>
-    <button class="settings-btn" onclick="openSettings()">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      <span>Cài đặt</span>
-    </button>
+    <div class="header-title-group">
+      <h1>OncoVision AI™</h1>
+      <p>Hệ Thống Sàng Lọc & Phân Tích Ung Thư Y Khoa</p>
+    </div>
   </div>
+  
+  <div class="header-center">
+    <div class="system-pulse">
+      <span class="pulse-dot"></span>
+      <span id="medicalStatus">Khởi tạo hệ thống...</span>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <div class="theme-selector">
+      <button class="theme-btn" onclick="setTheme('light')" id="lightBtn">☼ Sáng</button>
+      <button class="theme-btn" onclick="setTheme('dark')" id="darkBtn">☾ Tối</button>
+      <button class="theme-btn" onclick="setTheme('system')" id="systemBtn">Hệ thống</button>
+    </div>
+  </div>
+</header>
+
+<div class="app-container">
+  
+  <!-- Left Column: Case History -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-action-bar">
+      <button class="new-chat-btn" onclick="newChat()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Ca chẩn đoán mới</span>
+      </button>
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Tìm ca bệnh/bệnh nhân..." oninput="filterHistory()">
+      </div>
+    </div>
+    <div class="history-section">
+      <div class="history-title">Hồ Sơ Ca Lâm Sàng</div>
+      <div class="history-panel" id="historyPanel"></div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="settings-btn" onclick="openSettings()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Cấu hình hệ thống</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Center Column: PACS Viewer & Diagnostic Controls -->
+  <main class="medical-viewer">
+    <div class="viewer-header">
+      <button class="toggle-sidebar-btn" onclick="toggleSidebar()" title="Thu gọn thanh bên" id="sidebarToggle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="viewer-controls">
+        <div class="control-group">
+          <label>Nhóm bệnh học:</label>
+          <select id="targetSelect"></select>
+        </div>
+        <div class="control-group">
+          <label>Loại hình ảnh (Modality):</label>
+          <select id="modalitySelect"></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- PACS Simulator Container -->
+    <div class="pacs-screen" id="pacsScreen">
+      <!-- Simulated DICOM Info Overlays -->
+      <div class="pacs-screen-overlay-topleft">
+        PATIENT ID: <span id="pacsPatientCode">CHƯA CÓ</span><br>
+        STUDY: ONCOVISION_SCREENING<br>
+        FPS: 30.00 Hz<br>
+        ACQUISITION: LOCAL
+      </div>
+      <div class="pacs-screen-overlay-topright">
+        DATE: <span id="pacsDate">-</span><br>
+        W: 256 L: 128<br>
+        GRID: 30mm<br>
+        STATUS: SYSTEM_READY
+      </div>
+
+      <!-- Content displays dynamic based on file selected -->
+      <div class="empty-dropzone" id="emptyDropzone">
+        <div class="dropzone-radar">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--accent)">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+        </div>
+        <h3>Trình Xem Ảnh Chẩn Đoán</h3>
+        <p>Kéo và thả tệp phim chụp (DICOM, NIfTI, JPG, PNG, WEBP) hoặc chọn nút bên dưới để bắt đầu sàng lọc AI.</p>
+        <button class="upload-trigger-btn" onclick="pickImage()">Chọn tệp phim chụp</button>
+      </div>
+
+      <div class="pacs-active-image-container" id="pacsImageContainer" style="display:none">
+        <div class="pacs-crosshair"></div>
+        <img class="pacs-active-image" id="pacsActiveImage" src="" onclick="previewImage(this.src)">
+        <div class="pacs-action-overlay">
+          <button class="pacs-btn" onclick="triggerAIScreening()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Phân Tích AI
+          </button>
+          <button class="pacs-btn" onclick="pickImage()">
+            Đổi phim chụp
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="viewer-footer">
+      <div class="hints-row">
+        <span id="targetHint"></span>
+        <span id="modalityHint"></span>
+      </div>
+      <div>Chỉ số phân giải chuẩn đoán • Mode: GPU (FP16)</div>
+    </div>
+  </main>
+
+  <!-- Right Column: AI Assistant clinical chatbot -->
+  <section class="ai-assistant">
+    <div class="assistant-header">
+      <h2>Trợ Lý Lâm Sàng AI</h2>
+      <span class="status-indicator" id="modeBadge">Y Khoa</span>
+    </div>
+
+    <div class="messages-area" id="messagesArea">
+      <div class="greeting-card" id="greetingCard">
+        <h3>Hệ Thống Trợ Lý Chẩn Đoán</h3>
+        <p>Xin chào! Hãy tải phim chụp lên bảng điều khiển trung tâm hoặc đặt câu hỏi y khoa dưới đây để nhận hỗ trợ sàng lọc tự động.</p>
+      </div>
+
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">🧬</div>
+        <h3>Tư Vấn & Đọc Kết Quả</h3>
+        <p>Gửi ảnh chụp hoặc văn bản mô tả bệnh lý để nhận phân tích chi tiết tự động từ mô hình chuyên biệt.</p>
+      </div>
+
+      <div id="messagesContainer"></div>
+    </div>
+
+    <div class="recording-panel" id="recordingPanel">
+      <div class="wave"><span></span><span></span><span></span></div>
+      <span class="recording-label">Thiết bị ghi âm đang lắng nghe...</span>
+    </div>
+
+    <div class="composer">
+      <!-- Quick presets -->
+      <div class="presets-container">
+        <span class="preset-badge" onclick="fillPrompt('Phân tích bất thường trong phim chụp y khoa này')">Phân tích bất thường</span>
+        <span class="preset-badge" onclick="fillPrompt('Hãy lập báo cáo y khoa chi tiết cho ca bệnh này')">Lập báo cáo ca bệnh</span>
+        <span class="preset-badge" onclick="fillPrompt('Đề xuất hướng chẩn đoán phân biệt dựa trên kết quả chụp')">Gợi ý chẩn đoán</span>
+      </div>
+
+      <div class="image-preview-area hidden" id="imagePreviewArea"></div>
+      
+      <div class="composer-row">
+        <button class="composer-btn plus-btn" onclick="togglePlusMenu(event)" title="Đính kèm tài liệu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <textarea class="composer-input" id="messageInput" placeholder="Nhập câu hỏi lâm sàng tại đây..." rows="1" oninput="autoResize(this)"></textarea>
+        <button class="composer-btn mic-btn" onclick="toggleVoice()" title="Nhập giọng nói">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button class="composer-btn send-btn" onclick="sendMessage()" title="Gửi yêu cầu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" color="#fff"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="disclaimer">Kết quả phân tích từ AI chỉ mang tính tham khảo hỗ trợ, vui lòng xác chẩn với bác sĩ chuyên khoa lâm sàng.</div>
+    </div>
+  </section>
+
 </div>
-<div class="main">
-  <div class="top-bar">
-    <button onclick="setTheme('light')" id="lightBtn">☼ Sáng</button>
-    <button onclick="setTheme('dark')" id="darkBtn">☾ Tối</button>
-    <button onclick="setTheme('system')" id="systemBtn">Hệ thống</button>
-    <span class="badge" id="modeBadge"></span>
-  </div>
-  <div class="medical-row">
-    <label>Nhóm bệnh</label>
-    <select id="targetSelect"></select>
-    <label>Loại ảnh</label>
-    <select id="modalitySelect"></select>
-    <span class="medical-hint" id="targetHint"></span>
-    <span class="medical-hint" id="modalityHint"></span>
-  </div>
-  <div class="messages-area" id="messagesArea">
-    <div class="greeting-card" id="greetingCard">
-      <h1>Xin chào!</h1>
-      <p>Hôm nay bạn muốn hỏi điều gì?</p>
-    </div>
-    <div class="empty-state" id="emptyState">
-      <div class="robot">🤖</div>
-      <h2>Bác sĩ AI luôn sẵn sàng hỗ trợ bạn</h2>
-      <p>Đặt câu hỏi về sức khỏe, triệu chứng, xét nghiệm, điều trị và nhận thông tin đáng tin cậy từ AI.</p>
-    </div>
-    <div id="messagesContainer"></div>
-  </div>
-  <div class="recording-panel" id="recordingPanel">
-    <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
-    <span class="recording-label">Đang lắng nghe...</span>
-  </div>
-  <div class="composer">
-    <div class="image-preview-area hidden" id="imagePreviewArea"></div>
-    <div class="composer-row">
-      <button class="plus-btn" onclick="togglePlusMenu(event)" title="Đính kèm">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </button>
-      <textarea class="composer-input" id="messageInput" placeholder="Nhập tin nhắn của bạn..." rows="1" oninput="autoResize(this)"></textarea>
-      <button class="mic-btn" onclick="toggleVoice()" title="Ghi âm">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-      </button>
-      <button class="send-btn" onclick="sendMessage()" title="Gửi">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
-    </div>
-    <div class="disclaimer">Kết quả AI chỉ mang tính hỗ trợ. Hãy kiểm tra lại thông tin quan trọng với bác sĩ chuyên khoa.</div>
-    <div class="medical-status" id="medicalStatus"></div>
-  </div>
-</div>
+
+<!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal">
   <div class="modal">
     <button class="modal-close" onclick="closeSettings()">✕</button>
-    <h2>Cài đặt</h2>
+    <h2>Cấu hình hệ thống</h2>
     <div class="modal-section">
       <label>Giao diện</label>
-      <div class="desc">Chọn giao diện hiển thị cho ứng dụng.</div>
+      <div class="desc">Chọn chế độ màu hiển thị tối ưu cho môi trường làm việc.</div>
       <select id="themeSetting" onchange="applyThemeSetting(this.value)">
-        <option value="system">Hệ thống</option>
-        <option value="dark">Tối</option>
-        <option value="light">Sáng</option>
+        <option value="system">Hệ thống (Tự động)</option>
+        <option value="dark">PACS Mode (Tối chuyên nghiệp)</option>
+        <option value="light">Clinic Mode (Sáng sạch)</option>
       </select>
     </div>
     <div class="modal-section">
-      <label>Ngôn ngữ</label>
-      <div class="desc">Chọn ngôn ngữ hiển thị cho ứng dụng.</div>
+      <label>Ngôn ngữ (Language)</label>
+      <div class="desc">Chọn ngôn ngữ hiển thị giao diện chính.</div>
       <select id="langSetting" onchange="applyLanguage(this.value)">
         <option value="vi">Tiếng Việt</option>
         <option value="en">English</option>
@@ -232,11 +1198,14 @@ body{display:flex;background:var(--root-bg);color:var(--text);overflow:hidden}
     </div>
   </div>
 </div>
+
 <div class="plus-menu" id="plusMenu" style="display:none"></div>
+
+<!-- Image Previewer Modal -->
 <div class="modal-overlay" id="imagePreviewModal" style="display:none">
   <div class="modal" style="min-width:auto;max-width:90vw;text-align:center;padding:16px">
     <button class="modal-close" onclick="document.getElementById('imagePreviewModal').classList.remove('active')">✕</button>
-    <img id="previewFullImg" style="max-width:100%;max-height:80vh;border-radius:12px" src="">
+    <img id="previewFullImg" style="max-width:100%;max-height:80vh;border-radius:8px;border:1px solid rgba(255,255,255,0.1)" src="">
   </div>
 </div>
 
@@ -253,30 +1222,32 @@ let recognition = null;
 
 const TR = {
   vi: {
-    new_chat:'Cuộc trò chuyện mới',search:'Tìm kiếm cuộc trò chuyện...',history:'Lịch sử trò chuyện',
-    settings:'Cài đặt',app_name:'OncoVision Chat AI',greeting_title:'Xin chào!',
-    greeting_text:'Hôm nay bạn muốn hỏi điều gì?',input_placeholder:'Nhập tin nhắn của bạn...',
-    empty_title:'Bác sĩ AI luôn sẵn sàng hỗ trợ bạn',
-    empty_subtitle:'Đặt câu hỏi về sức khỏe, triệu chứng, xét nghiệm, điều trị và nhận thông tin đáng tin cậy từ AI.',
-    disclaimer:'Kết quả AI chỉ mang tính hỗ trợ. Hãy kiểm tra lại thông tin quan trọng với bác sĩ chuyên khoa.',
-    attach:'Đính kèm',camera:'Mở camera',choose_image:'Chọn ảnh',
-    medical_target:'Nhóm bệnh',medical_modality:'Loại ảnh',
-    light:'Sáng',dark:'Tối',system:'Hệ thống',today:'Hôm nay',
+    new_chat:'Ca chẩn đoán mới',search:'Tìm ca bệnh/bệnh nhân...',history:'Hồ Sơ Ca Lâm Sàng',
+    settings:'Cấu hình hệ thống',app_name:'OncoVision AI™',greeting_title:'Hệ Thống Trợ Lý Chẩn Đoán',
+    greeting_text:'Xin chào! Hãy tải phim chụp lên bảng điều khiển trung tâm hoặc đặt câu hỏi y khoa dưới đây để nhận hỗ trợ sàng lọc tự động.',
+    input_placeholder:'Nhập câu hỏi lâm sàng tại đây...',
+    empty_title:'Tư Vấn & Đọc Kết Quả',
+    empty_subtitle:'Gửi ảnh chụp hoặc văn bản mô tả bệnh lý để nhận phân tích chi tiết tự động từ mô hình chuyên biệt.',
+    disclaimer:'Kết quả phân tích từ AI chỉ mang tính tham khảo hỗ trợ, vui lòng xác chẩn với bác sĩ chuyên khoa lâm sàng.',
+    attach:'Đính kèm',camera:'Mở camera',choose_image:'Chọn ảnh chụp',
+    medical_target:'Nhóm bệnh học',medical_modality:'Loại ảnh (Modality)',
+    light:'Clinic Mode (Sáng)',dark:'PACS Mode (Tối)',system:'Hệ thống',today:'Hôm nay',
     medical_analyzing:'Đang phân tích ảnh y khoa...',medical_pending:'Đang chạy pipeline sàng lọc y dược...',
-    system_reply_text:'Tôi đã nhận nội dung và sẽ xử lý trong ngữ cảnh cuộc trò chuyện này.',
+    system_reply_text:'Tôi đã nhận nội dung và sẽ xử lý trong ngữ cảnh ca bệnh này.',
   },
   en: {
-    new_chat:'New chat',search:'Search conversations...',history:'Chat history',
-    settings:'Settings',app_name:'OncoVision Chat AI',greeting_title:'Hello!',
-    greeting_text:'What would you like to ask today?',input_placeholder:'Enter your message...',
-    empty_title:'AI doctor is ready to help',
-    empty_subtitle:'Ask about health, symptoms, tests, treatment, and get reliable information from AI.',
-    disclaimer:'AI results are for support only. Please verify important information with a specialist.',
+    new_chat:'New Diagnostic Case',search:'Search case/patient...',history:'Clinical Case Logs',
+    settings:'System Settings',app_name:'OncoVision AI™',greeting_title:'Diagnostic Assistant System',
+    greeting_text:'Welcome! Upload a medical scan to the center view or write a clinical query below for automated analysis support.',
+    input_placeholder:'Enter clinical query here...',
+    empty_title:'AI Clinical Companion',
+    empty_subtitle:'Submit medical imaging or case details to obtain specialized automated classification and report.',
+    disclaimer:'AI results are for diagnostic reference only. Please confirm with clinical specialists.',
     attach:'Attach',camera:'Open camera',choose_image:'Choose image',
-    medical_target:'Cancer group',medical_modality:'Modality',
-    light:'Light',dark:'Dark',system:'System',today:'Today',
-    medical_analyzing:'Analyzing medical image...',medical_pending:'Medical analysis is running...',
-    system_reply_text:'I received the content and will process it locally in this chat context.',
+    medical_target:'Cancer Targets',medical_modality:'Imaging Modality',
+    light:'Clinic Mode (Light)',dark:'PACS Mode (Dark)',system:'System Default',today:'Today',
+    medical_analyzing:'Analyzing medical image...',medical_pending:'Medical analysis pipeline is running...',
+    system_reply_text:'I received the content and will process it locally in this case context.',
   }
 };
 
@@ -294,12 +1265,12 @@ function translateUI(){
   document.querySelector('.history-title').textContent=t('history');
   document.querySelector('.settings-btn span').textContent=t('settings');
   document.getElementById('messageInput').placeholder=t('input_placeholder');
-  document.querySelector('.greeting-card h1').textContent=t('greeting_title');
+  document.querySelector('.greeting-card h3').textContent=t('greeting_title');
   document.querySelector('.greeting-card p').textContent=t('greeting_text');
-  document.querySelector('.empty-state h2').textContent=t('empty_title');
+  document.querySelector('.empty-state h3').textContent=t('empty_title');
   document.querySelector('.empty-state p').textContent=t('empty_subtitle');
   document.querySelector('.disclaimer').textContent=t('disclaimer');
-  const labels=document.querySelectorAll('.medical-row label');
+  const labels=document.querySelectorAll('.control-group label');
   if(labels.length>=2){labels[0].textContent=t('medical_target');labels[1].textContent=t('medical_modality')}
 }
 
@@ -310,7 +1281,9 @@ function setTheme(mode){
   document.getElementById('lightBtn').classList.toggle('active',mode==='light');
   document.getElementById('darkBtn').classList.toggle('active',mode==='dark');
   document.getElementById('systemBtn').classList.toggle('active',mode==='system');
-  document.getElementById('modeBadge').textContent=mode==='system'?'Hệ thống':mode==='dark'?t('dark'):t('light');
+  const ts = document.getElementById('themeSetting');
+  if(ts) ts.value = mode;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`language=${currentLang}&theme=${mode}`});
 }
 function applyThemeMode(){
   const mode=currentTheme==='system'?(window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark'):currentTheme;
@@ -320,9 +1293,6 @@ window.matchMedia('(prefers-color-scheme:light)').addListener(applyThemeMode);
 
 function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('collapsed');
-  const collapsed=document.getElementById('sidebar').classList.contains('collapsed');
-  document.getElementById('sidebarToggle').style.display=collapsed?'none':'flex';
-  document.getElementById('sidebarCompactToggle').style.display=collapsed?'flex':'none';
 }
 
 // Cancer targets
@@ -389,6 +1359,7 @@ async function selectConv(i){
   activeConvId=c.id;
   renderHistory();
   renderMessages();
+  syncPACSView();
 }
 async function deleteConv(i){
   const c=conversations[i];
@@ -396,6 +1367,47 @@ async function deleteConv(i){
   conversations.splice(i,1);
   if(!conversations.length)conversations.push({id:null,title:t('new_chat'),subtitle:t('today'),messages:[]});
   selectConv(Math.min(activeConvIndex,conversations.length-1));
+}
+
+// Sync last medical image to PACS Viewer
+function syncPACSView() {
+  const c = conversations[activeConvIndex];
+  let lastImage = null;
+  let patientCode = "WEB";
+  
+  if (c && c.subtitle) {
+    patientCode = c.subtitle;
+  }
+  
+  if (c && c.messages) {
+    for (let j = c.messages.length - 1; j >= 0; j--) {
+      const msg = c.messages[j];
+      if (msg.attachment_path && (msg.attachment_kind === 'image' || msg.attachment_kind === 'camera')) {
+        lastImage = msg.attachment_path;
+        break;
+      }
+    }
+  }
+  
+  const emptyDropzone = document.getElementById('emptyDropzone');
+  const pacsImageContainer = document.getElementById('pacsImageContainer');
+  const pacsActiveImage = document.getElementById('pacsActiveImage');
+  const pacsPatientCodeEl = document.getElementById('pacsPatientCode');
+  const pacsDateEl = document.getElementById('pacsDate');
+  
+  pacsPatientCodeEl.textContent = patientCode;
+  
+  if (lastImage) {
+        pacsActiveImage.src = attachmentUrl(lastImage);
+    emptyDropzone.style.display = 'none';
+    pacsImageContainer.style.display = 'flex';
+    pacsDateEl.textContent = new Date().toLocaleDateString('vi-VN');
+  } else {
+    pacsActiveImage.src = '';
+    emptyDropzone.style.display = 'flex';
+    pacsImageContainer.style.display = 'none';
+    pacsDateEl.textContent = '-';
+  }
 }
 
 // Messages
@@ -410,6 +1422,14 @@ function renderMessages(){
   c.messages.forEach(msg=>addBubble(msg,false));
   document.getElementById('messagesArea').scrollTop=document.getElementById('messagesArea').scrollHeight;
 }
+// Đường dẫn file (tuyệt đối hoặc tương đối) -> URL tĩnh dưới mount /output
+function attachmentUrl(p){
+  if(!p)return '';
+  const norm=String(p).replace(/\\/g,'/');
+  const i=norm.toLowerCase().lastIndexOf('/output/');
+  if(i>=0)return norm.slice(i);
+  return '/'+norm;
+}
 function addBubble(msg,animate=true){
   const container=document.getElementById('messagesContainer');
   const row=document.createElement('div');row.className='message-row '+(msg.sender||'assistant');
@@ -419,7 +1439,7 @@ function addBubble(msg,animate=true){
     const fname=msg.attachment_path.split('/').pop().split('\\').pop();
     html+=`<div class="attachment-name">📎 ${fname}</div>`;
     if(msg.attachment_kind==='image'||msg.attachment_kind==='camera'){
-      html+=`<img src="/${msg.attachment_path.replace(/\\/g,'/')}" onclick="previewImage(this.src)" loading="lazy">`;
+            html+=`<img src="${attachmentUrl(msg.attachment_path)}" onclick="previewImage(this.src)" loading="lazy">`;
     }
   }
   const txt=msg.text||'';
@@ -437,12 +1457,12 @@ function addBubble(msg,animate=true){
 }
 function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
-  // Upload & Send
+// Upload & Send
 function togglePlusMenu(e){
   const m=document.getElementById('plusMenu');
   if(m.style.display==='block'){m.style.display='none';return}
   m.style.display='block';
-  m.innerHTML=`<button onclick="pickImage()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> ${t('choose_image')}</button><button onclick="openCamera()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> ${t('camera')}</button>`;
+  m.innerHTML=`<button onclick="pickImage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> ${t('choose_image')}</button><button onclick="openCamera()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> ${t('camera')}</button>`;
   const rect=e.currentTarget.getBoundingClientRect();
   m.style.top=(rect.bottom+4)+'px';m.style.left=rect.left+'px';
 }
@@ -456,7 +1476,23 @@ function pickImage(){
     const f=inp.files[0];
     const fd=new FormData();fd.append('file',f);
     const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
-    if(d.ok)addAttachment(d.stored_path,'image',f.name);
+    if(d.ok) {
+      addAttachment(d.stored_path,'image',f.name);
+      
+      // Update target and modality dropdowns if auto-detected
+      if(d.detected_target) {
+        document.getElementById('targetSelect').value = d.detected_target;
+        document.getElementById('targetSelect').dispatchEvent(new Event('change'));
+      }
+      
+      // Render in PACS screen
+      document.getElementById('emptyDropzone').style.display = 'none';
+      const pacsActiveImage = document.getElementById('pacsActiveImage');
+      pacsActiveImage.src = attachmentUrl(d.stored_path);
+      document.getElementById('pacsImageContainer').style.display = 'flex';
+      document.getElementById('pacsPatientCode').textContent = "WEB_UPLOAD";
+      document.getElementById('pacsDate').textContent = new Date().toLocaleDateString('vi-VN');
+    }
   };
   inp.click();
 }
@@ -465,14 +1501,59 @@ function addAttachment(path,kind,name){
   pendingAttachments.push({path,kind,name});
   renderPreviews();
 }
+
 function renderPreviews(){
   const a=document.getElementById('imagePreviewArea');
-  a.classList.add('hidden');a.innerHTML='';
+  a.innerHTML='';
+  if (pendingAttachments.length === 0) {
+    a.classList.add('hidden');
+    return;
+  }
+  a.classList.remove('hidden');
+  pendingAttachments.forEach((att, i) => {
+    const d = document.createElement('div');
+    d.className = 'preview-thumb';
+    let src = '/' + att.path.replace(/\\/g, '/');
+    d.innerHTML = `<img src="${src}"><button class="remove-btn" onclick="removeAttachment(${i})">✕</button>`;
+    a.appendChild(d);
+  });
 }
+
 function removeAttachment(i){
   pendingAttachments.splice(i,1);
   renderPreviews();
+  if (pendingAttachments.length === 0) {
+    syncPACSView();
+  }
 }
+
+async function triggerAIScreening() {
+  const input = document.getElementById('messageInput');
+  const target = document.getElementById('targetSelect').value;
+  const modality = document.getElementById('modalitySelect').value;
+  const prompt = input.value.trim() || `Hãy sàng lọc y khoa cho ảnh này với nhóm bệnh ${target} bằng modality ${modality}.`;
+  
+  if (pendingAttachments.length === 0) {
+    // If no new attachment, check if we have one in PACS view
+    const pacsActiveImage = document.getElementById('pacsActiveImage');
+    const src = pacsActiveImage ? (pacsActiveImage.getAttribute('src') || '') : '';
+    if (src && !src.endsWith('/')) {
+      const rel = src.startsWith('/output/') ? src.slice('/output/'.length) : decodeURIComponent(src.replace(/^\//, ''));
+      pendingAttachments.push({
+        path: rel,
+        kind: 'image',
+        name: rel.split('/').pop()
+      });
+    }
+  }
+  
+  if (pendingAttachments.length > 0) {
+    sendMessage();
+  } else {
+    alert('Vui lòng tải phim chụp lên trước khi yêu cầu phân tích AI.');
+  }
+}
+
 async function sendMessage(){
   const input=document.getElementById('messageInput');
   const text=input.value.trim();
@@ -502,6 +1583,12 @@ async function sendMessage(){
   input.value='';input.style.height='auto';
   renderMessages();
   const atts=[...pendingAttachments];pendingAttachments=[];renderPreviews();
+  
+  // Show analyzing status on head-bar
+  const statusEl = document.getElementById('medicalStatus');
+  const origStatusText = statusEl.textContent;
+  statusEl.textContent = t('medical_analyzing');
+  
   // Assistant response
   if(atts.length>0){
     const att=atts[0];
@@ -532,15 +1619,23 @@ async function sendMessage(){
     await fetch(`/api/conversations/${c.id}/messages`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd2});
     c.messages.push({sender:'assistant',text:t('system_reply_text')});
   }
+  
+  statusEl.textContent = origStatusText;
   renderHistory();
+  syncPACSView();
 }
 function removeLastBubble(){
   const c=document.getElementById('messagesContainer');
   if(c.lastChild)c.removeChild(c.lastChild);
 }
 
-function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
 document.getElementById('messageInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
+
+function fillPrompt(txt) {
+  document.getElementById('messageInput').value = txt;
+  autoResize(document.getElementById('messageInput'));
+}
 
 // Voice
 function toggleVoice(){
@@ -579,7 +1674,16 @@ function openCamera(){
     if(!inp.files[0])return;
     const fd=new FormData();fd.append('file',inp.files[0]);
     const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
-    if(d.ok)addAttachment(d.stored_path,'camera','📷 '+inp.files[0].name);
+    if(d.ok) {
+      addAttachment(d.stored_path,'camera','📷 '+inp.files[0].name);
+      // Render in PACS screen
+      document.getElementById('emptyDropzone').style.display = 'none';
+      const pacsActiveImage = document.getElementById('pacsActiveImage');
+      pacsActiveImage.src = attachmentUrl(d.stored_path);
+      document.getElementById('pacsImageContainer').style.display = 'flex';
+      document.getElementById('pacsPatientCode').textContent = "CAMERA_CAPTURE";
+      document.getElementById('pacsDate').textContent = new Date().toLocaleDateString('vi-VN');
+    }
   };
   inp.click();
 }
@@ -591,16 +1695,40 @@ function previewImage(src){
 }
 document.getElementById('imagePreviewModal').onclick=e=>{if(e.target===e.currentTarget)document.getElementById('imagePreviewModal').classList.remove('active')};
 
-// Drag & drop
-document.addEventListener('dragover',e=>{e.preventDefault()});
-document.addEventListener('drop',async e=>{
+// Drag & drop on PACS Screen
+const pacsScreen = document.getElementById('pacsScreen');
+pacsScreen.addEventListener('dragenter', e => { e.preventDefault(); pacsScreen.classList.add('dragover'); });
+pacsScreen.addEventListener('dragover', e => { e.preventDefault(); pacsScreen.classList.add('dragover'); });
+pacsScreen.addEventListener('dragleave', () => { pacsScreen.classList.remove('dragover'); });
+pacsScreen.addEventListener('drop', async e => {
   e.preventDefault();
+  pacsScreen.classList.remove('dragover');
   for(const f of e.dataTransfer.files){
     const fd=new FormData();fd.append('file',f);
     const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
-    if(d.ok)addAttachment(d.stored_path,'image',f.name);
+    if(d.ok) {
+      addAttachment(d.stored_path,'image',f.name);
+      
+      // Update selections
+      if(d.detected_target) {
+        document.getElementById('targetSelect').value = d.detected_target;
+        document.getElementById('targetSelect').dispatchEvent(new Event('change'));
+      }
+      
+      // Render in PACS screen
+      document.getElementById('emptyDropzone').style.display = 'none';
+      const pacsActiveImage = document.getElementById('pacsActiveImage');
+      pacsActiveImage.src = attachmentUrl(d.stored_path);
+      document.getElementById('pacsImageContainer').style.display = 'flex';
+      document.getElementById('pacsPatientCode').textContent = "DRAG_DROP";
+      document.getElementById('pacsDate').textContent = new Date().toLocaleDateString('vi-VN');
+    }
   }
 });
+
+// Drag & drop on window (default prevent)
+document.addEventListener('dragover',e=>{e.preventDefault()});
+document.addEventListener('drop', e => { e.preventDefault(); });
 
 // Init
 (async function(){
@@ -616,7 +1744,7 @@ document.addEventListener('drop',async e=>{
   await loadConversations();
   const r2=await fetch('/api/status');const d2=await r2.json();
   if(d2.ok){
-    document.getElementById('medicalStatus').textContent='Model medical: '+(d2.model_ready?'✅ Sẵn sàng':'⏳ Chưa sẵn sàng');
+    document.getElementById('medicalStatus').textContent='Model: '+(d2.model_ready?'Sẵn sàng':'Chưa sẵn sàng');
     document.getElementById('modeBadge').textContent='Y khoa • '+(d2.analyzed_cancers||[]).length+' bệnh';
   }
 })();

@@ -121,42 +121,24 @@ class ChatDatabase:
         )
 
     def _ensure_web_tables(self, conn: sqlite3.Connection) -> None:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS web_uploads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT,
-                stored_path TEXT,
-                size_bytes INTEGER,
-                mime_type TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS web_uploads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT,
+                    stored_path TEXT,
+                    size_bytes INTEGER,
+                    mime_type TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
             )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS web_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT UNIQUE,
-                ip_address TEXT,
-                user_agent TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_web_uploads_created_at
+                ON web_uploads (created_at)
+                """
             )
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_web_uploads_created_at
-            ON web_uploads (created_at)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_web_sessions_session_id
-            ON web_sessions (session_id)
-            """
-        )
 
     def add_web_upload(self, *, filename: str, stored_path: str, size_bytes: int, mime_type: str) -> int:
         with self._connect() as conn:
@@ -165,17 +147,6 @@ class ChatDatabase:
                 (filename, stored_path, size_bytes, mime_type),
             )
             return cursor.lastrowid
-
-    def get_recent_uploads(self, limit: int = 100):
-        try:
-            with self._connect() as conn:
-                return conn.execute(
-                    "SELECT id, filename, stored_path, size_bytes, mime_type, created_at FROM web_uploads ORDER BY id DESC LIMIT ?",
-                    (limit,),
-                ).fetchall()
-        except sqlite3.Error:
-            logger.exception("Failed to load web uploads")
-            return []
 
     def get_db_stats(self) -> dict:
         try:
@@ -254,6 +225,51 @@ class ChatDatabase:
             for conversation_id, title, subtitle in conversation_rows
         ]
 
+    def conversation_exists(self, conv_id: int) -> bool:
+        try:
+            with self._connect() as conn:
+                return (
+                    conn.execute("SELECT 1 FROM conversations WHERE id = ?", (conv_id,)).fetchone()
+                    is not None
+                )
+        except sqlite3.Error:
+            logger.exception("Failed to check conversation %s in chat history database", conv_id)
+            return False
+
+    def get_conversation(self, conv_id: int) -> Conversation | None:
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT id, title, subtitle FROM conversations WHERE id = ?", (conv_id,)
+                ).fetchone()
+                if row is None:
+                    return None
+                message_rows = conn.execute(
+                    """
+                    SELECT conversation_id, sender, text, attachment_path, attachment_kind, metadata_json, id
+                    FROM messages
+                    WHERE conversation_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (conv_id,),
+                ).fetchall()
+        except sqlite3.Error:
+            logger.exception("Failed to load conversation %s from chat history database", conv_id)
+            return None
+
+        messages = [
+            ChatMessage(
+                sender=sender,
+                text=text,
+                attachment_path=path,
+                attachment_kind=kind,
+                metadata_json=metadata_json,
+                id=message_id,
+            )
+            for _, sender, text, path, kind, metadata_json, message_id in message_rows
+        ]
+        return Conversation(title=row[1], subtitle=row[2], messages=messages, id=row[0])
+
     def create_conversation(self, title: str, subtitle: str) -> int:
         with self._connect() as conn:
             cursor = conn.execute("INSERT INTO conversations (title, subtitle) VALUES (?, ?)", (title, subtitle))
@@ -278,10 +294,6 @@ class ChatDatabase:
     def clear_all_conversations(self):
         with self._connect() as conn:
             conn.execute("DELETE FROM conversations")
-
-    def clear_all_messages(self):
-        with self._connect() as conn:
-            conn.execute("DELETE FROM messages")
 
     def search_conversations_by_message(self, query: str) -> list[int]:
         if not query:

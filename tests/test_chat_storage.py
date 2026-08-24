@@ -85,6 +85,23 @@ class ChatStorageTests(unittest.TestCase):
 
             self.assertEqual(conversations[0].messages[0].metadata_json, '{"risk_level":"high","medical_case_id":12}')
 
+    def test_get_conversation_and_exists_query_single_row(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = ChatDatabase(str(Path(temp_dir) / "chat.db"))
+            first_id = db.create_conversation("First", "Today")
+            second_id = db.create_conversation("Second", "Today")
+            db.add_message(first_id, ChatMessage(sender="user", text="one"))
+            db.add_message(second_id, ChatMessage(sender="user", text="two"))
+
+            conv = db.get_conversation(second_id)
+
+            self.assertIsNotNone(conv)
+            self.assertEqual(conv.id, second_id)
+            self.assertEqual([message.text for message in conv.messages], ["two"])
+            self.assertTrue(db.conversation_exists(second_id))
+            self.assertIsNone(db.get_conversation(9999))
+            self.assertFalse(db.conversation_exists(9999))
+
     def test_init_creates_message_indexes_for_new_database(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "chat.db"

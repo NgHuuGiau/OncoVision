@@ -46,7 +46,7 @@ def _split_train_val(
 
 def train_modality_classifier(
     dataset_root: str | Path = "dataset/medical_modality",
-    output_path: str | Path = "D:/OncoVision/modality_classifier.pt",
+    output_path: str | Path = "modality_classifier.pt",
     *,
     image_size: int = 320,
     batch_size: int = 16,

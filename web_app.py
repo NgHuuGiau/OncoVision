@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
+import aiofiles
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,10 +28,26 @@ logger = get_logger(__name__)
 WEB_UPLOADS_DIR = OUTPUT_DIR / "web_uploads"
 WEB_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
+
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="OncoVision Web Chat")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    logger.info("OncoVision Web Chat khoi dong...")
+    try:
+        service = get_medical_service()
+        service.check_ready()
+        logger.info("Medical service san sang.")
+    except Exception as exc:
+        logger.warning("Medical service chua san sang: %s", exc)
+    yield
+
+
+app = FastAPI(title="OncoVision Web Chat", lifespan=lifespan)
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -53,20 +71,9 @@ def get_medical_service() -> MedicalChatService:
 
 def _safe_path(base: Path, path: str) -> Path | None:
     resolved = (base / path).resolve()
-    if not str(resolved).startswith(str(base.resolve())):
+    if not resolved.is_relative_to(base.resolve()):
         return None
     return resolved if resolved.exists() else None
-
-
-@app.on_event("startup")
-async def startup():
-    logger.info("OncoVision Web Chat khoi dong...")
-    try:
-        service = get_medical_service()
-        service.check_ready()
-        logger.info("Medical service san sang.")
-    except Exception as exc:
-        logger.warning("Medical service chua san sang: %s", exc)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -82,11 +89,18 @@ async def index(request: Request):
     })
 
 
+_STATUS_CACHE_TTL_SECONDS = 60.0
+_status_cache: tuple[float, dict] | None = None
+
+
 @app.get("/api/status")
-async def api_status():
+def api_status():
+    global _status_cache
+    if _status_cache is not None and time.monotonic() - _status_cache[0] < _STATUS_CACHE_TTL_SECONDS:
+        return _status_cache[1]
     medical = get_medical_system_status()
     db_stats = get_db().get_db_stats()
-    return {
+    payload = {
         "ok": True,
         "model_ready": medical.model_ready,
         "model_message": medical.model_message,
@@ -98,6 +112,26 @@ async def api_status():
         "db_stats": db_stats,
         "disclaimer": MEDICAL_DISCLAIMER,
     }
+    _status_cache = (time.monotonic(), payload)
+    return payload
+
+
+async def _save_upload(file: UploadFile, dest: Path) -> int:
+    size = 0
+    try:
+        async with aiofiles.open(dest, "wb") as out:
+            while chunk := await file.read(_UPLOAD_CHUNK_BYTES):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File quá lớn (tối đa {MAX_UPLOAD_BYTES // (1024 * 1024)}MB).",
+                    )
+                await out.write(chunk)
+    except Exception:
+        dest.unlink(missing_ok=True)
+        raise
+    return size
 
 
 @app.post("/api/upload")
@@ -113,39 +147,38 @@ async def upload_file(file: Annotated[UploadFile, File()]):
     token = uuid.uuid4().hex[:10]
     safe_name = f"{timestamp}_{token}_{filename}"
     stored_path = WEB_UPLOADS_DIR / safe_name
-    content = await file.read()
-    stored_path.write_bytes(content)
+    size_bytes = await _save_upload(file, stored_path)
     upload_id = get_db().add_web_upload(
         filename=filename,
         stored_path=str(stored_path),
-        size_bytes=len(content),
+        size_bytes=size_bytes,
         mime_type=file.content_type or "application/octet-stream",
     )
     # Auto-detect medical context
     target_key, modality = infer_medical_upload_context(str(stored_path))
-    logger.info("Da upload file: %s (%d bytes), context: %s / %s", filename, len(content), target_key, modality)
+    logger.info("Da upload file: %s (%d bytes), context: %s / %s", filename, size_bytes, target_key, modality)
     return {
         "ok": True,
         "upload_id": upload_id,
         "filename": filename,
         "stored_path": str(stored_path),
-        "size_bytes": len(content),
+        "size_bytes": size_bytes,
         "detected_target": target_key,
         "detected_modality": modality,
     }
 
 
 @app.post("/api/analyze")
-async def analyze_image(
+def analyze_image(
     image_path: str = Form(""),
     patient_code: str = Form("WEB"),
     user_prompt: str = Form(""),
 ):
     if not image_path or not image_path.strip():
         raise HTTPException(status_code=400, detail="Thieu file anh.")
-    stored = _safe_path(PROJECT_ROOT, image_path)
+    stored = _safe_path(OUTPUT_DIR, image_path)
     if stored is None:
-        raise HTTPException(status_code=400, detail=f"Không tìm thấy file: {image_path}")
+        raise HTTPException(status_code=400, detail=f"Không tìm thấy file hợp lệ: {image_path}")
     pc = patient_code or f"WEB-{uuid.uuid4().hex[:8].upper()}"
     try:
         service = get_medical_service()
@@ -216,36 +249,35 @@ async def list_conversations():
 
 @app.get("/api/conversations/{conv_id}")
 async def get_conversation(conv_id: int):
-    convs = get_db().get_all_conversations()
-    for conv in convs:
-        if conv.id == conv_id:
-            msgs = []
-            for msg in conv.messages:
-                msgs.append({
-                    "id": msg.id,
-                    "sender": msg.sender,
-                    "text": msg.text,
-                    "attachment_path": msg.attachment_path,
-                    "attachment_kind": msg.attachment_kind,
-                    "metadata_json": msg.metadata_json,
-                })
-            return {
-                "ok": True,
-                "conversation": {
-                    "id": conv.id,
-                    "title": conv.title or "Hoi thoai",
-                    "subtitle": conv.subtitle or "",
-                    "messages": msgs,
-                },
-            }
-    raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
+    conv = get_db().get_conversation(conv_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
+    msgs = []
+    for msg in conv.messages:
+        msgs.append({
+            "id": msg.id,
+            "sender": msg.sender,
+            "text": msg.text,
+            "attachment_path": msg.attachment_path,
+            "attachment_kind": msg.attachment_kind,
+            "metadata_json": msg.metadata_json,
+        })
+    return {
+        "ok": True,
+        "conversation": {
+            "id": conv.id,
+            "title": conv.title or "Hoi thoai",
+            "subtitle": conv.subtitle or "",
+            "messages": msgs,
+        },
+    }
 
 
 @app.post("/api/conversations/{conv_id}/messages")
 async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""), attachment_path: str = Form(""), attachment_kind: str = Form("")):
     db = get_db()
-    convs = db.get_all_conversations()
-    if not any(c.id == conv_id for c in convs):
+    conv = db.get_conversation(conv_id)
+    if conv is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
     msg = ChatMessage(
         sender=sender,
@@ -255,7 +287,6 @@ async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""
     )
     msg_id = db.add_message(conv_id, msg)
     # Auto-title from first user message
-    conv = next(c for c in convs if c.id == conv_id)
     if sender == "user" and conv.title in ("Cuoc tro chuyen moi", "New chat", ""):
         first_line = text.strip().splitlines()[0] if text.strip() else ""
         if first_line and len(first_line) > 2:
@@ -266,7 +297,7 @@ async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""
 @app.delete("/api/conversations/{conv_id}")
 async def delete_conversation(conv_id: int):
     db = get_db()
-    if not any(c.id == conv_id for c in db.get_all_conversations()):
+    if not db.conversation_exists(conv_id):
         raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
     db.delete_conversation(conv_id)
     return {"ok": True}
@@ -292,3 +323,9 @@ async def save_settings(language: str = Form("vi"), theme: str = Form("system"))
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=8000)

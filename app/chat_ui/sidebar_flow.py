@@ -16,10 +16,6 @@ from app.chat_ui.icons import themed_icon, themed_pixmap
 from app.chat_ui.widgets import HistoryItemWidget
 
 
-def build_sidebar_ui(window) -> None:
-    return None
-
-
 def apply_theme_assets(window) -> None:
     strong = window.icon_color()
     window.sidebar_toggle_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
@@ -252,7 +248,7 @@ def delete_conversation(window, index_to_delete: int) -> None:
 
 
 def clear_all_history(window) -> None:
-    window.db.clear_conversations()
+    window.db.clear_all_conversations()
     window.conversations = [window._build_empty_conversation()]
     window.active_conversation_index = 0
     window.refresh_history()

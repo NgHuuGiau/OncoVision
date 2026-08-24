@@ -84,19 +84,6 @@ class RuntimeConfig:
             "low_light_mean_threshold": self.low_light_mean_threshold,
         }
 
-    def pretty_report(self) -> str:
-        return (
-            "===== CẤU HÌNH ĐƯỢC CHỌN =====\n"
-            f"Chế độ: {self.mode}\n"
-            f"Profile: {self.profile_name}\n"
-            f"Phần cứng: {self.hardware_tier}\n"
-            f"Device: {self.resolved_device}\n"
-            f"Model: {self.primary_model_name}\n"
-            f"imgsz: {self.imgsz}\n"
-            f"Half: {'on' if self.use_half else 'off'}\n"
-            f"Camera size: {self.camera_width}x{self.camera_height}"
-        )
-
 
 def _camera_preset(settings: dict) -> dict:
     return settings.get("display_camera") or settings.get("camera") or {}

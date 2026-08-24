@@ -110,13 +110,6 @@ class ActiveLearningLogger:
             ])
         self._file_handle.flush()
 
-    def get_stats(self) -> dict[str, int]:
-        return {
-            "total_samples_reviewed": self._total_reviewed,
-            "samples_flagged": self._flagged_count,
-            "samples_confirmed": self._confirmed_count,
-        }
-
     def close(self) -> None:
         self._file_handle.close()
 
