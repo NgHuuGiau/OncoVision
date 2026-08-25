@@ -63,6 +63,8 @@ python run_smoke.py
 python run_chat.py
 
 # Giao diện web (optional)
+python web_app.py
+# hoặc
 python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
 ```
 

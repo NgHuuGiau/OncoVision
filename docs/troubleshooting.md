@@ -88,14 +88,16 @@ Xem theo thứ tự:
 ## 7. Web Chat UI không mở được
 
 ```powershell
-python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
-# Mở http://localhost:8000
+python web_app.py
+# hoặc
+python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
+# Mở http://127.0.0.1:8000
 ```
 
 Nếu lỗi:
 
 - Kiểm tra đã cài dependencies: `pip install -r requirements.txt`
 - Kiểm tra port 8000 có bị chiếm: `netstat -ano | findstr :8000`
-- Thử port khác: `python -m uvicorn web_app:app --host 0.0.0.0 --port 8080`
+- Thử port khác: `python -m uvicorn web_app:app --host 127.0.0.1 --port 8080`
 - Xem log server để tìm lỗi cụ thể
-- Admin DB: `http://localhost:8000/admin/db`
+- Admin DB: `http://127.0.0.1:8000/admin/db`

@@ -71,7 +71,7 @@ python -m unittest discover -s tests -p "test_*.py"
 | Gợi ý runtime | `python run_app.py --advisor-only` |
 | Camera realtime | `python run_app.py` |
 | Chat UI desktop | `python run_chat.py` |
-| Chat UI web | `python -m uvicorn web_app:app --host 0.0.0.0 --port 8000` |
+| Chat UI web | `python web_app.py` hoặc `python -m uvicorn web_app:app --host 127.0.0.1 --port 8000` |
 | Medical CLI | `python run_medical.py status` |
 
 ---

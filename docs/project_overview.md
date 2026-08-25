@@ -88,6 +88,8 @@ Tất cả entrypoint đều là lớp mỏng: gọi module xử lý tương ứ
 | `run_doctor.py` | Quét tổng thể hệ thống |
 | `run_medical.py` | CLI quản lý nhánh y dược |
 | `run_smoke.py` | Smoke check (CI-friendly) |
+| `run_tests.py` | Dashboard chạy unit test |
+| `web_app.py` | Web app upload ảnh → phân tích (FastAPI) |
 
 ---
 

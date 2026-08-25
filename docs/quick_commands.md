@@ -27,9 +27,11 @@ python run_chat.py --cleanup-output --older-than-days 30
 ### Web
 
 ```powershell
-python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
-# Mở http://localhost:8000
-# Admin DB: http://localhost:8000/admin/db
+python web_app.py
+# hoặc
+python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
+# Mở http://127.0.0.1:8000
+# Admin DB: http://127.0.0.1:8000/admin/db
 ```
 
 ## 3. Camera realtime
@@ -50,7 +52,6 @@ python run_medical.py ready
 python run_medical.py sources
 python run_medical.py cancer
 python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
-python -m uvicorn web_app:app --host 0.0.0.0 --port 8000
 ```
 
 ## 5. Model & phân tích
