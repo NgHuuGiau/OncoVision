@@ -121,24 +121,24 @@ class ChatDatabase:
         )
 
     def _ensure_web_tables(self, conn: sqlite3.Connection) -> None:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS web_uploads (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    filename TEXT,
-                    stored_path TEXT,
-                    size_bytes INTEGER,
-                    mime_type TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT,
+                stored_path TEXT,
+                size_bytes INTEGER,
+                mime_type TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_web_uploads_created_at
-                ON web_uploads (created_at)
-                """
-            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_uploads_created_at
+            ON web_uploads (created_at)
+            """
+        )
 
     def add_web_upload(self, *, filename: str, stored_path: str, size_bytes: int, mime_type: str) -> int:
         with self._connect() as conn:
