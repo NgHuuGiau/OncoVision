@@ -89,7 +89,7 @@ class CameraDetectorTests(unittest.TestCase):
 
     @patch(
         "core.camera_runner.draw_detection_results",
-        side_effect=lambda image, detections, box_thickness, label_font_scale, motion_trails=None, fps=None, show_fps=False: image,
+        side_effect=lambda image, detections, box_thickness, label_font_scale, motion_trails=None, fps=None, show_fps=False, show_heatmap=True: image,
     )
     @patch("core.camera_runner.cv2.VideoCapture")
     @patch("core.camera_runner.load_yolo_model")

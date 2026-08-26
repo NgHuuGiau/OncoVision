@@ -9,7 +9,7 @@ from typing import Annotated
 
 import aiofiles
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -17,9 +17,12 @@ from app.chat_ui.models import ChatMessage
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, OUTPUT_DIR, PROJECT_ROOT
 from app.chat_ui.storage import ChatDatabase
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
+from medical.case_payloads import build_case_export_payload
 from medical.chat_service import MedicalChatResponse, MedicalChatService
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dataset import infer_medical_upload_context
+from medical.reporting import export_case_pdf
+from medical.storage import MedicalCaseDatabase
 from medical.system_status import get_medical_system_status
 from utils.logger import get_logger
 
@@ -53,6 +56,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 _db: ChatDatabase | None = None
 _medical_service: MedicalChatService | None = None
+_case_db: MedicalCaseDatabase | None = None
 
 
 def get_db() -> ChatDatabase:
@@ -60,6 +64,13 @@ def get_db() -> ChatDatabase:
     if _db is None:
         _db = ChatDatabase(str(CHAT_HISTORY_DB_PATH))
     return _db
+
+
+def get_case_db() -> MedicalCaseDatabase:
+    global _case_db
+    if _case_db is None:
+        _case_db = MedicalCaseDatabase(CHAT_HISTORY_DB_PATH)
+    return _case_db
 
 
 def get_medical_service() -> MedicalChatService:
@@ -173,6 +184,7 @@ def analyze_image(
     image_path: str = Form(""),
     patient_code: str = Form("WEB"),
     user_prompt: str = Form(""),
+    conversation_id: int = Form(0),
 ):
     if not image_path or not image_path.strip():
         raise HTTPException(status_code=400, detail="Thieu file anh.")
@@ -191,6 +203,17 @@ def analyze_image(
         logger.exception("Phân tích ảnh thất bại: %s", stored)
         raise HTTPException(status_code=500, detail=f"Lỗi phân tích: {exc}")
     metadata = json.loads(response.metadata_json) if response.metadata_json else {}
+    # Khi caller quản lý hội thoại của nó, không tạo hội thoại/tin nhắn trùng ở đây.
+    if conversation_id and get_db().conversation_exists(conversation_id):
+        return {
+            "ok": True,
+            "conversation_id": conversation_id,
+            "reply_text": response.reply_text,
+            "attachment_path": response.attachment_path,
+            "attachment_kind": response.attachment_kind,
+            "metadata": metadata,
+            "metadata_json": response.metadata_json,
+        }
     fname = Path(image_path).name
     title = f"Phân tích {fname}"
     db = get_db()
@@ -212,6 +235,7 @@ def analyze_image(
         "attachment_path": response.attachment_path,
         "attachment_kind": response.attachment_kind,
         "metadata": metadata,
+        "metadata_json": response.metadata_json,
     }
 
 
@@ -220,6 +244,49 @@ async def create_conversation():
     db = get_db()
     conv_id = db.create_conversation(title="Cuoc tro chuyen moi", subtitle="Hom nay")
     return {"ok": True, "conversation_id": conv_id}
+
+
+def _case_summary(record) -> dict:
+    return {
+        "case_id": record.case_id,
+        "patient_code": record.patient_code,
+        "risk_level": record.risk_level,
+        "suspected_malignant": record.suspected_malignant,
+        "image_path": record.image_path,
+        "processed_image_path": record.processed_image_path,
+        "recommendation": record.recommendation,
+        "created_at": record.created_at,
+        "detections": record.metadata.get("detections", []),
+        "average_confidence": record.metadata.get("average_confidence", 0),
+        "model_name": record.metadata.get("model_name", "-"),
+        "quality_warnings": record.metadata.get("quality_warnings", []),
+    }
+
+
+@app.get("/api/cases")
+def list_cases():
+    cases = [_case_summary(r) for r in get_case_db().list_cases()]
+    return {"ok": True, "cases": cases}
+
+
+@app.get("/api/cases/{case_id}")
+def get_case(case_id: int):
+    record = get_case_db().get_case(case_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    return {"ok": True, "case": _case_summary(record)}
+
+
+@app.get("/api/cases/{case_id}/pdf")
+def download_case_pdf(case_id: int):
+    record = get_case_db().get_case(case_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    try:
+        pdf_path = export_case_pdf(OUTPUT_DIR / "medical" / "reports", build_case_export_payload(record))
+    except ImportError as exc:
+        raise HTTPException(status_code=501, detail=str(exc))
+    return FileResponse(pdf_path, filename=pdf_path.name, media_type="application/pdf")
 
 
 @app.get("/api/conversations")
@@ -274,7 +341,7 @@ async def get_conversation(conv_id: int):
 
 
 @app.post("/api/conversations/{conv_id}/messages")
-async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""), attachment_path: str = Form(""), attachment_kind: str = Form("")):
+async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""), attachment_path: str = Form(""), attachment_kind: str = Form(""), metadata_json: str = Form("")):
     db = get_db()
     conv = db.get_conversation(conv_id)
     if conv is None:
@@ -284,6 +351,7 @@ async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""
         text=text,
         attachment_path=attachment_path or None,
         attachment_kind=attachment_kind or None,
+        metadata_json=metadata_json or None,
     )
     msg_id = db.add_message(conv_id, msg)
     # Auto-title from first user message

@@ -134,6 +134,7 @@ def draw_detection_results(
     motion_trails: dict[int, list[tuple[int, int]]] | None = None,
     fps: float | None = None,
     show_fps: bool = False,
+    show_heatmap: bool = True,
 ) -> np.ndarray:
     detection_list = list(detections)
     trail_overlay = image.copy() if (motion_trails and len(motion_trails) > 0) else None
@@ -155,7 +156,7 @@ def draw_detection_results(
                 cv2.circle(trail_overlay, end, max(1, thickness // 2), box_color, -1, cv2.LINE_AA)
         if drew_trail:
             image = cv2.addWeighted(trail_overlay, 0.30, image, 0.70, 0.0)
-    if detection_list:
+    if detection_list and show_heatmap:
         heatmap = np.zeros((image.shape[0], image.shape[1]), dtype=np.float32)
         for detection in detection_list:
             clamped_bbox = _clamp_bbox_to_image(detection.bbox, image.shape)

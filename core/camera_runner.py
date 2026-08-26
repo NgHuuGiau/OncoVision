@@ -55,6 +55,7 @@ class CameraSessionControls:
     show_overlays: bool = True
     show_fps: bool = True
     show_trails: bool = True
+    medical_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -342,10 +343,22 @@ class CameraDetector:
                 detections=detections,
                 box_thickness=self._effective_box_thickness(),
                 label_font_scale=self._effective_label_font_scale(),
-                motion_trails=self.display_trails if controls.show_trails else None,
+                motion_trails=self.display_trails if (controls.show_trails and not controls.medical_mode) else None,
                 fps=fps,
                 show_fps=controls.show_fps,
+                show_heatmap=not controls.medical_mode,
             )
+            if controls.medical_mode:
+                cv2.putText(
+                    processed_frame,
+                    "MEDICAL MODE - nhan M de tat",
+                    (12, 28),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (80, 220, 100),
+                    2,
+                    cv2.LINE_AA,
+                )
         else:
             processed_frame = frame.copy()
         return True, processed_frame, detections, fps
@@ -589,18 +602,28 @@ def _toggle_session_controls(controls: CameraSessionControls, key: int) -> Camer
             show_overlays=not controls.show_overlays,
             show_fps=controls.show_fps,
             show_trails=controls.show_trails,
+            medical_mode=controls.medical_mode,
         )
     if key in (ord("f"), ord("F")):
         return CameraSessionControls(
             show_overlays=controls.show_overlays,
             show_fps=not controls.show_fps,
             show_trails=controls.show_trails,
+            medical_mode=controls.medical_mode,
         )
     if key in (ord("t"), ord("T")):
         return CameraSessionControls(
             show_overlays=controls.show_overlays,
             show_fps=controls.show_fps,
             show_trails=not controls.show_trails,
+            medical_mode=controls.medical_mode,
+        )
+    if key in (ord("m"), ord("M")):
+        return CameraSessionControls(
+            show_overlays=controls.show_overlays,
+            show_fps=controls.show_fps,
+            show_trails=controls.show_trails,
+            medical_mode=not controls.medical_mode,
         )
     return controls
 

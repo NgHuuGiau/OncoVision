@@ -9,10 +9,10 @@ from medical.cancer_catalog import supported_cancer_labels, supported_cancer_mod
 from medical.case_payloads import build_detection_metadata
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.pipeline import MedicalImageAnalyzer
-
-ProgressCallback = Callable[[str, float], None] | None
 from medical.reporting import update_case_report_case_id
 from medical.storage import MedicalCaseDatabase
+
+ProgressCallback = Callable[[str, float], None] | None
 
 
 @dataclass(frozen=True)
@@ -93,6 +93,7 @@ class MedicalChatService:
             "quality_warnings": result.quality_warnings,
             "supported_screening_targets": supported_cancer_labels(),
             "supported_modalities": supported_cancer_modalities(),
+            "detections": [{"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in result.detections],
             "predicted_labels": [item.label for item in result.detections],
         }
         top_detections = result.detections[:3]
