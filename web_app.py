@@ -165,7 +165,7 @@ async def upload_file(file: Annotated[UploadFile, File()]):
         size_bytes=size_bytes,
         mime_type=file.content_type or "application/octet-stream",
     )
-    # Auto-detect medical context
+
     target_key, modality = infer_medical_upload_context(str(stored_path))
     logger.info("Da upload file: %s (%d bytes), context: %s / %s", filename, size_bytes, target_key, modality)
     return {
@@ -203,7 +203,7 @@ def analyze_image(
         logger.exception("Phân tích ảnh thất bại: %s", stored)
         raise HTTPException(status_code=500, detail=f"Lỗi phân tích: {exc}")
     metadata = json.loads(response.metadata_json) if response.metadata_json else {}
-    # Khi caller quản lý hội thoại của nó, không tạo hội thoại/tin nhắn trùng ở đây.
+
     if conversation_id and get_db().conversation_exists(conversation_id):
         return {
             "ok": True,
@@ -354,7 +354,7 @@ async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""
         metadata_json=metadata_json or None,
     )
     msg_id = db.add_message(conv_id, msg)
-    # Auto-title from first user message
+
     if sender == "user" and conv.title in ("Cuoc tro chuyen moi", "New chat", ""):
         first_line = text.strip().splitlines()[0] if text.strip() else ""
         if first_line and len(first_line) > 2:

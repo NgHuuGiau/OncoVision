@@ -281,7 +281,7 @@ def _collect_medical_text(path: Path) -> str:
 def _collect_dicom_text(path: Path) -> str:
     try:
         import pydicom
-    except ImportError:  # pragma: no cover
+    except ImportError:# pragma: no cover
         return ""
 
     try:
@@ -331,7 +331,7 @@ def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:
         pydicom = None
         try:
             import pydicom  # type: ignore[assignment]
-        except ImportError:  # pragma: no cover
+        except ImportError:# pragma: no cover
             pass
         if pydicom is not None:
             try:
@@ -445,7 +445,7 @@ def _load_dicom_slice(source: Path) -> Image.Image:
     try:
         import pydicom
         from pydicom.pixels import apply_voi_lut
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:# pragma: no cover
         raise RuntimeError("Không đọc được DICOM. Hãy cài đặt pydicom để mở file .dcm.") from exc
 
     dataset = pydicom.dcmread(str(source), force=True)
@@ -467,7 +467,7 @@ def _load_dicom_slice(source: Path) -> Image.Image:
 def _load_nifti_volume(source: Path) -> np.ndarray:
     try:
         import nibabel as nib
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:# pragma: no cover
         raise RuntimeError("Không đọc được NIfTI. Hãy cài đặt nibabel để mở file .nii/.nii.gz.") from exc
 
     image = nib.load(str(source))
@@ -480,7 +480,7 @@ def _load_nifti_volume(source: Path) -> np.ndarray:
 def _load_mha_volume(source: Path) -> np.ndarray:
     try:
         import SimpleITK as sitk  # type: ignore[import-not-found]
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:# pragma: no cover
         raise RuntimeError("Không đọc được MHA/MHD. Hãy cài đặt SimpleITK để mở file .mha/.mhd.") from exc
 
     image = sitk.ReadImage(str(source))
@@ -492,7 +492,7 @@ def _load_dicom_series_volume(source: Path) -> np.ndarray:
     try:
         import pydicom
         from pydicom.pixels import apply_voi_lut
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:# pragma: no cover
         raise RuntimeError("Không đọc được DICOM. Hãy cài đặt pydicom để mở thư mục series .dcm.") from exc
 
     slice_entries: list[tuple[float, np.ndarray]] = []

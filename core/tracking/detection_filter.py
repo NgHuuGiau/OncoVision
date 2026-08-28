@@ -1,4 +1,4 @@
-# Detection filter module
+
 
 DISPLAY_NMS_IOU = 0.45
 PERSON_MIN_CONFIDENCE = 0.60

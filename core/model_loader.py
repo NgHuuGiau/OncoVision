@@ -30,7 +30,7 @@ def _require_yolo() -> Any:
     if YOLO is None and ULTRALYTICS_IMPORT_ERROR is None:
         try:
             YOLO = importlib.import_module("ultralytics").YOLO
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:# pragma: no cover
             ULTRALYTICS_IMPORT_ERROR = exc
     if YOLO is None:
         raise RuntimeError(f"Không khởi tạo được ultralytics/YOLO: {ULTRALYTICS_IMPORT_ERROR}")
@@ -87,7 +87,7 @@ def load_yolo_model(runtime: RuntimeConfig) -> tuple[LoadedModel, str]:
                 model = yolo_cls(candidate)
                 runtime.active_model_name = model_name
                 return LoadedModel(model=model, model_name=model_name, source_path=candidate), runtime.resolved_device
-            except Exception as exc:  # pragma: no cover
+            except Exception as exc:# pragma: no cover
                 errors.append(f"{candidate}: {exc}")
                 logger.warning("Failed to load %s: %s", candidate, exc)
     raise RuntimeError(

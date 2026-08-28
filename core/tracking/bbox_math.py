@@ -1,4 +1,4 @@
-# Bounding box mathematical operations
+
 
 def _bbox_iou(box_a: tuple[int, int, int, int], box_b: tuple[int, int, int, int]) -> float:
     ax1, ay1, ax2, ay2 = box_a

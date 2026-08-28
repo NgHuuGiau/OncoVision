@@ -7,7 +7,7 @@ import psutil
 
 try:
     import GPUtil
-except ImportError:  # pragma: no cover
+except ImportError:# pragma: no cover
     GPUtil = None
 
 torch = None
@@ -105,7 +105,7 @@ def _load_torch():
         import torch as imported_torch
 
         torch = imported_torch
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:# pragma: no cover
         TORCH_IMPORT_ERROR = exc
         torch = None
     return torch

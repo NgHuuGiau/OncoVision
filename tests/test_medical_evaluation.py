@@ -17,7 +17,7 @@ class _FakeModel:
         self.class_labels = class_labels
 
     def predict(self, image_path, top_k: int = 3):
-        # Ten file dang '<label_index>_...': doan dung lop do voi conf cao.
+
         stem = Path(image_path).stem
         idx = int(stem.split("_")[0])
         results = []
@@ -116,7 +116,7 @@ class PredictScoresTests(unittest.TestCase):
 
         idx, scores = evaluation._predict_scores(_ForeignModel(), Path("0_a.jpg"), ("A", "B"))
         self.assertEqual(idx, -1)
-        # Không nhãn nào khớp nên scores vẫn là vector 0.
+
         self.assertEqual(float(scores.sum()), 0.0)
 
     def test_in_vocab_label_maps_correctly(self) -> None:

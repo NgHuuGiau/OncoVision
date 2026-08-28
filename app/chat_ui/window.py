@@ -239,7 +239,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
             self.language = self.db.get_setting("language", "vi")
             self.theme_mode = self.db.get_setting("theme", "system")
-            
+
             self.active_conversation_index = 0
             self.setup_tray_icon()
             self.setup_voice_animation()
@@ -302,8 +302,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def setup_voice_animation(self) -> None:
             self.pulse_anim = QVariantAnimation(self)
             self.pulse_anim.setDuration(700)
-            self.pulse_anim.setStartValue(QColor("#FF5252"))  # Bright red
-            self.pulse_anim.setEndValue(QColor("#7F2929"))  # Dark red
+            self.pulse_anim.setStartValue(QColor("#FF5252"))
+            self.pulse_anim.setEndValue(QColor("#7F2929"))
             self.pulse_anim.setEasingCurve(QEasingCurve.InOutSine)
             self.pulse_anim.setLoopCount(-1)
             self.pulse_anim.valueChanged.connect(self.update_mic_style)
@@ -340,13 +340,13 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def build_ui(self) -> None:
             root_widget = QWidget()
             root_widget.setObjectName("Root")
-            
+
             self.sidebar_shadow = QGraphicsDropShadowEffect(root_widget)
             self.sidebar_shadow.setBlurRadius(30)
             self.sidebar_shadow.setXOffset(10)
             self.sidebar_shadow.setYOffset(0)
             self.sidebar_shadow.setColor(QColor(0, 0, 0, 100))
-            
+
             root = QHBoxLayout(root_widget)
             root.setContentsMargins(14, 14, 14, 14)
             root.setSpacing(16)
@@ -442,10 +442,10 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.history_list = QListWidget()
             self.history_list.setFrameShape(QFrame.NoFrame)
             self.history_list.setSpacing(8)
-            self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Ẩn thanh cuộn dọc
-            self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Ẩn thanh cuộn ngang
-            self.history_list.setContextMenuPolicy(Qt.CustomContextMenu)  # Kích hoạt menu ngữ cảnh
-            self.history_list.customContextMenuRequested.connect(self.show_history_context_menu)  # Kết nối sự kiện chuột phải
+            self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.history_list.setContextMenuPolicy(Qt.CustomContextMenu)
+            self.history_list.customContextMenuRequested.connect(self.show_history_context_menu)
             self.history_list.currentRowChanged.connect(self.select_conversation)
             history_panel_layout.addWidget(self.history_list, 1)
             open_layout.addWidget(self.history_panel)
@@ -791,12 +791,12 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                 widget = item.widget()
                 if widget is not None:
                     widget.deleteLater()
-            
+
             messages = self.active_conversation().messages
             self.greeting_card.setVisible(len(messages) == 0)
             self.empty_state.setVisible(len(messages) == 0)
             self.scroll_area.setVisible(len(messages) > 0)
-            
+
             for message in messages:
                 bubble = ChatBubble(message, language=self.language, align_right=message.sender == "user", window=self)
                 self.messages_layout.insertWidget(self.messages_layout.count() - 1, bubble)

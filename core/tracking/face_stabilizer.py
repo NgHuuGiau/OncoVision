@@ -1,4 +1,4 @@
-# Face stabilization module
+
 
 FACE_LABEL = "face"
 FACE_TRACKING_STICKY_ALPHA = 0.90

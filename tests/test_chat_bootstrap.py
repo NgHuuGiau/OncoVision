@@ -68,7 +68,7 @@ class ChatBootstrapTests(unittest.TestCase):
     ) -> None:
         hardware = object()
         detect_hardware_mock.return_value = hardware
-        
+
         @dataclass
         class FakeRuntime:
             primary_model_name: str

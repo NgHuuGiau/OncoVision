@@ -32,7 +32,7 @@ class SegmentationROIIntegrationTests(unittest.TestCase):
     def test_roi_enabled_crops_with_fallback_otsu(self) -> None:
         analyzer = self._analyzer(enable_segmentation_roi=True, segmentation_roi_margin=4)
         image = np.zeros((128, 128, 3), dtype=np.uint8)
-        image[40:90, 40:90] = 255  # vùng sáng để Otsu tách ra
+        image[40:90, 40:90] = 255
         out, roi_info = analyzer._apply_segmentation_roi(image)
         self.assertIsNotNone(roi_info)
         self.assertIn("bbox", roi_info)
@@ -53,8 +53,8 @@ class UncertaintyIntegrationTests(unittest.TestCase):
         self.assertIsNone(analyzer._estimate_uncertainty(image))
 
     def test_uncertainty_returns_none_when_no_cnn(self) -> None:
-        # Model centroid (không phải CNN) -> _load_cnn_wrapper trả None -> uncertainty None.
-        # Dung file centroid thuc te de test dung muc dich (model mac dinh da la CNN).
+
+
         analyzer = MedicalImageAnalyzer(config=_base_config(enable_mc_dropout=True, model_path="medical/medical_7_cancers.pt"))
         image = np.full((64, 64, 3), 100, dtype=np.uint8)
         self.assertIsNone(analyzer._estimate_uncertainty(image))

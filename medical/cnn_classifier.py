@@ -326,7 +326,7 @@ class MedicalCNNClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.backbone(x)
         if features.dim() > 2:
-            # Gộp không gian: global average pool về [B, C] để tương thích mọi backbone.
+
             features = features.mean(dim=(-2, -1)) if features.dim() == 4 else features.flatten(start_dim=1)
         return self.classifier(features)
 
@@ -824,7 +824,7 @@ def train_cnn_classifier(
         }
         if ema is not None:
             ckpt["ema_shadow"] = {k: v.cpu() for k, v in ema.shadow.items()}
-        # Ghi vào file tạm rồi rename (atomic) để không hỏng file nếu bị dừng giữa chừng.
+
         tmp_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".tmp")
         try:
             torch.save(ckpt, tmp_path, _use_new_zipfile_serialization=False)
@@ -839,7 +839,7 @@ def train_cnn_classifier(
     _CKPT_INTERVAL = 900
 
     def _handle_stop_signal(signum, _frame):
-        # Khi user dừng (Ctrl+C / kill), lưu checkpoint cuối cùng rồi thoát sạch.
+
         if checkpoint_path is not None:
             try:
                 _write_ckpt(epoch)

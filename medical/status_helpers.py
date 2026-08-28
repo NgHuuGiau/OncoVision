@@ -4,8 +4,8 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-# Giữ đồng bộ với MEDICAL_IMAGE_EXTENSIONS trong medical/classifier.py
-# (không import trực tiếp để tránh kéo torch vào module nhẹ này).
+
+
 _MEDICAL_IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 
 
@@ -21,8 +21,8 @@ def count_files(path: Path) -> int:
 
 
 def count_medical_images(directory: Path) -> int:
-    # ponytail: os.walk không sort — đếm 240k ảnh nhanh gấp ~4 lần rglob+sorted;
-    # nếu cần chính xác thời gian thực thì cache theo (path, mtime).
+
+
     if not directory.exists():
         return 0
     total = 0

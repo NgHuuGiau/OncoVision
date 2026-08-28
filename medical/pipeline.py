@@ -355,7 +355,7 @@ class MedicalImageAnalyzer:
                 f"Chi tiet: {exc}"
             ) from exc
         self._call_progress(progress_callback, "Normalizing image...", 0.10)
-        # YOLO: chua train xong, disable tam (se bat khi deploy ensemble)
+
         resolved_source = Path(image_path)
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
@@ -669,7 +669,7 @@ class MedicalImageAnalyzer:
             cropped = crop_to_roi(image, result.bbox, margin=self.config.segmentation_roi_margin)
             if cropped is None or cropped.size == 0:
                 return image, None
-            # Góc crop thực tế sau khi tính margin/clamp (giống logic crop_to_roi).
+
             height, width = image.shape[:2]
             x1 = max(0, result.bbox[0] - self.config.segmentation_roi_margin)
             y1 = max(0, result.bbox[1] - self.config.segmentation_roi_margin)
@@ -1076,8 +1076,8 @@ class MedicalImageAnalyzer:
                     modality_confidence=max(base_result.modality_confidence, 0.9),
                 )
 
-        # Neu chua xac dinh duoc loai anh (modality None hoac tin cay thap),
-        # dung modality model (CNN 8 loai anh) de du doan.
+
+
         if base_result.modality is None or base_result.modality_confidence < self.config.validation_min_confidence:
             cnn_modality = self._predict_modality_with_cnn(source)
             if cnn_modality is not None:
@@ -1086,8 +1086,8 @@ class MedicalImageAnalyzer:
                     modality=cnn_modality,
                     modality_confidence=max(base_result.modality_confidence, 0.9),
                 )
-                # Neu van chua biet body_region, thu suy tu ten file/duong dan
-                # (vi du 'pituitary_tumor', 'glioma' -> brain) de dinh tuyen dung model.
+
+
                 if updated.body_region is None:
                     inferred_target, _ = infer_medical_upload_context(source)
                     if inferred_target is not None:

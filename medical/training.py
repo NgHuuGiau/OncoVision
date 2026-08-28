@@ -198,7 +198,7 @@ def _patient_id_from_path(path: Path) -> str:
     if parent and parent.lower() not in {"images", "raw", "processed", ""} and re.search(r"\d", parent):
         return parent.lower()
     stem = path.stem
-    # Tien to den dau '_' hoac '-' dau tien, phai co chu so moi la patient id.
+
     prefix = re.split(r"[_-]", stem, maxsplit=1)[0]
     if re.search(r"\d", prefix):
         return prefix.lower()
@@ -236,11 +236,11 @@ def _populate_processed_splits_from_raw_images(paths: MedicalTrainingPaths) -> N
         if not raw_images:
             continue
 
-        # Nhóm theo bệnh nhân để cùng một bệnh nhân không bị chia sang cả 2 train/val/test.
+
         patient_groups = _group_images_by_patient(raw_images)
         total_groups = len(patient_groups)
         if total_groups < 2:
-            # Quá ít bệnh nhân để phân tầng: gom tất cả vào train như cũ.
+
             train_groups = patient_groups
             val_groups: list[list[Path]] = []
             test_groups: list[list[Path]] = []
@@ -397,7 +397,7 @@ def train_cnn_medical_model(paths: MedicalTrainingPaths | None = None, *, prepar
         asl_clip=float(settings.get("asl_clip", 0.05)),
         balanced_softmax_beta=float(settings.get("balanced_softmax_beta", 0.5)),
     )
-    # Lưu CNN vào path riêng để KHÔNG ghi đè model centroid cũ (medical_7_cancers.pt).
+
     target_path = Path(output_model_path) if output_model_path else paths.cnn_model_path
     wrapper.save(target_path)
     _write_training_manifest(target_path, paths, settings, _history)
@@ -463,12 +463,12 @@ def _is_cnn_wrapper(model: Any) -> bool:
 
 DEFAULT_KFOLD_MODEL_DIR = Path("output/medical/kfold_models")
 
-# Reverse map cua COMMON_CANCER_TARGETS: nhan lop (label) -> body region key.
+
 _CLASS_LABEL_TO_BODY_REGION = {target.label: target.key for target in COMMON_CANCER_TARGETS}
 
 
 def _router_body_region(body_region_key: str | None) -> str | None:
-    # dataset dung "cervical" nhung router dung "cervix".
+
     if body_region_key == "cervical":
         return "cervix"
     return body_region_key
@@ -484,7 +484,7 @@ def _family_for_sample(paths: MedicalTrainingPaths, image_path: Path, class_inde
         return "unknown"
     body_region = _router_body_region(body_region_key)
     modality = None
-    # Chỉ phổi (lung) cần suy luận modality vì nó tách làm xray_mammo và ct_volume.
+
     if body_region == "lung":
         try:
             _, modality = infer_medical_upload_context(image_path)
@@ -531,7 +531,7 @@ def _stratify_samples_by_family(
 
     rng = np.random.default_rng(seed)
     fold_buckets: list[list[tuple[Path, int]]] = [[] for _ in range(num_folds)]
-    # Duyệt nhóm theo thứ tự ổn định để kết quả có thể tái lập.
+
     for key in sorted(groups.keys(), key=lambda item: (item[0], str(item[1]))):
         items = list(groups[key])
         rng.shuffle(items)
@@ -766,7 +766,7 @@ def train_with_stratified_kfold(
             )
             _save_fold_model(model, model_path)
             metrics = _evaluate_model_on_samples(model, val_samples, class_labels)
-        except Exception as error:  # pragma: no cover - phong ve tinh mach lac
+        except Exception as error:# pragma: no cover - phong ve tinh mach lac
             fold_metrics.append(
                 {
                     "fold": fold_index,
@@ -949,13 +949,13 @@ def _samples_for_family(paths: MedicalTrainingPaths, family_key: str) -> tuple[l
                 continue
             split_dir = paths.dataset_root / class_label / "processed" / "images" / split
             for image_path in iter_medical_image_paths(split_dir):
-                # Phổi chia theo modality: X-quang -> xray_mammo, CT/MRI/PET -> ct_volume.
+
                 if member == "lung":
                     _, modality = infer_medical_upload_context(image_path)
                     if route_input(modality, "lung").family != family_key:
                         continue
                 bucket[member].append(image_path)
-    # Chỉ giữ thành viên thực sự có ảnh trong family này (tránh lớp rỗng sau khi chia modality).
+
     present = [member for member in members if per_member_train[member] or per_member_val[member]]
     index_of = {member: index for index, member in enumerate(present)}
     train_samples = [(path, index_of[member]) for member in present for path in per_member_train[member]]
@@ -1002,7 +1002,7 @@ def train_medical_submodels(paths: MedicalTrainingPaths | None = None, *, prepar
     trained: dict[str, Path] = {}
     for family_key in IMAGE_TYPE_FAMILIES:
         train_samples, val_samples, class_labels = _samples_for_family(paths, family_key)
-        # Cần ít nhất 2 lớp để huấn luyện submodel có ý nghĩa.
+
         if len(class_labels) < 2 or not train_samples:
             continue
         members = tuple(label for label in class_labels)

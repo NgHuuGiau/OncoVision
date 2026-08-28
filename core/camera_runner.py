@@ -22,7 +22,7 @@ from core.model_loader import LoadedModel, load_yolo_model
 from core.model_selector import RuntimeConfig
 from core.recorder import VideoRecorder
 
-# Import helpers from submodules
+
 from core.tracking.bbox_math import _bbox_center
 from core.tracking.detection_filter import (
     DISPLAY_MIN_CONFIDENCE,
@@ -145,8 +145,8 @@ class CameraStream:
     def _start_capture_worker(self) -> None:
         self.capture_stop_event.clear()
         self.capture_ready_event.clear()
-        # Thread creation is intentionally simple: keep the capture loop isolated
-        # and avoid passing unsupported constructor arguments across Python versions.
+
+
         self.capture_thread = threading.Thread(
             target=self._capture_worker_loop,
             name="camera-capture-worker",

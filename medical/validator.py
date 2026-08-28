@@ -173,9 +173,9 @@ def _canonical_modality(label):
     canonical = _MODALITY_LABEL_TO_CANONICAL.get(label)
     if canonical is not None:
         return canonical
-    # Fallback: derive canonical modality from the modality keyword in the label.
-    # Covers specific labels from dataset._MODALITY_HINTS missing in the static map
-    # (e.g. "CT gan", "MRI gan", "Siêu âm gan") so valid inputs are not rejected.
+
+
+
     lowered = label.lower()
     if lowered.startswith(("pet/ct", "pet")) or "pet ct" in lowered:
         return "pet_ct"

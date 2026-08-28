@@ -69,7 +69,7 @@ def train_modality_classifier(
 
     existing_labels = {label for _, idx in samples for label in (_MODALITY_LABELS[idx],)}
     class_labels = tuple(label for label in _MODALITY_LABELS if label in existing_labels)
-    # Map chi so trong _MODALITY_LABELS goc sang chi so cua class_labels thuc te.
+
     label_to_index = {label: index for index, label in enumerate(class_labels)}
     remapped_train = [(path, label_to_index[_MODALITY_LABELS[idx]]) for path, idx in train_samples]
     remapped_val = [(path, label_to_index[_MODALITY_LABELS[idx]]) for path, idx in val_samples] if val_samples else None

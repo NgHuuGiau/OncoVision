@@ -1,4 +1,4 @@
-# Detection tracker module
+
 
 TRACKING_MATCH_IOU = 0.35
 TRACKING_SMOOTHING_ALPHA = 0.65
@@ -66,14 +66,14 @@ def _match_and_smooth_detections(
     previous_observed_detections: list | None = None,
     iou_threshold: float = TRACKING_MATCH_IOU,
 ) -> list:
-    # Avoid circular import at runtime by importing DetectionRecord inside the function if needed,
-    # or just treat items as objects dynamically.
+
+
     if not current_detections:
         return []
     if not previous_detections:
         return list(current_detections)
 
-    # We import DetectionRecord dynamically to avoid circular import issues
+
     from core.camera_runner import DetectionRecord
 
     smoothed: list = []

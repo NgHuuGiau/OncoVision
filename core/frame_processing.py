@@ -1,4 +1,4 @@
-# Frame processing operations
+
 
 import cv2
 import numpy as np

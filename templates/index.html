@@ -64,7 +64,7 @@ body {
   transition: background-color 0.25s, color 0.25s;
 }
 
-/* Scrollbars */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -80,7 +80,7 @@ body {
   background: var(--text-muted);
 }
 
-/* App Header */
+
 .app-header {
   height: 60px;
   background-color: var(--bg-secondary);
@@ -169,7 +169,7 @@ body {
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-/* Container Layout */
+
 .app-container {
   flex: 1;
   display: flex;
@@ -177,7 +177,7 @@ body {
   position: relative;
 }
 
-/* Column 1: Left Sidebar */
+
 .sidebar {
   width: 300px;
   background-color: var(--bg-secondary);
@@ -322,7 +322,7 @@ body {
   background-color: var(--border-color);
 }
 
-/* Column 2: Center Medical Viewer (PACS Simulator) */
+
 .medical-viewer {
   flex: 1.2;
   background-color: var(--bg-primary);
@@ -388,7 +388,7 @@ body {
   border-color: var(--accent);
 }
 
-/* PACS Screen */
+
 .pacs-screen {
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
@@ -574,7 +574,7 @@ body {
   gap: 15px;
 }
 
-/* Column 3: Right Panel AI Assistant */
+
 .ai-assistant {
   flex: 1;
   background-color: var(--bg-secondary);
@@ -650,7 +650,7 @@ body {
   line-height: 1.4;
 }
 
-/* Chat Bubbles */
+
 .message-row {
   display: flex;
   width: 100%;
@@ -711,7 +711,7 @@ body {
   margin-top: 4px;
 }
 
-/* Structured analysis result card */
+
 .result-card {
   margin-top: 10px;
   background: var(--bg-tertiary);
@@ -769,7 +769,7 @@ body {
 }
 .result-btn:hover { background: var(--accent); color: #fff; }
 
-/* Compare modal */
+
 .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
 .compare-col { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; }
 .compare-col img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; background: #000; cursor: pointer; }
@@ -782,7 +782,7 @@ body {
 .case-pick-item img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
 @media (max-width: 640px) { .compare-grid { grid-template-columns: 1fr; } }
 
-/* Recording Wave */
+
 .recording-panel {
   display: none;
   align-items: center;
@@ -817,7 +817,7 @@ body {
   font-weight: 700;
 }
 
-/* Composer Panel */
+
 .composer {
   padding: 16px;
   background-color: var(--bg-secondary);
@@ -919,7 +919,7 @@ body {
   margin-top: 8px;
 }
 
-/* Modals */
+
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -991,7 +991,7 @@ body {
   outline: none;
 }
 
-/* Plus Menu Popup */
+
 .plus-menu {
   position: absolute;
   background-color: var(--bg-secondary);
@@ -1022,7 +1022,7 @@ body {
   color: var(--accent);
 }
 
-/* Suggestion Presets */
+
 .presets-container {
   display: flex;
   gap: 6px;
@@ -1045,7 +1045,7 @@ body {
   color: var(--accent);
 }
 
-/* Mobile responsive toggle */
+
 @media (max-width: 992px) {
   .app-container {
     flex-direction: column;
@@ -1096,7 +1096,7 @@ body {
 
 <div class="app-container">
   
-  <!-- Left Column: Case History -->
+  
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-action-bar">
       <button class="new-chat-btn" onclick="newChat()">
@@ -1124,7 +1124,7 @@ body {
     </div>
   </aside>
 
-  <!-- Center Column: PACS Viewer & Diagnostic Controls -->
+  
   <main class="medical-viewer">
     <div class="viewer-header">
       <button class="toggle-sidebar-btn" onclick="toggleSidebar()" title="Thu gọn thanh bên" id="sidebarToggle">
@@ -1142,9 +1142,9 @@ body {
       </div>
     </div>
 
-    <!-- PACS Simulator Container -->
+    
     <div class="pacs-screen" id="pacsScreen">
-      <!-- Simulated DICOM Info Overlays -->
+      
       <div class="pacs-screen-overlay-topleft">
         PATIENT ID: <span id="pacsPatientCode">CHƯA CÓ</span><br>
         STUDY: ONCOVISION_SCREENING<br>
@@ -1158,7 +1158,7 @@ body {
         STATUS: SYSTEM_READY
       </div>
 
-      <!-- Content displays dynamic based on file selected -->
+      
       <div class="empty-dropzone" id="emptyDropzone">
         <div class="dropzone-radar">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--accent)">
@@ -1194,7 +1194,7 @@ body {
     </div>
   </main>
 
-  <!-- Right Column: AI Assistant clinical chatbot -->
+  
   <section class="ai-assistant">
     <div class="assistant-header">
       <h2>Trợ Lý Lâm Sàng AI</h2>
@@ -1222,7 +1222,7 @@ body {
     </div>
 
     <div class="composer">
-      <!-- Quick presets -->
+      
       <div class="presets-container">
         <span class="preset-badge" onclick="fillPrompt('Phân tích bất thường trong phim chụp y khoa này')">Phân tích bất thường</span>
         <span class="preset-badge" onclick="fillPrompt('Hãy lập báo cáo y khoa chi tiết cho ca bệnh này')">Lập báo cáo ca bệnh</span>
@@ -1249,7 +1249,7 @@ body {
 
 </div>
 
-<!-- Settings Modal -->
+
 <div class="modal-overlay" id="settingsModal">
   <div class="modal">
     <button class="modal-close" onclick="closeSettings()">✕</button>
@@ -1276,7 +1276,7 @@ body {
 
 <div class="plus-menu" id="plusMenu" style="display:none"></div>
 
-<!-- Image Previewer Modal -->
+
 <div class="modal-overlay" id="imagePreviewModal" style="display:none">
   <div class="modal" style="min-width:auto;max-width:90vw;text-align:center;padding:16px">
     <button class="modal-close" onclick="document.getElementById('imagePreviewModal').classList.remove('active')">✕</button>
@@ -1284,7 +1284,7 @@ body {
   </div>
 </div>
 
-<!-- Compare Cases Modal -->
+
 <div class="modal-overlay" id="compareModal">
   <div class="modal" style="max-width:900px">
     <button class="modal-close" onclick="document.getElementById('compareModal').classList.remove('active')">✕</button>
@@ -1386,7 +1386,7 @@ function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('collapsed');
 }
 
-// Cancer targets
+
 function initTargets(){
   const s=document.getElementById('targetSelect');
   CANCER_TARGETS.forEach(t=>{const o=document.createElement('option');o.value=t.key;o.textContent=t.label;s.appendChild(o)});
@@ -1414,7 +1414,7 @@ function closeSettings(){document.getElementById('settingsModal').classList.remo
 document.getElementById('settingsModal').onclick=e=>{if(e.target===e.currentTarget)closeSettings()};
 document.getElementById('compareModal').onclick=e=>{if(e.target===e.currentTarget)document.getElementById('compareModal').classList.remove('active')};
 
-// Conversations
+
 async function loadConversations(){
   const r=await fetch('/api/conversations');const d=await r.json();
   conversations=d.conversations||[];
@@ -1461,7 +1461,7 @@ async function deleteConv(i){
   selectConv(Math.min(activeConvIndex,conversations.length-1));
 }
 
-// Sync last medical image to PACS Viewer
+
 function syncPACSView() {
   const c = conversations[activeConvIndex];
   let lastImage = null;
@@ -1502,7 +1502,7 @@ function syncPACSView() {
   }
 }
 
-// Messages
+
 function renderMessages(){
   const c=conversations[activeConvIndex];
   const hasMsg=c&&c.messages&&c.messages.length>0;
@@ -1514,7 +1514,7 @@ function renderMessages(){
   c.messages.forEach(msg=>addBubble(msg,false));
   document.getElementById('messagesArea').scrollTop=document.getElementById('messagesArea').scrollHeight;
 }
-// Đường dẫn file (tuyệt đối hoặc tương đối) -> URL tĩnh dưới mount /output
+
 function attachmentUrl(p){
   if(!p)return '';
   const norm=String(p).replace(/\\/g,'/');
@@ -1574,7 +1574,7 @@ function buildResultCard(m){
 }
 function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
-// Upload & Send
+
 function togglePlusMenu(e){
   const m=document.getElementById('plusMenu');
   if(m.style.display==='block'){m.style.display='none';return}
@@ -1596,13 +1596,13 @@ function pickImage(){
     if(d.ok) {
       addAttachment(d.stored_path,'image',f.name);
       
-      // Update target and modality dropdowns if auto-detected
+
       if(d.detected_target) {
         document.getElementById('targetSelect').value = d.detected_target;
         document.getElementById('targetSelect').dispatchEvent(new Event('change'));
       }
       
-      // Render in PACS screen
+
       document.getElementById('emptyDropzone').style.display = 'none';
       const pacsActiveImage = document.getElementById('pacsActiveImage');
       pacsActiveImage.src = attachmentUrl(d.stored_path);
@@ -1651,7 +1651,7 @@ async function triggerAIScreening() {
   const prompt = input.value.trim() || `Hãy sàng lọc y khoa cho ảnh này với nhóm bệnh ${target} bằng modality ${modality}.`;
   
   if (pendingAttachments.length === 0) {
-    // If no new attachment, check if we have one in PACS view
+
     const pacsActiveImage = document.getElementById('pacsActiveImage');
     const src = pacsActiveImage ? (pacsActiveImage.getAttribute('src') || '') : '';
     if (src && !src.endsWith('/')) {
@@ -1684,7 +1684,7 @@ async function sendMessage(){
     const fl=text.split('\n')[0].trim();
     if(fl&&fl.length>2)c.title=fl.substring(0,28);
   }
-  // User message
+
   for(let i=0;i<pendingAttachments.length;i++){
     const att=pendingAttachments[i];
     const msgText=i===0&&text?text:'';
@@ -1701,12 +1701,12 @@ async function sendMessage(){
   renderMessages();
   const atts=[...pendingAttachments];pendingAttachments=[];renderPreviews();
   
-  // Show analyzing status on head-bar
+
   const statusEl = document.getElementById('medicalStatus');
   const origStatusText = statusEl.textContent;
   statusEl.textContent = t('medical_analyzing');
   
-  // Assistant response
+
   if(atts.length>0){
     const att=atts[0];
     const prompt=text||`Phân tích ảnh: ${att.name}`;
@@ -1722,7 +1722,7 @@ async function sendMessage(){
         c.messages.push({sender:'assistant',text:d.reply_text,attachment_path:d.attachment_path,attachment_kind:d.attachment_kind,metadata_json:metaJson});
         analysisOk=true;
       }
-    }catch(e){/* fallback below */}
+    }catch(e){}
     if(!analysisOk){
       const fname=att.name||att.path.split('/').pop().split('\\').pop();
       addBubble({sender:'assistant',text:'Đã nhận ảnh: '+fname,attachment_path:att.path,attachment_kind:att.kind},true);
@@ -1755,7 +1755,7 @@ function fillPrompt(txt) {
   autoResize(document.getElementById('messageInput'));
 }
 
-// Voice
+
 function toggleVoice(){
   if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
     alert('Trình duyệt không hỗ trợ nhập giọng nói.');return;
@@ -1784,7 +1784,7 @@ function stopVoice(){
   if(recognition){try{recognition.stop()}catch(e){}recognition=null}
 }
 
-// Camera
+
 function openCamera(){
   document.getElementById('plusMenu').style.display='none';
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';
@@ -1794,7 +1794,7 @@ function openCamera(){
     const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
     if(d.ok) {
       addAttachment(d.stored_path,'camera','📷 '+inp.files[0].name);
-      // Render in PACS screen
+
       document.getElementById('emptyDropzone').style.display = 'none';
       const pacsActiveImage = document.getElementById('pacsActiveImage');
       pacsActiveImage.src = attachmentUrl(d.stored_path);
@@ -1806,14 +1806,14 @@ function openCamera(){
   inp.click();
 }
 
-// Image preview
+
 function previewImage(src){
   document.getElementById('previewFullImg').src=src;
   document.getElementById('imagePreviewModal').classList.add('active');
 }
 document.getElementById('imagePreviewModal').onclick=e=>{if(e.target===e.currentTarget)document.getElementById('imagePreviewModal').classList.remove('active')};
 
-// Drag & drop on PACS Screen
+
 const pacsScreen = document.getElementById('pacsScreen');
 pacsScreen.addEventListener('dragenter', e => { e.preventDefault(); pacsScreen.classList.add('dragover'); });
 pacsScreen.addEventListener('dragover', e => { e.preventDefault(); pacsScreen.classList.add('dragover'); });
@@ -1827,13 +1827,13 @@ pacsScreen.addEventListener('drop', async e => {
     if(d.ok) {
       addAttachment(d.stored_path,'image',f.name);
       
-      // Update selections
+
       if(d.detected_target) {
         document.getElementById('targetSelect').value = d.detected_target;
         document.getElementById('targetSelect').dispatchEvent(new Event('change'));
       }
       
-      // Render in PACS screen
+
       document.getElementById('emptyDropzone').style.display = 'none';
       const pacsActiveImage = document.getElementById('pacsActiveImage');
       pacsActiveImage.src = attachmentUrl(d.stored_path);
@@ -1844,11 +1844,11 @@ pacsScreen.addEventListener('drop', async e => {
   }
 });
 
-// Drag & drop on window (default prevent)
+
 document.addEventListener('dragover',e=>{e.preventDefault()});
 document.addEventListener('drop', e => { e.preventDefault(); });
 
-// Compare cases
+
 let compareSelection=[];
 async function openCompare(preId){
   document.getElementById('compareModal').classList.add('active');
@@ -1903,7 +1903,7 @@ async function renderCompare(){
   view.style.display='block';
 }
 
-// Init
+
 (async function(){
   const r=await fetch('/api/settings');const d=await r.json();
   if(d.ok){currentLang=d.language||'vi';currentTheme=d.theme||'system'}
