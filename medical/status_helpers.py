@@ -4,8 +4,6 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-
-
 _MEDICAL_IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 
 

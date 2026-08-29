@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
-
 CT_VOLUME_FAMILY = "ct_volume"
 ENDOSCOPY_FAMILY = "endoscopy"
 XRAY_MAMMO_FAMILY = "xray_mammo"

@@ -21,8 +21,6 @@ from core.frame_processing import (
 from core.model_loader import LoadedModel, load_yolo_model
 from core.model_selector import RuntimeConfig
 from core.recorder import VideoRecorder
-
-
 from core.tracking.bbox_math import _bbox_center
 from core.tracking.detection_filter import (
     DISPLAY_MIN_CONFIDENCE,
