@@ -1041,7 +1041,7 @@ document.addEventListener('click', e => {
     const d = await r.json();
     if (d.ok) {
       currentLang = d.language || 'vi';
-      currentTheme = d.theme || 'system';
+      currentTheme = localStorage.getItem('theme') || d.theme || 'system';
     }
   } catch (e) {}
 

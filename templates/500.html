@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>const savedTheme=localStorage.getItem('theme')||'system';const activeTheme=savedTheme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):savedTheme;document.documentElement.dataset.theme=activeTheme;document.documentElement.classList.toggle('light',activeTheme==='light');</script>
   <title>500 - Lỗi Hệ Thống | OncoVision AI</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/css/styles.css">
+  <script defer src="/static/js/auth-theme.js"></script>
 </head>
 <body class="error-page-container">
+  <button class="error-theme-toggle" type="button" onclick="toggleAuthTheme()" aria-label="Chuyển đổi giao diện sáng/tối">◐ Giao diện</button>
   <div class="error-code" style="color: var(--error);">500</div>
   <h1 class="error-title">Lỗi xử lý hệ thống máy chủ</h1>
   <p class="error-desc">Đã xảy ra sự cố trong quá trình xử lý pipeline phân tích hoặc truy vấn cơ sở dữ liệu. Vui lòng kiểm tra lại dịch vụ y tế hoặc tải lại trang.</p>

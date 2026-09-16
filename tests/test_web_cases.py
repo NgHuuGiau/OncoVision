@@ -103,6 +103,57 @@ class WebCaseRoutesTests(unittest.TestCase):
         conv = web_app.get_db().get_conversation(conv_id)
         self.assertEqual(conv.messages[0].metadata_json, meta)
 
+    def test_static_files_served(self) -> None:
+        css_resp = self.client.get("/static/css/styles.css")
+        self.assertEqual(css_resp.status_code, 200)
+        self.assertIn("--bg-primary", css_resp.text)
+
+        js_resp = self.client.get("/static/js/app.js")
+        self.assertEqual(js_resp.status_code, 200)
+        self.assertIn("OncoVision AI Workstation", js_resp.text)
+
+        fav_resp = self.client.get("/static/favicon.svg")
+        self.assertEqual(fav_resp.status_code, 200)
+        self.assertIn("svg", fav_resp.headers.get("content-type", ""))
+
+        auth_css = self.client.get("/static/css/auth.css")
+        self.assertEqual(auth_css.status_code, 200)
+        self.assertIn('[data-theme="light"]', auth_css.text)
+
+        theme_js = self.client.get("/static/js/auth-theme.js")
+        self.assertEqual(theme_js.status_code, 200)
+        self.assertIn("toggleAuthTheme", theme_js.text)
+
+    def test_settings_get_and_post(self) -> None:
+        get_resp = self.client.get("/api/settings")
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertTrue(get_resp.json()["ok"])
+
+        post_resp = self.client.post(
+            "/api/settings",
+            data={"language": "en", "theme": "dark"},
+            headers={"X-CSRF-Token": self.csrf},
+        )
+        self.assertEqual(post_resp.status_code, 200)
+        self.assertTrue(post_resp.json()["ok"])
+
+        get_resp2 = self.client.get("/api/settings")
+        self.assertEqual(get_resp2.json()["language"], "en")
+        self.assertEqual(get_resp2.json()["theme"], "dark")
+
+    def test_404_error_page_html(self) -> None:
+        resp = self.client.get("/nonexistent-page", headers={"accept": "text/html,application/xhtml+xml"})
+        self.assertEqual(resp.status_code, 404)
+        self.assertIn("404", resp.text)
+        self.assertIn("Không tìm thấy", resp.text)
+        self.assertIn("error-theme-toggle", resp.text)
+
+    def test_404_error_json_for_api(self) -> None:
+        resp = self.client.get("/api/nonexistent-route")
+        self.assertEqual(resp.status_code, 404)
+        body = resp.json()
+        self.assertFalse(body.get("ok", True))
+
 
 if __name__ == "__main__":
     unittest.main()

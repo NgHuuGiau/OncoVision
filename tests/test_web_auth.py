@@ -84,6 +84,17 @@ class WebAuthTests(unittest.TestCase):
         empty_db = WebAuthDatabase(self.root / "empty.db")
         self.assertEqual(empty_db.list_users(), [])
 
+    def test_auth_pages_use_shared_dark_light_theme(self) -> None:
+        anonymous = TestClient(web_app.app, follow_redirects=False)
+        for path in ("/login", "/forgot-password"):
+            response = anonymous.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('/static/css/auth.css', response.text)
+            self.assertIn("toggleAuthTheme()", response.text)
+        admin_page = self.client.get("/admin/users")
+        self.assertEqual(admin_page.status_code, 200)
+        self.assertIn('/static/css/auth.css', admin_page.text)
+
     def test_auth_database_adds_recovery_column_to_existing_database(self) -> None:
         legacy_path = self.root / "legacy.db"
         conn = sqlite3.connect(legacy_path)
@@ -174,7 +185,9 @@ class WebAuthTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("cache-control"), "no-store")
         recovery_code = re.search(r'<strong data-recovery-code[^>]*>([A-Z0-9]{6})</strong>', response.text).group(1)
+        self.assertIn("MÃ KHÔI PHỤC MỚI", response.text)
         users = self.auth_db.list_users()
         new_user = next(user for user in users if user.username == "newviewer")
         self.assertEqual(new_user.role, "viewer")
@@ -200,6 +213,19 @@ class WebAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 303)
         self.assertIn("admin cuối cùng", unquote(response.headers["location"]))
         self.assertTrue(self.auth_db.get_user(self.admin_id).is_active)
+
+    def test_admin_can_issue_code_for_account_created_without_recovery_code(self) -> None:
+        user_id = self.auth_db.create_user("sqladmin", hash_password("SqlAdminPassword123!"), "admin")
+        response = self.client.post(
+            f"/admin/users/{user_id}/recovery-code",
+            data={"csrf_token": self.csrf},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("cache-control"), "no-store")
+        self.assertRegex(
+            re.search(r'<strong data-recovery-code[^>]*>([^<]+)</strong>', response.text).group(1),
+            r"^[A-Z0-9]{6}$",
+        )
 
     def test_disabled_account_loses_access_on_next_request(self) -> None:
         self.client.post("/logout", headers={"X-CSRF-Token": self.csrf})

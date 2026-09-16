@@ -4,25 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
+  <script>const savedTheme=localStorage.getItem('theme')||'system';document.documentElement.dataset.theme=savedTheme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):savedTheme;</script>
+  <link rel="stylesheet" href="/static/css/auth.css">
+  <script defer src="/static/js/auth-theme.js"></script>
   <title>Quản lý tài khoản · OncoVision</title>
-  <style>
-    *{box-sizing:border-box}body{margin:0;background:#0b1220;color:#e5edf8;font:15px system-ui,sans-serif}.wrap{width:min(1050px,calc(100% - 32px));margin:36px auto}a{color:#7dd3fc}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}h1{font-size:25px;margin:0 0 5px}.muted{color:#9baec7;margin:0}.panel{padding:22px;margin:18px 0;border:1px solid #26344a;border-radius:14px;background:#121c2d}.grid{display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:12px;align-items:end}label{display:grid;gap:6px;color:#b7c6da;font-size:13px}input,select{width:100%;padding:10px;border:1px solid #34445d;border-radius:8px;background:#0b1220;color:white;font:inherit}button{padding:10px 14px;border:0;border-radius:8px;background:#0284c7;color:white;font:600 14px system-ui;cursor:pointer}button:hover{background:#0369a1}table{width:100%;border-collapse:collapse}th,td{padding:11px 8px;text-align:left;border-bottom:1px solid #26344a}th{color:#9baec7;font-size:12px;text-transform:uppercase}.row-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px}.status{color:#86efac}.status.off{color:#fda4af}.notice{padding:10px;border-radius:8px;background:#123a31;color:#a7f3d0;margin-bottom:14px}@media(max-width:720px){.grid{grid-template-columns:1fr}.table-wrap{overflow-x:auto}table{min-width:650px}header{align-items:flex-start;flex-direction:column}}
-  </style>
 </head>
-<body>
-<main class="wrap">
-  <header>
+<body class="auth-page">
+<button class="theme-toggle" type="button" onclick="toggleAuthTheme()" aria-label="Chuyển đổi giao diện sáng/tối">◐ Giao diện</button>
+<main class="auth-shell admin-shell">
+  <header class="admin-header">
     <div><h1>Quản lý tài khoản</h1><p class="muted">Đăng nhập: {{ current_user.username }} · admin</p></div>
-    <nav><a href="/">← Quay lại ứng dụng</a>　<form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Đăng xuất</button></form></nav>
+    <nav class="admin-nav"><a href="/">← Quay lại ứng dụng</a><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Đăng xuất</button></form></nav>
   </header>
-  {% if recovery_code %}<div class="notice" role="status">Mã khôi phục một lần cho <strong>{{ recovery_username }}</strong>: <strong data-recovery-code style="font-size:20px;letter-spacing:2px">{{ recovery_code }}</strong><br>Hãy lưu và gửi riêng cho người dùng ngay; mã không hiện lại sau khi rời trang.</div>
-  {% elif notice == 'created' %}<div class="notice">Đã tạo tài khoản.</div>
-  {% elif notice == 'updated' %}<div class="notice">Đã cập nhật tài khoản.</div>
-  {% elif notice == 'recovery-code-issued' %}<div class="notice">Đã cấp mã khôi phục mới.</div>{% endif %}
-  {% if error %}<div class="notice" style="background:#4c1d2a;color:#fecdd3">{{ error }}</div>{% endif %}
+  {% if recovery_code %}
+  <section class="recovery-card" role="status" aria-live="polite">
+    <p class="eyebrow">MÃ KHÔI PHỤC MỚI · CHỈ HIỆN LẦN NÀY</p>
+    <h2>Dành cho tài khoản {{ recovery_username }}</h2>
+    <strong data-recovery-code class="recovery-code" aria-label="Mã khôi phục sáu ký tự">{{ recovery_code }}</strong>
+    <p class="hint">Ghi lại và gửi riêng cho người dùng ngay. Mã gồm 6 chữ cái/số, chỉ dùng một lần và sẽ không hiện lại sau khi rời trang.</p>
+  </section>
+  {% elif notice == 'created' %}<div class="auth-notice" role="status">Đã tạo tài khoản.</div>
+  {% elif notice == 'updated' %}<div class="auth-notice" role="status">Đã cập nhật tài khoản.</div>
+  {% elif notice == 'recovery-code-issued' %}<div class="auth-notice" role="status">Đã cấp mã khôi phục mới.</div>{% endif %}
+  {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
   <section class="panel">
-    <h2 style="margin:0 0 16px;font-size:18px">Tạo tài khoản</h2>
-    <form class="grid" method="post" action="/admin/users/create" autocomplete="off">
+    <h2>Tạo tài khoản</h2>
+    <form class="admin-grid" method="post" action="/admin/users/create" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>Tên đăng nhập<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required></label>
       <label>Mật khẩu<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
@@ -31,7 +38,8 @@
     </form>
   </section>
   <section class="panel">
-    <h2 style="margin:0 0 12px;font-size:18px">Tài khoản hiện có</h2>
+    <h2>Tài khoản hiện có</h2>
+    <p class="admin-hint">Tài khoản chưa có mã khôi phục hoặc đã làm mất mã? Nhấn “Cấp mã khôi phục mới”; mã sẽ hiện ngay tại đầu trang và chỉ xem được một lần.</p>
     <div class="table-wrap"><table>
       <thead><tr><th>Tên đăng nhập</th><th>Vai trò / trạng thái</th><th>Ngày tạo</th><th>Cập nhật</th></tr></thead>
       <tbody>
@@ -52,9 +60,9 @@
               </select>
               <button type="submit">Lưu</button>
             </form>
-            <form method="post" action="/admin/users/{{ user.id }}/recovery-code" style="margin-top:8px">
+            <form class="recovery-form" method="post" action="/admin/users/{{ user.id }}/recovery-code">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button type="submit">Cấp mã khôi phục mới</button>
+              <button type="submit" aria-label="Cấp mã khôi phục mới cho {{ user.username }}">Cấp mã khôi phục mới</button>
             </form>
           </td>
           <td>{{ user.created_at }}</td><td><span class="status {% if not user.is_active %}off{% endif %}">{% if user.is_active %}Hoạt động{% else %}Đã khóa{% endif %}</span></td>

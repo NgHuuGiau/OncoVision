@@ -12,8 +12,10 @@ from urllib.parse import quote
 import aiofiles
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.datastructures import UploadFile
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.chat_ui.models import ChatMessage
@@ -47,6 +49,9 @@ MAX_FORM_BYTES = 1024 * 1024
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+
+STATIC_DIR = PROJECT_ROOT / "static"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
@@ -708,13 +713,30 @@ async def save_settings(request: Request, language: str = Form("vi"), theme: str
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-
 @app.get("/output/{file_path:path}")
 async def serve_output_file(file_path: str):
     path = _safe_path(OUTPUT_DIR, file_path)
     if path is None or not path.is_file():
         raise HTTPException(status_code=404, detail="Không tìm thấy tệp.")
     return FileResponse(path)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        if "text/html" in request.headers.get("accept", "") and not request.url.path.startswith("/api/"):
+            return templates.TemplateResponse(request, "404.html", {"request": request}, status_code=404)
+        return JSONResponse(status_code=404, content={"ok": False, "detail": exc.detail or "Not Found"})
+    return JSONResponse(status_code=exc.status_code, content={"ok": False, "detail": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def custom_500_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled server error: %s", exc)
+    if "text/html" in request.headers.get("accept", "") and not request.url.path.startswith("/api/"):
+        return templates.TemplateResponse(request, "500.html", {"request": request}, status_code=500)
+    return JSONResponse(status_code=500, content={"ok": False, "detail": "Internal Server Error"})
 
 
 if __name__ == "__main__":

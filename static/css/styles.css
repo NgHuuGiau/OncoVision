@@ -29,23 +29,23 @@
 }
 
 .light {
-  --bg-primary: #f8fafc;
+  --bg-primary: #f5f8fc;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #f1f5f9;
-  --border-color: #e2e8f0;
+  --bg-tertiary: #edf3f8;
+  --border-color: #d7e1eb;
   --border-focus: #0ea5e9;
   --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --accent: #0ea5e9;
-  --accent-hover: #0284c7;
-  --accent-light: rgba(14, 165, 233, 0.1);
-  --success: #10b981;
-  --success-light: rgba(16, 185, 129, 0.08);
-  --error: #ef4444;
-  --error-light: rgba(239, 68, 68, 0.08);
-  --bubble-user: rgba(14, 165, 233, 0.08);
-  --bubble-user-border: rgba(14, 165, 233, 0.18);
+  --text-secondary: #3f5268;
+  --text-muted: #60748b;
+  --accent: #0369a1;
+  --accent-hover: #075985;
+  --accent-light: rgba(3, 105, 161, 0.1);
+  --success: #047857;
+  --success-light: rgba(4, 120, 87, 0.09);
+  --error: #b91c1c;
+  --error-light: rgba(185, 28, 28, 0.08);
+  --bubble-user: rgba(3, 105, 161, 0.08);
+  --bubble-user-border: rgba(3, 105, 161, 0.2);
   --bubble-assistant: #ffffff;
   --bubble-assistant-border: #e2e8f0;
   --pacs-grid: rgba(14, 165, 233, 0.03);
@@ -61,6 +61,13 @@ body {
   overflow: hidden;
   transition: background-color 0.25s, color 0.25s;
 }
+
+body[data-role="viewer"] .new-chat-btn,
+body[data-role="viewer"] .composer,
+body[data-role="viewer"] .upload-trigger-btn,
+body[data-role="viewer"] .pacs-action-overlay { display: none !important; }
+body[data-role="viewer"] .viewer-readonly-notice { display: block; }
+.viewer-readonly-notice { display: none; padding: 12px 16px; color: var(--text-secondary); font-size: 13px; border-top: 1px solid var(--border-color); }
 
 /* Scrollbars */
 ::-webkit-scrollbar {
@@ -394,6 +401,8 @@ body {
   --border-color: rgba(255, 255, 255, 0.08);
   --bg-tertiary: #1e293b;
   --bg-secondary: #0f172a;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
   flex: 1;
   margin: 16px;
   border-radius: 16px;
@@ -1123,6 +1132,17 @@ body {
 }
 .error-btn:hover {
   background-color: var(--accent-hover);
+}
+.error-theme-toggle {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
 }
 
 /* Responsive Rules */

@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>const savedTheme=localStorage.getItem('theme')||'system';const activeTheme=savedTheme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):savedTheme;document.documentElement.dataset.theme=activeTheme;document.documentElement.classList.toggle('light',activeTheme==='light');</script>
   <title>404 - Không Tìm Thấy | OncoVision AI</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/css/styles.css">
+  <script defer src="/static/js/auth-theme.js"></script>
 </head>
 <body class="error-page-container">
+  <button class="error-theme-toggle" type="button" onclick="toggleAuthTheme()" aria-label="Chuyển đổi giao diện sáng/tối">◐ Giao diện</button>
   <div class="error-code">404</div>
   <h1 class="error-title">Không tìm thấy trang hoặc tài nguyên y khoa</h1>
   <p class="error-desc">Liên kết bạn vừa truy cập không tồn tại, ca bệnh đã bị xóa hoặc đường dẫn tệp phim chụp không còn khả dụng trên hệ thống.</p>
