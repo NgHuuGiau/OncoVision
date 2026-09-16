@@ -15,7 +15,7 @@ Tài liệu hướng dẫn cài đặt OncoVision trên Windows và kiểm tra m
 
 ### Khuyến nghị
 
-- GPU NVIDIA (CUDA) — tối ưu train và inference
+- GPU NVIDIA (CUDA) — tăng tốc suy luận; không bắt buộc
 - Webcam — nếu sử dụng camera realtime
 - PowerShell 7 — hiển thị Unicode tốt hơn
 
@@ -114,6 +114,6 @@ python run_chat.py --check-only --auto-fix-icons
 
 ## 7. Khuyến nghị
 
-- Luôn chạy `run_doctor.py` hoặc `run_smoke.py` trên máy mới trước khi train hoặc chạy camera.
+- Luôn chạy `run_doctor.py` hoặc `run_smoke.py` trên máy mới trước khi sử dụng.
 - Mọi môi trường đều dùng `requirements.txt` duy nhất.
 - Nếu gặp lỗi chưa rõ, xem [troubleshooting.md](troubleshooting.md) trước khi thay đổi cấu hình.

@@ -1,51 +1,20 @@
 from __future__ import annotations
 
-from pathlib import Path
+from medical.system_status import MedicalSystemStatus
 
 
-def print_dataset_counts(prefix: str, *, train: int, val: int, test: int, total: int) -> None:
-    print(f"{prefix}: train={train}, val={val}, test={test}, total={total}")
-
-
-def print_output_counts(*, case_count: int, report_files: int, normalized_files: int, overlay_files: int, export_files: int) -> None:
-    print(
-        f"Outputs: cases={case_count}, reports={report_files}, "
-        f"normalized={normalized_files}, overlay={overlay_files}, exports={export_files}"
-    )
-
-
-def print_medical_readiness(status) -> None:
-    print(
-        "ready_for_train_medical: "
-        f"{status.dataset_initialized and status.raw_dataset_ready and status.processed_dataset_ready and status.model_ready}"
-    )
-
-
-def print_medical_status_block(status, dataset_root: Path) -> None:
-    print("Trang thai he thong medical")
-    print(f"Model config: {status.configured_model_path}")
+def print_medical_status_block(status: MedicalSystemStatus) -> None:
+    print("Trạng thái phân tích y khoa")
+    print(f"Model cấu hình: {status.configured_model_path}")
     if status.resolved_model_path is not None:
-        print(f"Model runtime: {status.resolved_model_path}")
-    print(f"Fallback allowed: {status.allow_fallback_model}")
-    print(f"Model ready: {status.model_ready}")
-    print(f"Model detail: {status.model_message}")
-    print("Hệ thống đang phân tích các ung thư:")
-    for name in status.analyzed_cancers:
-        print(f"- {name}")
-    print(f"Dataset root: {status.dataset_root}")
-    print(f"Data yaml: {status.data_yaml_path} | exists={status.dataset_initialized}")
-    print_dataset_counts(
-        "Dataset counts",
-        train=status.train_images,
-        val=status.val_images,
-        test=status.test_images,
-        total=status.total_images,
+        print(f"Model đang dùng: {status.resolved_model_path}")
+    print(f"Sẵn sàng phân tích: {status.model_ready}")
+    print(f"Chi tiết: {status.model_message}")
+    print("Nhóm bệnh có trong catalog:")
+    for name, ready in status.screening_targets:
+        print(f"- {name}: {'có model' if ready else 'chờ model suy luận'}")
+    print(
+        f"Ca đã lưu: {status.case_count} | báo cáo: {status.report_files} | "
+        f"ảnh chuẩn hóa: {status.normalized_files} | heatmap: {status.overlay_files} | "
+        f"bản xuất: {status.export_files}"
     )
-    print_output_counts(
-        case_count=status.case_count,
-        report_files=status.report_files,
-        normalized_files=status.normalized_files,
-        overlay_files=status.overlay_files,
-        export_files=status.export_files,
-    )
-    print(f"Medical dataset root: {dataset_root}")

@@ -47,11 +47,20 @@ class CNNClassifierTests(unittest.TestCase):
         class_labels = ("A", "B", "C")
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "model.pt"
-            from medical.cnn_classifier import MedicalCNNClassifierWrapper
-            wrapper = MedicalCNNClassifierWrapper(model=model, class_labels=class_labels)
-            wrapper.save(path)
+            import torch
+            torch.save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "class_labels": class_labels,
+                    "backbone": model.backbone_name,
+                    "num_classes": model.num_classes,
+                    "dropout": model.dropout,
+                },
+                path,
+            )
             self.assertTrue(path.exists())
-            loaded = MedicalCNNClassifierWrapper.load(path)
+            from medical.cnn_classifier import MedicalCNNClassifierWrapper
+            loaded = MedicalCNNClassifierWrapper.load(path, device="cpu")
             self.assertEqual(loaded.class_labels, class_labels)
 
     def test_detect_cnn_checkpoint(self) -> None:

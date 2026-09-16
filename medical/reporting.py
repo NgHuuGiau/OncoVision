@@ -108,7 +108,7 @@ def export_case_pdf(output_dir: str | Path, payload: dict[str, Any], pdf_path: s
 def _try_import(name: str) -> Any | None:
     try:
         return __import__(name)
-    except ImportError:
+    except (ImportError, OSError):
         return None
 
 

@@ -18,6 +18,9 @@ _BODY_REGION_FAMILY: dict[str, str] = {
     "lung": CT_VOLUME_FAMILY,
     "prostate": CT_VOLUME_FAMILY,
     "cervix": CT_VOLUME_FAMILY,
+    "kidney": CT_VOLUME_FAMILY,
+    "pancreas": CT_VOLUME_FAMILY,
+    "thyroid": CT_VOLUME_FAMILY,
     "stomach": ENDOSCOPY_FAMILY,
     "colorectal": ENDOSCOPY_FAMILY,
     "breast": XRAY_MAMMO_FAMILY,
@@ -38,8 +41,8 @@ UNDERREPRESENTED_BODY_REGIONS = frozenset({"liver", "cervix", "brain"})
 
 IMAGE_TYPE_FAMILIES: dict[str, dict[str, object]] = {
     CT_VOLUME_FAMILY: {
-        "label": "Ảnh cắt lớp (CT/MRI/PET/CT): gan, phổi, tuyến tiền liệt, cổ tử cung, não",
-        "members": ("liver", "lung", "prostate", "cervix", "brain"),
+        "label": "Ảnh cắt lớp (CT/MRI/PET/CT): gan, phổi, tuyến tiền liệt, cổ tử cung, não, thận, tụy, tuyến giáp",
+        "members": ("liver", "lung", "prostate", "cervix", "brain", "kidney", "pancreas", "thyroid"),
         "multimodal": False,
     },
     ENDOSCOPY_FAMILY: {

@@ -38,7 +38,7 @@ def resolve_pretrained(requested: bool, *, context: str = "backbone") -> bool:
 
     Nếu gọi yêu cầu pretrained=True nhưng chính sách offline đang bật, hạ về
     False và in cảnh báo một lần để người dùng biết model khởi tạo với trọng số
-    ngẫu nhiên (cần train từ đầu hoặc cung cấp checkpoint local).
+    ngẫu nhiên (không phù hợp cho suy luận; cần cung cấp checkpoint local).
 
     Nếu đặt ONCOVISION_REQUIRE_PRETRAINED=1 (dành cho serving/production), thay
     vì hạ thầy lang sẽ raise RuntimeError để fail-loud, tránh degrade thầy lang.

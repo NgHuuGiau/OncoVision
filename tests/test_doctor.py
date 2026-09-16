@@ -47,13 +47,13 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("1280x720", result.detail)
 
     @patch("builtins.print")
-    @patch("run_doctor.recommended_medical_commands", return_value=["python run_medical.py train-all"])
+    @patch("run_doctor.recommended_medical_commands", return_value=["Bổ sung model suy luận"])
     @patch("run_doctor.get_medical_system_status")
     @patch("run_doctor.optimized_runtime")
     @patch("run_doctor.detect_hardware")
     @patch("run_doctor.ensure_project_directories")
     @patch("run_doctor.parse_args")
-    def test_main_reports_missing_models_and_raw_dataset_guidance(
+    def test_main_reports_missing_models_without_dataset_training_guidance(
         self,
         parse_args_mock,
         _ensure_dirs_mock,
@@ -88,13 +88,6 @@ class DoctorTests(unittest.TestCase):
             using_fallback_model=False,
             model_ready=False,
             model_message="missing medical model",
-            dataset_root=Path("dataset/medical/skin_lesion"),
-            data_yaml_path=Path("dataset/medical/skin_lesion/data.yaml"),
-            raw_images=0,
-            raw_labels=0,
-            train_images=0,
-            val_images=0,
-            test_images=0,
             report_files=0,
             normalized_files=0,
             overlay_files=0,
@@ -116,12 +109,13 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("download_models.py", output)
         self.assertIn("model local", output)
         self.assertIn("run_doctor.py --fix", output)
-        self.assertIn("run_medical.py train-all", output)
+        self.assertNotIn("train-all", output.lower())
+        self.assertNotIn("split train", output.lower())
 
     @patch("builtins.print")
     @patch("run_doctor.medical_config_issues", return_value=["conf_threshold phai nam trong khoang (0, 1)."])
     @patch("run_doctor.runtime_config_issues", return_value=["config/settings.yaml thieu hoac sai muc `models`."])
-    @patch("run_doctor.recommended_medical_commands", return_value=["python run_medical.py validate"])
+    @patch("run_doctor.recommended_medical_commands", return_value=["python run_medical.py analyze"])
     @patch("run_doctor.get_medical_system_status")
     @patch("run_doctor.detect_hardware")
     @patch("run_doctor.ensure_project_directories")
@@ -157,13 +151,6 @@ class DoctorTests(unittest.TestCase):
             using_fallback_model=False,
             model_ready=True,
             model_message="ready",
-            dataset_root=Path("dataset/medical/skin_lesion"),
-            data_yaml_path=Path("dataset/medical/skin_lesion/data.yaml"),
-            raw_images=1,
-            raw_labels=1,
-            train_images=1,
-            val_images=1,
-            test_images=1,
             report_files=0,
             normalized_files=0,
             overlay_files=0,

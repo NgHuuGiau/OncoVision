@@ -9,18 +9,6 @@ import yaml
 PROJECT_DIRS = tuple(
     Path(directory)
     for directory in (
-        "dataset/raw",
-        "dataset/raw/images",
-        "dataset/raw/labels",
-        "dataset/processed",
-        "dataset/processed/images",
-        "dataset/processed/labels",
-        "dataset/processed/images/train",
-        "dataset/processed/images/val",
-        "dataset/processed/images/test",
-        "dataset/processed/labels/train",
-        "dataset/processed/labels/val",
-        "dataset/processed/labels/test",
         "models/pretrained",
         "models/trained",
         "models/exported",
@@ -32,9 +20,7 @@ PROJECT_DIRS = tuple(
         "output/screenshots",
         "output/videos",
         "output/logs",
-        "runs/train",
         "runs/detect",
-        "runs/val",
     )
 )
 

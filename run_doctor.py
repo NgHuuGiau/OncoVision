@@ -9,7 +9,6 @@ from app.chat_ui.paths import get_chat_capture_dir
 from core.hardware_info import detect_hardware
 from core.model_catalog import YOLO11_MODELS_ASC
 from core.runtime_advisor import optimized_runtime
-from medical.dataset import create_default_medical_dataset_config
 from medical.status_helpers import count_files
 from medical.system_status import (
     get_medical_system_status,
@@ -39,15 +38,6 @@ from utils.file_utils import ensure_project_directories
 
 YOLO11_MODELS = YOLO11_MODELS_ASC
 PRETRAINED_DIR = Path("models/pretrained")
-RAW_IMAGES_DIR = Path("dataset/object_detection/raw/images")
-RAW_LABELS_DIR = Path("dataset/object_detection/raw/labels")
-PROCESSED_TRAIN_DIR = Path("dataset/object_detection/processed/images/train")
-PROCESSED_VAL_DIR = Path("dataset/object_detection/processed/images/val")
-MEDICAL_SKIN_ROOT = create_default_medical_dataset_config().dataset_root
-MEDICAL_SKIN_RAW_IMAGES_DIR = MEDICAL_SKIN_ROOT / "raw" / "images"
-MEDICAL_SKIN_RAW_LABELS_DIR = MEDICAL_SKIN_ROOT / "raw" / "labels"
-MEDICAL_SKIN_PROCESSED_TRAIN_DIR = MEDICAL_SKIN_ROOT / "processed" / "images" / "train"
-MEDICAL_SKIN_PROCESSED_VAL_DIR = MEDICAL_SKIN_ROOT / "processed" / "images" / "val"
 ICONS_DIR = Path("assets/icons")
 ICON_WARNING_THRESHOLD = 10
 ICON_AUTOFIX_THRESHOLD = 5
@@ -169,17 +159,9 @@ def main() -> int:
     hardware = detect_hardware()
     present_models, missing_models = _present_and_missing_models()
     chat_capture_dir = get_chat_capture_dir(ensure_exists=False)
-    raw_images = count_files(RAW_IMAGES_DIR)
-    raw_labels = count_files(RAW_LABELS_DIR)
-    train_images = count_files(PROCESSED_TRAIN_DIR)
-    val_images = count_files(PROCESSED_VAL_DIR)
     icon_count = count_files(ICONS_DIR)
     chat_capture_count = count_files(chat_capture_dir)
     medical_status = get_medical_system_status()
-    med_raw_images = count_files(MEDICAL_SKIN_RAW_IMAGES_DIR)
-    med_raw_labels = count_files(MEDICAL_SKIN_RAW_LABELS_DIR)
-    med_train_images = count_files(MEDICAL_SKIN_PROCESSED_TRAIN_DIR)
-    med_val_images = count_files(MEDICAL_SKIN_PROCESSED_VAL_DIR)
     camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
     recommendations = _runtime_recommendations(hardware)
 
@@ -215,18 +197,6 @@ def main() -> int:
     _print_recommendations(recommendations)
 
     print(line(rule("-"), CYAN))
-    dataset_ok = raw_images > 0 and raw_labels > 0
-    split_ok = train_images > 0 and val_images > 0
-    print(section("DỮ LIỆU", GREEN if dataset_ok or med_raw_images > 0 else YELLOW))
-    print(row("Vật thể raw images", f"{RAW_IMAGES_DIR} ({raw_images} file)", GREEN if raw_images else RED, bounded=False))
-    print(row("Vật thể raw labels", f"{RAW_LABELS_DIR} ({raw_labels} file)", GREEN if raw_labels else RED, bounded=False))
-    print(row("Vật thể train split", f"{PROCESSED_TRAIN_DIR} ({train_images} file)", GREEN if train_images else YELLOW, bounded=False))
-    print(row("Vật thể val split", f"{PROCESSED_VAL_DIR} ({val_images} file)", GREEN if val_images else YELLOW, bounded=False))
-    print(row("Y dược raw images", f"{MEDICAL_SKIN_RAW_IMAGES_DIR} ({med_raw_images} file)", GREEN if med_raw_images else RED, bounded=False))
-    print(row("Y dược raw labels", f"{MEDICAL_SKIN_RAW_LABELS_DIR} ({med_raw_labels} file)", GREEN if med_raw_labels else RED, bounded=False))
-    print(row("Y dược train split", f"{MEDICAL_SKIN_PROCESSED_TRAIN_DIR} ({med_train_images} file)", GREEN if med_train_images else YELLOW, bounded=False))
-    print(row("Y dược val split", f"{MEDICAL_SKIN_PROCESSED_VAL_DIR} ({med_val_images} file)", GREEN if med_val_images else YELLOW, bounded=False))
-
     print_medical_status(medical_status)
     _print_config_health()
 
@@ -238,8 +208,6 @@ def main() -> int:
     issues: list[str] = []
     if not present_models:
         issues.append("Chưa có model local")
-    if not dataset_ok:
-        issues.append("Chưa có dataset raw")
     if medical_status.model_ready is False:
         issues.append("Model medical chưa sẵn sàng")
     if icon_count < ICON_WARNING_THRESHOLD:
@@ -258,13 +226,7 @@ def main() -> int:
     if camera_probe is not None and camera_probe.level != "PASS":
         print(row("Camera", camera_probe.detail.replace("Lý do không chạy  ", ""), YELLOW, bounded=False))
 
-    if not dataset_ok:
-        print(row("Dataset", "Chưa có dữ liệu raw cho luồng vật thể.", YELLOW, bounded=False))
-    elif not split_ok:
-        print(row("Dataset", "Đã có raw vật thể nhưng chưa split train/val.", YELLOW, bounded=False))
-    else:
-        print(row("Dataset", "Dữ liệu train/val vật thể đã sẵn sàng.", GREEN, bounded=False))
-    print(row("Medical", f"{medical_status.model_message} | raw={med_raw_images}/{med_raw_labels}", medical_status_color(medical_status), bounded=False))
+    print(row("Medical", medical_status.model_message, medical_status_color(medical_status), bounded=False))
 
     print_recommended_commands(
         missing_models=missing_models,

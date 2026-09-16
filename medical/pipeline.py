@@ -103,16 +103,7 @@ class MedicalImageAnalyzerConfig:
         ".nii",
         ".nii.gz",
     )
-    cnn_backbone: str = "resnet50"
     cnn_image_size: int = 320
-    cnn_batch_size: int = 16
-    cnn_num_epochs: int = 30
-    cnn_learning_rate: float = 0.0001
-    cnn_dropout: float = 0.3
-    cnn_early_stopping_patience: int = 7
-    cnn_label_smoothing: float = 0.1
-    cnn_mixed_precision: bool = True
-    cnn_warmup_epochs: int = 3
     cnn_tta: bool = True
     analyze_topk: int = 3
     yolo_model_path: Path | None = None
@@ -206,7 +197,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     advanced = settings.get("advanced", {})
     if not isinstance(advanced, dict):
         advanced = {}
-    configured_model = Path(settings.get("model", "medical_7_cancers.pt"))
+    configured_model = Path(settings.get("model", "medical_10_cancers_cnn.pt"))
     brain_model = settings.get("brain_model")
     return MedicalImageAnalyzerConfig(
         model_path=configured_model,
@@ -227,16 +218,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         validation_allowed_extensions=tuple(
             settings.get("validation_allowed_extensions", [".jpg", ".jpeg", ".png", ".dcm", ".nii", ".nii.gz"])
         ),
-        cnn_backbone=str(settings.get("cnn_backbone", "resnet50")),
         cnn_image_size=int(settings.get("cnn_image_size", 320)),
-        cnn_batch_size=int(settings.get("cnn_batch_size", 16)),
-        cnn_num_epochs=int(settings.get("cnn_num_epochs", 30)),
-        cnn_learning_rate=float(settings.get("cnn_learning_rate", 0.0001)),
-        cnn_dropout=float(settings.get("cnn_dropout", 0.3)),
-        cnn_early_stopping_patience=int(settings.get("cnn_early_stopping_patience", 7)),
-        cnn_label_smoothing=float(settings.get("cnn_label_smoothing", 0.1)),
-        cnn_mixed_precision=bool(settings.get("cnn_mixed_precision", True)),
-        cnn_warmup_epochs=int(settings.get("cnn_warmup_epochs", 3)),
         cnn_tta=bool(settings.get("cnn_tta", True)),
         analyze_topk=int(settings.get("analyze_topk", 3)),
         yolo_model_path=Path(settings["yolo_model_path"]) if settings.get("yolo_model_path") else None,
@@ -268,20 +250,6 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
         issues.append("validation_allowed_extensions không được để trống.")
     if not config.cnn_image_size > 0:
         issues.append("cnn_image_size phải lớn hơn 0.")
-    if not config.cnn_batch_size > 0:
-        issues.append("cnn_batch_size phải lớn hơn 0.")
-    if not config.cnn_num_epochs > 0:
-        issues.append("cnn_num_epochs phải lớn hơn 0.")
-    if not 0.0 < config.cnn_learning_rate <= 1.0:
-        issues.append("cnn_learning_rate không hợp lệ.")
-    if not 0.0 <= config.cnn_dropout < 1.0:
-        issues.append("cnn_dropout không hợp lệ.")
-    if config.cnn_early_stopping_patience <= 0:
-        issues.append("cnn_early_stopping_patience phải lớn hơn 0.")
-    if not 0.0 <= config.cnn_label_smoothing < 1.0:
-        issues.append("cnn_label_smoothing không hợp lệ.")
-    if config.cnn_warmup_epochs < 0:
-        issues.append("cnn_warmup_epochs không được âm.")
     if not 0.0 <= config.detection_consistency_threshold <= 1.0:
         issues.append("detection_consistency_threshold phải nằm trong khoảng [0, 1].")
     if config.segmentation_roi_margin < 0:
@@ -351,7 +319,7 @@ class MedicalImageAnalyzer:
             self.ensure_ready()
         except FileNotFoundError as exc:
             raise FileNotFoundError(
-                "Chưa có model medical để phân tích. Hãy bổ sung file model đã train vào "
+                "Chưa có model medical để phân tích. Hãy bổ sung model suy luận đã chuẩn bị bên ngoài vào "
                 "models/pretrained/ hoặc kiểm tra config/medical_settings.yaml (khóa 'model').\n"
                 f"Chi tiet: {exc}"
             ) from exc
@@ -875,7 +843,7 @@ class MedicalImageAnalyzer:
             candidates = ", ".join(str(p) for p in iter_medical_runtime_model_paths(self.config))
             raise FileNotFoundError(
                 "Thiếu model medical để phân tích. Đã thử các đường dẫn: "
-                f"{candidates}. Hãy bổ sung file model đã train vào models/pretrained/ "
+                f"{candidates}. Hãy bổ sung model suy luận đã chuẩn bị bên ngoài vào models/pretrained/ "
                 "hoac cap nhat 'model' trong config/medical_settings.yaml."
             )
         issues = validate_medical_analyzer_config(self.config)

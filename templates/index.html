@@ -1389,18 +1389,18 @@ function toggleSidebar(){
 
 function initTargets(){
   const s=document.getElementById('targetSelect');
-  CANCER_TARGETS.forEach(t=>{const o=document.createElement('option');o.value=t.key;o.textContent=t.label;s.appendChild(o)});
+  CANCER_TARGETS.forEach(t=>{const o=document.createElement('option');o.value=t.key;o.textContent=t.label+(t.model_ready?'':' — model chưa sẵn sàng');s.appendChild(o)});
   updateModalities();
   s.onchange=()=>{
     const t=CANCER_TARGETS.find(x=>x.key===s.value);
-    if(t){updateModalityList(t.modalities);document.getElementById('targetHint').textContent='Ảnh thường dùng: '+t.modalities.join(', ')}
+    if(t){updateModalityList(t.modalities);document.getElementById('targetHint').textContent='Ảnh thường dùng: '+t.modalities.join(', ')+(t.model_ready?'':' · Chưa có model suy luận cho nhóm này')}
   };
   s.onchange();
 }
 function updateModalities(){
   const t=CANCER_TARGETS[0];
   if(t)updateModalityList(t.modalities);
-  document.getElementById('targetHint').textContent='Ảnh thường dùng: '+(t?t.modalities.join(', '):'');
+  document.getElementById('targetHint').textContent='Ảnh thường dùng: '+(t?t.modalities.join(', ')+(t.model_ready?'':' · Chưa có model suy luận cho nhóm này'):'');
 }
 function updateModalityList(modalities){
   const s=document.getElementById('modalitySelect');s.innerHTML='';

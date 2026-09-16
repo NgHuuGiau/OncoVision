@@ -3,16 +3,12 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageOps
 
-from medical.cancer_catalog import COMMON_CANCER_TARGETS
-from medical.classifier import iter_medical_image_paths
 from medical.reporting import build_artifact_stamp
-from utils.file_utils import save_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +25,6 @@ def _limit_volume_slices(volume: np.ndarray, max_slices: int = 256) -> np.ndarra
     return volume[indices]
 
 
-MEDICAL_DATASET_ROOT = Path("dataset/medical")
-MEDICAL_CLASS_NAMES = tuple(target.label for target in COMMON_CANCER_TARGETS)
 MEDICAL_UPLOAD_EXTENSIONS = frozenset({
     ".jpg",
     ".jpeg",
@@ -54,6 +48,17 @@ _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("CT dạ dày", ("ct dạ dày", "ct gastric", "stomach ct", "gastric ct")),
     ("CT tuyến tiền liệt", ("ct tuyến tiền liệt", "prostate ct")),
     ("CT cổ tử cung", ("ct cổ tử cung", "cervical ct", "pelvic ct")),
+    ("CT thận", ("ct than", "kidney ct", "renal ct")),
+    ("MRI thận", ("mri than", "kidney mri", "renal mri")),
+    ("Siêu âm thận", ("sieu am than", "kidney ultrasound", "renal ultrasound")),
+    ("PET/CT thận", ("pet ct than", "petct kidney", "pet ct kidney", "pet ct renal")),
+    ("CT tụy", ("ct tuy", "pancreas ct", "pancreatic ct")),
+    ("MRI tụy", ("mri tuy", "pancreas mri", "pancreatic mri")),
+    ("PET/CT tụy", ("pet ct tuy", "petct pancreas", "pet ct pancreas", "pet ct pancreatic")),
+    ("Siêu âm tuyến giáp", ("sieu am tuyen giap", "thyroid ultrasound", "thyroid sonography")),
+    ("CT tuyến giáp", ("ct tuyen giap", "thyroid ct")),
+    ("MRI tuyến giáp", ("mri tuyen giap", "thyroid mri")),
+    ("PET/CT tuyến giáp", ("pet ct tuyen giap", "petct thyroid", "pet ct thyroid")),
     ("MRI tuyến tiền liệt", ("mri tuyến tiền liệt", "prostate mri")),
     ("MRI trực tràng", ("mri truc trang", "rectal mri")),
     ("MRI vú", ("mri vú", "breast mri")),
@@ -86,6 +91,9 @@ _TARGET_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("colorectal", ("đại trực tràng", "colorectal", "colon", "rectal", "trực tràng", "colonoscopy", "colorectal cancer", "colon cancer", "rectal cancer", "colon lesion", "rectal lesion", "colon tumor", "rectal tumor")),
     ("prostate", ("tuyến tiền liệt", "prostate", "prostatic", "prostate cancer", "prostate lesion", "prostate tumor", "prostate mass")),
     ("cervical", ("cổ tử cung", "cervical", "cervix", "pap", "hpv", "colposcopy", "cervical cancer", "cervix cancer", "cervical lesion", "cervical tumor")),
+    ("kidney", ("thận", "kidney", "renal", "nephro", "rcc", "renal cell carcinoma", "kidney cancer", "kidney lesion", "kidney tumor", "kidney mass")),
+    ("pancreas", ("tụy", "pancreas", "pancreatic", "pdac", "pancreatic ductal adenocarcinoma", "pancreas cancer", "pancreatic cancer", "pancreas lesion", "pancreatic lesion", "pancreas tumor", "pancreatic tumor")),
+    ("thyroid", ("tuyến giáp", "thyroid", "thyroid cancer", "thyroid carcinoma", "thyroid lesion", "thyroid nodule", "thyroid tumor")),
     ("brain", ("não", "brain", "cranial", "skull", "neuro", "intracranial", "cerebral", "glioma", "meningioma", "pituitary", "brain tumor", "brain cancer", "brain lesion", "brain mass", "head tumor")),
 )
 
@@ -111,6 +119,17 @@ _MODALITY_TO_TARGET_KEY: dict[str, str] = {
     "MRI tuyến tiền liệt": "prostate",
     "CT cổ tử cung": "cervical",
     "MRI cổ tử cung": "cervical",
+    "CT thận": "kidney",
+    "MRI thận": "kidney",
+    "Siêu âm thận": "kidney",
+    "PET/CT thận": "kidney",
+    "CT tụy": "pancreas",
+    "MRI tụy": "pancreas",
+    "PET/CT tụy": "pancreas",
+    "Siêu âm tuyến giáp": "thyroid",
+    "CT tuyến giáp": "thyroid",
+    "MRI tuyến giáp": "thyroid",
+    "PET/CT tuyến giáp": "thyroid",
     "PET/CT gan": "liver",
     "PET/CT phổi": "lung",
     "PET/CT đại trực tràng": "colorectal",
@@ -159,6 +178,10 @@ _DICOM_BODY_PART_TO_TARGET: dict[str, str] = {
     "NEURO": "brain",
     "SKULL": "brain",
     "CSPINE": "brain",
+    "KIDNEY": "kidney",
+    "RENAL": "kidney",
+    "PANCREAS": "pancreas",
+    "THYROID": "thyroid",
 }
 
 SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
@@ -170,77 +193,10 @@ SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
     "prostate": ("mri", "ultrasound", "pet_ct"),
     "cervical": ("ct", "mri", "pet_ct"),
     "brain": ("mri", "ct", "pet_ct"),
+    "kidney": ("ct", "mri", "ultrasound", "pet_ct"),
+    "pancreas": ("ct", "mri", "pet_ct"),
+    "thyroid": ("ultrasound", "ct", "mri", "pet_ct"),
 }
-
-
-@dataclass(frozen=True)
-class MedicalDatasetConfig:
-    disease_name: str
-    dataset_root: Path
-    data_yaml_path: Path
-    metadata_dir: Path
-    reports_dir: Path
-    class_names: tuple[str, ...]
-    image_size: int
-
-
-@dataclass(frozen=True)
-class MedicalDatasetSummary:
-    dataset_root: Path
-    created_directories: list[Path]
-    data_yaml_path: Path
-
-
-def create_default_medical_dataset_config(dataset_root: str | Path = MEDICAL_DATASET_ROOT) -> MedicalDatasetConfig:
-    root = Path(dataset_root)
-    return MedicalDatasetConfig(
-        disease_name=f"medical_{len(COMMON_CANCER_TARGETS)}_cancers",
-        dataset_root=root,
-        data_yaml_path=root / "data.yaml",
-        metadata_dir=root / "metadata",
-        reports_dir=root / "reports",
-        class_names=MEDICAL_CLASS_NAMES,
-        image_size=320,
-    )
-
-
-def ensure_medical_dataset_structure(config: MedicalDatasetConfig | None = None) -> MedicalDatasetSummary:
-    config = config or create_default_medical_dataset_config()
-    created_dirs = [config.dataset_root, config.metadata_dir, config.reports_dir]
-    for class_name in config.class_names:
-        for split in ("train", "val", "test"):
-            created_dirs.append(config.dataset_root / class_name / "processed" / "images" / split)
-    for directory in created_dirs:
-        directory.mkdir(parents=True, exist_ok=True)
-    save_yaml(
-        config.data_yaml_path,
-        {
-            "path": str(config.dataset_root.resolve()),
-            "task": "classification",
-            "train": str(config.dataset_root.resolve()),
-            "val": str(config.dataset_root.resolve()),
-            "test": str(config.dataset_root.resolve()),
-            "names": {index: name for index, name in enumerate(config.class_names)},
-        },
-    )
-    return MedicalDatasetSummary(
-        dataset_root=config.dataset_root,
-        created_directories=created_dirs,
-        data_yaml_path=config.data_yaml_path,
-    )
-
-
-def iter_medical_class_split_images(dataset_root: str | Path, split: str) -> dict[str, list[Path]]:
-    root = Path(dataset_root)
-    split_map: dict[str, list[Path]] = {}
-    for class_name in MEDICAL_CLASS_NAMES:
-        split_dir = root / class_name / "processed" / "images" / split
-        split_map[class_name] = list(iter_medical_image_paths(split_dir))
-    return split_map
-
-
-def count_medical_class_split_images(dataset_root: str | Path, split: str) -> dict[str, int]:
-    return {class_name: len(paths) for class_name, paths in iter_medical_class_split_images(dataset_root, split).items()}
 
 
 def is_supported_medical_upload_path(path: str | Path) -> bool:

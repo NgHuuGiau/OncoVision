@@ -6,12 +6,12 @@ Tài liệu tóm tắt cách CI hoạt động và các bước kiểm tra khi p
 
 ## 1. CI chạy những gì
 
-Workflow chính tại `.github/workflows/test.yml`, chạy trên `windows-latest` với matrix Python 3.10 / 3.11 / 3.12 (`fail-fast: false`).
+Workflow chính tại `.github/workflows/test.yml`, chạy trên `windows-latest` với matrix Python 3.10 / 3.11 / 3.12 / 3.13 (`fail-fast: false`).
 
 **Trình tự các bước:**
 
 1. Checkout code
-2. Setup Python (matrix 3.10, 3.11, 3.12)
+2. Setup Python (matrix 3.10, 3.11, 3.12, 3.13)
 3. Cài đặt dependencies (bỏ pyaudio trên CI)
 4. `compileall` — kiểm tra biên dịch
 5. `ruff` — kiểm tra code style
@@ -41,7 +41,6 @@ Chỉ kiểm tra các module đang bảo trì:
 
 - `core`
 - `medical`
-- `training`
 - `utils`
 - `run_*.py`
 

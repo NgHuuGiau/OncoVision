@@ -25,7 +25,7 @@ Nếu vẫn lỗi:
 Kiểm tra:
 
 - `models/pretrained/` — model tiền huấn luyện
-- `models/trained/` — model đã train
+- `models/trained/` — model suy luận bổ sung do người dùng cung cấp
 
 Nếu cần tải pretrained: `python training/download_models.py`.
 
@@ -47,7 +47,7 @@ Nếu thất bại, xem:
 
 ## 4. Model medical chưa sẵn sàng
 
-Hệ thống chỉ phân tích bằng model đã train sẵn. Kiểm tra:
+Hệ thống chỉ suy luận bằng model được cung cấp. Kiểm tra:
 
 ```powershell
 python run_doctor.py --skip-camera-check
@@ -57,14 +57,14 @@ python run_medical.py status
 **Trạng thái model (09/2026):**
 - ✅ `brain_classifier.pt` — Não (4 loại u) — **SẴN SÀNG**
 - ✅ `modality_classifier.pt` — 8 modality — **99.93%**
-- ❌ `medical_7_cancers_cnn.pt` — 7 ung thư — **CHƯA CÓ**
+- ❌ `medical_10_cancers_cnn.pt` — 10 nhóm ung thư ngoài não — **CHƯA CÓ MODEL**
 
 Nếu thiếu model:
 - Bổ sung file đã train vào `models/pretrained/`
 - Hoặc sửa đường dẫn trong `config/medical_settings.yaml`
 - Xem `medical/model_policy.py` để hiểu cách resolve đường dẫn model
 
-> **Lưu ý**: Thiếu model 7 ung thư → hệ thống tự fallback sang brain model cho mọi ảnh. `run_doctor.py` báo "chỉ phân tích được não". Đây là hành vi dự kiến.
+> **Lưu ý**: Chưa có model 10 nhóm ung thư → hiện chỉ dùng được brain model. Nhóm bệnh đã có trong catalog nhưng chưa có model suy luận tương ứng.
 
 ---
 
@@ -74,7 +74,6 @@ Xem:
 
 - `medical/system_status.py`
 - `medical/model_policy.py`
-- `medical/training.py`
 - `run_medical.py`
 
 ---

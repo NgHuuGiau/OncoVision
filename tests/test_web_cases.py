@@ -60,6 +60,14 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["case"]["patient_code"], "TEST-001")
 
+    def test_web_ui_lists_new_targets_as_not_model_ready(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Ung thư thận", response.text)
+        self.assertIn("Ung thư tụy", response.text)
+        self.assertIn("Ung thư tuyến giáp", response.text)
+        self.assertIn("model_ready", response.text)
+
     def test_get_missing_case_returns_404(self) -> None:
         self.assertEqual(self.client.get("/api/cases/9999").status_code, 404)
 

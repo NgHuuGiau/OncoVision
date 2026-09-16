@@ -31,15 +31,6 @@ def print_medical_status(status: MedicalSystemStatus) -> None:
         print(row("Model runtime", str(status.resolved_model_path), color, bounded=False))
     print(row("Fallback", "Bật" if status.allow_fallback_model else "Tắt", YELLOW if status.allow_fallback_model else GREEN, bounded=False))
     print(row("Trạng thái", status.model_message, color, bounded=False))
-    print(row("Dataset root", str(status.dataset_root), CYAN, bounded=False))
-    print(
-        row(
-            "Medical data",
-            f"raw {status.raw_images}/{status.raw_labels} | train {status.train_images} | val {status.val_images} | test {status.test_images}",
-            GREEN if status.processed_dataset_ready else YELLOW,
-            bounded=False,
-        )
-    )
     print(
         row(
             "Cases / output",

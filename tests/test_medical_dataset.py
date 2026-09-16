@@ -12,9 +12,6 @@ from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.filewriter import dcmwrite
 
 from medical.dataset import (
-    MedicalDatasetConfig,
-    create_default_medical_dataset_config,
-    ensure_medical_dataset_structure,
     infer_medical_upload_context,
     is_medical_volume_source,
     is_supported_medical_upload_path,
@@ -25,33 +22,6 @@ from medical.dataset import (
 
 
 class MedicalDatasetTests(unittest.TestCase):
-    def test_ensure_medical_dataset_structure_creates_skin_cancer_layout(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            config = create_default_medical_dataset_config(Path(temp_dir) / "medical_ds")
-            summary = ensure_medical_dataset_structure(config)
-
-            self.assertTrue(summary.data_yaml_path.exists())
-            self.assertTrue((config.dataset_root / "Ung thư gan" / "processed" / "images" / "train").exists())
-            self.assertTrue((config.dataset_root / "Ung thư cổ tử cung" / "processed" / "images" / "test").exists())
-
-    def test_ensure_medical_dataset_structure_creates_medical_cancer_layout(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "medical_cancer_ds"
-            config = MedicalDatasetConfig(
-                disease_name="medical_cancer_screening",
-                dataset_root=root,
-                metadata_dir=root / "metadata",
-                reports_dir=root / "reports",
-                data_yaml_path=root / "data.yaml",
-                image_size=640,
-                class_names=("Ung thư gan",),
-            )
-            summary = ensure_medical_dataset_structure(config)
-
-            self.assertTrue(summary.data_yaml_path.exists())
-            self.assertTrue((config.dataset_root / "Ung thư gan" / "processed" / "images" / "val").exists())
-            self.assertTrue(config.metadata_dir.exists())
-
     def test_normalize_uploaded_image_letterboxes_to_square_rgb(self) -> None:
         with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "input.png"
@@ -213,6 +183,18 @@ class MedicalDatasetTests(unittest.TestCase):
 
             self.assertEqual(target_key, "lung")
             self.assertEqual(modality, "CT ngực")
+
+    def test_infer_medical_upload_context_recognizes_new_cancer_targets(self) -> None:
+        cases = (
+            ("kidney_ct_scan.jpg", "kidney", "CT thận"),
+            ("pancreatic_mri_scan.jpg", "pancreas", "MRI tụy"),
+            ("thyroid_ultrasound_scan.jpg", "thyroid", "Siêu âm tuyến giáp"),
+        )
+        with TemporaryDirectory() as temp_dir:
+            for filename, expected_target, expected_modality in cases:
+                path = Path(temp_dir) / filename
+                path.touch()
+                self.assertEqual(infer_medical_upload_context(path), (expected_target, expected_modality))
 
     def test_normalize_uploaded_image_accepts_nifti_volume(self) -> None:
         with TemporaryDirectory() as temp_dir:

@@ -54,9 +54,6 @@ python run_app.py --model models/trained/best.pt
 
 ```powershell
 python run_medical.py status
-python run_medical.py ready
-python run_medical.py sources
-python run_medical.py cancer
 python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
 ```
 
@@ -64,7 +61,7 @@ python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
 
 ## 5. Model & phân tích (Trạng thái 09/2026)
 
-Hệ thống chỉ phân tích ảnh bằng model đã train sẵn (đặt trong `models/pretrained/`):
+Hệ thống chỉ suy luận bằng model có sẵn (đặt trong `models/pretrained/`):
 
 ```powershell
 # Kiểm tra đã đủ model chưa
@@ -75,9 +72,9 @@ python run_doctor.py --skip-camera-check
 |---|---|---|---|
 | **Brain** | `brain_classifier.pt` | ✅ **Sẵn sàng** | 4 loại u não (glioma/meningioma/pituitary/no_tumor) — fallback tự động |
 | **Modality** | `modality_classifier.pt` | ✅ **99.93%** | 8 loại ảnh (CT, MRI, X-quang, Mammogram, Nội soi, Siêu âm, PET/CT, EUS) |
-| **7 Ung thư** | `medical_7_cancers_cnn.pt` | ❌ **Chưa có** | Gan, phổi, vú, dạ dày, đại trực tràng, tiền liệt, tử cung — chờ data train mới |
+| **10 nhóm ung thư ngoài não** | `medical_10_cancers_cnn.pt` | ❌ **Chưa có model** | Model suy luận sẽ được bổ sung bên ngoài |
 
-> **Hành vi hiện tại**: Thiếu model 7 ung thư → hệ thống tự fallback sang **brain model** cho mọi ảnh. `run_doctor.py` báo "chỉ phân tích được não". Đây là dự kiến.
+> **Hành vi hiện tại**: Thiếu model 10 nhóm → chỉ phân tích được ảnh não. Không xem các nhóm mới đăng ký là đã được AI hỗ trợ lâm sàng.
 
 ---
 
@@ -107,8 +104,8 @@ python run_chat.py --check-only
 
 ---
 
-## 8. Khi có dữ liệu train mới (model 7 ung thư / brain tốt hơn)
+## 8. Khi có model suy luận mới
 
-1. Đặt file `.pt` vào `models/pretrained/`
+1. Đặt model và metadata cần thiết vào `models/pretrained/`
 2. Chạy `python run_doctor.py --skip-camera-check` để xác nhận nhận diện
 3. `python run_medical.py analyze --image ...` để test

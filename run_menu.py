@@ -8,8 +8,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.model_catalog import YOLO11_MODELS_ASC
-from training.download_models import download_models
 from utils.entrypoint_common import run_entrypoint
 from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
@@ -44,7 +42,7 @@ class MenuOption:
 MENU_OPTIONS: dict[str, MenuOption] = {
     "1": MenuOption("run_app.py", "Camera realtime", "Mở camera, chạy model và xem kết quả ngay.", "CHẠY NHANH", GREEN, "📷"),
     "2": MenuOption("run_chat.py", "Chat y dược", "Mở chat UI và luồng phân tích ảnh y khoa.", "CHẠY NHANH", GREEN, "💬"),
-    "3": MenuOption("run_medical.py", "Y dược", "Quản lý dataset, lịch sử ca và luồng medical.", "Y DƯỢC", CYAN, "🏥"),
+    "3": MenuOption("run_medical.py", "Phân tích y khoa", "Phân tích ảnh, quản lý ca bệnh và xem báo cáo.", "Y DƯỢC", CYAN, "🏥"),
     "4": MenuOption("", "Kiểm tra", "Mở menu kiểm tra (Doctor, Test, Smoke).", "KIỂM TRA", YELLOW, "🔍"),
     "5": MenuOption("run_chat.py", "Dọn cache", "Xóa output chat và medical cũ cho repo gọn hơn.", "BẢO TRÌ", YELLOW, "🧹", ("--cleanup-output",)),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED, "🚪"),
@@ -54,7 +52,7 @@ PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
 MENU_PROMPT = f"  Nhập lựa chọn [{'/'.join(('0', *PRIMARY_KEYS))}]: "
 
 MEDICAL_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_medical.py", "Phân tích ca bệnh", "Thực hiện phân tích ảnh y khoa theo ID", "PHÂN TÍCH", CYAN, "🔬", ("analyze",)),
+    "1": MenuOption("run_medical.py", "Phân tích ảnh", "Nhập ảnh y khoa để phân tích và nhận báo cáo.", "PHÂN TÍCH", CYAN, "🔬", ("analyze",)),
     "2": MenuOption("run_medical.py", "Lịch sử ca bệnh", "Xem danh sách các ca đã phân tích", "KẾT QUẢ", YELLOW, "📋", ("history",)),
     "3": MenuOption("run_medical.py", "Kiểm tra & Báo cáo", "Xem tóm tắt dữ liệu / Kiểm tra tính hợp lệ ảnh", "KIỂM TRA", GREEN, "✅", ("report",)),
     "0": MenuOption("", "Quay lại menu chính", "Trở về menu chính.", "HỆ THỐNG", RED, "↩"),
@@ -64,7 +62,7 @@ MEDICAL_PROMPT = f"  Nhập lựa chọn [{'/'.join(('0', *MEDICAL_PRIMARY_KEYS)
 MEDICAL_BACK_TEXT = "Quay lại menu chính."
 
 CHECK_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_doctor.py", "Doctor", "Rà soát môi trường, model và dataset.", "KIỂM TRA", YELLOW, "🩺", ("--skip-camera-check",)),
+    "1": MenuOption("run_doctor.py", "Doctor", "Rà soát môi trường, model và output.", "KIỂM TRA", YELLOW, "🩺", ("--skip-camera-check",)),
     "2": MenuOption("run_tests.py", "Test", "Chạy unit test và regression.", "KIỂM TRA", YELLOW, "🧪", ("--skip-camera-check",)),
     "3": MenuOption("run_smoke.py", "Smoke", "Kiểm tra nhanh các entrypoint chính.", "KIỂM TRA", YELLOW, "💨", ()),
     "4": MenuOption("run_smoke.py", "Smoke + tests", "Smoke check và nối thêm test suite.", "KIỂM TRA", YELLOW, "🔬", ("--include-tests",)),
@@ -74,34 +72,6 @@ CHECK_OPTIONS: dict[str, MenuOption] = {
 }
 CHECK_PRIMARY_KEYS = tuple(key for key in CHECK_OPTIONS if key != "0")
 CHECK_PROMPT = f"  Nhập lựa chọn [{'/'.join(('0', *CHECK_PRIMARY_KEYS))}]: "
-
-
-def _progress_bar(percent: int, width: int = 20) -> str:
-    percent = max(0, min(100, percent))
-    filled = round(width * percent / 100)
-    return f"[{'█' * filled}{'░' * (width - filled)}] {percent:3d}%"
-
-
-def _model_exists(model_name: str) -> bool:
-    return os.path.exists(str(Path("models/pretrained") / model_name))
-
-
-def _ensure_yolo11_models() -> None:
-    missing_models = [model_name for model_name in YOLO11_MODELS_ASC if not _model_exists(model_name)]
-    if not missing_models:
-        return
-    total = len(missing_models)
-    print(f"{BOLD}{CYAN}{'═' * 78}{RESET}")
-    print(f"{BOLD}{CYAN}  ĐANG KIỂM TRA VÀ TẢI MODEL YOLO11{RESET}")
-    print(f"{BOLD}{CYAN}{'═' * 78}{RESET}")
-    for index, model_name in enumerate(missing_models, start=1):
-        print(f"{YELLOW}  [{index}/{total}] {model_name} {_progress_bar(0)}{RESET}")
-    downloaded, skipped = download_models(missing_models)
-    for index, model_name in enumerate(downloaded, start=1):
-        print(f"{GREEN}  ✔ [{index}/{total}] {model_name} {_progress_bar(100)}{RESET}")
-    for model_name in skipped:
-        print(f"{CYAN}  • Đã có sẵn {model_name}, bỏ qua{RESET}")
-    print(f"{BOLD}{CYAN}{'═' * 78}{RESET}")
 
 
 def _configure_terminal_encoding() -> None:
@@ -149,7 +119,7 @@ def _render_main_menu(print_fn=print) -> None:
     items = [
         ("1", "Camera realtime", "Mở camera, chạy model và xem kết quả ngay."),
         ("2", "Chat y dược", "Mở chat UI và luồng phân tích ảnh y khoa."),
-        ("3", "Y dược", "Quản lý dataset, lịch sử ca và luồng medical."),
+        ("3", "Phân tích y khoa", "Đưa ảnh vào phân tích, xem báo cáo và lịch sử ca bệnh."),
         ("4", "Kiểm tra", "Mở menu kiểm tra (Doctor, Test, Smoke)."),
         ("5", "Dọn cache", "Xóa output chat và medical cũ cho repo gọn hơn."),
     ]
@@ -162,18 +132,16 @@ def _render_menu(print_fn=print) -> None:
 
 def _render_medical_menu(print_fn=print) -> None:
     items = [
-        ("1", "Phân tích ca bệnh", "Thực hiện phân tích ảnh y khoa theo ID."),
+        ("1", "Phân tích ảnh", "Đưa ảnh y khoa vào phân tích bằng model có sẵn."),
         ("2", "Lịch sử ca bệnh", "Xem danh sách các ca đã phân tích."),
-        ("3", "Kiểm tra & Báo cáo", "Xem tóm tắt dữ liệu / Kiểm tra tính hợp lệ ảnh."),
-        ("4", "Huấn luyện mô hình", "Khởi tạo split và train pipeline y khoa."),
-        ("5", "Cải tiến & Tuning", "Active learning, train modality & hiệu chỉnh."),
+        ("3", "Trạng thái & Báo cáo", "Kiểm tra model suy luận và kết quả đã lưu."),
     ]
     _print_menu_lines("MENU Y DƯỢC", items, MAGENTA, CYAN, print_fn=print_fn)
 
 
 def _render_check_menu(print_fn=print) -> None:
     items = [
-        ("1", "Doctor", "Rà soát môi trường, model và dataset."),
+        ("1", "Doctor", "Rà soát môi trường, model và output."),
         ("2", "Test", "Chạy unit test và regression."),
         ("3", "Smoke", "Kiểm tra nhanh các entrypoint chính."),
         ("4", "Smoke + tests", "Smoke check và nối thêm test suite."),
@@ -404,7 +372,6 @@ def _run_menu_choice(choice: str, *, input_fn=input, print_fn=print, run_script_
 def main(input_fn=input, print_fn=print, run_script_fn=_run_script, clear_terminal_fn=_clear_terminal) -> int:
     _configure_terminal_encoding()
     ensure_project_directories()
-    _ensure_yolo11_models()
     try:
         while True:
             _render_main_menu(print_fn=print_fn)

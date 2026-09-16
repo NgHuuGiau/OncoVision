@@ -41,6 +41,17 @@ _MODALITY_LABEL_TO_CANONICAL = {
     "MRI não": "mri",
     "CT sọ não": "ct",
     "PET/CT não": "pet_ct",
+    "CT thận": "ct",
+    "MRI thận": "mri",
+    "Siêu âm thận": "ultrasound",
+    "PET/CT thận": "pet_ct",
+    "CT tụy": "ct",
+    "MRI tụy": "mri",
+    "PET/CT tụy": "pet_ct",
+    "Siêu âm tuyến giáp": "ultrasound",
+    "CT tuyến giáp": "ct",
+    "MRI tuyến giáp": "mri",
+    "PET/CT tuyến giáp": "pet_ct",
 }
 
 _TARGET_LABEL_TO_CANONICAL = {
@@ -52,6 +63,9 @@ _TARGET_LABEL_TO_CANONICAL = {
     "prostate": "prostate",
     "cervical": "cervix",
     "brain": "brain",
+    "kidney": "kidney",
+    "pancreas": "pancreas",
+    "thyroid": "thyroid",
 }
 
 _MODALITY_TO_TARGET_KEY = {
@@ -74,6 +88,17 @@ _MODALITY_TO_TARGET_KEY = {
     "MRI não": "brain",
     "CT sọ não": "brain",
     "PET/CT não": "brain",
+    "CT thận": "kidney",
+    "MRI thận": "kidney",
+    "Siêu âm thận": "kidney",
+    "PET/CT thận": "kidney",
+    "CT tụy": "pancreas",
+    "MRI tụy": "pancreas",
+    "PET/CT tụy": "pancreas",
+    "Siêu âm tuyến giáp": "thyroid",
+    "CT tuyến giáp": "thyroid",
+    "MRI tuyến giáp": "thyroid",
+    "PET/CT tuyến giáp": "thyroid",
 }
 
 _DICOM_MODALITY_MAP = {
@@ -104,6 +129,9 @@ SUPPORTED_MAPPING = {
     "colorectal": supported_medical_modalities_for_target("colorectal"),
     "prostate": supported_medical_modalities_for_target("prostate"),
     "cervix": supported_medical_modalities_for_target("cervical"),
+    "kidney": supported_medical_modalities_for_target("kidney"),
+    "pancreas": supported_medical_modalities_for_target("pancreas"),
+    "thyroid": supported_medical_modalities_for_target("thyroid"),
 }
 
 DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")

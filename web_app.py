@@ -90,7 +90,7 @@ def _safe_path(base: Path, path: str) -> Path | None:
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     cancer_targets = [
-        {"key": t.key, "label": t.label, "modalities": list(t.modalities)}
+        {"key": t.key, "label": t.label, "modalities": list(t.modalities), "model_ready": t.model_ready}
         for t in COMMON_CANCER_TARGETS
     ]
     return templates.TemplateResponse(request, "index.html", {
@@ -115,8 +115,6 @@ def api_status():
         "ok": True,
         "model_ready": medical.model_ready,
         "model_message": medical.model_message,
-        "dataset_initialized": medical.dataset_initialized,
-        "total_images": medical.total_images,
         "case_count": medical.case_count,
         "analyzed_cancers": list(medical.analyzed_cancers),
         "analyzed_modalities": list(medical.analyzed_modalities),

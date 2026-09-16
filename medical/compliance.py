@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from textwrap import dedent
 
@@ -212,18 +211,6 @@ def deidentify_dicom_series(input_dir: str | Path, output_dir: str | Path) -> Co
             report.record_skipped(dcm_file)
 
     return report
-
-
-def compute_dataset_hash(dataset_root: str | Path) -> str:
-    root = Path(dataset_root)
-    hasher = hashlib.sha256()
-    for path in sorted(root.rglob("*")):
-        if path.is_file():
-            hasher.update(str(path.relative_to(root)).encode("utf-8"))
-            hasher.update(b":")
-            hasher.update(str(path.stat().st_size).encode("utf-8"))
-            hasher.update(b"\n")
-    return hasher.hexdigest()[:16]
 
 
 class ComplianceReport:

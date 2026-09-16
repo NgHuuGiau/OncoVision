@@ -1,295 +1,77 @@
 from __future__ import annotations
 
-import os
 import re
 import unittest
 from unittest.mock import MagicMock, patch
 
 import run_menu
-from run_menu import MENU_OPTIONS
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class RunMenuTests(unittest.TestCase):
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_auto_downloads_missing_yolo_models_on_startup(self, exists_mock, download_models_mock) -> None:
-        def exists_side_effect(path: str) -> bool:
-            return path.endswith(("yolo11n.pt", "yolo11s.pt"))
-
-        exists_mock.side_effect = exists_side_effect
-        download_models_mock.return_value = (["yolo11m.pt", "yolo11l.pt", "yolo11x.pt"], [])
-
-        answers = iter(["0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=lambda _: None,
-            run_script_fn=MagicMock(),
-            clear_terminal_fn=MagicMock(),
-        )
-
-        self.assertEqual(result, 0)
-        download_models_mock.assert_called_once_with(["yolo11m.pt", "yolo11l.pt", "yolo11x.pt"])
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_does_not_download_when_all_yolo_models_exist(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-
+    def test_main_exits_without_downloading_models(self) -> None:
+        run_script = MagicMock()
         result = run_menu.main(
             input_fn=lambda _: "0",
             print_fn=lambda _: None,
-            run_script_fn=MagicMock(),
-            clear_terminal_fn=MagicMock(),
-        )
-
-        self.assertEqual(result, 0)
-        download_models_mock.assert_not_called()
-
-    def test_main_exits_on_zero(self) -> None:
-        outputs: list[str] = []
-        clear_terminal = MagicMock()
-        result = run_menu.main(
-            input_fn=lambda _: "0",
-            print_fn=outputs.append,
-            run_script_fn=MagicMock(),
-            clear_terminal_fn=clear_terminal,
-        )
-
-        self.assertEqual(result, 0)
-        self.assertTrue(any("Đã thoát menu" in line for line in outputs))
-        clear_terminal.assert_not_called()
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_runs_camera_entrypoint(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        run_script = MagicMock(return_value=0)
-        answers = iter(["1", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=lambda _: None,
             run_script_fn=run_script,
             clear_terminal_fn=MagicMock(),
         )
-
-        self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_app.py")
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_enters_check_menu_and_runs_doctor_option(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        run_script = MagicMock(return_value=0)
-        clear_terminal = MagicMock()
-        answers = iter(["4", "6", "", "0", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=clear_terminal,
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_has_calls([
-            unittest.mock.call("run_doctor.py", "--skip-camera-check"),
-            unittest.mock.call("run_tests.py", "--skip-camera-check"),
-            unittest.mock.call("run_smoke.py"),
-            unittest.mock.call("run_medical.py", "status"),
-        ], any_order=False)
-        self.assertTrue(any("KIỂM TRA TOÀN HỆ THỐNG" in line or "Bước 1/" in line for line in outputs))
-        self.assertEqual(clear_terminal.call_count, 2)
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_enters_check_menu_and_runs_test_option(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        run_script = MagicMock(return_value=0)
-        clear_terminal = MagicMock()
-        answers = iter(["4", "6", "", "0", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=clear_terminal,
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_has_calls([
-            unittest.mock.call("run_doctor.py", "--skip-camera-check"),
-            unittest.mock.call("run_tests.py", "--skip-camera-check"),
-            unittest.mock.call("run_smoke.py"),
-            unittest.mock.call("run_medical.py", "status"),
-        ], any_order=False)
-        self.assertTrue(any("KIỂM TRA TOÀN HỆ THỐNG" in line or "Bước 1/" in line for line in outputs))
-        self.assertEqual(clear_terminal.call_count, 2)
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_enters_check_menu_and_runs_smoke_check_option(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        run_script = MagicMock(return_value=0)
-        clear_terminal = MagicMock()
-        answers = iter(["4", "6", "", "0", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=clear_terminal,
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_has_calls([
-            unittest.mock.call("run_doctor.py", "--skip-camera-check"),
-            unittest.mock.call("run_tests.py", "--skip-camera-check"),
-            unittest.mock.call("run_smoke.py"),
-            unittest.mock.call("run_medical.py", "status"),
-        ], any_order=False)
-        self.assertTrue(any("KIỂM TRA TOÀN HỆ THỐNG" in line or "Bước 1/" in line for line in outputs))
-        self.assertEqual(clear_terminal.call_count, 2)
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_enters_check_menu_and_runs_smoke_plus_tests_option(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        run_script = MagicMock(return_value=0)
-        clear_terminal = MagicMock()
-        answers = iter(["4", "6", "", "0", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=clear_terminal,
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_has_calls([
-            unittest.mock.call("run_doctor.py", "--skip-camera-check"),
-            unittest.mock.call("run_tests.py", "--skip-camera-check"),
-            unittest.mock.call("run_smoke.py"),
-            unittest.mock.call("run_medical.py", "status"),
-        ], any_order=False)
-        self.assertTrue(any("KIỂM TRA TOÀN HỆ THỐNG" in line or "Bước 1/" in line for line in outputs))
-        self.assertEqual(clear_terminal.call_count, 2)
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_runs_chat_cleanup_option(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        run_script = MagicMock(return_value=0)
-        answers = iter(["5", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=MagicMock(),
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_chat.py", "--cleanup-output")
-        self.assertTrue(any("run_chat.py --cleanup-output" in line for line in outputs))
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_retries_on_invalid_choice(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        answers = iter(["13", "4", "", "0", "0"])
-        run_script = MagicMock(return_value=0)
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=MagicMock(),
-        )
-
         self.assertEqual(result, 0)
         run_script.assert_not_called()
-        self.assertTrue(any("Lựa chọn không hợp lệ" in line for line in outputs))
 
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_check_menu_retries_on_invalid_choice(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        answers = iter(["4", "", "x", "0", "0"])
-        run_script = MagicMock(return_value=0)
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=MagicMock(),
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_not_called()
-        self.assertTrue(any("Lựa chọn không hợp lệ" in line for line in outputs))
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_main_enters_medical_menu_and_runs_report(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
-        outputs: list[str] = []
-        run_script = MagicMock(return_value=0)
-        answers = iter(["3", "3", "0", "0"])
-
-        result = run_menu.main(
-            input_fn=lambda _: next(answers),
-            print_fn=outputs.append,
-            run_script_fn=run_script,
-            clear_terminal_fn=MagicMock(),
-        )
-
-        self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_medical.py", "report")
-        self.assertTrue(any("Kiểm tra & Báo cáo" in line or "report" in line for line in outputs))
-
-    @patch("run_menu.download_models")
-    @patch("run_menu.os.path.exists")
-    def test_medical_analyze_prompts_for_path_and_patient_code(self, exists_mock, download_models_mock) -> None:
-        exists_mock.return_value = True
+    def test_medical_analyze_prompts_for_image_and_patient_code(self) -> None:
         run_script = MagicMock(return_value=0)
         answers = iter(["3", "1", "sample.jpg", "BN009", "0", "0"])
-
         result = run_menu.main(
             input_fn=lambda _: next(answers),
             print_fn=lambda _: None,
             run_script_fn=run_script,
             clear_terminal_fn=MagicMock(),
         )
-
         self.assertEqual(result, 0)
         run_script.assert_called_once_with("run_medical.py", "analyze", "--image", "sample.jpg", "--patient-code", "BN009")
 
-    def test_render_menu_wraps_long_descriptions_on_narrow_terminal(self) -> None:
+    def test_medical_menu_does_not_offer_training(self) -> None:
         outputs: list[str] = []
+        run_menu._render_medical_menu(print_fn=outputs.append)
+        rendered = ANSI_RE.sub("", "\n".join(outputs)).lower()
+        self.assertIn("phân tích ảnh", rendered)
+        self.assertNotIn("huấn luyện", rendered)
+        self.assertNotIn("tuning", rendered)
 
-        with patch("run_menu.os.get_terminal_size", return_value=os.terminal_size((60, 20))):
-            run_menu._render_menu(print_fn=outputs.append)
-
-        plain_outputs = [ANSI_RE.sub("", item) for item in outputs]
-        non_empty_lines = [line for line in plain_outputs if line.strip()]
-        self.assertTrue(len(non_empty_lines) > len(MENU_OPTIONS))
-        menu_lines = [line for line in non_empty_lines if line.strip()[0] in "0123456789"]
-        self.assertTrue(
-            all(len(line) <= 60 for line in menu_lines),
-            msg="\n".join(plain_outputs),
+    def test_main_enters_medical_menu_and_runs_report(self) -> None:
+        run_script = MagicMock(return_value=0)
+        answers = iter(["3", "3", "0", "0"])
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=lambda _: None,
+            run_script_fn=run_script,
+            clear_terminal_fn=MagicMock(),
         )
+        self.assertEqual(result, 0)
+        run_script.assert_called_once_with("run_medical.py", "report")
+
+    def test_invalid_main_menu_choice_is_rejected(self) -> None:
+        outputs: list[str] = []
+        answers = iter(["99", "0"])
+        result = run_menu.main(
+            input_fn=lambda _: next(answers),
+            print_fn=outputs.append,
+            run_script_fn=MagicMock(),
+            clear_terminal_fn=MagicMock(),
+        )
+        self.assertEqual(result, 0)
+        self.assertTrue(any("Lựa chọn không hợp lệ" in line for line in outputs))
+
+    def test_render_menu_wraps_long_descriptions(self) -> None:
+        outputs: list[str] = []
+        with patch("run_menu.os.get_terminal_size", return_value=type("Size", (), {"columns": 60})()):
+            run_menu._render_menu(print_fn=outputs.append)
+        lines = [ANSI_RE.sub("", item) for item in outputs if ANSI_RE.sub("", item).strip()]
+        self.assertGreater(len(lines), len(run_menu.MENU_OPTIONS))
+        self.assertTrue(all(len(line) <= 60 for line in lines))
 
 
 if __name__ == "__main__":

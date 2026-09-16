@@ -2,32 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from medical.cnn_classifier import MedicalCNNClassifier, MedicalCNNClassifierWrapper
-from medical.network_policy import resolve_pretrained
-
-_MODALITY_LABELS = [
-    "ct",
-    "mri",
-    "xray",
-    "ultrasound",
-    "mammogram",
-    "endoscopy",
-    "pet_ct",
-    "eus",
-]
-
-
-def build_modality_classifier(num_classes: int = 8) -> MedicalCNNClassifier:
-    return MedicalCNNClassifier(
-        num_classes=num_classes,
-        backbone="resnet18",
-        pretrained=resolve_pretrained(True, context="modality:resnet18"),
-        dropout=0.2,
-    )
-
-
-def save_modality_classifier(wrapper: MedicalCNNClassifierWrapper, path: str | Path) -> Path:
-    return wrapper.save(path)
+from medical.cnn_classifier import MedicalCNNClassifierWrapper
 
 
 def load_modality_classifier(path: str | Path, device: str | None = None) -> MedicalCNNClassifierWrapper:

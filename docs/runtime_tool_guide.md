@@ -93,4 +93,4 @@ Khắc phục: thử `--mode low` hoặc `--mode medium`.
 
 ### Kết quả nhận diện kém
 
-Advisor chỉ gợi ý cấu hình — không đánh giá chất lượng model. Nếu model kém, cần xem lại dataset và quy trình train.
+Advisor chỉ gợi ý cấu hình — không đánh giá chất lượng model. Model suy luận được chuẩn bị và đánh giá bên ngoài ứng dụng.

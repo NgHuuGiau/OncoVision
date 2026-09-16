@@ -47,7 +47,7 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
     SmokeCheck(
         key="medical-status",
         title="Medical status",
-        description="Kiểm tra nhanh model, dataset và output của nhánh medical.",
+        description="Kiểm tra nhanh model suy luận và output của nhánh medical.",
         command=("run_medical.py", "status"),
         ci_safe=False,
     ),
@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ci-safe",
         action="store_true",
-        help="Chỉ chạy những smoke-check nhẹ, phù hợp với môi trường CI không có camera/dataset đầy đủ.",
+        help="Chỉ chạy smoke-check nhẹ, phù hợp CI không có camera hay model dữ liệu đầy đủ.",
     )
     parser.add_argument(
         "--dry-run",

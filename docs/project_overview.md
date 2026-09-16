@@ -1,152 +1,49 @@
-# Tổng Quan Kiến Trúc Dự Án
+# Tổng quan kiến trúc OncoVision
 
-Tài liệu này mô tả kiến trúc tổng thể của OncoVision: cây thư mục, trách nhiệm từng module và luồng dữ liệu giữa các thành phần.
+OncoVision là ứng dụng suy luận ảnh y khoa. Luồng ứng dụng nhận ảnh từ người dùng, kiểm tra định dạng/chất lượng, chọn model suy luận có sẵn, tạo kết quả sàng lọc và lưu hồ sơ ca bệnh. **Ứng dụng không xử lý bộ dữ liệu huấn luyện và không train model.** Model mới được chuẩn bị bên ngoài rồi bổ sung vào vị trí cấu hình.
 
----
+## Thành phần chính
 
-## 1. Tổng quan
-
-OncoVision là monorepo gồm bốn nhánh chính:
-
-| Nhánh | Vai trò |
+| Thành phần | Vai trò |
 |---|---|
-| **Camera thông minh** | Chạy realtime object detection với YOLO, hỗ trợ nhiều chế độ runtime |
-| **Y dược** | Phân tích ảnh bệnh lý bằng model CNN đã train sẵn (không tự train) |
-| **Chat AI** | Giao diện desktop và web cho bác sĩ tương tác với hệ thống phân tích |
-| **Phân tích model** | Nhận ảnh → nhận diện modality/vùng cơ thể → phân loại ung thư từ `models/pretrained/` |
+| `app/chat_ui/` | Giao diện desktop, tải ảnh, lịch sử chat/ca |
+| `web_app.py`, `templates/` | Giao diện web upload ảnh và xem kết quả |
+| `medical/validator.py` | Kiểm tra đầu vào, modality và vùng cơ thể |
+| `medical/dataset.py` | Đọc metadata/volume y khoa và chuẩn hóa ảnh đầu vào; không quản lý train/val/test |
+| `medical/pipeline.py` | Điều phối suy luận, giải thích và tạo kết quả |
+| `medical/cnn_classifier.py` | Nạp model CNN và chạy dự đoán |
+| `medical/explainability.py` | Grad-CAM/heatmap khi model hỗ trợ |
+| `medical/reporting.py` | Báo cáo JSON/Markdown/HTML và xuất hồ sơ ca |
+| `medical/storage.py` | Lưu lịch sử ca bệnh trong SQLite |
+| `medical/cancer_catalog.py` | Nhóm bệnh, modality và trạng thái model hỗ trợ |
+| `models/pretrained/` | Model suy luận có sẵn; không chứa pipeline huấn luyện |
 
----
+## Luồng xử lý
 
-## 2. Cây thư mục
-
-```
-OncoVision/
-├── app/                     # Giao diện và runtime
-│   ├── camera_runtime/      # Parser, bootstrap, launch camera
-│   └── chat_ui/             # Chat window, storage, theme, widgets, medical controller
-├── assets/                  # Tài nguyên tĩnh (icon, font)
-├── config/                  # Cấu hình hệ thống (YAML)
-├── core/                    # Xử lý camera cốt lõi
-│   ├── camera_runner.py     # Vòng lặp camera: detect, overlay, record, capture
-│   ├── model_loader.py      # Nạp YOLO model và fallback
-│   ├── hardware_info.py     # Đọc CPU/GPU/CUDA/PyTorch
-│   ├── frame_processing.py  # Tiền xử lý frame
-│   ├── runtime_advisor.py   # Gợi ý cấu hình runtime
-│   └── tracking/            # Gán track, smooth, filter detection
-├── dataset/                 # Dữ liệu vận hành
-│   ├── medical/             # Dataset y tế (ung thư não: glioma/meningioma/pituitary/no_tumor)
-│   ├── medical_modality/    # Dataset phân loại modality (8 loại)
-│   └── object_detection/    # Dataset YOLO detection
-├── docs/                    # Tài liệu
-├── medical/                 # Logic nghiệp vụ y dược
-│   ├── dataset.py           # Tạo và kiểm tra layout dataset
-│   ├── system_status.py     # Tổng hợp trạng thái medical
-│   ├── training.py          # Audit, split, train, validate
-│   ├── output_management.py # Quản lý output medical
-│   ├── storage.py           # Lưu và truy vấn case DB
-│   ├── validator.py         # Kiểm tra ảnh đầu vào
-│   └── cli_helpers.py       # Helper in trạng thái CLI
-├── models/                  # Mô hình
-│   ├── pretrained/          # YOLO pretrained, modality classifier, brain classifier
-│   └── trained/             # Model đã train (best.pt)
-├── output/                  # Kết quả đầu ra
-│   ├── captures/            # Ảnh chụp từ camera
-│   ├── chat/                # File chat capture
-│   ├── medical/             # Kết quả phân tích y tế
-│   └── recordings/          # Video ghi từ camera
-├── scripts/                 # Script tiện ích (đang trống)
-├── tests/                   # Unit test
-├── training/                # Model catalog & download models
-├── utils/                   # Helper dùng chung
-│   ├── entrypoint_checks.py # Kiểm tra trạng thái entrypoint
-│   ├── cleanup_utils.py     # Dọn dẹp output
-│   ├── console_ui.py        # UI bảng trong console
-│   ├── file_utils.py        # Xử lý file
-│   ├── logger.py            # Ghi log
-│   ├── camera_utils.py      # Tiện ích camera
-│   └── sqlite_utils.py      # Tiện ích SQLite
-├── web_app.py               # Giao diện chat web (FastAPI)
-├── run_chat.py              # Entrypoint chat
-├── run_app.py               # Entrypoint camera
-├── run_menu.py              # Menu tổng hợp
-├── run_doctor.py            # Quét hệ thống
-├── run_medical.py           # CLI y dược
-└── run_smoke.py             # Kiểm tra CI
+```text
+Ảnh người dùng
+  → kiểm tra định dạng, metadata, chất lượng
+  → chọn loại ảnh/vùng cơ thể
+  → nạp model tương ứng từ cấu hình
+  → phân tích, độ tin cậy, giải thích và khuyến nghị
+  → lưu báo cáo và lịch sử ca
 ```
 
----
+Nếu không có model phù hợp, hệ thống báo chưa hỗ trợ thay vì suy luận bằng model sai loại. Model não hiện có thể dùng độc lập; các nhóm ung thư khác cần model suy luận tương ứng được cung cấp sau.
 
-## 3. Entrypoint
+## Entrypoint
 
-Tất cả entrypoint đều là lớp mỏng: gọi module xử lý tương ứng và trả về kết quả.
-
-| File | Trách nhiệm |
+| Lệnh | Vai trò |
 |---|---|
-| `run_chat.py` | Khởi chạy chat UI desktop, kiểm tra trạng thái preflight, dọn output |
-| `run_app.py` | Runtime advisor và camera realtime |
-| `run_menu.py` | Cửa vào tổng hợp cho người vận hành |
-| `run_doctor.py` | Quét tổng thể hệ thống |
-| `run_medical.py` | CLI quản lý nhánh y dược |
-| `run_smoke.py` | Smoke check (CI-friendly) |
-| `run_tests.py` | Dashboard chạy unit test |
-| `web_app.py` | Web app upload ảnh → phân tích (FastAPI) |
+| `python run_chat.py` | Mở giao diện desktop |
+| `python web_app.py` | Mở giao diện web |
+| `python run_medical.py analyze --image ... --patient-code ...` | Phân tích ảnh bằng CLI |
+| `python run_medical.py status` | Kiểm tra model và số ca đã lưu |
+| `python run_doctor.py --skip-camera-check` | Kiểm tra môi trường, model và cấu hình |
+| `python run_smoke.py --ci-safe --stop-on-fail` | Smoke test an toàn cho CI |
 
----
+## Dữ liệu và an toàn
 
-## 4. Luồng dữ liệu
-
-### Camera realtime
-
-```
-run_app.py
-→ app/camera_runtime/
-→ core/hardware_info.py
-→ core/runtime_advisor.py
-→ core/model_loader.py
-→ core/camera_runner.py
-→ output/captures/ | output/recordings/
-```
-
-### Y dược
-
-```
-dataset/medical/
-→ medical/dataset.py
-→ medical/system_status.py
-→ run_medical.py (CLI)
-→ output/medical/
-→ run_chat.py (Chat UI)
-```
-
-### Phân tích model
-
-```
-models/pretrained/*.pt (model đã train sẵn)
-→ medical/pipeline.py (MedicalImageAnalyzer)
-→ medical/cnn_classifier.py | medical/explainability.py
-→ output/medical/ (report JSON/MD/HTML)
-→ web_app.py | run_chat.py (Chat UI)
-```
-
-### Chat AI
-
-```
-run_chat.py
-→ app/chat_ui/ (window, storage, widgets)
-→ medical/ (phân tích, case DB)
-→ output/chat/ | output/medical/
-→ SQLite (lịch sử)
-```
-
----
-
-## 5. Debug theo triệu chứng
-
-| Vấn đề | File cần mở đầu tiên |
-|---|---|
-| Camera không chạy | `run_app.py`, `core/camera_runner.py`, `utils/camera_utils.py` |
-| Runtime gợi ý sai | `core/hardware_info.py`, `core/runtime_advisor.py` |
-| Chat UI không sẵn sàng | `run_chat.py`, `utils/entrypoint_checks.py`, `app/chat_ui/` |
-| Medical status sai | `medical/system_status.py`, `medical/model_policy.py` |
-| Model chưa sẵn sàng | `medical/model_policy.py`, `config/medical_settings.yaml` |
-| CI fail | `.github/workflows/test.yml`, `run_smoke.py` |
+- Ảnh upload được chuẩn hóa vào thư mục output; báo cáo và lịch sử nằm trong `output/`.
+- Ảnh y tế có thể chứa thông tin định danh; chỉ dùng dữ liệu được phép và bảo vệ thư mục output.
+- Đây là hỗ trợ sàng lọc, không thay thế chẩn đoán của bác sĩ hay xét nghiệm xác nhận.

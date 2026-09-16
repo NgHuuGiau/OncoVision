@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -11,7 +10,6 @@ import pydicom
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.filewriter import dcmwrite
 
-from medical.dashboard import write_training_dashboard
 from medical.validator import get_modality_tuning, validate_image
 
 
@@ -50,6 +48,21 @@ class MedicalValidatorTests(unittest.TestCase):
             self.assertEqual(result.status, "success")
             self.assertEqual(result.modality, "mri")
             self.assertEqual(result.body_region, "cervix")
+
+    def test_new_cancer_target_images_are_routed(self) -> None:
+        cases = (
+            ("kidney_ct_001.jpg", "kidney", "ct"),
+            ("pancreatic_mri_001.jpg", "pancreas", "mri"),
+            ("thyroid_ultrasound_001.jpg", "thyroid", "ultrasound"),
+        )
+        with TemporaryDirectory() as temp_dir:
+            for filename, expected_region, expected_modality in cases:
+                image_path = Path(temp_dir) / filename
+                cv2.imwrite(str(image_path), np.full((64, 64, 3), 128, dtype=np.uint8))
+                result = validate_image(image_path, min_confidence=0.15)
+                self.assertEqual(result.status, "success")
+                self.assertEqual(result.body_region, expected_region)
+                self.assertEqual(result.modality, expected_modality)
 
     def test_unsupported_extension_returns_error(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -187,26 +200,6 @@ class MedicalValidatorTests(unittest.TestCase):
 
         self.assertEqual(float(tuning["certainty_threshold"]), 0.80)
         self.assertEqual(float(tuning["quality_threshold"]), 0.65)
-
-    def test_write_training_dashboard_adds_summary_sections(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            report_path = write_training_dashboard(
-                temp_dir,
-                {
-                    "accuracy": 0.91,
-                    "history": {"train_loss": [1.0, 0.6], "val_acc": [0.8, 0.91]},
-                    "confusion_matrix": [[2, 0], [1, 3]],
-                    "top_k_predictions": [{"label": "lung", "confidence": 0.91}],
-                    "low_confidence_cases": [{"label": "lung", "confidence": 0.42}],
-                },
-            )
-
-            payload = json.loads(report_path.read_text(encoding="utf-8"))
-
-            self.assertIn("summary", payload)
-            self.assertEqual(payload["summary"]["accuracy"], 0.91)
-            self.assertIn("history", payload)
-            self.assertIn("confusion_matrix", payload)
 
     def test_dicom_series_folder_passes(self) -> None:
         with TemporaryDirectory() as temp_dir:

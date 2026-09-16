@@ -20,18 +20,25 @@ class CancerCatalogTests(unittest.TestCase):
             "Ung thư đại trực tràng",
             "Ung thư tuyến tiền liệt",
             "Ung thư cổ tử cung",
+            "Ung thư thận",
+            "Ung thư tụy",
+            "Ung thư tuyến giáp",
         ):
             self.assertIn(expected, labels)
 
-    def test_catalog_has_eight_supported_targets(self) -> None:
+    def test_catalog_has_eleven_targets_with_new_data_targets_pending(self) -> None:
         targets = list(COMMON_CANCER_TARGETS)
-        self.assertEqual(len(targets), 8)
+        self.assertEqual(len(targets), 11)
         model_ready_count = sum(1 for item in targets if item.model_ready)
-        self.assertEqual(model_ready_count, 8)
+        self.assertEqual(model_ready_count, 1)
+        ready = {item.key for item in targets if item.model_ready}
+        self.assertEqual(ready, {"brain"})
+        pending = {item.key for item in targets if not item.model_ready}
+        self.assertEqual(len(pending), 10)
 
     def test_catalog_includes_common_modalities(self) -> None:
         modalities = supported_cancer_modalities()
-        for expected in ("CT", "MRI", "PET/CT", "Siêu âm", "Nội soi"):
+        for expected in ("CT", "MRI", "PET/CT", "Siêu âm", "Nội soi", "CT thận", "MRI tụy", "Siêu âm tuyến giáp"):
             self.assertIn(expected, modalities)
 
 
