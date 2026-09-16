@@ -74,6 +74,8 @@ python -m unittest discover -s tests -p "test_*.py"
 | Chat UI web | `python web_app.py` hoặc `python -m uvicorn web_app:app --host 127.0.0.1 --port 8000` |
 | Medical CLI | `python run_medical.py status` |
 
+Web chỉ cho phép người dùng đã đăng nhập. Tạo admin ban đầu và xem ma trận quyền trong [hướng dẫn đăng nhập](web_auth.md); không có mật khẩu mặc định.
+
 ---
 
 ## 5. Checklist sẵn sàng

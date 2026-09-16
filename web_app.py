@@ -1,21 +1,25 @@
 from __future__ import annotations
 
 import json
+import os
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from urllib.parse import quote
 
 import aiofiles
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.datastructures import UploadFile
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.chat_ui.models import ChatMessage
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, OUTPUT_DIR, PROJECT_ROOT
 from app.chat_ui.storage import ChatDatabase
+from app.web_auth import WebAuthDatabase, WebUser, hash_password
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
 from medical.case_payloads import build_case_export_payload
 from medical.chat_service import MedicalChatResponse, MedicalChatService
@@ -33,6 +37,7 @@ WEB_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 _UPLOAD_CHUNK_BYTES = 1024 * 1024
+MAX_FORM_BYTES = 1024 * 1024
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -41,6 +46,7 @@ TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("OncoVision Web Chat khoi dong...")
+    get_auth_db()
     try:
         service = get_medical_service()
         service.check_ready()
@@ -50,13 +56,100 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="OncoVision Web Chat", lifespan=lifespan)
+def _request_csrf_token(request: Request) -> str:
+    token = request.session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        request.session["csrf_token"] = token
+    return token
+
+
+async def require_authenticated(request: Request) -> WebUser | None:
+    if request.url.path == "/login":
+        return None
+
+    user_id = request.session.get("user_id")
+    user = get_auth_db().get_user(user_id) if isinstance(user_id, int) else None
+    if user is None or not user.is_active:
+        request.session.clear()
+        if request.url.path.startswith("/api/"):
+            raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.", headers={"X-Login-Required": "true"})
+        raise HTTPException(status_code=303, headers={"Location": "/login"})
+    request.state.current_user = user
+
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        provided_token = request.headers.get("x-csrf-token")
+        if not provided_token and (
+            request.url.path in {"/logout", "/admin/users/create"}
+            or (request.url.path.startswith("/admin/users/") and request.url.path.endswith("/update"))
+        ):
+            form = await request.form()
+            provided_token = str(form.get("csrf_token", ""))
+        expected_token = request.session.get("csrf_token", "")
+        if not expected_token or not secrets.compare_digest(str(provided_token or ""), str(expected_token)):
+            raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")
+
+    allowed_viewer_write = request.url.path in {"/logout", "/api/settings"}
+    if user.role == "viewer" and request.method not in {"GET", "HEAD", "OPTIONS"} and not allowed_viewer_write:
+        raise HTTPException(status_code=403, detail="Tài khoản chỉ có quyền xem.")
+    return user
+
+
+def require_role(*roles: str):
+    def dependency(request: Request) -> WebUser:
+        user = getattr(request.state, "current_user", None)
+        if user is None or user.role not in roles:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền thực hiện thao tác này.")
+        return user
+
+    return dependency
+
+
+ADMIN_REQUIRED = Depends(require_role("admin"))
+SESSION_SECRET = os.environ.get("ONCOVISION_SESSION_SECRET") or secrets.token_urlsafe(32)
+if len(SESSION_SECRET) < 32:
+    raise RuntimeError("ONCOVISION_SESSION_SECRET phải dài ít nhất 32 ký tự.")
+
+
+app = FastAPI(
+    title="OncoVision Web Chat",
+    lifespan=lifespan,
+    dependencies=[Depends(require_authenticated)],
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET,
+    session_cookie="oncovision_session",
+    max_age=8 * 60 * 60,
+    same_site="lax",
+    https_only=os.environ.get("ONCOVISION_COOKIE_SECURE", "0") == "1",
+)
+
+
+@app.middleware("http")
+async def limit_request_size(request: Request, call_next):
+    raw_length = request.headers.get("content-length")
+    if not raw_length and request.headers.get("transfer-encoding"):
+        return JSONResponse({"detail": "Yêu cầu truyền theo luồng không được hỗ trợ."}, status_code=411)
+    if raw_length:
+        try:
+            request_length = int(raw_length)
+        except ValueError:
+            return JSONResponse({"detail": "Content-Length không hợp lệ."}, status_code=400)
+        max_length = MAX_UPLOAD_BYTES + MAX_FORM_BYTES if request.url.path == "/api/upload" else MAX_FORM_BYTES
+        if request_length > max_length:
+            return JSONResponse({"detail": "Yêu cầu vượt quá dung lượng cho phép."}, status_code=413)
+    return await call_next(request)
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 _db: ChatDatabase | None = None
 _medical_service: MedicalChatService | None = None
 _case_db: MedicalCaseDatabase | None = None
+_auth_db: WebAuthDatabase | None = None
 
 
 def get_db() -> ChatDatabase:
@@ -71,6 +164,13 @@ def get_case_db() -> MedicalCaseDatabase:
     if _case_db is None:
         _case_db = MedicalCaseDatabase(CHAT_HISTORY_DB_PATH)
     return _case_db
+
+
+def get_auth_db() -> WebAuthDatabase:
+    global _auth_db
+    if _auth_db is None:
+        _auth_db = WebAuthDatabase(CHAT_HISTORY_DB_PATH)
+    return _auth_db
 
 
 def get_medical_service() -> MedicalChatService:
@@ -97,7 +197,94 @@ async def index(request: Request):
         "request": request,
         "cancer_targets": json.dumps(cancer_targets, ensure_ascii=False),
         "disclaimer": MEDICAL_DISCLAIMER,
+        "current_user": request.state.current_user,
+        "csrf_token": _request_csrf_token(request),
     })
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, error: str = ""):
+    user_id = request.session.get("user_id")
+    user = get_auth_db().get_user(user_id) if isinstance(user_id, int) else None
+    if user and user.is_active:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "login.html", {
+        "request": request,
+        "csrf_token": _request_csrf_token(request),
+        "error": error,
+    })
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login(request: Request, username: str = Form(""), password: str = Form(""), csrf_token: str = Form("")):
+    expected_token = request.session.get("csrf_token", "")
+    if not expected_token or not secrets.compare_digest(csrf_token, expected_token):
+        raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")
+
+    auth_db = get_auth_db()
+    remote_addr = request.client.host if request.client else "unknown"
+    if auth_db.login_locked(username, remote_addr):
+        raise HTTPException(status_code=429, detail="Đăng nhập tạm khóa 15 phút do nhập sai quá nhiều lần.")
+    user = auth_db.authenticate(username, password)
+    if user is None:
+        auth_db.record_login_failure(username, remote_addr)
+        return templates.TemplateResponse(request, "login.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": "Tên đăng nhập hoặc mật khẩu không đúng.",
+        }, status_code=401)
+
+    auth_db.clear_login_failures(username, remote_addr)
+    request.session.clear()
+    request.session["user_id"] = user.id
+    _request_csrf_token(request)
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_page(request: Request, _: WebUser = ADMIN_REQUIRED):
+    return templates.TemplateResponse(request, "admin_users.html", {
+        "request": request,
+        "users": get_auth_db().list_users(),
+        "current_user": request.state.current_user,
+        "csrf_token": _request_csrf_token(request),
+        "notice": request.query_params.get("notice", ""),
+        "error": request.query_params.get("error", ""),
+    })
+
+
+@app.post("/admin/users/create")
+async def admin_create_user(
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    _: WebUser = ADMIN_REQUIRED,
+):
+    try:
+        get_auth_db().create_user(username, hash_password(password), role)
+    except ValueError as exc:
+        return RedirectResponse(f"/admin/users?error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/admin/users?notice=created", status_code=303)
+
+
+@app.post("/admin/users/{user_id}/update")
+async def admin_update_user(
+    user_id: int,
+    role: str = Form(...),
+    is_active: str = Form("0"),
+    _: WebUser = ADMIN_REQUIRED,
+):
+    try:
+        get_auth_db().update_user(user_id, role, is_active == "1")
+    except ValueError as exc:
+        return RedirectResponse(f"/admin/users?error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/admin/users?notice=updated", status_code=303)
 
 
 _STATUS_CACHE_TTL_SECONDS = 60.0
@@ -144,37 +331,51 @@ async def _save_upload(file: UploadFile, dest: Path) -> int:
 
 
 @app.post("/api/upload")
-async def upload_file(file: Annotated[UploadFile, File()]):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Không có file được chọn.")
-    filename = file.filename
-    lower_name = filename.lower()
-    allowed_ext = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".dcm"}
-    if Path(filename).suffix.lower() not in allowed_ext and not lower_name.endswith((".nii", ".nii.gz")):
-        raise HTTPException(status_code=400, detail=f"Định dạng file không được hỗ trợ: {filename}")
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    token = uuid.uuid4().hex[:10]
-    safe_name = f"{timestamp}_{token}_{filename}"
-    stored_path = WEB_UPLOADS_DIR / safe_name
-    size_bytes = await _save_upload(file, stored_path)
-    upload_id = get_db().add_web_upload(
-        filename=filename,
-        stored_path=str(stored_path),
-        size_bytes=size_bytes,
-        mime_type=file.content_type or "application/octet-stream",
-    )
+async def upload_file(request: Request):
+    raw_length = request.headers.get("content-length")
+    if raw_length is None:
+        raise HTTPException(status_code=411, detail="Cần Content-Length để giới hạn dung lượng tải lên.")
+    if int(raw_length) > MAX_UPLOAD_BYTES + MAX_FORM_BYTES:
+        raise HTTPException(status_code=413, detail="File vượt quá dung lượng cho phép.")
 
-    target_key, modality = infer_medical_upload_context(str(stored_path))
-    logger.info("Da upload file: %s (%d bytes), context: %s / %s", filename, size_bytes, target_key, modality)
-    return {
-        "ok": True,
-        "upload_id": upload_id,
-        "filename": filename,
-        "stored_path": str(stored_path),
-        "size_bytes": size_bytes,
-        "detected_target": target_key,
-        "detected_modality": modality,
-    }
+    form = await request.form(max_files=1, max_fields=1)
+    try:
+        file = form.get("file")
+        if not isinstance(file, UploadFile) or not file.filename:
+            raise HTTPException(status_code=400, detail="Không có file được chọn.")
+        filename = Path(file.filename.replace("\\", "/")).name
+        if not filename or filename in {".", ".."}:
+            raise HTTPException(status_code=400, detail="Tên file không hợp lệ.")
+        lower_name = filename.lower()
+        allowed_ext = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".dcm"}
+        if Path(filename).suffix.lower() not in allowed_ext and not lower_name.endswith((".nii", ".nii.gz")):
+            raise HTTPException(status_code=400, detail=f"Định dạng file không được hỗ trợ: {filename}")
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        token = uuid.uuid4().hex[:10]
+        safe_name = f"{timestamp}_{token}_{filename}"
+        WEB_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        stored_path = WEB_UPLOADS_DIR / safe_name
+        size_bytes = await _save_upload(file, stored_path)
+        upload_id = get_db().add_web_upload(
+            filename=filename,
+            stored_path=str(stored_path),
+            size_bytes=size_bytes,
+            mime_type=file.content_type or "application/octet-stream",
+        )
+
+        target_key, modality = infer_medical_upload_context(str(stored_path))
+        logger.info("Da upload file: %s (%d bytes), context: %s / %s", filename, size_bytes, target_key, modality)
+        return {
+            "ok": True,
+            "upload_id": upload_id,
+            "filename": filename,
+            "stored_path": str(stored_path),
+            "size_bytes": size_bytes,
+            "detected_target": target_key,
+            "detected_modality": modality,
+        }
+    finally:
+        await form.close()
 
 
 @app.post("/api/analyze")
@@ -380,7 +581,9 @@ async def get_settings():
 
 
 @app.post("/api/settings")
-async def save_settings(language: str = Form("vi"), theme: str = Form("system")):
+async def save_settings(request: Request, language: str = Form("vi"), theme: str = Form("system")):
+    if request.state.current_user.role == "viewer":
+        return {"ok": True}
     db = get_db()
     db.set_setting("language", language)
     db.set_setting("theme", theme)
@@ -388,7 +591,14 @@ async def save_settings(language: str = Form("vi"), theme: str = Form("system"))
 
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
+
+
+@app.get("/output/{file_path:path}")
+async def serve_output_file(file_path: str):
+    path = _safe_path(OUTPUT_DIR, file_path)
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="Không tìm thấy tệp.")
+    return FileResponse(path)
 
 
 if __name__ == "__main__":

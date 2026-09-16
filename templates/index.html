@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token }}">
 <title>OncoVision AI Workstation</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -63,6 +64,12 @@ body {
   overflow: hidden;
   transition: background-color 0.25s, color 0.25s;
 }
+body[data-role="viewer"] .new-chat-btn,
+body[data-role="viewer"] .composer,
+body[data-role="viewer"] .upload-trigger-btn,
+body[data-role="viewer"] .pacs-action-overlay { display: none !important; }
+body[data-role="viewer"] .viewer-readonly-notice { display: block; }
+.viewer-readonly-notice { display: none; padding: 12px 16px; color: var(--text-secondary); font-size: 13px; border-top: 1px solid var(--border-color); }
 
 
 ::-webkit-scrollbar {
@@ -1063,7 +1070,7 @@ body {
 }
 </style>
 </head>
-<body>
+<body data-role="{{ current_user.role }}">
 
 <header class="app-header">
   <div class="header-left">
@@ -1121,6 +1128,14 @@ body {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span>Cấu hình hệ thống</span>
       </button>
+      {% if current_user.role == 'admin' %}
+      <a class="settings-btn" href="/admin/users" style="text-decoration:none;margin-top:8px">Quản lý tài khoản</a>
+      {% endif %}
+      <div style="padding:10px 8px;color:var(--text-muted);font-size:12px">{{ current_user.username }} · {{ current_user.role }}</div>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="settings-btn" type="submit">Đăng xuất</button>
+      </form>
     </div>
   </aside>
 
@@ -1166,8 +1181,12 @@ body {
           </svg>
         </div>
         <h3>Trình Xem Ảnh Chẩn Đoán</h3>
+        {% if current_user.role == 'viewer' %}
+        <p>Chọn một ca bệnh trong danh sách bên trái để xem ảnh và báo cáo.</p>
+        {% else %}
         <p>Kéo và thả tệp phim chụp (DICOM, NIfTI, JPG, PNG, WEBP) hoặc chọn nút bên dưới để bắt đầu sàng lọc AI.</p>
         <button class="upload-trigger-btn" onclick="pickImage()">Chọn tệp phim chụp</button>
+        {% endif %}
       </div>
 
       <div class="pacs-active-image-container" id="pacsImageContainer" style="display:none">
@@ -1221,6 +1240,7 @@ body {
       <span class="recording-label">Thiết bị ghi âm đang lắng nghe...</span>
     </div>
 
+    <div class="viewer-readonly-notice">Tài khoản của bạn đang ở chế độ chỉ xem. Liên hệ quản trị viên nếu cần quyền phân tích ảnh.</div>
     <div class="composer">
       
       <div class="presets-container">
@@ -1301,6 +1321,18 @@ body {
 </div>
 
 <script>
+const _nativeFetch = window.fetch.bind(window);
+window.fetch = (url, options = {}) => {
+  const headers = new Headers(options.headers || {});
+  const method = (options.method || 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    headers.set('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]').content);
+  }
+  return _nativeFetch(url, { ...options, headers }).then(response => {
+    if (response.status === 401 && response.headers.get('X-Login-Required') === 'true') location.assign('/login');
+    return response;
+  });
+};
 const CANCER_TARGETS = {{cancer_targets|safe}};
 let conversations = [];
 let activeConvId = null;

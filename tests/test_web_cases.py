@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import web_app
+from app.web_auth import WebAuthDatabase, hash_password
 from medical.storage import MedicalCaseDatabase
 
 
@@ -35,11 +37,18 @@ class WebCaseRoutesTests(unittest.TestCase):
         )
         patcher_db = patch.object(web_app, "_db", None)
         patcher_case = patch.object(web_app, "_case_db", case_db)
+        auth_db = WebAuthDatabase(db_path)
+        auth_db.create_user("testadmin", hash_password("ValidAdminPass123!"), "admin")
+        patcher_auth = patch.object(web_app, "_auth_db", auth_db)
         patcher_path = patch.object(web_app, "CHAT_HISTORY_DB_PATH", db_path)
-        for p in (patcher_db, patcher_case, patcher_path):
+        for p in (patcher_db, patcher_case, patcher_auth, patcher_path):
             p.start()
             self.addCleanup(p.stop)
         self.client = TestClient(web_app.app)
+        login_page = self.client.get("/login")
+        csrf = re.search(r'name="csrf_token" value="([^"]+)"', login_page.text).group(1)
+        self.client.post("/login", data={"username": "testadmin", "password": "ValidAdminPass123!", "csrf_token": csrf})
+        self.csrf = re.search(r'name="csrf-token" content="([^"]+)"', self.client.get("/").text).group(1)
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -88,6 +97,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         resp = self.client.post(
             f"/api/conversations/{conv_id}/messages",
             data={"sender": "assistant", "text": "x", "metadata_json": meta},
+            headers={"X-CSRF-Token": self.csrf},
         )
         self.assertEqual(resp.status_code, 200)
         conv = web_app.get_db().get_conversation(conv_id)

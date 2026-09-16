@@ -79,6 +79,8 @@ python web_app.py
 python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
 ```
 
+Lần đầu dùng web: khởi chạy server để tạo bảng tài khoản, sau đó tạo admin theo hướng dẫn [đăng nhập và phân quyền](docs/web_auth.md). Không có tài khoản mặc định.
+
 ---
 
 ## Bản đồ entrypoint
