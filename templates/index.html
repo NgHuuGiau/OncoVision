@@ -1131,7 +1131,7 @@ body[data-role="viewer"] .viewer-readonly-notice { display: block; }
       {% if current_user.role == 'admin' %}
       <a class="settings-btn" href="/admin/users" style="text-decoration:none;margin-top:8px">Quản lý tài khoản</a>
       {% endif %}
-      <div style="padding:10px 8px;color:var(--text-muted);font-size:12px">{{ current_user.username }} · {{ current_user.role }}</div>
+      <div style="padding:10px 8px;color:var(--text-muted);font-size:12px">{{ current_user.username }} · {% if current_user.role == 'admin' %}Quản trị viên{% elif current_user.role == 'clinician' %}Nhân viên y tế{% else %}Người dùng chỉ xem{% endif %}</div>
       <form method="post" action="/logout">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="settings-btn" type="submit">Đăng xuất</button>

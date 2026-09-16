@@ -19,7 +19,13 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.chat_ui.models import ChatMessage
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, OUTPUT_DIR, PROJECT_ROOT
 from app.chat_ui.storage import ChatDatabase
-from app.web_auth import WebAuthDatabase, WebUser, hash_password
+from app.web_auth import (
+    WebAuthDatabase,
+    WebUser,
+    generate_recovery_code,
+    hash_password,
+    hash_recovery_code,
+)
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
 from medical.case_payloads import build_case_export_payload
 from medical.chat_service import MedicalChatResponse, MedicalChatService
@@ -65,7 +71,7 @@ def _request_csrf_token(request: Request) -> str:
 
 
 async def require_authenticated(request: Request) -> WebUser | None:
-    if request.url.path == "/login":
+    if request.url.path in {"/login", "/forgot-password"}:
         return None
 
     user_id = request.session.get("user_id")
@@ -81,7 +87,10 @@ async def require_authenticated(request: Request) -> WebUser | None:
         provided_token = request.headers.get("x-csrf-token")
         if not provided_token and (
             request.url.path in {"/logout", "/admin/users/create"}
-            or (request.url.path.startswith("/admin/users/") and request.url.path.endswith("/update"))
+            or (
+                request.url.path.startswith("/admin/users/")
+                and request.url.path.endswith(("/update", "/recovery-code"))
+            )
         ):
             form = await request.form()
             provided_token = str(form.get("csrf_token", ""))
@@ -203,7 +212,7 @@ async def index(request: Request):
 
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, error: str = ""):
+async def login_page(request: Request, error: str = "", reset: str = ""):
     user_id = request.session.get("user_id")
     user = get_auth_db().get_user(user_id) if isinstance(user_id, int) else None
     if user and user.is_active:
@@ -212,6 +221,7 @@ async def login_page(request: Request, error: str = ""):
         "request": request,
         "csrf_token": _request_csrf_token(request),
         "error": error,
+        "reset": reset == "1",
     })
 
 
@@ -241,36 +251,142 @@ async def login(request: Request, username: str = Form(""), password: str = Form
     return RedirectResponse("/", status_code=303)
 
 
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request, error: str = ""):
+    user_id = request.session.get("user_id")
+    user = get_auth_db().get_user(user_id) if isinstance(user_id, int) else None
+    if user and user.is_active:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "forgot_password.html", {
+        "request": request,
+        "csrf_token": _request_csrf_token(request),
+        "error": error,
+    })
+
+
+@app.post("/forgot-password", response_class=HTMLResponse)
+async def reset_forgotten_password(
+    request: Request,
+    username: str = Form(""),
+    recovery_code: str = Form(""),
+    password: str = Form(""),
+    confirm_password: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    expected_token = request.session.get("csrf_token", "")
+    if not expected_token or not secrets.compare_digest(csrf_token, expected_token):
+        raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")
+
+    auth_db = get_auth_db()
+    remote_addr = request.client.host if request.client else "unknown"
+    attempt_key = f"recovery:{username.strip()}"
+    if auth_db.login_locked(attempt_key, remote_addr):
+        raise HTTPException(status_code=429, detail="Khôi phục tạm khóa 15 phút do nhập sai quá nhiều lần.")
+    if password != confirm_password:
+        return templates.TemplateResponse(request, "forgot_password.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": "Mật khẩu nhập lại không khớp.",
+        }, status_code=400)
+    try:
+        new_password_hash = hash_password(password)
+    except ValueError as exc:
+        return templates.TemplateResponse(request, "forgot_password.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": str(exc),
+        }, status_code=400)
+
+    if not auth_db.reset_password_with_recovery(username, recovery_code, new_password_hash):
+        auth_db.record_login_failure(attempt_key, remote_addr)
+        return templates.TemplateResponse(request, "forgot_password.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": "Tên đăng nhập hoặc mã khôi phục không đúng.",
+        }, status_code=400)
+    auth_db.clear_login_failures(attempt_key, remote_addr)
+    return RedirectResponse("/login?reset=1", status_code=303)
+
+
 @app.post("/logout")
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
 
 
-@app.get("/admin/users", response_class=HTMLResponse)
-async def admin_users_page(request: Request, _: WebUser = ADMIN_REQUIRED):
+def _admin_users_response(
+    request: Request,
+    *,
+    notice: str = "",
+    error: str = "",
+    recovery_code: str = "",
+    recovery_username: str = "",
+):
     return templates.TemplateResponse(request, "admin_users.html", {
         "request": request,
         "users": get_auth_db().list_users(),
         "current_user": request.state.current_user,
         "csrf_token": _request_csrf_token(request),
-        "notice": request.query_params.get("notice", ""),
-        "error": request.query_params.get("error", ""),
-    })
+        "notice": notice,
+        "error": error,
+        "recovery_code": recovery_code,
+        "recovery_username": recovery_username,
+    }, headers={"Cache-Control": "no-store"} if recovery_code else None)
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_page(request: Request, _: WebUser = ADMIN_REQUIRED):
+    return _admin_users_response(
+        request,
+        notice=request.query_params.get("notice", ""),
+        error=request.query_params.get("error", ""),
+    )
 
 
 @app.post("/admin/users/create")
 async def admin_create_user(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     role: str = Form(...),
     _: WebUser = ADMIN_REQUIRED,
 ):
+    recovery_code = generate_recovery_code()
     try:
-        get_auth_db().create_user(username, hash_password(password), role)
+        get_auth_db().create_user(
+            username,
+            hash_password(password),
+            role,
+            recovery_code_hash=hash_recovery_code(recovery_code),
+        )
     except ValueError as exc:
         return RedirectResponse(f"/admin/users?error={quote(str(exc))}", status_code=303)
-    return RedirectResponse("/admin/users?notice=created", status_code=303)
+    return _admin_users_response(
+        request,
+        notice="created",
+        recovery_code=recovery_code,
+        recovery_username=username.strip(),
+    )
+
+
+@app.post("/admin/users/{user_id}/recovery-code")
+async def admin_issue_recovery_code(
+    user_id: int,
+    request: Request,
+    _: WebUser = ADMIN_REQUIRED,
+):
+    recovery_code = generate_recovery_code()
+    try:
+        get_auth_db().set_recovery_code(user_id, hash_recovery_code(recovery_code))
+    except ValueError as exc:
+        return RedirectResponse(f"/admin/users?error={quote(str(exc))}", status_code=303)
+    user = get_auth_db().get_user(user_id)
+    return _admin_users_response(
+        request,
+        notice="recovery-code-issued",
+        recovery_code=recovery_code,
+        recovery_username=user.username,
+    )
 
 
 @app.post("/admin/users/{user_id}/update")

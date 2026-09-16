@@ -15,7 +15,10 @@
     <div><h1>Quản lý tài khoản</h1><p class="muted">Đăng nhập: {{ current_user.username }} · admin</p></div>
     <nav><a href="/">← Quay lại ứng dụng</a>　<form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Đăng xuất</button></form></nav>
   </header>
-  {% if notice %}<div class="notice">Đã cập nhật tài khoản.</div>{% endif %}
+  {% if recovery_code %}<div class="notice" role="status">Mã khôi phục một lần cho <strong>{{ recovery_username }}</strong>: <strong data-recovery-code style="font-size:20px;letter-spacing:2px">{{ recovery_code }}</strong><br>Hãy lưu và gửi riêng cho người dùng ngay; mã không hiện lại sau khi rời trang.</div>
+  {% elif notice == 'created' %}<div class="notice">Đã tạo tài khoản.</div>
+  {% elif notice == 'updated' %}<div class="notice">Đã cập nhật tài khoản.</div>
+  {% elif notice == 'recovery-code-issued' %}<div class="notice">Đã cấp mã khôi phục mới.</div>{% endif %}
   {% if error %}<div class="notice" style="background:#4c1d2a;color:#fecdd3">{{ error }}</div>{% endif %}
   <section class="panel">
     <h2 style="margin:0 0 16px;font-size:18px">Tạo tài khoản</h2>
@@ -23,7 +26,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>Tên đăng nhập<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required></label>
       <label>Mật khẩu<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
-      <label>Vai trò<select name="role"><option value="clinician">Bác sĩ / chuyên viên</option><option value="viewer">Chỉ xem</option><option value="admin">Quản trị viên</option></select></label>
+      <label>Vai trò<select name="role"><option value="clinician">Nhân viên y tế</option><option value="viewer">Người dùng chỉ xem</option><option value="admin">Quản trị viên</option></select></label>
       <button type="submit">Tạo tài khoản</button>
     </form>
   </section>
@@ -40,14 +43,18 @@
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <select name="role" aria-label="Vai trò của {{ user.username }}">
                 <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
-                <option value="clinician" {% if user.role == 'clinician' %}selected{% endif %}>Bác sĩ / chuyên viên</option>
-                <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>Chỉ xem</option>
+                <option value="clinician" {% if user.role == 'clinician' %}selected{% endif %}>Nhân viên y tế</option>
+                <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>Người dùng chỉ xem</option>
               </select>
               <select name="is_active" aria-label="Trạng thái của {{ user.username }}">
                 <option value="1" {% if user.is_active %}selected{% endif %}>Đang hoạt động</option>
                 <option value="0" {% if not user.is_active %}selected{% endif %}>Đã khóa</option>
               </select>
               <button type="submit">Lưu</button>
+            </form>
+            <form method="post" action="/admin/users/{{ user.id }}/recovery-code" style="margin-top:8px">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit">Cấp mã khôi phục mới</button>
             </form>
           </td>
           <td>{{ user.created_at }}</td><td><span class="status {% if not user.is_active %}off{% endif %}">{% if user.is_active %}Hoạt động{% else %}Đã khóa{% endif %}</span></td>

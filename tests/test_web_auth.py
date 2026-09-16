@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +11,13 @@ from urllib.parse import unquote
 from fastapi.testclient import TestClient
 
 import web_app
-from app.web_auth import WebAuthDatabase, hash_password, verify_password
+from app.web_auth import (
+    WebAuthDatabase,
+    generate_recovery_code,
+    hash_password,
+    hash_recovery_code,
+    verify_password,
+)
 
 
 class WebAuthTests(unittest.TestCase):
@@ -19,8 +26,12 @@ class WebAuthTests(unittest.TestCase):
         self.root = Path(self.temp_dir.name)
         self.db_path = self.root / "onco.db"
         self.auth_db = WebAuthDatabase(self.db_path)
-        self.admin_id = self.auth_db.create_user("admin01", hash_password("AdminPassword123!"), "admin")
-        self.viewer_id = self.auth_db.create_user("viewer01", hash_password("ViewerPassword123!"), "viewer")
+        self.admin_id = self.auth_db.create_user(
+            "admin01", hash_password("AdminPassword123!"), "admin", hash_recovery_code("ADM123")
+        )
+        self.viewer_id = self.auth_db.create_user(
+            "viewer01", hash_password("ViewerPassword123!"), "viewer", hash_recovery_code("VIEW01")
+        )
         for name, value in (
             ("_auth_db", self.auth_db),
             ("_db", None),
@@ -58,9 +69,38 @@ class WebAuthTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             hash_password("short")
 
+    def test_recovery_codes_are_six_alphanumeric_characters(self) -> None:
+        self.assertRegex(generate_recovery_code(), r"^[A-Z0-9]{6}$")
+        with self.assertRaises(ValueError):
+            hash_recovery_code("short")
+
+    def test_recovery_code_resets_password_once(self) -> None:
+        new_hash = hash_password("NewViewerPassword123!")
+        self.assertTrue(self.auth_db.reset_password_with_recovery("viewer01", "view01", new_hash))
+        self.assertTrue(self.auth_db.authenticate("viewer01", "NewViewerPassword123!"))
+        self.assertFalse(self.auth_db.reset_password_with_recovery("viewer01", "VIEW01", new_hash))
+
     def test_auth_database_does_not_seed_a_default_account(self) -> None:
         empty_db = WebAuthDatabase(self.root / "empty.db")
         self.assertEqual(empty_db.list_users(), [])
+
+    def test_auth_database_adds_recovery_column_to_existing_database(self) -> None:
+        legacy_path = self.root / "legacy.db"
+        conn = sqlite3.connect(legacy_path)
+        try:
+            conn.execute(
+                "CREATE TABLE web_users (id INTEGER PRIMARY KEY, username TEXT, password_hash TEXT, "
+                "role TEXT, is_active INTEGER, created_at TIMESTAMP)"
+            )
+        finally:
+            conn.close()
+        WebAuthDatabase(legacy_path)
+        conn = sqlite3.connect(legacy_path)
+        try:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(web_users)")}
+        finally:
+            conn.close()
+        self.assertIn("recovery_code_hash", columns)
 
     def test_login_is_required_for_patient_apis_and_output_files(self) -> None:
         anonymous = TestClient(web_app.app, follow_redirects=False)
@@ -80,6 +120,25 @@ class WebAuthTests(unittest.TestCase):
         bad = self.client.post("/login", data={"username": "admin01", "password": "wrong", "csrf_token": token})
         self.assertEqual(bad.status_code, 401)
         self.assertEqual(self.client.post("/api/conversations").status_code, 401)
+
+    def test_forgot_password_page_is_public_and_resets_password(self) -> None:
+        self.client.post("/logout", headers={"X-CSRF-Token": self.csrf})
+        page = self.client.get("/forgot-password")
+        self.assertEqual(page.status_code, 200)
+        token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+        response = self.client.post(
+            "/forgot-password",
+            data={
+                "csrf_token": token,
+                "username": "viewer01",
+                "recovery_code": "VIEW01",
+                "password": "ResetViewerPassword123!",
+                "confirm_password": "ResetViewerPassword123!",
+            },
+        )
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/login?reset=1")
+        self.assertTrue(self.auth_db.authenticate("viewer01", "ResetViewerPassword123!"))
 
     def test_authenticated_mutations_require_csrf(self) -> None:
         self.assertEqual(self.client.post("/api/conversations").status_code, 403)
@@ -114,10 +173,25 @@ class WebAuthTests(unittest.TestCase):
                 "role": "viewer",
             },
         )
-        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.status_code, 200)
+        recovery_code = re.search(r'<strong data-recovery-code[^>]*>([A-Z0-9]{6})</strong>', response.text).group(1)
         users = self.auth_db.list_users()
         new_user = next(user for user in users if user.username == "newviewer")
         self.assertEqual(new_user.role, "viewer")
+        self.assertTrue(self.auth_db.reset_password_with_recovery(
+            "newviewer", recovery_code, hash_password("CreatedViewerPassword123!")
+        ))
+
+    def test_admin_can_reissue_recovery_code(self) -> None:
+        response = self.client.post(
+            f"/admin/users/{self.viewer_id}/recovery-code",
+            data={"csrf_token": self.csrf},
+        )
+        self.assertEqual(response.status_code, 200)
+        code = re.search(r'<strong data-recovery-code[^>]*>([A-Z0-9]{6})</strong>', response.text).group(1)
+        self.assertTrue(self.auth_db.reset_password_with_recovery(
+            "viewer01", code, hash_password("RotatedViewerPassword123!")
+        ))
 
         response = self.client.post(
             f"/admin/users/{self.admin_id}/update",

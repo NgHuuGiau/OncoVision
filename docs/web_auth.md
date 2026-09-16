@@ -19,6 +19,7 @@ Web app không có tài khoản mặc định và không mở đăng ký công k
    ```
 
 4. Đăng nhập tại `/login`. Nếu tên `admin` đã tồn tại, hãy chọn username khác hoặc cập nhật bản ghi hiện có.
+5. Vào **Quản lý tài khoản** và bấm **Cấp mã khôi phục mới** cho tài khoản admin. Ghi lại mã 6 ký tự để dùng nếu quên mật khẩu.
 
 Không lưu mật khẩu dạng chữ thường trong SQL. Hash dùng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên.
 
@@ -27,12 +28,16 @@ Không lưu mật khẩu dạng chữ thường trong SQL. Hash dùng PBKDF2-HMA
 | Vai trò | Quyền |
 |---|---|
 | `admin` | Toàn quyền, gồm tạo/đổi vai trò/khóa tài khoản tại `/admin/users` |
-| `clinician` | Xem, tải ảnh, phân tích, quản lý hội thoại và hồ sơ |
+| `clinician` | Nhân viên y tế: xem, tải ảnh, phân tích, quản lý hội thoại và hồ sơ |
 | `viewer` | Chỉ xem hồ sơ, hội thoại và báo cáo; không được tải ảnh/phân tích/ghi dữ liệu bệnh nhân. Có thể đổi giao diện riêng trên trình duyệt |
 
-Admin tạo tài khoản sau này ngay trong trang **Quản lý tài khoản**. Hệ thống không cho khóa hoặc hạ quyền admin cuối cùng. Mọi phiên đều kiểm tra trạng thái tài khoản hiện tại; khóa tài khoản sẽ thu hồi quyền ở request kế tiếp.
+Admin tạo tài khoản sau này ngay trong trang **Quản lý tài khoản**. Mã khôi phục 6 ký tự chữ/số được tạo ngẫu nhiên và chỉ hiện một lần khi tạo hoặc cấp lại; chia sẻ mã riêng cho đúng người dùng. Trang **Quên mật khẩu** yêu cầu username, mã này và mật khẩu mới. Mã chỉ dùng một lần; sau khi khôi phục, admin phải cấp mã mới nếu cần khôi phục lần sau. Không có email/SMS gửi mã tự động. Sau 5 lần nhập sai theo username/IP, thao tác khôi phục bị khóa 15 phút.
+
+Hệ thống không cho khóa hoặc hạ quyền admin cuối cùng. Mọi phiên đều kiểm tra trạng thái tài khoản hiện tại; khóa tài khoản sẽ thu hồi quyền ở request kế tiếp.
 
 Phân quyền hiện áp dụng ở mức vai trò cho toàn bộ workspace: các tài khoản `clinician`/`viewer` cùng được xem các ca trong database này. Chưa có phân vùng hồ sơ theo bác sĩ, khoa hoặc cơ sở.
+
+`viewer` chưa phải cổng tra cứu riêng theo mã bệnh nhân: họ chỉ xem dữ liệu chung của workspace. Ô tìm kiếm hiện tại lọc lịch sử hội thoại trên giao diện, không cấp quyền truy cập riêng cho một hồ sơ. Không dùng mã bệnh nhân dễ đoán như mật khẩu tra cứu.
 
 ## Triển khai trên máy chủ
 

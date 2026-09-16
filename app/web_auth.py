@@ -7,6 +7,7 @@ import hmac
 import re
 import secrets
 import sqlite3
+import string
 import sys
 import time
 from contextlib import contextmanager
@@ -48,6 +49,19 @@ def hash_password(password: str) -> str:
         raise ValueError(f"Mật khẩu không được dài quá {PASSWORD_MAX_LENGTH} ký tự.")
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
+    return f"pbkdf2_sha256${PASSWORD_ITERATIONS}${_encode_bytes(salt)}${_encode_bytes(digest)}"
+
+
+def generate_recovery_code() -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(6))
+
+
+def hash_recovery_code(code: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9]{6}", code):
+        raise ValueError("Mã khôi phục phải có đúng 6 chữ cái hoặc chữ số.")
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", code.upper().encode("ascii"), salt, PASSWORD_ITERATIONS)
     return f"pbkdf2_sha256${PASSWORD_ITERATIONS}${_encode_bytes(salt)}${_encode_bytes(digest)}"
 
 
@@ -105,6 +119,9 @@ class WebAuthDatabase:
                 )
                 """
             )
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(web_users)")}
+            if "recovery_code_hash" not in columns:
+                conn.execute("ALTER TABLE web_users ADD COLUMN recovery_code_hash TEXT")
 
     @staticmethod
     def _user(row) -> WebUser | None:
@@ -125,7 +142,13 @@ class WebAuthDatabase:
             ).fetchall()
         return [self._user(row) for row in rows]
 
-    def create_user(self, username: str, password_hash: str, role: str) -> int:
+    def create_user(
+        self,
+        username: str,
+        password_hash: str,
+        role: str,
+        recovery_code_hash: str | None = None,
+    ) -> int:
         username = username.strip()
         if not _USERNAME_RE.fullmatch(username):
             raise ValueError("Tên đăng nhập phải dài 3–32 ký tự, chỉ gồm chữ, số, dấu chấm, gạch ngang hoặc gạch dưới.")
@@ -133,15 +156,46 @@ class WebAuthDatabase:
             raise ValueError("Vai trò không hợp lệ.")
         if not password_hash.startswith("pbkdf2_sha256$"):
             raise ValueError("Hash mật khẩu không hợp lệ; tạo bằng `python -m app.web_auth hash-password`.")
+        if recovery_code_hash is not None and not recovery_code_hash.startswith("pbkdf2_sha256$"):
+            raise ValueError("Hash mã khôi phục không hợp lệ.")
         try:
             with self._connect() as conn:
                 cur = conn.execute(
-                    "INSERT INTO web_users (username, password_hash, role) VALUES (?, ?, ?)",
-                    (username, password_hash, role),
+                    "INSERT INTO web_users (username, password_hash, role, recovery_code_hash) VALUES (?, ?, ?, ?)",
+                    (username, password_hash, role, recovery_code_hash),
                 )
                 return int(cur.lastrowid)
         except sqlite3.IntegrityError as exc:
             raise ValueError("Tên đăng nhập đã tồn tại.") from exc
+
+    def set_recovery_code(self, user_id: int, recovery_code_hash: str) -> None:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE web_users SET recovery_code_hash = ? WHERE id = ?",
+                (recovery_code_hash, user_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Không tìm thấy tài khoản.")
+
+    def reset_password_with_recovery(self, username: str, recovery_code: str, new_password_hash: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, is_active, recovery_code_hash FROM web_users WHERE username = ? COLLATE NOCASE",
+                (username.strip(),),
+            ).fetchone()
+        code_has_valid_shape = bool(re.fullmatch(r"[A-Za-z0-9]{6}", recovery_code))
+        encoded_code = row[2] if row and row[2] else _DUMMY_PASSWORD_HASH
+        valid_code = verify_password(recovery_code.upper() if code_has_valid_shape else "INVALID", encoded_code)
+        if not row or not row[1] or not row[2] or not code_has_valid_shape or not valid_code:
+            return False
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.execute(
+                "UPDATE web_users SET password_hash = ?, recovery_code_hash = NULL "
+                "WHERE id = ? AND is_active = 1 AND recovery_code_hash = ?",
+                (new_password_hash, row[0], row[2]),
+            )
+            return cursor.rowcount == 1
 
     def update_user(self, user_id: int, role: str, is_active: bool) -> None:
         if role not in ROLES:
