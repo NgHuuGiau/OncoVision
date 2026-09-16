@@ -21,8 +21,11 @@ PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 1024
 LOGIN_FAILURE_LIMIT = 5
 LOGIN_LOCK_SECONDS = 15 * 60
+RECOVERY_CODE_TTL_SECONDS = 10 * 60
+RECOVERY_REQUEST_COOLDOWN_SECONDS = 60
 ROLES = {"admin", "clinician", "viewer"}
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{3,32}$")
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _encode_bytes(value: bytes) -> str:
@@ -37,6 +40,7 @@ def _decode_bytes(value: str) -> bytes:
 class WebUser:
     id: int
     username: str
+    email: str | None
     role: str
     is_active: bool
     created_at: str
@@ -54,7 +58,10 @@ def hash_password(password: str) -> str:
 
 def generate_recovery_code() -> str:
     alphabet = string.ascii_uppercase + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(6))
+    code = [secrets.choice(string.ascii_uppercase), secrets.choice(string.digits)]
+    code.extend(secrets.choice(alphabet) for _ in range(4))
+    secrets.SystemRandom().shuffle(code)
+    return "".join(code)
 
 
 def hash_recovery_code(code: str) -> str:
@@ -63,6 +70,15 @@ def hash_recovery_code(code: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", code.upper().encode("ascii"), salt, PASSWORD_ITERATIONS)
     return f"pbkdf2_sha256${PASSWORD_ITERATIONS}${_encode_bytes(salt)}${_encode_bytes(digest)}"
+
+
+def normalize_email(email: str | None) -> str | None:
+    value = (email or "").strip().lower()
+    if not value:
+        return None
+    if len(value) > 254 or not _EMAIL_RE.fullmatch(value):
+        raise ValueError("Địa chỉ email không hợp lệ.")
+    return value
 
 
 def verify_password(password: str, encoded: str) -> bool:
@@ -101,6 +117,7 @@ class WebAuthDatabase:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL COLLATE NOCASE UNIQUE,
                     password_hash TEXT NOT NULL,
+                    email TEXT,
                     role TEXT NOT NULL CHECK (role IN ('admin', 'clinician', 'viewer')),
                     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -119,18 +136,32 @@ class WebAuthDatabase:
                 )
                 """
             )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS web_recovery_requests "
+                "(request_key TEXT PRIMARY KEY, requested_at REAL NOT NULL)"
+            )
             columns = {row[1] for row in conn.execute("PRAGMA table_info(web_users)")}
+            if "email" not in columns:
+                conn.execute("ALTER TABLE web_users ADD COLUMN email TEXT")
             if "recovery_code_hash" not in columns:
                 conn.execute("ALTER TABLE web_users ADD COLUMN recovery_code_hash TEXT")
+            if "recovery_code_expires_at" not in columns:
+                conn.execute("ALTER TABLE web_users ADD COLUMN recovery_code_expires_at REAL")
+                # Old admin-issued codes had no expiry and are invalidated by the email-based flow.
+                conn.execute("UPDATE web_users SET recovery_code_hash = NULL")
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_web_users_email "
+                "ON web_users(email COLLATE NOCASE) WHERE email IS NOT NULL AND email <> ''"
+            )
 
     @staticmethod
     def _user(row) -> WebUser | None:
-        return WebUser(int(row[0]), row[1], row[2], bool(row[3]), row[4]) if row else None
+        return WebUser(int(row[0]), row[1], row[2], row[3], bool(row[4]), row[5]) if row else None
 
     def get_user(self, user_id: int) -> WebUser | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, username, role, is_active, created_at FROM web_users WHERE id = ?",
+                "SELECT id, username, email, role, is_active, created_at FROM web_users WHERE id = ?",
                 (user_id,),
             ).fetchone()
         return self._user(row)
@@ -138,7 +169,8 @@ class WebAuthDatabase:
     def list_users(self) -> list[WebUser]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT id, username, role, is_active, created_at FROM web_users ORDER BY username COLLATE NOCASE"
+                "SELECT id, username, email, role, is_active, created_at "
+                "FROM web_users ORDER BY username COLLATE NOCASE"
             ).fetchall()
         return [self._user(row) for row in rows]
 
@@ -148,8 +180,10 @@ class WebAuthDatabase:
         password_hash: str,
         role: str,
         recovery_code_hash: str | None = None,
+        email: str | None = None,
     ) -> int:
         username = username.strip()
+        email = normalize_email(email)
         if not _USERNAME_RE.fullmatch(username):
             raise ValueError("Tên đăng nhập phải dài 3–32 ký tự, chỉ gồm chữ, số, dấu chấm, gạch ngang hoặc gạch dưới.")
         if role not in ROLES:
@@ -161,45 +195,114 @@ class WebAuthDatabase:
         try:
             with self._connect() as conn:
                 cur = conn.execute(
-                    "INSERT INTO web_users (username, password_hash, role, recovery_code_hash) VALUES (?, ?, ?, ?)",
-                    (username, password_hash, role, recovery_code_hash),
+                    "INSERT INTO web_users "
+                    "(username, password_hash, email, role, recovery_code_hash, recovery_code_expires_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        username,
+                        password_hash,
+                        email,
+                        role,
+                        recovery_code_hash,
+                        time.time() + RECOVERY_CODE_TTL_SECONDS if recovery_code_hash else None,
+                    ),
                 )
                 return int(cur.lastrowid)
         except sqlite3.IntegrityError as exc:
+            if "email" in str(exc).lower():
+                raise ValueError("Email đã được dùng cho tài khoản khác.") from exc
             raise ValueError("Tên đăng nhập đã tồn tại.") from exc
 
-    def set_recovery_code(self, user_id: int, recovery_code_hash: str) -> None:
+    def allow_recovery_request(
+        self,
+        remote_addr: str,
+        email: str,
+        now: float | None = None,
+    ) -> bool:
+        now = time.time() if now is None else now
+        account_key = hashlib.sha256(email.strip().casefold().encode()).hexdigest()
+        keys = (f"ip:{remote_addr}", f"account:{account_key}")
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM web_recovery_requests WHERE requested_at < ?", (now - 86_400,))
+            requested = [
+                conn.execute(
+                    "SELECT requested_at FROM web_recovery_requests WHERE request_key = ?", (key,)
+                ).fetchone()
+                for key in keys
+            ]
+            if any(row and now - row[0] < RECOVERY_REQUEST_COOLDOWN_SECONDS for row in requested):
+                return False
+            conn.executemany(
+                "INSERT OR REPLACE INTO web_recovery_requests (request_key, requested_at) VALUES (?, ?)",
+                ((key, now) for key in keys),
+            )
+        return True
+
+    def store_recovery_code(
+        self,
+        username: str,
+        email: str,
+        recovery_code_hash: str,
+        expires_at: float,
+    ) -> bool:
         with self._connect() as conn:
             cursor = conn.execute(
-                "UPDATE web_users SET recovery_code_hash = ? WHERE id = ?",
-                (recovery_code_hash, user_id),
+                "UPDATE web_users SET recovery_code_hash = ?, recovery_code_expires_at = ? "
+                "WHERE username = ? COLLATE NOCASE AND email = ? COLLATE NOCASE AND is_active = 1",
+                (recovery_code_hash, expires_at, username.strip(), normalize_email(email)),
             )
-            if cursor.rowcount != 1:
-                raise ValueError("Không tìm thấy tài khoản.")
+            return cursor.rowcount == 1
 
-    def reset_password_with_recovery(self, username: str, recovery_code: str, new_password_hash: str) -> bool:
+    def clear_recovery_code(self, username: str, recovery_code_hash: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE web_users SET recovery_code_hash = NULL, recovery_code_expires_at = NULL "
+                "WHERE username = ? COLLATE NOCASE AND recovery_code_hash = ?",
+                (username.strip(), recovery_code_hash),
+            )
+
+    def reset_password_with_recovery(
+        self,
+        username: str,
+        recovery_code: str,
+        new_password_hash: str,
+        now: float | None = None,
+    ) -> bool:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, is_active, recovery_code_hash FROM web_users WHERE username = ? COLLATE NOCASE",
+                "SELECT id, is_active, recovery_code_hash, recovery_code_expires_at "
+                "FROM web_users WHERE username = ? COLLATE NOCASE",
                 (username.strip(),),
             ).fetchone()
+        now = time.time() if now is None else now
         code_has_valid_shape = bool(re.fullmatch(r"[A-Za-z0-9]{6}", recovery_code))
         encoded_code = row[2] if row and row[2] else _DUMMY_PASSWORD_HASH
         valid_code = verify_password(recovery_code.upper() if code_has_valid_shape else "INVALID", encoded_code)
-        if not row or not row[1] or not row[2] or not code_has_valid_shape or not valid_code:
+        if (
+            not row
+            or not row[1]
+            or not row[2]
+            or row[3] is None
+            or row[3] < now
+            or not code_has_valid_shape
+            or not valid_code
+        ):
             return False
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
-                "UPDATE web_users SET password_hash = ?, recovery_code_hash = NULL "
-                "WHERE id = ? AND is_active = 1 AND recovery_code_hash = ?",
-                (new_password_hash, row[0], row[2]),
+                "UPDATE web_users SET password_hash = ?, recovery_code_hash = NULL, "
+                "recovery_code_expires_at = NULL WHERE id = ? AND is_active = 1 "
+                "AND recovery_code_hash = ? AND recovery_code_expires_at >= ?",
+                (new_password_hash, row[0], row[2], now),
             )
             return cursor.rowcount == 1
 
-    def update_user(self, user_id: int, role: str, is_active: bool) -> None:
+    def update_user(self, user_id: int, role: str, is_active: bool, email: str | None = None) -> None:
         if role not in ROLES:
             raise ValueError("Vai trò không hợp lệ.")
+        normalized_email = normalize_email(email) if email is not None else None
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             current = conn.execute("SELECT role, is_active FROM web_users WHERE id = ?", (user_id,)).fetchone()
@@ -212,22 +315,31 @@ class WebAuthDatabase:
                 ).fetchone()[0]
                 if admins <= 1:
                     raise ValueError("Không thể khóa hoặc hạ quyền admin cuối cùng.")
-            conn.execute(
-                "UPDATE web_users SET role = ?, is_active = ? WHERE id = ?",
-                (role, int(is_active), user_id),
-            )
+            try:
+                if email is None:
+                    conn.execute(
+                        "UPDATE web_users SET role = ?, is_active = ? WHERE id = ?",
+                        (role, int(is_active), user_id),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE web_users SET role = ?, is_active = ?, email = ? WHERE id = ?",
+                        (role, int(is_active), normalized_email, user_id),
+                    )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("Email đã được dùng cho tài khoản khác.") from exc
 
     def authenticate(self, username: str, password: str) -> WebUser | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, username, password_hash, role, is_active, created_at "
+                "SELECT id, username, password_hash, email, role, is_active, created_at "
                 "FROM web_users WHERE username = ? COLLATE NOCASE",
                 (username.strip(),),
             ).fetchone()
         password_ok = verify_password(password, row[2] if row else _DUMMY_PASSWORD_HASH)
-        if row is None or not bool(row[4]) or not password_ok:
+        if row is None or not bool(row[5]) or not password_ok:
             return None
-        return WebUser(int(row[0]), row[1], row[3], True, row[5])
+        return WebUser(int(row[0]), row[1], row[3], row[4], True, row[6])
 
     def login_locked(self, username: str, remote_addr: str, now: float | None = None) -> bool:
         now = time.time() if now is None else now

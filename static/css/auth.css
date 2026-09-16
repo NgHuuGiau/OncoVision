@@ -15,8 +15,6 @@
   --success-text: #b7f7da;
   --danger-bg: #4a1d2a;
   --danger-text: #fecdd3;
-  --code-bg: #07131f;
-  --code-text: #fde68a;
   --shadow: 0 24px 72px rgb(0 0 0 / 28%);
 }
 
@@ -36,8 +34,6 @@
   --success-text: #145c40;
   --danger-bg: #fff0f0;
   --danger-text: #9f2525;
-  --code-bg: #fff7d6;
-  --code-text: #713f12;
   --shadow: 0 20px 56px rgb(28 55 82 / 12%);
 }
 
@@ -68,6 +64,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .auth-shell h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; letter-spacing: -.025em; }
 .auth-subtitle { margin: 0 0 24px; color: var(--muted); }
+.auth-section { margin: 24px 0; padding-top: 18px; border-top: 1px solid var(--line); }
+.auth-section h2 { margin: 0 0 14px; font-size: 16px; }
 .field { display: grid; gap: 7px; margin: 16px 0; }
 .field label, .auth-shell label { color: var(--muted); font-size: 14px; }
 .field input, .admin-shell input, .admin-shell select {
@@ -94,7 +92,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .auth-primary:active, .admin-shell button:active { transform: translateY(1px); }
 .auth-foot { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
 .auth-foot + .auth-foot { margin-top: 8px; }
-.auth-error, .auth-notice, .recovery-card { border-radius: 12px; }
+.auth-error, .auth-notice { border-radius: 12px; }
 .auth-error, .auth-notice { margin: 0 0 16px; padding: 12px 14px; }
 .auth-error { background: var(--danger-bg); color: var(--danger-text); }
 .auth-notice { background: var(--success-bg); color: var(--success-text); }
@@ -120,41 +118,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .admin-nav button { min-height: 38px; }
 .panel { margin: 16px 0; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); }
 .panel h2 { margin: 0 0 14px; font-size: 18px; }
-.admin-grid { display: grid; grid-template-columns: 1.3fr 1.3fr 1fr auto; align-items: end; gap: 12px; }
+.admin-grid { display: grid; grid-template-columns: 1fr 1.5fr 1.2fr 1fr auto; align-items: end; gap: 12px; }
 .admin-grid label { display: grid; gap: 6px; }
 .table-wrap { overflow-x: auto; }
 .admin-shell table { width: 100%; border-collapse: collapse; }
 .admin-shell th, .admin-shell td { padding: 12px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .admin-shell th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .admin-shell td { color: var(--text); }
-.row-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
-.row-form button, .recovery-form button { min-height: 36px; padding: 7px 10px; font-size: 13px; }
-.recovery-form { margin-top: 8px; }
+.row-form { display: grid; grid-template-columns: 1fr 1fr 1.5fr auto; gap: 8px; }
+.row-form button { min-height: 36px; padding: 7px 10px; font-size: 13px; }
 .status { color: #15803d; }
 [data-theme="dark"] .status { color: #86efac; }
 .status.off { color: #b42335; }
 [data-theme="dark"] .status.off { color: #fda4af; }
-.recovery-card {
-  margin: 18px 0;
-  padding: 20px;
-  border: 1px solid color-mix(in srgb, var(--success-text) 28%, transparent);
-  background: var(--success-bg);
-  color: var(--success-text);
-}
-.recovery-card h2 { margin: 4px 0 12px; font-size: 18px; }
-.recovery-card .eyebrow { margin: 0; font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
-.recovery-code {
-  display: inline-block;
-  padding: 10px 16px;
-  border: 1px solid color-mix(in srgb, var(--code-text) 45%, transparent);
-  border-radius: 10px;
-  background: var(--code-bg);
-  color: var(--code-text);
-  font: 750 30px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
-  letter-spacing: .24em;
-  user-select: all;
-}
-.recovery-card .hint { margin: 12px 0 0; font-size: 13px; }
 .admin-hint { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 @media (max-width: 720px) {
   .auth-shell { padding: 24px; }

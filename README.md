@@ -175,3 +175,4 @@ Hệ thống phân tích ảnh y khoa với CNN classifier (convnext_tiny pretra
 | [docs/quick_commands.md](docs/quick_commands.md) | Lệnh nhanh hàng ngày |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Lỗi thường gặp và cách xử lý |
 | [docs/ci_and_quality.md](docs/ci_and_quality.md) | CI pipeline và quality gate |
+| [docs/web_auth.md](docs/web_auth.md) | Đăng nhập, phân quyền và cấu hình email khôi phục |

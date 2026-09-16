@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import aiofiles
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,7 +21,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.chat_ui.models import ChatMessage
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, OUTPUT_DIR, PROJECT_ROOT
 from app.chat_ui.storage import ChatDatabase
+from app.email_service import send_password_recovery_email
 from app.web_auth import (
+    RECOVERY_CODE_TTL_SECONDS,
     WebAuthDatabase,
     WebUser,
     generate_recovery_code,
@@ -76,7 +78,7 @@ def _request_csrf_token(request: Request) -> str:
 
 
 async def require_authenticated(request: Request) -> WebUser | None:
-    if request.url.path in {"/login", "/forgot-password"}:
+    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request"}:
         return None
 
     user_id = request.session.get("user_id")
@@ -94,7 +96,7 @@ async def require_authenticated(request: Request) -> WebUser | None:
             request.url.path in {"/logout", "/admin/users/create"}
             or (
                 request.url.path.startswith("/admin/users/")
-                and request.url.path.endswith(("/update", "/recovery-code"))
+                and request.url.path.endswith("/update")
             )
         ):
             form = await request.form()
@@ -257,7 +259,7 @@ async def login(request: Request, username: str = Form(""), password: str = Form
 
 
 @app.get("/forgot-password", response_class=HTMLResponse)
-async def forgot_password_page(request: Request, error: str = ""):
+async def forgot_password_page(request: Request, error: str = "", sent: str = ""):
     user_id = request.session.get("user_id")
     user = get_auth_db().get_user(user_id) if isinstance(user_id, int) else None
     if user and user.is_active:
@@ -266,7 +268,49 @@ async def forgot_password_page(request: Request, error: str = ""):
         "request": request,
         "csrf_token": _request_csrf_token(request),
         "error": error,
+        "sent": sent == "1",
     })
+
+
+def _deliver_recovery_email(auth_db: WebAuthDatabase, username: str, email: str, code: str, code_hash: str) -> None:
+    try:
+        send_password_recovery_email(email, username, code)
+    except Exception:
+        auth_db.clear_recovery_code(username, code_hash)
+        logger.exception("Không gửi được email khôi phục mật khẩu.")
+
+
+@app.post("/forgot-password/request")
+async def request_password_recovery(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    username: str = Form(""),
+    email: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    expected_token = request.session.get("csrf_token", "")
+    if not expected_token or not secrets.compare_digest(csrf_token, expected_token):
+        raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")
+
+    auth_db = get_auth_db()
+    remote_addr = request.client.host if request.client else "unknown"
+    if auth_db.allow_recovery_request(remote_addr, email):
+        recovery_code = generate_recovery_code()
+        recovery_hash = hash_recovery_code(recovery_code)
+        try:
+            stored = auth_db.store_recovery_code(
+                username,
+                email,
+                recovery_hash,
+                time.time() + RECOVERY_CODE_TTL_SECONDS,
+            )
+        except ValueError:
+            stored = False
+        if stored:
+            background_tasks.add_task(
+                _deliver_recovery_email, auth_db, username.strip(), email.strip(), recovery_code, recovery_hash
+            )
+    return RedirectResponse("/forgot-password?sent=1", status_code=303)
 
 
 @app.post("/forgot-password", response_class=HTMLResponse)
@@ -324,8 +368,6 @@ def _admin_users_response(
     *,
     notice: str = "",
     error: str = "",
-    recovery_code: str = "",
-    recovery_username: str = "",
 ):
     return templates.TemplateResponse(request, "admin_users.html", {
         "request": request,
@@ -334,9 +376,7 @@ def _admin_users_response(
         "csrf_token": _request_csrf_token(request),
         "notice": notice,
         "error": error,
-        "recovery_code": recovery_code,
-        "recovery_username": recovery_username,
-    }, headers={"Cache-Control": "no-store"} if recovery_code else None)
+    })
 
 
 @app.get("/admin/users", response_class=HTMLResponse)
@@ -352,46 +392,21 @@ async def admin_users_page(request: Request, _: WebUser = ADMIN_REQUIRED):
 async def admin_create_user(
     request: Request,
     username: str = Form(...),
+    email: str = Form(...),
     password: str = Form(...),
     role: str = Form(...),
     _: WebUser = ADMIN_REQUIRED,
 ):
-    recovery_code = generate_recovery_code()
     try:
         get_auth_db().create_user(
             username,
             hash_password(password),
             role,
-            recovery_code_hash=hash_recovery_code(recovery_code),
+            email=email,
         )
     except ValueError as exc:
         return RedirectResponse(f"/admin/users?error={quote(str(exc))}", status_code=303)
-    return _admin_users_response(
-        request,
-        notice="created",
-        recovery_code=recovery_code,
-        recovery_username=username.strip(),
-    )
-
-
-@app.post("/admin/users/{user_id}/recovery-code")
-async def admin_issue_recovery_code(
-    user_id: int,
-    request: Request,
-    _: WebUser = ADMIN_REQUIRED,
-):
-    recovery_code = generate_recovery_code()
-    try:
-        get_auth_db().set_recovery_code(user_id, hash_recovery_code(recovery_code))
-    except ValueError as exc:
-        return RedirectResponse(f"/admin/users?error={quote(str(exc))}", status_code=303)
-    user = get_auth_db().get_user(user_id)
-    return _admin_users_response(
-        request,
-        notice="recovery-code-issued",
-        recovery_code=recovery_code,
-        recovery_username=user.username,
-    )
+    return _admin_users_response(request, notice="created")
 
 
 @app.post("/admin/users/{user_id}/update")
@@ -399,10 +414,11 @@ async def admin_update_user(
     user_id: int,
     role: str = Form(...),
     is_active: str = Form("0"),
+    email: str = Form(""),
     _: WebUser = ADMIN_REQUIRED,
 ):
     try:
-        get_auth_db().update_user(user_id, role, is_active == "1")
+        get_auth_db().update_user(user_id, role, is_active == "1", email)
     except ValueError as exc:
         return RedirectResponse(f"/admin/users?error={quote(str(exc))}", status_code=303)
     return RedirectResponse("/admin/users?notice=updated", status_code=303)

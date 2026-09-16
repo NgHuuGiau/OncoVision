@@ -16,22 +16,15 @@
     <div><h1>Quản lý tài khoản</h1><p class="muted">Đăng nhập: {{ current_user.username }} · admin</p></div>
     <nav class="admin-nav"><a href="/">← Quay lại ứng dụng</a><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Đăng xuất</button></form></nav>
   </header>
-  {% if recovery_code %}
-  <section class="recovery-card" role="status" aria-live="polite">
-    <p class="eyebrow">MÃ KHÔI PHỤC MỚI · CHỈ HIỆN LẦN NÀY</p>
-    <h2>Dành cho tài khoản {{ recovery_username }}</h2>
-    <strong data-recovery-code class="recovery-code" aria-label="Mã khôi phục sáu ký tự">{{ recovery_code }}</strong>
-    <p class="hint">Ghi lại và gửi riêng cho người dùng ngay. Mã gồm 6 chữ cái/số, chỉ dùng một lần và sẽ không hiện lại sau khi rời trang.</p>
-  </section>
-  {% elif notice == 'created' %}<div class="auth-notice" role="status">Đã tạo tài khoản.</div>
-  {% elif notice == 'updated' %}<div class="auth-notice" role="status">Đã cập nhật tài khoản.</div>
-  {% elif notice == 'recovery-code-issued' %}<div class="auth-notice" role="status">Đã cấp mã khôi phục mới.</div>{% endif %}
+  {% if notice == 'created' %}<div class="auth-notice" role="status">Đã tạo tài khoản.</div>
+  {% elif notice == 'updated' %}<div class="auth-notice" role="status">Đã cập nhật tài khoản.</div>{% endif %}
   {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
   <section class="panel">
     <h2>Tạo tài khoản</h2>
     <form class="admin-grid" method="post" action="/admin/users/create" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>Tên đăng nhập<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required></label>
+      <label>Email khôi phục<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
       <label>Mật khẩu<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
       <label>Vai trò<select name="role"><option value="clinician">Nhân viên y tế</option><option value="viewer">Người dùng chỉ xem</option><option value="admin">Quản trị viên</option></select></label>
       <button type="submit">Tạo tài khoản</button>
@@ -39,13 +32,14 @@
   </section>
   <section class="panel">
     <h2>Tài khoản hiện có</h2>
-    <p class="admin-hint">Tài khoản chưa có mã khôi phục hoặc đã làm mất mã? Nhấn “Cấp mã khôi phục mới”; mã sẽ hiện ngay tại đầu trang và chỉ xem được một lần.</p>
+    <p class="admin-hint">Cập nhật email đã xác minh cho từng tài khoản. Mã khôi phục chỉ được gửi tới đúng email đã lưu và không hiển thị trong trang quản trị.</p>
     <div class="table-wrap"><table>
-      <thead><tr><th>Tên đăng nhập</th><th>Vai trò / trạng thái</th><th>Ngày tạo</th><th>Cập nhật</th></tr></thead>
+      <thead><tr><th>Tên đăng nhập</th><th>Email khôi phục</th><th>Vai trò / trạng thái</th><th>Ngày tạo</th><th>Cập nhật</th></tr></thead>
       <tbody>
       {% for user in users %}
         <tr>
           <td>{{ user.username }}{% if user.id == current_user.id %} <span class="muted">(bạn)</span>{% endif %}</td>
+          <td>{{ user.email or 'Chưa thiết lập' }}</td>
           <td>
             <form class="row-form" method="post" action="/admin/users/{{ user.id }}/update">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -58,17 +52,14 @@
                 <option value="1" {% if user.is_active %}selected{% endif %}>Đang hoạt động</option>
                 <option value="0" {% if not user.is_active %}selected{% endif %}>Đã khóa</option>
               </select>
+              <input name="email" type="email" maxlength="254" value="{{ user.email or '' }}" placeholder="Email khôi phục" aria-label="Email khôi phục của {{ user.username }}">
               <button type="submit">Lưu</button>
-            </form>
-            <form class="recovery-form" method="post" action="/admin/users/{{ user.id }}/recovery-code">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button type="submit" aria-label="Cấp mã khôi phục mới cho {{ user.username }}">Cấp mã khôi phục mới</button>
             </form>
           </td>
           <td>{{ user.created_at }}</td><td><span class="status {% if not user.is_active %}off{% endif %}">{% if user.is_active %}Hoạt động{% else %}Đã khóa{% endif %}</span></td>
         </tr>
       {% else %}
-        <tr><td colspan="4">Chưa có tài khoản.</td></tr>
+        <tr><td colspan="5">Chưa có tài khoản.</td></tr>
       {% endfor %}
       </tbody>
     </table></div>
