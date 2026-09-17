@@ -31,7 +31,7 @@ Không lưu mật khẩu dạng chữ thường trong SQL. Hash dùng PBKDF2-HMA
 | `clinician` | Nhân viên y tế: xem, tải ảnh, phân tích, quản lý hội thoại và hồ sơ |
 | `viewer` | Chỉ xem hồ sơ, hội thoại và báo cáo; không được tải ảnh/phân tích/ghi dữ liệu bệnh nhân. Có thể đổi giao diện riêng trên trình duyệt |
 
-Admin tạo tài khoản và gán email khôi phục trong trang **Quản lý tài khoản**. Khi quên mật khẩu, người dùng nhập username và email đã đăng ký; hệ thống gửi mã 6 ký tự đến email đó. Mã được lưu dưới dạng hash, dùng một lần, hết hạn sau 10 phút và không hiển thị trên trang. Email phải được xác minh với người dùng trước khi lưu. Tài khoản SQL cũ chưa có email cần được cập nhật trong trang quản trị trước khi khôi phục. Mã khôi phục cũ không có thời hạn bị vô hiệu hóa khi cập nhật cơ sở dữ liệu.
+Admin tạo tài khoản và gán email khôi phục trong trang **Quản lý tài khoản**. Khi quên mật khẩu, người dùng chỉ nhập username; hệ thống tự tìm email đã lưu và gửi mã 6 ký tự đến đó. Sau khi nhận thư, người dùng nhập mã và mật khẩu mới, không cần nhập lại username/email. Mã được lưu dưới dạng hash, dùng một lần, hết hạn sau 10 phút và không hiển thị trên trang. Email phải được xác minh với người dùng trước khi lưu. Tài khoản SQL cũ chưa có email cần được cập nhật trong trang quản trị trước khi khôi phục. Mã khôi phục cũ không có thời hạn bị vô hiệu hóa khi cập nhật cơ sở dữ liệu.
 
 ### Cấu hình gửi email bằng Gmail
 

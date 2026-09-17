@@ -94,16 +94,16 @@ class WebAuthTests(unittest.TestCase):
 
     def test_recovery_requests_are_limited_by_ip_and_account(self) -> None:
         self.assertTrue(self.auth_db.allow_recovery_request(
-            "127.0.0.1", "viewer@example.com", now=1000
+            "127.0.0.1", "viewer01", now=1000
         ))
         self.assertFalse(self.auth_db.allow_recovery_request(
-            "127.0.0.1", "other@example.com", now=1001
+            "127.0.0.1", "other", now=1001
         ))
         self.assertFalse(self.auth_db.allow_recovery_request(
-            "127.0.0.2", "VIEWER@example.com", now=1002
+            "127.0.0.2", "VIEWER01", now=1002
         ))
         self.assertTrue(self.auth_db.allow_recovery_request(
-            "127.0.0.1", "viewer@example.com", now=1061
+            "127.0.0.1", "viewer01", now=1061
         ))
 
     def test_auth_database_does_not_seed_a_default_account(self) -> None:
@@ -117,6 +117,9 @@ class WebAuthTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn('/static/css/auth.css', response.text)
             self.assertIn("toggleAuthTheme()", response.text)
+        self.assertIn('action="/forgot-password/request"', response.text)
+        self.assertNotIn('name="email"', response.text)
+        self.assertNotIn('name="username"', response.text.split('action="/forgot-password"')[1])
         admin_page = self.client.get("/admin/users")
         self.assertEqual(admin_page.status_code, 200)
         self.assertIn('/static/css/auth.css', admin_page.text)
@@ -180,12 +183,12 @@ class WebAuthTests(unittest.TestCase):
             request = self.client.post("/forgot-password/request", data={
                 "csrf_token": token,
                 "username": "viewer01",
-                "email": "VIEWER@example.com",
             })
         self.assertEqual(request.status_code, 303)
         self.assertEqual(request.headers["location"], "/forgot-password?sent=1")
         sent_page = self.client.get(request.headers["location"])
         self.assertIn("Nếu tài khoản và email khớp", sent_page.text)
+        self.assertEqual(send_email.call_args.args[:2], ("viewer@example.com", "viewer01"))
         recovery_code = send_email.call_args.args[2]
         self.assertNotIn(recovery_code, sent_page.text)
         conn = sqlite3.connect(self.db_path)
@@ -199,7 +202,6 @@ class WebAuthTests(unittest.TestCase):
         self.assertGreater(expires_at, time.time())
         response = self.client.post("/forgot-password", data={
             "csrf_token": token,
-            "username": "viewer01",
             "recovery_code": recovery_code,
             "password": "ResetViewerPassword123!",
             "confirm_password": "ResetViewerPassword123!",
@@ -214,7 +216,7 @@ class WebAuthTests(unittest.TestCase):
         token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
         with patch.object(web_app, "send_password_recovery_email") as send_email:
             response = self.client.post("/forgot-password/request", data={
-                "csrf_token": token, "username": "missing", "email": "missing@example.com",
+                "csrf_token": token, "username": "missing",
             })
         self.assertEqual(response.status_code, 303)
         self.assertEqual(response.headers["location"], "/forgot-password?sent=1")
@@ -226,7 +228,7 @@ class WebAuthTests(unittest.TestCase):
         token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
         with patch.object(web_app, "send_password_recovery_email", side_effect=OSError("SMTP unavailable")):
             response = self.client.post("/forgot-password/request", data={
-                "csrf_token": token, "username": "viewer01", "email": "viewer@example.com",
+                "csrf_token": token, "username": "viewer01",
             })
         self.assertEqual(response.status_code, 303)
         self.assertFalse(self.auth_db.reset_password_with_recovery(

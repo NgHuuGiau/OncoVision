@@ -216,11 +216,11 @@ class WebAuthDatabase:
     def allow_recovery_request(
         self,
         remote_addr: str,
-        email: str,
+        username: str,
         now: float | None = None,
     ) -> bool:
         now = time.time() if now is None else now
-        account_key = hashlib.sha256(email.strip().casefold().encode()).hexdigest()
+        account_key = hashlib.sha256(username.strip().casefold().encode()).hexdigest()
         keys = (f"ip:{remote_addr}", f"account:{account_key}")
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -242,17 +242,24 @@ class WebAuthDatabase:
     def store_recovery_code(
         self,
         username: str,
-        email: str,
         recovery_code_hash: str,
         expires_at: float,
-    ) -> bool:
+    ) -> tuple[str, str] | None:
         with self._connect() as conn:
-            cursor = conn.execute(
+            conn.execute("BEGIN IMMEDIATE")
+            user = conn.execute(
+                "SELECT username, email FROM web_users "
+                "WHERE username = ? COLLATE NOCASE AND is_active = 1 AND email IS NOT NULL AND email <> ''",
+                (username.strip(),),
+            ).fetchone()
+            if user is None:
+                return None
+            conn.execute(
                 "UPDATE web_users SET recovery_code_hash = ?, recovery_code_expires_at = ? "
-                "WHERE username = ? COLLATE NOCASE AND email = ? COLLATE NOCASE AND is_active = 1",
-                (recovery_code_hash, expires_at, username.strip(), normalize_email(email)),
+                "WHERE username = ? COLLATE NOCASE AND is_active = 1",
+                (recovery_code_hash, expires_at, user[0]),
             )
-            return cursor.rowcount == 1
+            return user[0], user[1]
 
     def clear_recovery_code(self, username: str, recovery_code_hash: str) -> None:
         with self._connect() as conn:

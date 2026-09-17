@@ -285,7 +285,6 @@ async def request_password_recovery(
     request: Request,
     background_tasks: BackgroundTasks,
     username: str = Form(""),
-    email: str = Form(""),
     csrf_token: str = Form(""),
 ):
     expected_token = request.session.get("csrf_token", "")
@@ -294,21 +293,23 @@ async def request_password_recovery(
 
     auth_db = get_auth_db()
     remote_addr = request.client.host if request.client else "unknown"
-    if auth_db.allow_recovery_request(remote_addr, email):
+    request.session["password_reset_username"] = username.strip() if len(username.strip()) <= 32 else ""
+    if auth_db.allow_recovery_request(remote_addr, username):
         recovery_code = generate_recovery_code()
         recovery_hash = hash_recovery_code(recovery_code)
         try:
             stored = auth_db.store_recovery_code(
                 username,
-                email,
                 recovery_hash,
                 time.time() + RECOVERY_CODE_TTL_SECONDS,
             )
         except ValueError:
-            stored = False
+            stored = None
         if stored:
+            stored_username, recipient = stored
+            request.session["password_reset_username"] = stored_username
             background_tasks.add_task(
-                _deliver_recovery_email, auth_db, username.strip(), email.strip(), recovery_code, recovery_hash
+                _deliver_recovery_email, auth_db, stored_username, recipient, recovery_code, recovery_hash
             )
     return RedirectResponse("/forgot-password?sent=1", status_code=303)
 
@@ -316,7 +317,6 @@ async def request_password_recovery(
 @app.post("/forgot-password", response_class=HTMLResponse)
 async def reset_forgotten_password(
     request: Request,
-    username: str = Form(""),
     recovery_code: str = Form(""),
     password: str = Form(""),
     confirm_password: str = Form(""),
@@ -326,6 +326,7 @@ async def reset_forgotten_password(
     if not expected_token or not secrets.compare_digest(csrf_token, expected_token):
         raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")
 
+    username = str(request.session.get("password_reset_username", ""))
     auth_db = get_auth_db()
     remote_addr = request.client.host if request.client else "unknown"
     attempt_key = f"recovery:{username.strip()}"
@@ -354,6 +355,7 @@ async def reset_forgotten_password(
             "error": "Tên đăng nhập hoặc mã khôi phục không đúng.",
         }, status_code=400)
     auth_db.clear_login_failures(attempt_key, remote_addr)
+    request.session.pop("password_reset_username", None)
     return RedirectResponse("/login?reset=1", status_code=303)
 
 
