@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
+import sqlite3
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -469,7 +471,7 @@ async def _save_upload(file: UploadFile, dest: Path) -> int:
     return size
 
 
-@app.post("/api/upload")
+@app.post("/api/upload", dependencies=[ADMIN_REQUIRED])
 async def upload_file(request: Request):
     raw_length = request.headers.get("content-length")
     if raw_length is None:
@@ -517,7 +519,7 @@ async def upload_file(request: Request):
         await form.close()
 
 
-@app.post("/api/analyze")
+@app.post("/api/analyze", dependencies=[ADMIN_REQUIRED])
 def analyze_image(
     image_path: str = Form(""),
     patient_code: str = Form("WEB"),
@@ -577,7 +579,7 @@ def analyze_image(
     }
 
 
-@app.post("/api/conversations")
+@app.post("/api/conversations", dependencies=[ADMIN_REQUIRED])
 async def create_conversation():
     db = get_db()
     conv_id = db.create_conversation(title="Cuoc tro chuyen moi", subtitle="Hom nay")
@@ -598,28 +600,164 @@ def _case_summary(record) -> dict:
         "average_confidence": record.metadata.get("average_confidence", 0),
         "model_name": record.metadata.get("model_name", "-"),
         "quality_warnings": record.metadata.get("quality_warnings", []),
+        "assigned_to": record.assigned_to,
+        "review_status": record.review_status,
+        "reviewed_by": record.reviewed_by,
+        "reviewed_at": record.reviewed_at,
+        "public_code": record.public_code,
     }
 
 
 @app.get("/api/cases")
-def list_cases():
-    cases = [_case_summary(r) for r in get_case_db().list_cases()]
+def list_cases(request: Request):
+    user = request.state.current_user
+    if user.role == "viewer":
+        return {"ok": True, "cases": []}
+    cases = get_case_db().list_cases(assigned_to=user.username if user.role == "clinician" else None)
+    cases = [_case_summary(record) for record in cases]
     return {"ok": True, "cases": cases}
 
 
 @app.get("/api/cases/{case_id}")
-def get_case(case_id: int):
+def get_case(case_id: int, request: Request):
     record = get_case_db().get_case(case_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    user = request.state.current_user
+    if user.role == "viewer" or (user.role == "clinician" and record.assigned_to != user.username):
+        raise HTTPException(status_code=403, detail="Bạn không được phân quyền xem ca bệnh này.")
     return {"ok": True, "case": _case_summary(record)}
 
 
-@app.get("/api/cases/{case_id}/pdf")
-def download_case_pdf(case_id: int):
+@app.get("/api/clinicians", dependencies=[ADMIN_REQUIRED])
+def list_clinicians():
+    return {"ok": True, "clinicians": [
+        {"username": user.username}
+        for user in get_auth_db().list_users()
+        if user.role == "clinician" and user.is_active
+    ]}
+
+
+@app.post("/api/cases/{case_id}/assign", dependencies=[ADMIN_REQUIRED])
+def assign_case(case_id: int, username: str = Form(...)):
+    clinician = next(
+        (user for user in get_auth_db().list_users() if user.username.casefold() == username.strip().casefold()),
+        None,
+    )
+    if clinician is None or clinician.role != "clinician" or not clinician.is_active:
+        raise HTTPException(status_code=400, detail="Hãy chọn tài khoản nhân viên y tế đang hoạt động.")
+    if not get_case_db().assign_case(case_id, clinician.username):
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    return {"ok": True}
+
+
+@app.post("/api/cases/{case_id}/review", dependencies=[Depends(require_role("clinician"))])
+def approve_case(
+    case_id: int,
+    request: Request,
+    risk_level: str = Form(...),
+    suspected_malignant: bool = Form(...),
+    recommendation: str = Form(...),
+):
+    if risk_level not in {"low", "medium", "high", "uncertain"}:
+        raise HTTPException(status_code=400, detail="Mức nguy cơ không hợp lệ.")
+    recommendation = recommendation.strip()
+    if not recommendation or len(recommendation) > 5000:
+        raise HTTPException(status_code=400, detail="Khuyến nghị phải có từ 1 đến 5000 ký tự.")
+    db = get_case_db()
+    record = db.get_case(case_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    user = request.state.current_user
+    if record.assigned_to != user.username:
+        raise HTTPException(status_code=403, detail="Ca bệnh chưa được phân công cho bạn.")
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    for _ in range(5):
+        public_code = "".join(secrets.choice(alphabet) for _ in range(10))
+        try:
+            if db.approve_case(
+                case_id,
+                reviewer=user.username,
+                risk_level=risk_level,
+                suspected_malignant=suspected_malignant,
+                recommendation=recommendation,
+                public_code=public_code,
+            ):
+                return {"ok": True, "public_code": public_code}
+        except sqlite3.IntegrityError:
+            continue
+    raise HTTPException(status_code=500, detail="Không thể tạo mã đọc kết quả, vui lòng thử lại.")
+
+
+@app.get("/api/public/cases/{public_code}", dependencies=[Depends(require_role("viewer"))])
+def get_public_case(public_code: str):
+    if not re.fullmatch(r"[A-Z0-9]{10}", public_code.upper(), flags=re.ASCII):
+        raise HTTPException(status_code=404, detail="Không tìm thấy kết quả đã duyệt.")
+    record = get_case_db().get_case_by_public_code(public_code)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy kết quả đã duyệt.")
+    return {
+        "ok": True,
+        "case": {
+            "patient_code": record.patient_code,
+            "risk_level": record.risk_level,
+            "suspected_malignant": record.suspected_malignant,
+            "recommendation": record.recommendation,
+            "created_at": record.created_at,
+            "reviewed_at": record.reviewed_at,
+        },
+    }
+
+
+@app.get("/api/public/cases/{public_code}/pdf", dependencies=[Depends(require_role("viewer"))])
+def download_public_case_pdf(public_code: str):
+    record = get_case_db().get_case_by_public_code(public_code)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy kết quả đã duyệt.")
+    try:
+        pdf_path = export_case_pdf(OUTPUT_DIR / "medical" / "reports", {
+            "case_id": record.patient_code,
+            "patient_code": record.patient_code,
+            "source_image": "",
+            "processed_image": "",
+            "risk_level": record.risk_level,
+            "suspected_malignant": record.suspected_malignant,
+            "recommendation": record.recommendation,
+            "review_status": "approved",
+            "reviewed_by": "Nhân viên y tế",
+            "reviewed_at": record.reviewed_at,
+            "quality_warnings": [],
+            "detections": [],
+            "model_name": "OncoVision AI",
+            "disclaimer": MEDICAL_DISCLAIMER,
+        })
+    except ImportError as exc:
+        raise HTTPException(status_code=501, detail=str(exc))
+    return FileResponse(pdf_path, filename=f"ket-qua-{public_code.upper()}.pdf", media_type="application/pdf")
+
+
+@app.get("/api/cases/{case_id}/image")
+def get_case_image(case_id: int, request: Request):
     record = get_case_db().get_case(case_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    user = request.state.current_user
+    if user.role == "viewer" or (user.role == "clinician" and record.assigned_to != user.username):
+        raise HTTPException(status_code=403, detail="Bạn không được xem ảnh của ca bệnh này.")
+    image_path = Path(record.processed_image_path).resolve()
+    if not image_path.is_relative_to(OUTPUT_DIR.resolve()) or not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh đã xử lý.")
+    return FileResponse(image_path)
+
+
+@app.get("/api/cases/{case_id}/pdf")
+def download_case_pdf(case_id: int, request: Request):
+    record = get_case_db().get_case(case_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    user = request.state.current_user
+    if user.role == "viewer" or (user.role == "clinician" and record.assigned_to != user.username):
+        raise HTTPException(status_code=403, detail="Bạn không được xuất ca bệnh này.")
     try:
         pdf_path = export_case_pdf(OUTPUT_DIR / "medical" / "reports", build_case_export_payload(record))
     except ImportError as exc:
@@ -627,7 +765,7 @@ def download_case_pdf(case_id: int):
     return FileResponse(pdf_path, filename=pdf_path.name, media_type="application/pdf")
 
 
-@app.get("/api/conversations")
+@app.get("/api/conversations", dependencies=[ADMIN_REQUIRED])
 async def list_conversations():
     convs = get_db().get_all_conversations()
     result = []
@@ -652,7 +790,7 @@ async def list_conversations():
     return {"ok": True, "conversations": result}
 
 
-@app.get("/api/conversations/{conv_id}")
+@app.get("/api/conversations/{conv_id}", dependencies=[ADMIN_REQUIRED])
 async def get_conversation(conv_id: int):
     conv = get_db().get_conversation(conv_id)
     if conv is None:
@@ -678,7 +816,7 @@ async def get_conversation(conv_id: int):
     }
 
 
-@app.post("/api/conversations/{conv_id}/messages")
+@app.post("/api/conversations/{conv_id}/messages", dependencies=[ADMIN_REQUIRED])
 async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""), attachment_path: str = Form(""), attachment_kind: str = Form(""), metadata_json: str = Form("")):
     db = get_db()
     conv = db.get_conversation(conv_id)
@@ -700,7 +838,7 @@ async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""
     return {"ok": True, "message_id": msg_id}
 
 
-@app.delete("/api/conversations/{conv_id}")
+@app.delete("/api/conversations/{conv_id}", dependencies=[ADMIN_REQUIRED])
 async def delete_conversation(conv_id: int):
     db = get_db()
     if not db.conversation_exists(conv_id):
@@ -731,7 +869,7 @@ async def save_settings(request: Request, language: str = Form("vi"), theme: str
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-@app.get("/output/{file_path:path}")
+@app.get("/output/{file_path:path}", dependencies=[ADMIN_REQUIRED])
 async def serve_output_file(file_path: str):
     path = _safe_path(OUTPUT_DIR, file_path)
     if path is None or not path.is_file():
@@ -746,7 +884,11 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
         if "text/html" in request.headers.get("accept", "") and not request.url.path.startswith("/api/"):
             return templates.TemplateResponse(request, "404.html", {"request": request}, status_code=404)
         return JSONResponse(status_code=404, content={"ok": False, "detail": exc.detail or "Not Found"})
-    return JSONResponse(status_code=exc.status_code, content={"ok": False, "detail": exc.detail})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"ok": False, "detail": exc.detail},
+        headers=exc.headers,
+    )
 
 
 @app.exception_handler(Exception)

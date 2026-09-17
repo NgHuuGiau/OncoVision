@@ -27,9 +27,9 @@ Không lưu mật khẩu dạng chữ thường trong SQL. Hash dùng PBKDF2-HMA
 
 | Vai trò | Quyền |
 |---|---|
-| `admin` | Toàn quyền, gồm tạo/đổi vai trò/khóa tài khoản tại `/admin/users` |
-| `clinician` | Nhân viên y tế: xem, tải ảnh, phân tích, quản lý hội thoại và hồ sơ |
-| `viewer` | Chỉ xem hồ sơ, hội thoại và báo cáo; không được tải ảnh/phân tích/ghi dữ liệu bệnh nhân. Có thể đổi giao diện riêng trên trình duyệt |
+| `admin` | Tạo/đổi vai trò/khóa tài khoản; tải dữ liệu, chạy phân tích và phân công từng ca tại `/admin/users` và màn hình chính |
+| `clinician` | Chỉ xem ca được giao; kiểm tra ảnh/kết quả, chỉnh mức nguy cơ và khuyến nghị, rồi duyệt báo cáo |
+| `viewer` | Chỉ tra cứu bằng mã 10 ký tự do nhân viên y tế cấp và đọc/tải PDF của kết quả đã duyệt; không xem danh sách ca, hội thoại hoặc ảnh gốc |
 
 Admin tạo tài khoản và gán email khôi phục trong trang **Quản lý tài khoản**. Khi quên mật khẩu, người dùng chỉ nhập username; hệ thống tự tìm email đã lưu và gửi mã 6 ký tự đến đó. Sau khi nhận thư, người dùng nhập mã và mật khẩu mới, không cần nhập lại username/email. Mã được lưu dưới dạng hash, dùng một lần, hết hạn sau 10 phút và không hiển thị trên trang. Email phải được xác minh với người dùng trước khi lưu. Tài khoản SQL cũ chưa có email cần được cập nhật trong trang quản trị trước khi khôi phục. Mã khôi phục cũ không có thời hạn bị vô hiệu hóa khi cập nhật cơ sở dữ liệu.
 
@@ -51,9 +51,14 @@ Sau 5 lần nhập mã sai theo username/IP, thao tác khôi phục bị khóa 1
 
 Hệ thống không cho khóa hoặc hạ quyền admin cuối cùng. Mọi phiên đều kiểm tra trạng thái tài khoản hiện tại; khóa tài khoản sẽ thu hồi quyền ở request kế tiếp.
 
-Phân quyền hiện áp dụng ở mức vai trò cho toàn bộ workspace: các tài khoản `clinician`/`viewer` cùng được xem các ca trong database này. Chưa có phân vùng hồ sơ theo bác sĩ, khoa hoặc cơ sở.
+### Luồng xử lý ca bệnh
 
-`viewer` chưa phải cổng tra cứu riêng theo mã bệnh nhân: họ chỉ xem dữ liệu chung của workspace. Ô tìm kiếm hiện tại lọc lịch sử hội thoại trên giao diện, không cấp quyền truy cập riêng cho một hồ sơ. Không dùng mã bệnh nhân dễ đoán như mật khẩu tra cứu.
+1. Admin tải ảnh/dữ liệu lên, chạy phân tích và giao ca cho một tài khoản `clinician` đang hoạt động.
+2. Nhân viên chỉ thấy các ca được giao cho chính tài khoản đó. Họ rà soát ảnh và kết quả AI, chỉnh mức nguy cơ/khuyến nghị nếu cần, rồi bấm **Lưu và duyệt kết quả**.
+3. Khi duyệt, hệ thống tạo mã tra cứu ngẫu nhiên 10 ký tự. Chuyển ca sang nhân viên khác sẽ đưa ca về trạng thái chờ duyệt và vô hiệu hóa mã cũ.
+4. Người dùng đăng nhập bằng vai trò `viewer`, nhập mã được cấp để đọc tóm tắt đã duyệt hoặc tải PDF. Tệp PDF dành cho người đọc không chứa đường dẫn nội bộ hay ảnh gốc.
+
+API cũng kiểm tra vai trò và quyền sở hữu ca; ẩn nút trên giao diện không phải biện pháp phân quyền. Mã tra cứu là thông tin cần giữ kín và chỉ gửi cho đúng người nhận. Ứng dụng hiện vẫn phù hợp chạy localhost; trước khi cho nhiều máy truy cập cần bổ sung triển khai HTTPS, sao lưu và quy trình bảo vệ dữ liệu bệnh nhân.
 
 ## Triển khai trên máy chủ
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -107,5 +108,45 @@ class MedicalStorageTests(unittest.TestCase):
             self.assertEqual(str(journal_mode).lower(), "wal")
             self.assertEqual(busy_timeout, 5000)
 
+    def test_assign_approve_and_revoke_public_case_code(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db = MedicalCaseDatabase(Path(temp_dir) / "medical.db")
+            case_id = db.save_case(
+                patient_code="BN004", image_path="a.jpg", processed_image_path="b.jpg",
+                report_json_path="c.json", report_md_path="d.md", suspected_malignant=False,
+                risk_level="uncertain", recommendation="Review", metadata={},
+            )
+            self.assertTrue(db.assign_case(case_id, "clinician01"))
+            self.assertEqual(db.list_cases(assigned_to="clinician01")[0].review_status, "pending")
+            self.assertTrue(db.approve_case(
+                case_id, reviewer="clinician01", risk_level="low", suspected_malignant=False,
+                recommendation="Đã rà soát", public_code="ABCD234567",
+            ))
+            self.assertEqual(db.get_case_by_public_code("abcd234567").recommendation, "Đã rà soát")
+            self.assertTrue(db.assign_case(case_id, "clinician02"))
+            self.assertIsNone(db.get_case_by_public_code("ABCD234567"))
+            self.assertEqual(db.get_case(case_id).review_status, "pending")
 
-
+    def test_legacy_case_table_gets_review_columns_without_losing_rows(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "legacy.db"
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    "CREATE TABLE medical_cases (id INTEGER PRIMARY KEY, patient_code TEXT NOT NULL, "
+                    "image_path TEXT NOT NULL, processed_image_path TEXT NOT NULL, report_json_path TEXT NOT NULL, "
+                    "report_md_path TEXT NOT NULL, suspected_malignant INTEGER NOT NULL, risk_level TEXT NOT NULL, "
+                    "recommendation TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                )
+                conn.execute(
+                    "INSERT INTO medical_cases (patient_code,image_path,processed_image_path,report_json_path,"
+                    "report_md_path,suspected_malignant,risk_level,recommendation,metadata_json) "
+                    "VALUES ('BN005','a','b','c','d',0,'low','Giữ nguyên','{}')"
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            case = MedicalCaseDatabase(db_path).get_case(1)
+            self.assertEqual(case.patient_code, "BN005")
+            self.assertIsNone(case.assigned_to)
+            self.assertEqual(case.review_status, "pending")

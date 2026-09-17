@@ -27,6 +27,11 @@ class MedicalCaseRecord:
     recommendation: str
     metadata: dict[str, Any]
     created_at: str
+    assigned_to: str | None
+    review_status: str
+    reviewed_by: str | None
+    reviewed_at: str | None
+    public_code: str | None
 
 
 class MedicalCaseDatabase:
@@ -71,6 +76,16 @@ class MedicalCaseDatabase:
                 )
                 """
             )
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(medical_cases)")}
+            for name, definition in (
+                ("assigned_to", "TEXT"),
+                ("review_status", "TEXT NOT NULL DEFAULT 'pending'"),
+                ("reviewed_by", "TEXT"),
+                ("reviewed_at", "TEXT"),
+                ("public_code", "TEXT"),
+            ):
+                if name not in columns:
+                    conn.execute(f"ALTER TABLE medical_cases ADD COLUMN {name} {definition}")
             self._ensure_indexes(conn)
 
     def _ensure_indexes(self, conn: sqlite3.Connection) -> None:
@@ -79,6 +94,14 @@ class MedicalCaseDatabase:
             CREATE INDEX IF NOT EXISTS idx_medical_cases_patient_code
             ON medical_cases (patient_code)
             """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_medical_cases_assigned_review "
+            "ON medical_cases (assigned_to, review_status, id DESC)"
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_medical_cases_public_code "
+            "ON medical_cases (public_code) WHERE public_code IS NOT NULL"
         )
         conn.execute(
             """
@@ -110,16 +133,19 @@ class MedicalCaseDatabase:
             )
             return int(cursor.lastrowid)
 
-    def list_cases(self) -> list[MedicalCaseRecord]:
+    def list_cases(self, *, assigned_to: str | None = None) -> list[MedicalCaseRecord]:
         with self._connect() as conn:
-            rows = conn.execute(
-                """
+            query = """
                 SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path,
-                       suspected_malignant, risk_level, recommendation, metadata_json, created_at
+                       suspected_malignant, risk_level, recommendation, metadata_json, created_at,
+                       assigned_to, review_status, reviewed_by, reviewed_at, public_code
                 FROM medical_cases
-                ORDER BY id DESC
-                """
-            ).fetchall()
+            """
+            rows = (
+                conn.execute(query + " WHERE assigned_to = ? ORDER BY id DESC", (assigned_to,)).fetchall()
+                if assigned_to is not None
+                else conn.execute(query + " ORDER BY id DESC").fetchall()
+            )
         return [self._row_to_record(row) for row in rows]
 
     def get_case(self, case_id: int) -> MedicalCaseRecord | None:
@@ -127,13 +153,53 @@ class MedicalCaseDatabase:
             row = conn.execute(
                 """
                 SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path,
-                       suspected_malignant, risk_level, recommendation, metadata_json, created_at
+                       suspected_malignant, risk_level, recommendation, metadata_json, created_at,
+                       assigned_to, review_status, reviewed_by, reviewed_at, public_code
                 FROM medical_cases
                 WHERE id = ?
                 """,
                 (case_id,),
             ).fetchone()
         return self._row_to_record(row) if row else None
+
+    def get_case_by_public_code(self, public_code: str) -> MedicalCaseRecord | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path, "
+                "suspected_malignant, risk_level, recommendation, metadata_json, created_at, assigned_to, "
+                "review_status, reviewed_by, reviewed_at, public_code FROM medical_cases "
+                "WHERE public_code = ? AND review_status = 'approved'",
+                (public_code.upper(),),
+            ).fetchone()
+        return self._row_to_record(row) if row else None
+
+    def assign_case(self, case_id: int, username: str) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE medical_cases SET assigned_to = ?, review_status = 'pending', reviewed_by = NULL, "
+                "reviewed_at = NULL, public_code = NULL WHERE id = ?",
+                (username, case_id),
+            )
+        return cursor.rowcount == 1
+
+    def approve_case(
+        self,
+        case_id: int,
+        *,
+        reviewer: str,
+        risk_level: str,
+        suspected_malignant: bool,
+        recommendation: str,
+        public_code: str,
+    ) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE medical_cases SET risk_level = ?, suspected_malignant = ?, recommendation = ?, "
+                "review_status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, public_code = ? "
+                "WHERE id = ?",
+                (risk_level, int(suspected_malignant), recommendation, reviewer, public_code.upper(), case_id),
+            )
+        return cursor.rowcount == 1
 
     def delete_case(self, case_id: int) -> bool:
         with self._connect() as conn:
@@ -174,4 +240,9 @@ class MedicalCaseDatabase:
             recommendation=row[8],
             metadata=json.loads(row[9]),
             created_at=row[10],
+            assigned_to=row[11],
+            review_status=row[12],
+            reviewed_by=row[13],
+            reviewed_at=row[14],
+            public_code=row[15],
         )

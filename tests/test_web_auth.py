@@ -159,7 +159,9 @@ class WebAuthTests(unittest.TestCase):
         anonymous = TestClient(web_app.app, follow_redirects=False)
         self.assertEqual(anonymous.get("/api/cases").status_code, 401)
         self.assertEqual(anonymous.get("/output/private.png").status_code, 303)
-        self.assertEqual(anonymous.get("/").status_code, 303)
+        redirect = anonymous.get("/")
+        self.assertEqual(redirect.status_code, 303)
+        self.assertEqual(redirect.headers.get("location"), "/login")
         blocked_upload_dir = self.root / "blocked-uploads"
         with patch.object(web_app, "WEB_UPLOADS_DIR", blocked_upload_dir):
             response = anonymous.post("/api/upload", files={"file": ("scan.png", b"pixels", "image/png")})
@@ -246,7 +248,8 @@ class WebAuthTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/cases").status_code, 200)
         page = self.client.get("/")
         self.assertIn('data-role="viewer"', page.text)
-        self.assertIn("chế độ chỉ xem", page.text)
+        self.assertIn("Tra cứu kết quả đã được duyệt", page.text)
+        self.assertIn('id="publicCaseSearch"', page.text)
         denied = self.client.post("/api/conversations", headers={"X-CSRF-Token": csrf})
         self.assertEqual(denied.status_code, 403)
         settings = self.client.post(

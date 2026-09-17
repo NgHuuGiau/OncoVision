@@ -6,10 +6,45 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>OncoVision AI Workstation</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script>const savedTheme=localStorage.getItem('theme')||'system';document.documentElement.classList.toggle('light',savedTheme==='light'||(savedTheme==='system'&&matchMedia('(prefers-color-scheme: light)').matches));</script>
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body data-role="{{ current_user.role }}">
 
+{% if current_user.role != 'admin' %}
+<header class="workflow-header">
+  <div><strong>OncoVision AI</strong><span>· {% if current_user.role == 'clinician' %}Khu vực nhân viên y tế{% else %}Tra cứu kết quả{% endif %}</span></div>
+  <div class="workflow-actions">
+    <button type="button" class="theme-btn" onclick="toggleAuthTheme()">◐ Giao diện sáng/tối</button>
+    <span>{{ current_user.username }}</span>
+    <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="workflow-secondary">Đăng xuất</button></form>
+  </div>
+</header>
+{% if current_user.role == 'clinician' %}
+<main class="workflow-page">
+  <h1>Duyệt kết quả phân tích</h1>
+  <p class="workflow-lead">Chỉ các ca được quản trị viên phân công cho bạn mới xuất hiện. Kiểm tra kết quả AI, chỉnh sửa nhận định và khuyến nghị, sau đó xác nhận duyệt.</p>
+  <div class="workflow-grid">
+    <section class="workflow-panel"><h2>Ca được giao</h2><div id="workflowCaseList" class="workflow-case-list"><p>Đang tải danh sách ca…</p></div></section>
+    <section class="workflow-panel" id="workflowDetail"><h2>Thông tin ca</h2><p class="workflow-muted">Chọn một ca để kiểm tra.</p></section>
+  </div>
+</main>
+{% else %}
+<main class="workflow-page public-reader">
+  <h1>Tra cứu kết quả đã được duyệt</h1>
+  <p class="workflow-lead">Nhập mã tra cứu do nhân viên y tế cung cấp. Chỉ kết quả đã duyệt mới có thể xem hoặc tải xuống.</p>
+  <form id="publicCaseSearch" class="public-search-form">
+    <label for="publicCaseCode">Mã tra cứu</label>
+    <div><input id="publicCaseCode" name="code" maxlength="10" minlength="10" pattern="[A-Za-z0-9]{10}" autocomplete="off" required><button type="submit">Tra cứu</button></div>
+    <p id="publicCaseError" class="workflow-error" role="alert" hidden></p>
+  </form>
+  <section id="publicCaseResult" class="workflow-panel" hidden aria-live="polite"></section>
+  <p class="workflow-disclaimer">Kết quả AI chỉ mang tính hỗ trợ sàng lọc, không thay thế chẩn đoán hoặc tư vấn của bác sĩ.</p>
+</main>
+{% endif %}
+{% endif %}
+
+{% if current_user.role == 'admin' %}
 <header class="app-header">
   <div class="header-left">
     <div class="header-logo">
@@ -57,6 +92,7 @@
       <div class="history-panel" id="historyPanel"></div>
     </div>
     <div class="sidebar-footer">
+      <button class="settings-btn" onclick="openCaseAssignment()" style="margin-bottom:8px"><span>Phân công ca bệnh</span></button>
       <button class="settings-btn" onclick="openCompare()" style="margin-bottom:8px">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="12" rx="1"/></svg>
         <span>So sánh ca bệnh</span>
@@ -226,6 +262,15 @@
 
 <div class="plus-menu" id="plusMenu" style="display:none"></div>
 
+<div class="modal-overlay" id="caseAssignmentModal">
+  <div class="modal" style="max-width:900px">
+    <button class="modal-close" onclick="closeCaseAssignment()" aria-label="Đóng">✕</button>
+    <h2>Phân công ca bệnh</h2>
+    <p class="workflow-muted">Chọn nhân viên y tế phụ trách. Chuyển người phụ trách sẽ đưa kết quả về trạng thái chờ duyệt và thu hồi mã tra cứu cũ.</p>
+    <div id="assignmentCaseList" class="workflow-case-list"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="imagePreviewModal" style="display:none">
   <div class="modal" style="min-width:auto;max-width:90vw;text-align:center;padding:16px">
     <button class="modal-close" onclick="closeImagePreview()">✕</button>
@@ -247,6 +292,7 @@
     <div id="compareResultView" style="display:none"></div>
   </div>
 </div>
+{% endif %}
 
 <script>
   const _nativeFetch = window.fetch.bind(window);
@@ -262,7 +308,9 @@
     });
   };
   window.CANCER_TARGETS = {{ cancer_targets|safe }};
+  window.USER_ROLE = "{{ current_user.role }}";
 </script>
-<script src="/static/js/app.js"></script>
+{% if current_user.role == 'admin' %}<script src="/static/js/app.js"></script>{% else %}<script src="/static/js/auth-theme.js"></script>{% endif %}
+<script src="/static/js/case-workflow.js"></script>
 </body>
 </html>
