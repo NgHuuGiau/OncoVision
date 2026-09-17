@@ -5,6 +5,7 @@
 }
 
 :root {
+  color-scheme: dark;
   --bg-primary: #090d16;
   --bg-secondary: #0f172a;
   --bg-tertiary: #1e293b;
@@ -29,6 +30,7 @@
 }
 
 .light {
+  color-scheme: light;
   --bg-primary: #f5f8fc;
   --bg-secondary: #ffffff;
   --bg-tertiary: #edf3f8;
@@ -56,6 +58,7 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   height: 100vh;
+  min-width: 1024px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -778,10 +781,10 @@ body[data-role="viewer"] .viewer-readonly-notice { display: block; }
   text-transform: uppercase;
   color: #fff;
 }
-.risk-high { background: #dc2626; }
-.risk-medium { background: #f59e0b; }
-.risk-low { background: #16a34a; }
-.risk-uncertain { background: #6b7280; }
+.risk-high { background: #b91c1c; }
+.risk-medium { background: #92400e; }
+.risk-low { background: #166534; }
+.risk-uncertain { background: #4b5563; }
 .result-stats { display: flex; gap: 0; border-bottom: 1px solid var(--border-color); }
 .result-stat { flex: 1; text-align: center; padding: 8px 4px; border-right: 1px solid var(--border-color); }
 .result-stat:last-child { border-right: none; }
@@ -1145,59 +1148,73 @@ body[data-role="viewer"] .viewer-readonly-notice { display: block; }
   cursor: pointer;
 }
 
-/* Responsive Rules */
-@media (max-width: 992px) {
-  .app-container {
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .sidebar {
-    width: 100%;
-    height: 220px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-  }
-  .sidebar.collapsed {
-    height: 0;
-    width: 100%;
-    border-bottom: none;
-  }
-  .medical-viewer {
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-    min-height: 380px;
-  }
-  .ai-assistant {
-    min-height: 480px;
-  }
+body[data-role="clinician"],
+body[data-role="viewer"] {
+  display: block;
+  height: auto;
+  min-height: 100vh;
+  overflow: auto;
 }
+body[data-role="clinician"] .app-header,
+body[data-role="clinician"] .app-container,
+body[data-role="viewer"] .app-header,
+body[data-role="viewer"] .app-container { display: none; }
 
-@media (max-width: 640px) {
-  .app-header {
-    padding: 0 12px;
-    height: 56px;
-  }
-  .header-title-group p {
-    display: none;
-  }
-  .system-pulse span:last-child {
-    display: none;
-  }
-  .theme-btn {
-    padding: 4px 6px;
-    font-size: 11px;
-  }
-  .pacs-screen {
-    margin: 8px;
-    min-height: 280px;
-  }
-  .compare-grid {
-    grid-template-columns: 1fr;
-  }
-  .composer {
-    padding: 10px;
-  }
-  .presets-container {
-    display: none;
-  }
+.workflow-header {
+  min-width: 1024px;
+  height: 68px;
+  padding: 0 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
+.workflow-header strong { color: var(--accent); font-size: 18px; }
+.workflow-header span { color: var(--text-secondary); }
+.workflow-actions { display: flex; align-items: center; gap: 18px; }
+.workflow-actions form { margin: 0; }
+.workflow-secondary,
+.workflow-primary,
+.public-search-form button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.workflow-primary,
+.public-search-form button { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 650; }
+.workflow-page { width: min(1440px, calc(100% - 64px)); margin: 34px auto; }
+.workflow-page h1 { margin-bottom: 8px; font-size: 28px; }
+.workflow-lead, .workflow-muted { color: var(--text-secondary); line-height: 1.6; }
+.workflow-grid { display: grid; grid-template-columns: minmax(320px, .8fr) minmax(560px, 1.2fr); gap: 18px; margin-top: 24px; align-items: start; }
+.workflow-panel { padding: 22px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); }
+.workflow-panel h2 { margin-bottom: 14px; font-size: 18px; }
+.workflow-case-list { display: grid; gap: 10px; }
+.workflow-case-item { width: 100%; padding: 14px; display: grid; gap: 7px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-primary); color: var(--text-primary); text-align: left; cursor: pointer; }
+.workflow-case-item:hover, .workflow-case-item.selected { border-color: var(--accent); }
+.workflow-case-meta { color: var(--text-muted); font-size: 12px; }
+.workflow-status { color: var(--text-secondary); font-size: 12px; }
+.workflow-review-image { display: block; width: 100%; max-height: 360px; margin: 14px 0; border-radius: 8px; background: #040810; object-fit: contain; }
+.workflow-form { display: grid; gap: 13px; }
+.workflow-form label, .assignment-row label { display: grid; gap: 6px; color: var(--text-secondary); }
+.workflow-form input, .workflow-form select, .workflow-form textarea, .assignment-row select, .public-search-form input {
+  width: 100%; min-height: 40px; padding: 9px 11px; border: 1px solid var(--border-color); border-radius: 8px;
+  background: var(--bg-primary); color: var(--text-primary); font: inherit;
+}
+.workflow-form textarea { min-height: 125px; resize: vertical; }
+.workflow-form .workflow-check { display: flex; align-items: center; gap: 9px; }
+.workflow-form .workflow-check input { width: 18px; min-height: 18px; }
+.workflow-error { margin-top: 10px; color: var(--error); }
+.workflow-success { margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--success-light); color: var(--success); }
+.assignment-row { display: grid; grid-template-columns: 1fr 260px auto; gap: 12px; align-items: end; padding: 14px 0; border-bottom: 1px solid var(--border-color); }
+.public-reader { max-width: 760px; margin-top: 70px; }
+.public-search-form { margin: 26px 0 18px; padding: 22px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); }
+.public-search-form label { display: block; margin-bottom: 8px; color: var(--text-secondary); }
+.public-search-form > div { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.public-search-form input { text-transform: uppercase; letter-spacing: .12em; }
+.public-report-risk { margin: 10px 0; color: var(--accent); font-weight: 700; }
+.workflow-disclaimer { margin-top: 16px; color: var(--text-muted); font-size: 13px; }

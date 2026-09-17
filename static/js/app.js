@@ -88,7 +88,7 @@ function translateUI() {
   if (searchInput) searchInput.placeholder = t('search');
   const histTitle = document.querySelector('.history-title');
   if (histTitle) histTitle.textContent = t('history');
-  const settingsBtnSpan = document.querySelector('.settings-btn span');
+  const settingsBtnSpan = document.querySelector('.settings-btn[onclick="openSettings()"] span');
   if (settingsBtnSpan) settingsBtnSpan.textContent = t('settings');
   const msgInput = document.getElementById('messageInput');
   if (msgInput) msgInput.placeholder = t('input_placeholder');
@@ -132,6 +132,7 @@ function applyThemeMode() {
   const mode = currentTheme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
     : currentTheme;
+  document.documentElement.classList.toggle('light', mode === 'light');
   document.body.classList.toggle('light', mode === 'light');
 }
 

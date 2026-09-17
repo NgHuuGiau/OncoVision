@@ -39,6 +39,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 body {
+  min-width: 1024px;
   min-height: 100vh;
   margin: 0;
   background: radial-gradient(ellipse at 50% -20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 54%), var(--page);
@@ -132,14 +133,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .status.off { color: #b42335; }
 [data-theme="dark"] .status.off { color: #fda4af; }
 .admin-hint { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
-@media (max-width: 720px) {
-  .auth-shell { padding: 24px; }
-  .admin-shell { padding: 20px; }
-  .admin-header { align-items: flex-start; flex-direction: column; }
-  .admin-nav { flex-wrap: wrap; }
-  .admin-grid { grid-template-columns: 1fr; }
-  .row-form { grid-template-columns: 1fr; }
-}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }

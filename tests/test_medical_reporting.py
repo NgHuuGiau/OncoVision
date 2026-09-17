@@ -5,7 +5,11 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from medical.reporting import update_case_report_case_id, write_case_report
+from medical.reporting import (
+    _pdf_report_html,
+    update_case_report_case_id,
+    write_case_report,
+)
 
 
 class MedicalReportingTests(unittest.TestCase):
@@ -74,3 +78,24 @@ class MedicalReportingTests(unittest.TestCase):
             self.assertIn("OncoVision", html_text)
             self.assertIn("Case Report", html_text)
             self.assertIn("overlay.jpg", html_text)
+
+    def test_pdf_summary_is_vietnamese_and_marks_reviewed_results(self) -> None:
+        report = _pdf_report_html({
+            "case_id": 17,
+            "patient_code": "BN017",
+            "risk_level": "medium",
+            "suspected_malignant": False,
+            "model_name": "Kết quả đã được nhân viên y tế duyệt",
+            "recommendation": "Tiếp tục theo dõi.",
+            "review_status": "approved",
+            "reviewed_at": "2026-09-18 10:30",
+            "source_image": "",
+            "processed_image": "",
+            "quality_warnings": [],
+            "detections": [],
+        })
+        self.assertIn("Báo cáo kết quả phân tích hình ảnh y khoa", report)
+        self.assertIn("Mức nguy cơ:</strong> Trung bình", report)
+        self.assertIn("Đã được nhân viên y tế duyệt", report)
+        self.assertIn("Tiếp tục theo dõi.", report)
+        self.assertNotIn("D:\\OncoVision", report)

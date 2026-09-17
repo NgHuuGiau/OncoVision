@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,30 @@ from medical.compliance import MEDICAL_DISCLAIMER
 
 def build_artifact_stamp() -> str:
     return f"{datetime.now():%Y%m%d_%H%M%S_%f}_{uuid4().hex[:8]}"
+
+
+def _risk_label(value: Any) -> str:
+    return {"high": "Cao", "medium": "Trung bình", "low": "Thấp", "uncertain": "Chưa xác định"}.get(
+        str(value).lower(), "Chưa xác định"
+    )
+
+
+def _reportlab_font_name() -> str:
+    candidates = (
+        Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf",
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    )
+    for path in candidates:
+        if path.is_file():
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+
+            name = "OncoVisionSans"
+            if name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(name, str(path)))
+            pdfmetrics.registerFontFamily(name, normal=name, bold=name, italic=name, boldItalic=name)
+            return name
+    return "Helvetica"
 
 
 def _as_file_uri(path_value: str | Path | None) -> str | None:
@@ -160,6 +185,9 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
     TA_LEFT = mods["TA_LEFT"]
 
     styles = getSampleStyleSheet()
+    report_font = _reportlab_font_name()
+    for style_name in ("Normal", "Title", "Heading1", "Heading2", "BodyText"):
+        styles[style_name].fontName = report_font
     title_style = ParagraphStyle("TitleStyle", parent=styles["Title"], textColor=colors.HexColor("#0f172a"))
     heading_style = ParagraphStyle("HeadingStyle", parent=styles["Heading2"], textColor=colors.HexColor("#0f172a"))
     body_style = ParagraphStyle("BodyStyle", parent=styles["BodyText"], alignment=TA_LEFT)
@@ -188,12 +216,17 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
     quality_warnings = payload.get("quality_warnings", [])
 
     summary_data = [
-        ["Case ID", str(payload.get("case_id", "-"))],
-        ["Risk level", str(payload.get("risk_level", "-"))],
-        ["Suspected malignant", str(payload.get("suspected_malignant", False))],
-        ["Model", str(payload.get("model_name", "-"))],
-        ["Recommendation", str(payload.get("recommendation", "-"))],
+        ["Mã ca bệnh", str(payload.get("patient_code") or payload.get("case_id", "-"))],
+        ["Mức nguy cơ", _risk_label(payload.get("risk_level"))],
+        ["Nghi ngờ ác tính", "Có" if payload.get("suspected_malignant") else "Không"],
+        ["Mô hình", str(payload.get("model_name", "-"))],
+        ["Khuyến nghị", str(payload.get("recommendation", "-"))],
     ]
+    if payload.get("review_status") == "approved":
+        summary_data.extend([
+            ["Trạng thái", "Đã được nhân viên y tế duyệt"],
+            ["Ngày duyệt", str(payload.get("reviewed_at") or "-")],
+        ])
     summary_table = Table([[Paragraph(f"<b>{k}</b>", body_style), Paragraph(html.escape(v), body_style)] for k, v in summary_data], colWidths=[5 * cm, 11 * cm])
     summary_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eff6ff")),
@@ -205,7 +238,7 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
 
-    findings_rows = [[Paragraph("<b>Label</b>", body_style), Paragraph("<b>Confidence</b>", body_style), Paragraph("<b>BBox</b>", body_style)]]
+    findings_rows = [[Paragraph("<b>Vùng nghi ngờ</b>", body_style), Paragraph("<b>Độ tin cậy</b>", body_style), Paragraph("<b>Vị trí</b>", body_style)]]
     if detections:
         for item in detections:
             findings_rows.append([
@@ -229,17 +262,17 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
     warning_items = "".join(f"<br/>&bull; {html.escape(str(w))}" for w in quality_warnings) or "Không có cảnh báo chất lượng ảnh."
 
     story = [
-        Paragraph("Medical Imaging Case Report", title_style),
+        Paragraph("Báo cáo kết quả phân tích hình ảnh y khoa", title_style),
         Spacer(1, 0.4 * cm),
         summary_table,
         Spacer(1, 0.4 * cm),
-        Paragraph("Findings", heading_style),
+        Paragraph("Kết quả phát hiện", heading_style),
         findings_table,
         Spacer(1, 0.4 * cm),
-        Paragraph("Image Quality", heading_style),
+        Paragraph("Chất lượng ảnh", heading_style),
         Paragraph(warning_items, body_style),
         PageBreak(),
-        Paragraph("Legal Notice", heading_style),
+        Paragraph("Lưu ý quan trọng", heading_style),
         Paragraph(html.escape(str(payload.get("disclaimer", MEDICAL_DISCLAIMER))), disclaimer_style),
     ]
 
@@ -295,8 +328,8 @@ def _html_report(payload: dict[str, Any]) -> str:
         if gradcam_sections else ""
     )
     risk = payload.get('risk_level', 'unknown')
-    risk_colors = {"high": "#dc2626", "medium": "#f59e0b", "low": "#16a34a", "uncertain": "#6b7280"}
-    risk_color = risk_colors.get(risk, "#6b7280")
+    risk_colors = {"high": "#b91c1c", "medium": "#92400e", "low": "#166534", "uncertain": "#4b5563"}
+    risk_color = risk_colors.get(risk, "#4b5563")
     return f"""<!DOCTYPE html>
 <html lang=\"vi\">
 <head>
@@ -331,7 +364,6 @@ def _html_report(payload: dict[str, Any]) -> str:
     .warning-list li::before {{ content: '⚠️ '; }}
     .disclaimer {{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px; font-size: 12px; color: #991b1b; }}
     .disclaimer h2 {{ font-size: 13px; color: #991b1b; border: none; padding: 0; margin-bottom: 6px; }}
-    @media (max-width: 640px) {{ .grid-2 {{ grid-template-columns: 1fr; }} }}
   </style>
 </head>
 <body>
@@ -423,7 +455,7 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
 <html lang=\"vi\">
 <head>
   <meta charset=\"utf-8\" />
-  <title>Medical Imaging Case Report</title>
+  <title>Báo cáo kết quả phân tích hình ảnh y khoa</title>
   <style>
     @page {{
       size: A4;
@@ -453,26 +485,27 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
   </style>
 </head>
 <body>
-  <h1>Medical Imaging Case Report</h1>
+  <h1>Báo cáo kết quả phân tích hình ảnh y khoa</h1>
   <div class=\"summary\">
-    <p><strong>Case ID:</strong> {html.escape(str(payload.get('case_id', '-')))}</p>
-    <p><strong>Risk level:</strong> {html.escape(str(payload.get('risk_level', '-')))}</p>
-    <p><strong>Suspected malignant:</strong> {html.escape(str(payload.get('suspected_malignant', False)))}</p>
-    <p><strong>Model:</strong> {html.escape(str(payload.get('model_name', '-')))}</p>
-    <p><strong>Recommendation:</strong> {html.escape(str(payload.get('recommendation', '-')))}</p>
+    <p><strong>Mã ca bệnh:</strong> {html.escape(str(payload.get('patient_code') or payload.get('case_id', '-')))}</p>
+    <p><strong>Mức nguy cơ:</strong> {html.escape(_risk_label(payload.get('risk_level')))}</p>
+    <p><strong>Nghi ngờ ác tính:</strong> {'Có' if payload.get('suspected_malignant') else 'Không'}</p>
+    <p><strong>Mô hình:</strong> {html.escape(str(payload.get('model_name', '-')))}</p>
+    <p><strong>Khuyến nghị:</strong> {html.escape(str(payload.get('recommendation', '-')))}</p>
+    {f"<p><strong>Trạng thái:</strong> Đã được nhân viên y tế duyệt</p><p><strong>Ngày duyệt:</strong> {html.escape(str(payload.get('reviewed_at') or '-'))}</p>" if payload.get('review_status') == 'approved' else ''}
   </div>
-  <h2>Findings</h2>
+  <h2>Kết quả phát hiện</h2>
   <table>
-    <thead><tr><th>Label</th><th>Confidence</th><th>BBox</th></tr></thead>
+    <thead><tr><th>Vùng nghi ngờ</th><th>Độ tin cậy</th><th>Vị trí</th></tr></thead>
     <tbody>{findings_rows}</tbody>
   </table>
-  <h2>Image Quality</h2>
+  <h2>Chất lượng ảnh</h2>
   <ul>{warning_rows}</ul>
   <div class=\"image-grid\">{source_section}{processed_section}</div>
   {gradcam_block}
   <div class=\"page-break\"></div>
   <div class=\"disclaimer\">
-    <h2>Legal Notice</h2>
+    <h2>Lưu ý quan trọng</h2>
     <p>{disclaimer_text}</p>
   </div>
 </body>
