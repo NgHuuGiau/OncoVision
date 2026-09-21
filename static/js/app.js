@@ -152,26 +152,33 @@ function initTargets() {
   CANCER_TARGETS.forEach(target => {
     const o = document.createElement('option');
     o.value = target.key;
-    o.textContent = target.label;
+    o.disabled = !target.model_ready;
+    o.textContent = target.label + (target.model_ready ? '' : ' — chưa sẵn sàng');
     s.appendChild(o);
   });
-  updateModalities();
-  s.onchange = () => {
-    const found = CANCER_TARGETS.find(x => x.key === s.value);
-    if (found) {
-      updateModalityList(found.modalities);
-      const th = document.getElementById('targetHint');
-      if (th) th.textContent = 'Ảnh thường dùng: ' + found.modalities.join(', ');
-    }
-  };
-  s.onchange();
+  const firstReady = CANCER_TARGETS.find(target => target.model_ready);
+  if (!firstReady) {
+    s.disabled = true;
+    return;
+  }
+  s.value = firstReady.key;
+  s.onchange = updateTargetSelection;
+  updateTargetSelection();
 }
 
-function updateModalities() {
-  const first = CANCER_TARGETS[0];
-  if (first) updateModalityList(first.modalities);
+function selectedTarget() {
+  const s = document.getElementById('targetSelect');
+  return CANCER_TARGETS.find(target => target.key === (s ? s.value : ''));
+}
+
+function updateTargetSelection() {
+  const target = selectedTarget();
+  if (!target) return;
+  updateModalityList(target.modalities);
   const th = document.getElementById('targetHint');
-  if (th) th.textContent = 'Ảnh thường dùng: ' + (first ? first.modalities.join(', ') : '');
+  if (th) th.textContent = target.model_ready
+    ? 'Ảnh thường dùng: ' + target.modalities.join(', ')
+    : (target.notes || 'Nhóm bệnh này chưa có model suy luận tích hợp.');
 }
 
 function updateModalityList(modalities) {
@@ -579,11 +586,16 @@ function removeAttachment(i) {
 async function triggerAIScreening() {
   if (isAnalyzing) return;
   const input = document.getElementById('messageInput');
-  const targetSelect = document.getElementById('targetSelect');
+  const selected = selectedTarget();
   const modalitySelect = document.getElementById('modalitySelect');
-  const target = targetSelect ? targetSelect.value : '';
   const modality = modalitySelect ? modalitySelect.value : '';
-  const prompt = (input && input.value.trim()) || `Hãy sàng lọc y khoa cho ảnh này với nhóm bệnh ${target} bằng modality ${modality}.`;
+  if (!selected || !selected.model_ready) {
+    alert('Nhóm bệnh này chưa có model suy luận tích hợp.');
+    return;
+  }
+  if (input && !input.value.trim()) {
+    input.value = `Hãy sàng lọc y khoa cho ảnh này với nhóm bệnh ${selected.label} bằng modality ${modality}.`;
+  }
 
   if (pendingAttachments.length === 0) {
     const pacsActiveImage = document.getElementById('pacsActiveImage');
@@ -681,6 +693,10 @@ async function sendMessage() {
       const fd = new URLSearchParams();
       fd.append('image_path', att.path);
       fd.append('user_prompt', prompt);
+      const target = selectedTarget();
+      if (!target || !target.model_ready) throw new Error('Nhóm bệnh chưa có model suy luận tích hợp.');
+      fd.append('target_key', target.key);
+      fd.append('modality', document.getElementById('modalitySelect')?.value || '');
       if (c.id) fd.append('conversation_id', c.id);
 
       let analysisOk = false;

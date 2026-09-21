@@ -176,6 +176,13 @@ class WebAuthTests(unittest.TestCase):
         self.assertEqual(bad.status_code, 401)
         self.assertEqual(self.client.post("/api/conversations").status_code, 401)
 
+    def test_authenticated_responses_include_security_headers(self) -> None:
+        response = self.client.get("/api/status")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
     def test_forgot_password_page_is_public_and_resets_password(self) -> None:
         self.client.post("/logout", headers={"X-CSRF-Token": self.csrf})
         page = self.client.get("/forgot-password")
@@ -257,7 +264,7 @@ class WebAuthTests(unittest.TestCase):
             data={"language": "en", "theme": "light"},
             headers={"X-CSRF-Token": csrf},
         )
-        self.assertEqual(settings.status_code, 200)
+        self.assertEqual(settings.status_code, 403)
         self.assertEqual(web_app.get_db().get_setting("language", "vi"), "vi")
         self.assertEqual(self.client.get("/admin/users").status_code, 403)
 
@@ -329,7 +336,7 @@ class WebAuthTests(unittest.TestCase):
         ):
             response = self.client.post(
                 "/api/upload",
-                files={"file": ("../../escape.png", b"test image bytes", "image/png")},
+                files={"file": ("../../escape.png", b"\x89PNG\r\n\x1a\n" + b"test image bytes", "image/png")},
                 headers={"X-CSRF-Token": self.csrf},
             )
         self.assertEqual(response.status_code, 200)

@@ -26,6 +26,19 @@ class ChatStorageTests(unittest.TestCase):
             self.assertEqual([message.text for message in conversations[0].messages], ["new-1"])
             self.assertEqual([message.text for message in conversations[1].messages], ["old-1", "old-2"])
 
+    def test_get_all_conversations_only_loads_messages_for_requested_page(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = ChatDatabase(str(Path(temp_dir) / "chat.db"))
+            older_id = db.create_conversation("Older", "Yesterday")
+            newer_id = db.create_conversation("Newer", "Today")
+            db.add_message(older_id, ChatMessage(sender="user", text="old"))
+            db.add_message(newer_id, ChatMessage(sender="user", text="new"))
+
+            page = db.get_all_conversations(limit=1, offset=0)
+
+            self.assertEqual([conversation.title for conversation in page], ["Newer"])
+            self.assertEqual([message.text for message in page[0].messages], ["new"])
+
     def test_delete_conversation_cascades_to_messages(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "chat.db"

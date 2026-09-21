@@ -91,6 +91,14 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertIn('id="caseAssignmentModal"', response.text)
         self.assertIn('id="lightBtn"', response.text)
 
+    def test_analyze_rejects_target_without_runtime_model(self) -> None:
+        response = self.client.post(
+            "/api/analyze",
+            data={"image_path": "not-used", "target_key": "thyroid"},
+            headers={"X-CSRF-Token": self.csrf},
+        )
+        self.assertEqual(response.status_code, 409)
+
     def test_get_missing_case_returns_404(self) -> None:
         self.assertEqual(self.client.get("/api/cases/9999").status_code, 404)
 
@@ -111,7 +119,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(clinician.get("/api/cases/9999").status_code, 404)
         self.assertEqual(clinician.post(
             "/api/analyze", data={"image_path": "not-used"}, headers={"X-CSRF-Token": clinician_csrf}
-        ).status_code, 403)
+        ).status_code, 400)
         self.assertEqual(clinician.get(f"/api/cases/{self.case_id}/image").status_code, 404)
         approved = clinician.post(
             f"/api/cases/{self.case_id}/review",

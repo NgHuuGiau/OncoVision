@@ -183,19 +183,26 @@ class ChatDatabase:
         with self._connect() as conn:
             conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
 
-    def get_all_conversations(self) -> list[Conversation]:
+    def get_all_conversations(self, *, limit: int = 50, offset: int = 0) -> list[Conversation]:
+        limit = max(1, min(int(limit), 200))
+        offset = max(0, int(offset))
         try:
             with self._connect() as conn:
                 conversation_rows = conn.execute(
-                    "SELECT id, title, subtitle FROM conversations ORDER BY id DESC"
+                    "SELECT id, title, subtitle FROM conversations ORDER BY id DESC LIMIT ? OFFSET ?",
+                    (limit, offset),
                 ).fetchall()
-                message_rows = conn.execute(
-                    """
-                    SELECT conversation_id, sender, text, attachment_path, attachment_kind, metadata_json, id
-                    FROM messages
-                    ORDER BY conversation_id ASC, id ASC
-                    """
-                ).fetchall()
+                conversation_ids = [row[0] for row in conversation_rows]
+                if conversation_ids:
+                    placeholders = ", ".join("?" for _ in conversation_ids)
+                    message_rows = conn.execute(
+                        "SELECT conversation_id, sender, text, attachment_path, attachment_kind, metadata_json, id "
+                        f"FROM messages WHERE conversation_id IN ({placeholders}) "
+                        "ORDER BY conversation_id ASC, id ASC",
+                        conversation_ids,
+                    ).fetchall()
+                else:
+                    message_rows = []
         except sqlite3.Error:
             logger.exception("Failed to load conversations from chat history database")
             return []

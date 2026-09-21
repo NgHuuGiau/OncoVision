@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -32,7 +33,7 @@ from app.web_auth import (
     hash_password,
     hash_recovery_code,
 )
-from medical.cancer_catalog import COMMON_CANCER_TARGETS
+from medical.cancer_catalog import COMMON_CANCER_TARGETS, get_cancer_target
 from medical.case_payloads import build_case_export_payload
 from medical.chat_service import MedicalChatResponse, MedicalChatService
 from medical.compliance import MEDICAL_DISCLAIMER
@@ -50,6 +51,7 @@ WEB_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 _UPLOAD_CHUNK_BYTES = 1024 * 1024
 MAX_FORM_BYTES = 1024 * 1024
+ANALYSIS_SEMAPHORE = threading.BoundedSemaphore(1)
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -124,9 +126,19 @@ def require_role(*roles: str):
 
 
 ADMIN_REQUIRED = Depends(require_role("admin"))
-SESSION_SECRET = os.environ.get("ONCOVISION_SESSION_SECRET") or secrets.token_urlsafe(32)
+STAFF_REQUIRED = Depends(require_role("admin", "clinician"))
+IS_PRODUCTION = os.environ.get("ONCOVISION_ENV", "").lower() in {"prod", "production"}
+COOKIE_SECURE = os.environ.get("ONCOVISION_COOKIE_SECURE", "0") == "1"
+if (env_secret := os.environ.get("ONCOVISION_SESSION_SECRET")):
+    SESSION_SECRET = env_secret
+else:
+    if IS_PRODUCTION:
+        raise RuntimeError("Thiếu ONCOVISION_SESSION_SECRET ở môi trường production.")
+    SESSION_SECRET = secrets.token_urlsafe(32)
 if len(SESSION_SECRET) < 32:
     raise RuntimeError("ONCOVISION_SESSION_SECRET phải dài ít nhất 32 ký tự.")
+if IS_PRODUCTION and not COOKIE_SECURE:
+    raise RuntimeError("Production yêu cầu ONCOVISION_COOKIE_SECURE=1 để bảo vệ cookie phiên.")
 
 
 app = FastAPI(
@@ -143,7 +155,7 @@ app.add_middleware(
     session_cookie="oncovision_session",
     max_age=8 * 60 * 60,
     same_site="lax",
-    https_only=os.environ.get("ONCOVISION_COOKIE_SECURE", "0") == "1",
+    https_only=COOKIE_SECURE,
 )
 
 
@@ -161,6 +173,20 @@ async def limit_request_size(request: Request, call_next):
         if request_length > max_length:
             return JSONResponse({"detail": "Yêu cầu vượt quá dung lượng cho phép."}, status_code=413)
     return await call_next(request)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    if request.url.path.startswith(("/api/", "/output/")):
+        response.headers.setdefault("Cache-Control", "no-store")
+    if IS_PRODUCTION:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -471,7 +497,34 @@ async def _save_upload(file: UploadFile, dest: Path) -> int:
     return size
 
 
-@app.post("/api/upload", dependencies=[ADMIN_REQUIRED])
+def _has_allowed_magic(path: Path, filename: str) -> bool:
+    # ponytail: sniff vài magic bytes, không thay thế validator y khoa đầy đủ
+    try:
+        with open(path, "rb") as f:
+            head = f.read(280)
+    except OSError:
+        return False
+    lower = filename.lower()
+    if lower.endswith((".nii", ".nii.gz")):
+        return head[:2] == b"\x1f\x8b" or len(head) > 0
+    if lower.endswith(".dcm") or head[128:132] == b"DICM":
+        return True
+    img_magic = (b"\xff\xd8\xff", b"\x89PNG", b"BM", b"II*\x00", b"MM\x00*", b"RIFF", b"\x49\x49\x2b\x00")
+    return head.startswith(img_magic)
+
+
+def _require_ready_target(target_key: str, modality: str):
+    target = get_cancer_target(target_key)
+    if target is None:
+        raise HTTPException(status_code=400, detail="Nhóm bệnh không hợp lệ.")
+    if not target.model_ready:
+        raise HTTPException(status_code=409, detail=f"{target.label} chưa có model suy luận tích hợp.")
+    if modality and modality not in target.modalities:
+        raise HTTPException(status_code=400, detail="Modality không phù hợp với nhóm bệnh đã chọn.")
+    return target
+
+
+@app.post("/api/upload", dependencies=[STAFF_REQUIRED])
 async def upload_file(request: Request):
     raw_length = request.headers.get("content-length")
     if raw_length is None:
@@ -497,6 +550,9 @@ async def upload_file(request: Request):
         WEB_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
         stored_path = WEB_UPLOADS_DIR / safe_name
         size_bytes = await _save_upload(file, stored_path)
+        if not _has_allowed_magic(stored_path, filename):
+            stored_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="Nội dung file không khớp định dạng cho phép.")
         upload_id = get_db().add_web_upload(
             filename=filename,
             stored_path=str(stored_path),
@@ -505,7 +561,7 @@ async def upload_file(request: Request):
         )
 
         target_key, modality = infer_medical_upload_context(str(stored_path))
-        logger.info("Da upload file: %s (%d bytes), context: %s / %s", filename, size_bytes, target_key, modality)
+        logger.info("Da upload medical file (%d bytes), context: %s / %s", size_bytes, target_key, modality)
         return {
             "ok": True,
             "upload_id": upload_id,
@@ -519,29 +575,38 @@ async def upload_file(request: Request):
         await form.close()
 
 
-@app.post("/api/analyze", dependencies=[ADMIN_REQUIRED])
+@app.post("/api/analyze", dependencies=[STAFF_REQUIRED])
 def analyze_image(
     image_path: str = Form(""),
     patient_code: str = Form("WEB"),
     user_prompt: str = Form(""),
     conversation_id: int = Form(0),
+    target_key: str = Form("brain"),
+    modality: str = Form(""),
 ):
+    target = _require_ready_target(target_key, modality)
     if not image_path or not image_path.strip():
         raise HTTPException(status_code=400, detail="Thieu file anh.")
     stored = _safe_path(OUTPUT_DIR, image_path)
     if stored is None:
         raise HTTPException(status_code=400, detail=f"Không tìm thấy file hợp lệ: {image_path}")
     pc = patient_code or f"WEB-{uuid.uuid4().hex[:8].upper()}"
+    if not ANALYSIS_SEMAPHORE.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Hệ thống đang phân tích một ca khác. Vui lòng thử lại sau.")
     try:
         service = get_medical_service()
         response: MedicalChatResponse = service.analyze_attachment(
             image_path=str(stored),
             patient_code=pc,
             user_prompt=user_prompt,
+            target_key=target.key,
+            modality=modality or None,
         )
-    except Exception as exc:
-        logger.exception("Phân tích ảnh thất bại: %s", stored)
-        raise HTTPException(status_code=500, detail=f"Lỗi phân tích: {exc}")
+    except Exception:
+        logger.exception("Phân tích ảnh thất bại.")
+        raise HTTPException(status_code=500, detail="Không thể phân tích ảnh. Vui lòng thử lại hoặc kiểm tra nhật ký hệ thống.")
+    finally:
+        ANALYSIS_SEMAPHORE.release()
     metadata = json.loads(response.metadata_json) if response.metadata_json else {}
 
     if conversation_id and get_db().conversation_exists(conversation_id):
@@ -605,15 +670,19 @@ def _case_summary(record) -> dict:
         "reviewed_by": record.reviewed_by,
         "reviewed_at": record.reviewed_at,
         "public_code": record.public_code,
+        "modality": record.metadata.get("modality"),
+        "body_region": record.metadata.get("body_region"),
     }
 
 
 @app.get("/api/cases")
-def list_cases(request: Request):
+def list_cases(request: Request, limit: int = 50, offset: int = 0):
     user = request.state.current_user
     if user.role == "viewer":
         return {"ok": True, "cases": []}
-    cases = get_case_db().list_cases(assigned_to=user.username if user.role == "clinician" else None)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    cases = get_case_db().list_cases(assigned_to=user.username if user.role == "clinician" else None, limit=limit, offset=offset)
     cases = [_case_summary(record) for record in cases]
     return {"ok": True, "cases": cases}
 
@@ -766,8 +835,10 @@ def download_case_pdf(case_id: int, request: Request):
 
 
 @app.get("/api/conversations", dependencies=[ADMIN_REQUIRED])
-async def list_conversations():
-    convs = get_db().get_all_conversations()
+async def list_conversations(limit: int = 50, offset: int = 0):
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    convs = get_db().get_all_conversations(limit=limit, offset=offset)
     result = []
     for conv in convs:
         msgs = []
@@ -860,7 +931,7 @@ async def get_settings():
 @app.post("/api/settings")
 async def save_settings(request: Request, language: str = Form("vi"), theme: str = Form("system")):
     if request.state.current_user.role == "viewer":
-        return {"ok": True}
+        raise HTTPException(status_code=403, detail="Tài khoản chỉ có quyền xem.")
     db = get_db()
     db.set_setting("language", language)
     db.set_setting("theme", theme)
