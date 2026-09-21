@@ -82,7 +82,7 @@ def _request_csrf_token(request: Request) -> str:
 
 
 async def require_authenticated(request: Request) -> WebUser | None:
-    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request"}:
+    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/favicon.svg"}:
         return None
 
     user_id = request.session.get("user_id")
@@ -947,6 +947,11 @@ async def serve_output_file(file_path: str):
         raise HTTPException(status_code=404, detail="Không tìm thấy tệp.")
     return FileResponse(path)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon():
+    return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
 
 
 @app.exception_handler(StarletteHTTPException)

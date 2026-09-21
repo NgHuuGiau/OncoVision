@@ -208,6 +208,9 @@ class WebCaseRoutesTests(unittest.TestCase):
         fav_resp = self.client.get("/static/favicon.svg")
         self.assertEqual(fav_resp.status_code, 200)
         self.assertIn("svg", fav_resp.headers.get("content-type", ""))
+        root_fav_resp = self.client.get("/favicon.svg")
+        self.assertEqual(root_fav_resp.status_code, 200)
+        self.assertIn("svg", root_fav_resp.headers.get("content-type", ""))
 
         auth_css = self.client.get("/static/css/auth.css")
         self.assertEqual(auth_css.status_code, 200)
