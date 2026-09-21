@@ -17,7 +17,7 @@ class _FakeAnalyzer:
     def ensure_ready(self):
         return Path("models/trained/fake.pt")
 
-    def analyze_image(self, image_path, *, patient_code: str, case_id=None, progress_callback=None):
+    def analyze_image(self, image_path, *, patient_code: str, case_id=None, target_key=None, progress_callback=None):
         return self.result
 
 
@@ -69,12 +69,20 @@ class MedicalChatServiceTests(unittest.TestCase):
             db = MedicalCaseDatabase(Path(temp_dir) / "cases.db")
             service = MedicalChatService(analyzer=_FakeAnalyzer(result), case_db=db)
 
-            response = service.analyze_attachment(image_path=source, patient_code="BN777", user_prompt="kiểm tra")
+            response = service.analyze_attachment(
+                image_path=source,
+                patient_code="BN777",
+                user_prompt="kiểm tra",
+                target_key="brain",
+                modality="MRI não",
+            )
 
             metadata = json.loads(response.metadata_json)
             self.assertIn("medical_case_id", metadata)
             self.assertEqual(metadata["risk_level"], "high")
             self.assertEqual(metadata["processed_image_path"], str(overlay))
+            self.assertEqual(metadata["requested_target"], "brain")
+            self.assertEqual(metadata["requested_modality"], "MRI não")
             self.assertEqual(metadata["report_html_path"], str(report_json.with_suffix(".html")))
             self.assertEqual(response.attachment_path, str(overlay))
             self.assertIn("BN777", response.reply_text)

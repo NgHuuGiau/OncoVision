@@ -133,7 +133,9 @@ class MedicalCaseDatabase:
             )
             return int(cursor.lastrowid)
 
-    def list_cases(self, *, assigned_to: str | None = None) -> list[MedicalCaseRecord]:
+    def list_cases(self, *, assigned_to: str | None = None, limit: int = 50, offset: int = 0) -> list[MedicalCaseRecord]:
+        limit = max(1, min(int(limit), 200))
+        offset = max(0, int(offset))
         with self._connect() as conn:
             query = """
                 SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path,
@@ -142,9 +144,9 @@ class MedicalCaseDatabase:
                 FROM medical_cases
             """
             rows = (
-                conn.execute(query + " WHERE assigned_to = ? ORDER BY id DESC", (assigned_to,)).fetchall()
+                conn.execute(query + " WHERE assigned_to = ? ORDER BY id DESC LIMIT ? OFFSET ?", (assigned_to, limit, offset)).fetchall()
                 if assigned_to is not None
-                else conn.execute(query + " ORDER BY id DESC").fetchall()
+                else conn.execute(query + " ORDER BY id DESC LIMIT ? OFFSET ? ", (limit, offset)).fetchall()
             )
         return [self._row_to_record(row) for row in rows]
 

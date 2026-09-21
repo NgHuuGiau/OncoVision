@@ -16,6 +16,7 @@ from medical.pipeline import (
     MedicalImageAnalyzer,
     MedicalImageAnalyzerConfig,
 )
+from medical.validator import ValidationResult
 
 
 class _FakeValue:
@@ -50,6 +51,27 @@ class _FakeDetector:
 
 
 class MedicalPipelineTests(unittest.TestCase):
+    def test_brain_fallback_rejects_non_brain_input(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "lung_ct_input.jpg"
+            source.write_bytes(b"x")
+            analyzer = MedicalImageAnalyzer(
+                config=MedicalImageAnalyzerConfig(
+                    model_path=Path(temp_dir) / "missing.pt",
+                    brain_model_path=Path(temp_dir) / "brain.pt",
+                    working_dir=Path(temp_dir) / "work",
+                    reports_dir=Path(temp_dir) / "reports",
+                    processed_dir=Path(temp_dir) / "normalized",
+                    overlay_dir=Path(temp_dir) / "overlay",
+                ),
+            )
+            analyzer._brain_fallback_active = True
+            analyzer.ensure_ready = lambda: Path(temp_dir) / "brain.pt"
+            analyzer.validate_input = lambda _: ValidationResult(status="success", body_region="lung")
+
+            with self.assertRaisesRegex(ValueError, "TARGET_MISMATCH"):
+                analyzer.analyze_image(source, patient_code="BN100", target_key="brain")
+
     def test_analyze_image_generates_overlay_and_reports(self) -> None:
         with TemporaryDirectory() as temp_dir:
             image_path = Path(temp_dir) / "lung_ct_input.jpg"

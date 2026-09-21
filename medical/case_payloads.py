@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 
-def build_detection_metadata(result, *, user_prompt: str = "") -> dict[str, Any]:
+def build_detection_metadata(
+    result,
+    *,
+    user_prompt: str = "",
+    requested_target: str | None = None,
+    requested_modality: str | None = None,
+) -> dict[str, Any]:
     metadata = {
         "normalized_image": str(result.normalized_image),
         "average_confidence": result.average_confidence,
@@ -13,9 +19,15 @@ def build_detection_metadata(result, *, user_prompt: str = "") -> dict[str, Any]
             {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in result.detections
         ],
         "quality_warnings": result.quality_warnings,
+        "modality": getattr(result, "modality", None),
+        "body_region": getattr(result, "body_region", None),
     }
     if user_prompt:
         metadata["user_prompt"] = user_prompt
+    if requested_target:
+        metadata["requested_target"] = requested_target
+    if requested_modality:
+        metadata["requested_modality"] = requested_modality
     return metadata
 
 

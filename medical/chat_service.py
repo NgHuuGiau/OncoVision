@@ -35,9 +35,23 @@ class MedicalChatService:
     def check_ready(self) -> Path:
         return self.analyzer.ensure_ready()
 
-    def analyze_attachment(self, *, image_path: str | Path, patient_code: str, user_prompt: str = "", progress_callback: ProgressCallback = None) -> MedicalChatResponse:
+    def analyze_attachment(
+        self,
+        *,
+        image_path: str | Path,
+        patient_code: str,
+        user_prompt: str = "",
+        target_key: str | None = None,
+        modality: str | None = None,
+        progress_callback: ProgressCallback = None,
+    ) -> MedicalChatResponse:
         try:
-            result = self.analyzer.analyze_image(image_path, patient_code=patient_code, progress_callback=progress_callback)
+            result = self.analyzer.analyze_image(
+                image_path,
+                patient_code=patient_code,
+                target_key=target_key,
+                progress_callback=progress_callback,
+            )
         except ValueError as exc:
             message = str(exc)
             if ": " in message:
@@ -58,6 +72,12 @@ class MedicalChatService:
                 attachment_kind=None,
                 metadata_json="{}",
             )
+        case_metadata = build_detection_metadata(
+            result,
+            user_prompt=user_prompt,
+            requested_target=target_key,
+            requested_modality=modality,
+        )
         case_id = self.case_db.save_case(
             patient_code=result.patient_code,
             image_path=str(result.source_image),
@@ -67,7 +87,7 @@ class MedicalChatService:
             suspected_malignant=result.suspected_malignant,
             risk_level=result.risk_level,
             recommendation=result.recommendation,
-            metadata=build_detection_metadata(result, user_prompt=user_prompt),
+            metadata=case_metadata,
         )
         update_case_report_case_id(
             result.report_json_path,
@@ -78,7 +98,6 @@ class MedicalChatService:
         dicom_info = result.dicom_info or {}
         metadata = {
             "medical_case_id": case_id,
-            "source_image_path": str(result.source_image),
             "risk_level": result.risk_level,
             "suspected_malignant": result.suspected_malignant,
             "processed_image_path": str(result.processed_image),
@@ -95,6 +114,10 @@ class MedicalChatService:
             "supported_modalities": supported_cancer_modalities(),
             "detections": [{"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in result.detections],
             "predicted_labels": [item.label for item in result.detections],
+            "modality": result.modality,
+            "body_region": result.body_region,
+            "requested_target": target_key,
+            "requested_modality": modality,
         }
         top_detections = result.detections[:3]
         if result.detections:
@@ -118,6 +141,7 @@ class MedicalChatService:
         reply_text = (
             f"📋 **Kết quả phân tích** — Mã BN: {patient_code}\n\n"
             f"{risk_text}\n"
+            f"🎯 Vùng: {result.body_region or 'chưa xác định'} | Modality: {result.modality or 'chưa xác định'}\n"
             f"🔬 Phát hiện: {len(result.detections)} vùng\n"
             f"{detection_summary}\n"
             f"{grad_summary}"

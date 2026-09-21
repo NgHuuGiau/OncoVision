@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from medical.system_status import MedicalSystemStatus
 
 
 def print_medical_status_block(status: MedicalSystemStatus) -> None:
     print("Trạng thái phân tích y khoa")
-    print(f"Model cấu hình: {status.configured_model_path}")
+    cfg = Path(status.configured_model_path)
+    suffix = "" if cfg.exists() else " (chưa có file — chỉ dùng brain model)"
+    print(f"Model cấu hình: {status.configured_model_path}{suffix}")
     if status.resolved_model_path is not None:
         print(f"Model đang dùng: {status.resolved_model_path}")
     print(f"Sẵn sàng phân tích: {status.model_ready}")

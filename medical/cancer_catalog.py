@@ -105,6 +105,11 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
 )
 
 
+def get_cancer_target(key: str) -> CancerScreeningTarget | None:
+    normalized = key.strip().lower()
+    return next((target for target in COMMON_CANCER_TARGETS if target.key == normalized), None)
+
+
 def supported_cancer_labels() -> list[str]:
     return [target.label for target in COMMON_CANCER_TARGETS]
 

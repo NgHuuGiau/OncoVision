@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from medical.system_status import MedicalSystemStatus
 from training.terminal_ui import (
     CYAN,
@@ -26,7 +28,9 @@ def print_medical_status(status: MedicalSystemStatus) -> None:
     color = medical_status_color(status)
     print(line(rule("-"), CYAN))
     print(section("MEDICAL", color))
-    print(row("Model config", str(status.configured_model_path), CYAN, bounded=False))
+    cfg = Path(status.configured_model_path)
+    suffix = "" if cfg.exists() else " (chưa có file)"
+    print(row("Model config", str(status.configured_model_path) + suffix, CYAN, bounded=False))
     if status.resolved_model_path is not None:
         print(row("Model runtime", str(status.resolved_model_path), color, bounded=False))
     print(row("Fallback", "Bật" if status.allow_fallback_model else "Tắt", YELLOW if status.allow_fallback_model else GREEN, bounded=False))

@@ -103,7 +103,7 @@ class MedicalImageAnalyzerConfig:
         ".nii",
         ".nii.gz",
     )
-    cnn_image_size: int = 320
+    cnn_image_size: int = 224
     cnn_tta: bool = True
     analyze_topk: int = 3
     yolo_model_path: Path | None = None
@@ -161,6 +161,8 @@ class MedicalAnalysisResult:
     deidentified_source: Path | None = None
     dicom_info: dict[str, str] = field(default_factory=dict)
     analysis_time_seconds: float = 0.0
+    modality: str | None = None
+    body_region: str | None = None
 
 
 def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
@@ -218,7 +220,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         validation_allowed_extensions=tuple(
             settings.get("validation_allowed_extensions", [".jpg", ".jpeg", ".png", ".dcm", ".nii", ".nii.gz"])
         ),
-        cnn_image_size=int(settings.get("cnn_image_size", 320)),
+        cnn_image_size=int(settings.get("cnn_image_size", 224)),
         cnn_tta=bool(settings.get("cnn_tta", True)),
         analyze_topk=int(settings.get("analyze_topk", 3)),
         yolo_model_path=Path(settings["yolo_model_path"]) if settings.get("yolo_model_path") else None,
@@ -312,7 +314,15 @@ class MedicalImageAnalyzer:
                 pass
         return removed
 
-    def analyze_image(self, image_path: str | Path, *, patient_code: str, case_id: int | None = None, progress_callback: ProgressCallback = None) -> MedicalAnalysisResult:
+    def analyze_image(
+        self,
+        image_path: str | Path,
+        *,
+        patient_code: str,
+        case_id: int | None = None,
+        target_key: str | None = None,
+        progress_callback: ProgressCallback = None,
+    ) -> MedicalAnalysisResult:
         _start_t = time.monotonic()
         self._call_progress(progress_callback, "Validating image...", 0.05)
         try:
@@ -320,7 +330,8 @@ class MedicalImageAnalyzer:
         except FileNotFoundError as exc:
             raise FileNotFoundError(
                 "Chưa có model medical để phân tích. Hãy bổ sung model suy luận đã chuẩn bị bên ngoài vào "
-                "models/pretrained/ hoặc kiểm tra config/medical_settings.yaml (khóa 'model').\n"
+                "models/pretrained/cancers/<nhóm-bệnh>/ hoặc kiểm tra config/medical_settings.yaml "
+                "(brain_model, modality_model).\n"
                 f"Chi tiet: {exc}"
             ) from exc
         self._call_progress(progress_callback, "Normalizing image...", 0.10)
@@ -329,6 +340,15 @@ class MedicalImageAnalyzer:
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
             raise ValueError(f"{validation.error_code}: {validation.message}")
+        requested_body_region = _canonical_body_region_key(target_key) if target_key else None
+        if target_key and requested_body_region is None:
+            raise ValueError("UNKNOWN_TARGET: Nhóm bệnh được chọn không hợp lệ.")
+        if self._brain_fallback_active:
+            if requested_body_region not in {None, "brain"}:
+                raise ValueError("UNSUPPORTED_TARGET: Runtime hiện tại chỉ hỗ trợ phân tích u não.")
+            if validation.body_region not in {None, "brain"}:
+                raise ValueError("TARGET_MISMATCH: Ảnh không khớp với nhóm u não đã chọn.")
+            validation = replace(validation, body_region="brain")
 
         deidentified_source = None
         dicom_info = {}
@@ -339,15 +359,10 @@ class MedicalImageAnalyzer:
                 dicom_info = {
                     "Modality": str(getattr(ds, "Modality", "")),
                     "BodyPart": str(getattr(ds, "BodyPartExamined", "")),
-                    "PatientAge": str(getattr(ds, "PatientAge", "")),
-                    "PatientSex": str(getattr(ds, "PatientSex", "")),
-                    "SeriesDescription": str(getattr(ds, "SeriesDescription", "")),
-                    "StudyDescription": str(getattr(ds, "StudyDescription", "")),
                     "WindowCenter": str(getattr(ds, "WindowCenter", "")),
                     "WindowWidth": str(getattr(ds, "WindowWidth", "")),
                     "RescaleIntercept": str(getattr(ds, "RescaleIntercept", "")),
                     "RescaleSlope": str(getattr(ds, "RescaleSlope", "")),
-                    "SeriesInstanceUID": str(getattr(ds, "SeriesInstanceUID", "")),
                 }
             except Exception:
                 pass
@@ -424,6 +439,8 @@ class MedicalImageAnalyzer:
             "roi": roi_info,
             "uncertainty": uncertainty_info,
             "dicom_info": dicom_info if dicom_info else None,
+            "modality": validation.modality,
+            "body_region": validation.body_region,
             "analysis_time_seconds": time.monotonic() - _start_t,
         }
         self._call_progress(progress_callback, "Writing report...", 0.95)
@@ -464,6 +481,8 @@ class MedicalImageAnalyzer:
             deidentified_source=deidentified_source,
             dicom_info=dicom_info,
             analysis_time_seconds=time.monotonic() - _start_t,
+            modality=validation.modality,
+            body_region=validation.body_region,
         )
 
     def _run_pipeline_stages(
@@ -843,8 +862,7 @@ class MedicalImageAnalyzer:
             candidates = ", ".join(str(p) for p in iter_medical_runtime_model_paths(self.config))
             raise FileNotFoundError(
                 "Thiếu model medical để phân tích. Đã thử các đường dẫn: "
-                f"{candidates}. Hãy bổ sung model suy luận đã chuẩn bị bên ngoài vào models/pretrained/ "
-                "hoac cap nhat 'model' trong config/medical_settings.yaml."
+                f"{candidates}. Hãy cập nhật model_path, fallback_model_path hoặc brain_model trong config/medical_settings.yaml."
             )
         issues = validate_medical_analyzer_config(self.config)
         if issues:

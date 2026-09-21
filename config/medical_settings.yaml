@@ -1,8 +1,6 @@
 medical:
-  model: models/pretrained/medical_10_cancers_cnn.pt
   brain_model: models/pretrained/brain_classifier.pt
   modality_model: models/pretrained/modality_classifier.pt
-  yolo_model_path: models/trained/medical_yolo_detect.pt
   allow_fallback_model: false
 
   output_root: output/medical

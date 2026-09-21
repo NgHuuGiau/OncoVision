@@ -4,6 +4,7 @@ import unittest
 
 from medical.cancer_catalog import (
     COMMON_CANCER_TARGETS,
+    get_cancer_target,
     supported_cancer_labels,
     supported_cancer_modalities,
 )
@@ -40,6 +41,10 @@ class CancerCatalogTests(unittest.TestCase):
         modalities = supported_cancer_modalities()
         for expected in ("CT", "MRI", "PET/CT", "Siêu âm", "Nội soi", "CT thận", "MRI tụy", "Siêu âm tuyến giáp"):
             self.assertIn(expected, modalities)
+
+    def test_lookup_returns_only_known_target(self) -> None:
+        self.assertEqual(get_cancer_target("BRAIN").key, "brain")
+        self.assertIsNone(get_cancer_target("unknown"))
 
 
 if __name__ == "__main__":
