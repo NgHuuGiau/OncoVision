@@ -94,7 +94,7 @@ class HistoryItemWidget(QFrame):
         text_layout.setSpacing(4)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 15px; font-weight: 600;")
+        title_label.setObjectName("HistoryItemTitle")
         title_label.setWordWrap(True)
         text_layout.addWidget(title_label)
 
@@ -159,14 +159,15 @@ class RecordingPanel(QFrame):
         self.hide()
 
     def setup_styles(self) -> None:
+        self.setStyleSheet("background: transparent; border: none;")
         if self._window and getattr(self._window, "effective_theme", "dark") == "light":
-            self.setStyleSheet("background: transparent; border: none;")
-            self.label.setStyleSheet("color: #0f172a; font-weight: 700; font-size: 14px;")
+            self.label.setStyleSheet("color: #dc2626; font-weight: 700; font-size: 14px;")
             self.waveform.color = QColor("#ef4444")
             self.waveform.update()
             return
-        self.setStyleSheet("background: transparent; border: none;")
-        self.label.setStyleSheet("color: white; font-weight: 700; font-size: 14px;")
+        self.label.setStyleSheet("color: #ff5252; font-weight: 700; font-size: 14px;")
+        self.waveform.color = QColor("#ff5252")
+        self.waveform.update()
 
 
 class MessageInput(QPlainTextEdit):

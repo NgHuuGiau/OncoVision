@@ -44,7 +44,7 @@ class SettingsDialog(QDialog):
         header_row.setContentsMargins(28, 24, 28, 20)
         header_row.setSpacing(12)
         self.dialog_title = QLabel(tr(self.window.language, "settings_title"))
-        self.dialog_title.setStyleSheet("font-size: 30px; font-weight: 800;")
+        self.dialog_title.setObjectName("SettingsDialogTitle")
         header_row.addWidget(self.dialog_title)
         header_row.addStretch(1)
         close_button = QPushButton("\u2715")
@@ -55,12 +55,8 @@ class SettingsDialog(QDialog):
         shell_layout.addLayout(header_row)
 
         header_divider = QFrame()
+        header_divider.setObjectName("SettingsHeaderDivider")
         header_divider.setFixedHeight(1)
-        header_divider.setStyleSheet(
-            "background: rgba(255, 255, 255, 0.08); border: none;"
-            if self.window.effective_theme == "dark"
-            else "background: rgba(15, 23, 42, 0.08); border: none;"
-        )
         shell_layout.addWidget(header_divider)
 
         body_row = QHBoxLayout()
@@ -80,12 +76,8 @@ class SettingsDialog(QDialog):
         body_row.addWidget(sidebar, 2)
 
         divider = QFrame()
+        divider.setObjectName("SettingsBodyDivider")
         divider.setFrameShape(QFrame.VLine)
-        divider.setStyleSheet(
-            "background: transparent; border: none; border-left: 1px solid rgba(255, 255, 255, 0.08);"
-            if self.window.effective_theme == "dark"
-            else "background: transparent; border: none; border-left: 1px solid rgba(17, 24, 39, 0.08);"
-        )
         body_row.addWidget(divider)
 
         content = QFrame()
@@ -95,8 +87,7 @@ class SettingsDialog(QDialog):
         content_layout.setSpacing(20)
 
         self.section_title = QLabel()
-        self.section_title.setObjectName("SectionTitle")
-        self.section_title.setStyleSheet("font-size: 24px; font-weight: 800;")
+        self.section_title.setObjectName("SettingsSectionTitle")
         content_layout.addWidget(self.section_title)
 
         self.appearance_card = QFrame()
@@ -107,10 +98,10 @@ class SettingsDialog(QDialog):
         appearance_row = QHBoxLayout()
         appearance_row.setSpacing(10)
         self.appearance_icon = QLabel("\u25d4")
-        self.appearance_icon.setStyleSheet("font-size: 18px; font-weight: 700;")
+        self.appearance_icon.setObjectName("SettingsOptionIcon")
         appearance_row.addWidget(self.appearance_icon, 0, Qt.AlignTop)
         self.appearance_label = QLabel()
-        self.appearance_label.setStyleSheet("font-size: 18px; font-weight: 700;")
+        self.appearance_label.setObjectName("SettingsOptionLabel")
         appearance_row.addWidget(self.appearance_label, 1)
         appearance_card_layout.addLayout(appearance_row)
 
@@ -134,10 +125,10 @@ class SettingsDialog(QDialog):
         language_row = QHBoxLayout()
         language_row.setSpacing(10)
         self.language_icon = QLabel("\U0001f310")
-        self.language_icon.setStyleSheet("font-size: 18px;")
+        self.language_icon.setObjectName("SettingsOptionIcon")
         language_row.addWidget(self.language_icon, 0, Qt.AlignTop)
         self.language_label = QLabel()
-        self.language_label.setStyleSheet("font-size: 18px; font-weight: 700;")
+        self.language_label.setObjectName("SettingsOptionLabel")
         language_row.addWidget(self.language_label, 1)
         language_card_layout.addLayout(language_row)
 
@@ -162,6 +153,8 @@ class SettingsDialog(QDialog):
         self.window.theme_mode = mode
         self.window.apply_theme()
         self.refresh_theme_buttons()
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def set_language(self, language_code: str) -> None:
         self.window.language = language_code
@@ -200,7 +193,7 @@ class SettingsDialog(QDialog):
                 )
             else:
                 button.setStyleSheet(
-                    "background: #e9edf7; color: #0f172a; border: 1px solid #1a56db; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
+                    "background: #e9edf7; color: #1a56db; border: 1px solid #1a56db; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
                     if is_active
                     else "background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                 )
@@ -216,7 +209,7 @@ class SettingsDialog(QDialog):
                 )
             else:
                 button.setStyleSheet(
-                    "background: #e9edf7; color: #0f172a; border: 1px solid #1a56db; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
+                    "background: #e9edf7; color: #1a56db; border: 1px solid #1a56db; border-radius: 14px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 14px;"
                     if is_active
                     else "background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 14px; font-weight: 600; font-size: 15px; text-align: center; padding: 0 14px;"
                 )

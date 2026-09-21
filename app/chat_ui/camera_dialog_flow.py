@@ -61,6 +61,7 @@ class CameraCaptureDialog(QDialog):
         row = QHBoxLayout()
         row.addStretch(1)
         self.capture_button = QPushButton(tr(language, "capture"))
+        self.capture_button.setObjectName("CameraCaptureButton")
         self.capture_button.clicked.connect(self.capture_frame)
         row.addWidget(self.capture_button)
         layout.addLayout(row)

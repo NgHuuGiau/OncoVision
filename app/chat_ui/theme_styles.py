@@ -19,7 +19,6 @@ _BASE_SHARED = """
         font-weight: 700;
         color: {heading_color};
     }}
-    QLabel#BrandText,
     QLabel#ChatHeaderTitle,
     QLabel#SectionTitle {{
         color: {heading_color};
@@ -27,13 +26,92 @@ _BASE_SHARED = """
     }}
     QLabel#BrandText {{
         font-size: 18px;
+        font-weight: 700;
+        color: {brand_color};
     }}
-    QLabel#ChatHeaderTitle {{
-        font-size: 24px;
+    QLabel#GreetingText {{
+        font-size: 16px;
+        color: {subtle_color};
     }}
-    QLabel#SectionTitle {{
+    QLabel#EmptyTitle {{
+        font-size: 20px;
+        font-weight: 700;
+        color: {heading_color};
+    }}
+    QLabel#EmptyRobot {{
+        font-size: 86px;
+    }}
+    QLabel#HistoryItemTitle {{
         font-size: 15px;
         font-weight: 600;
+        color: {text_color};
+    }}
+    QLabel#SettingsDialogTitle {{
+        font-size: 30px;
+        font-weight: 800;
+        color: {heading_color};
+    }}
+    QLabel#SettingsSectionTitle {{
+        font-size: 24px;
+        font-weight: 800;
+        color: {heading_color};
+    }}
+    QLabel#SettingsOptionLabel {{
+        font-size: 18px;
+        font-weight: 700;
+        color: {heading_color};
+    }}
+    QLabel#SettingsOptionIcon {{
+        font-size: 18px;
+        color: {subtle_color};
+    }}
+    QLabel#ImagePreviewCaption {{
+        font-size: 20px;
+        font-weight: 800;
+        color: {heading_color};
+    }}
+    QFrame#SettingsHeaderDivider {{
+        background: {divider_color};
+        border: none;
+    }}
+    QFrame#SettingsBodyDivider {{
+        background: transparent;
+        border: none;
+        border-left: 1px solid {divider_color};
+    }}
+    QPushButton#CameraCaptureButton {{
+        background: #1a56db;
+        color: #ffffff;
+        border: none;
+        border-radius: 14px;
+        font-size: 14px;
+        font-weight: 700;
+        padding: 10px 24px;
+        text-align: center;
+    }}
+    QPushButton#CameraCaptureButton:hover {{
+        background: #1442b0;
+    }}
+    QPushButton#CameraCaptureButton:disabled {{
+        background: {mode_button_bg};
+        color: {subtle_color};
+    }}
+    QPushButton#ImagePreviewNavButton {{
+        min-width: 42px;
+        max-width: 42px;
+        min-height: 42px;
+        max-height: 42px;
+        border-radius: 21px;
+        border: 1px solid {round_button_border};
+        background: {round_button_bg};
+        color: {round_button_text};
+        font-size: 22px;
+        font-weight: 700;
+        text-align: center;
+        padding: 0;
+    }}
+    QPushButton#ImagePreviewNavButton:hover {{
+        background: {round_button_hover};
     }}
     QLabel#ModeBadge {{
         color: {subtle_color};
@@ -159,9 +237,16 @@ _BASE_SHARED = """
         border-radius: 24px;
     }}
     QFrame#SearchBox {{
-        background: {footer_button_bg};
-        border: 1px solid {footer_button_border};
+        background: {search_bg};
+        border: 1px solid {search_border};
         border-radius: 16px;
+    }}
+    QLineEdit#SearchInput {{
+        border: none;
+        background: transparent;
+        color: {text_color};
+        padding: 0;
+        font-size: 14px;
     }}
     QFrame#SidebarCompactSearchButton {{
         background: transparent;
@@ -201,8 +286,8 @@ _BASE_SHARED = """
         border-left: 3px solid #1a56db;
     }}
     QFrame#BubbleUser {{
-        background: rgba(26, 86, 219, 0.10);
-        border: 1px solid rgba(26, 86, 219, 0.08);
+        background: {bubble_user_bg};
+        border: 1px solid {bubble_user_border};
         border-top-left-radius: 24px;
         border-top-right-radius: 8px;
         border-bottom-left-radius: 24px;
@@ -552,9 +637,10 @@ DARK_STYLESHEET = _build_stylesheet(
     text_color="#e3e3e3",
     subtle_color="#94a3b8",
     heading_color="#ffffff",
+    brand_color="#60a5fa",
     avatar_border="rgba(255, 255, 255, 0.08)",
     avatar_background="rgba(255, 255, 255, 0.03)",
-    attachment_color="#d7e0ff",
+    attachment_color="#93c5fd",
     avatar_text="#ffffff",
     sidebar_bg="#0c1428",
     sidebar_border="rgba(255, 255, 255, 0.06)",
@@ -568,8 +654,8 @@ DARK_STYLESHEET = _build_stylesheet(
     preview_thumb_border="rgba(255, 255, 255, 0.08)",
     history_panel_bg="rgba(255, 255, 255, 0.02)",
     history_panel_border="rgba(255, 255, 255, 0.05)",
-    search_bg="rgba(255, 255, 255, 0.03)",
-    search_border="rgba(255, 255, 255, 0.06)",
+    search_bg="rgba(255, 255, 255, 0.04)",
+    search_border="rgba(255, 255, 255, 0.08)",
     dialog_shell_bg="#0c1428",
     dialog_shell_border="rgba(255, 255, 255, 0.06)",
     settings_nav_bg="rgba(255, 255, 255, 0.02)",
@@ -578,8 +664,10 @@ DARK_STYLESHEET = _build_stylesheet(
     history_hover="rgba(255, 255, 255, 0.05)",
     history_selected_bg="rgba(255, 255, 255, 0.08)",
     history_selected_border="rgba(255, 255, 255, 0.06)",
-    bubble_system_bg="rgba(255, 255, 255, 0.03)",
-    bubble_system_border="rgba(255, 255, 255, 0.06)",
+    bubble_user_bg="rgba(26, 86, 219, 0.22)",
+    bubble_user_border="rgba(26, 86, 219, 0.35)",
+    bubble_system_bg="rgba(255, 255, 255, 0.05)",
+    bubble_system_border="rgba(255, 255, 255, 0.08)",
     input_bg="rgba(255, 255, 255, 0.03)",
     input_border="rgba(255, 255, 255, 0.08)",
     mode_button_bg="#3a3d45",
@@ -617,10 +705,11 @@ LIGHT_STYLESHEET = _build_stylesheet(
     text_color="#111827",
     subtle_color="#64748b",
     heading_color="#000000",
+    brand_color="#1a56db",
     avatar_border="rgba(17, 24, 39, 0.08)",
     avatar_background="rgba(17, 24, 39, 0.03)",
-    attachment_color="#000000",
-    avatar_text="#111827",
+    attachment_color="#1a56db",
+    avatar_text="#ffffff",
     sidebar_bg="#ffffff",
     sidebar_border="#e8edf5",
     divider_color="rgba(17, 24, 39, 0.08)",
@@ -633,8 +722,8 @@ LIGHT_STYLESHEET = _build_stylesheet(
     preview_thumb_border="rgba(17, 24, 39, 0.08)",
     history_panel_bg="rgba(255, 255, 255, 0.65)",
     history_panel_border="rgba(17, 24, 39, 0.06)",
-    search_bg="rgba(17, 24, 39, 0.03)",
-    search_border="rgba(17, 24, 39, 0.06)",
+    search_bg="#ffffff",
+    search_border="#e2e8f0",
     dialog_shell_bg="#ffffff",
     dialog_shell_border="#e2e8f0",
     settings_nav_bg="rgba(26, 86, 219, 0.03)",
@@ -643,8 +732,10 @@ LIGHT_STYLESHEET = _build_stylesheet(
     history_hover="rgba(17, 24, 39, 0.05)",
     history_selected_bg="rgba(17, 24, 39, 0.08)",
     history_selected_border="rgba(17, 24, 39, 0.05)",
+    bubble_user_bg="rgba(26, 86, 219, 0.10)",
+    bubble_user_border="rgba(26, 86, 219, 0.18)",
     bubble_system_bg="rgba(255, 255, 255, 0.9)",
-    bubble_system_border="rgba(17, 24, 39, 0.06)",
+    bubble_system_border="rgba(17, 24, 39, 0.08)",
     input_bg="rgba(255, 255, 255, 0.9)",
     input_border="rgba(17, 24, 39, 0.08)",
     mode_button_bg="#e4e7ed",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QSize
+from PySide6.QtGui import QColor, QPalette
 
 from app.chat_ui.icons import themed_icon
 from app.chat_ui.theme_styles import DARK_STYLESHEET, LIGHT_STYLESHEET
@@ -33,9 +34,18 @@ def apply_theme_assets(window) -> None:
     window.plus_button.setIconSize(QSize(18, 18))
     window.micro_button.setIcon(themed_icon("mic.svg", strong, 18))
     window.micro_button.setIconSize(QSize(18, 18))
-    window.send_button.setIcon(themed_icon("send.svg", strong, 18))
+    # Send button has #1a56db background in both modes; icon must always be high-contrast white
+    window.send_button.setIcon(themed_icon("send.svg", "#ffffff", 18))
     window.send_button.setIconSize(QSize(18, 18))
     window.message_input.apply_visual_style(dark_mode=window.effective_theme == "dark")
+    if hasattr(window, "search_input"):
+        dark = window.effective_theme == "dark"
+        text_c = "#e3e3e3" if dark else "#111827"
+        subtle_c = "#94a3b8" if dark else "#64748b"
+        palette = window.search_input.palette()
+        palette.setColor(QPalette.Text, QColor(text_c))
+        palette.setColor(QPalette.PlaceholderText, QColor(subtle_c))
+        window.search_input.setPalette(palette)
     window.recording_panel.setup_styles()
     refresh_topbar_buttons(window)
     refresh_empty_state_theme(window)
@@ -72,12 +82,16 @@ def refresh_topbar_buttons(window) -> None:
 
 
 def refresh_empty_state_theme(window) -> None:
-    if window.effective_theme == "dark":
-        window.robot_mark.setStyleSheet("font-size: 86px;")
-        window.empty_title.setStyleSheet("font-size: 20px; font-weight: 700; color: #f8fafc;")
-    else:
-        window.robot_mark.setStyleSheet("font-size: 86px;")
-        window.empty_title.setStyleSheet("font-size: 20px; font-weight: 700; color: #0f172a;")
+    if hasattr(window, "robot_mark"):
+        window.robot_mark.setObjectName("EmptyRobot")
+        window.robot_mark.setStyleSheet("")
+        window.robot_mark.style().unpolish(window.robot_mark)
+        window.robot_mark.style().polish(window.robot_mark)
+    if hasattr(window, "empty_title"):
+        window.empty_title.setObjectName("EmptyTitle")
+        window.empty_title.setStyleSheet("")
+        window.empty_title.style().unpolish(window.empty_title)
+        window.empty_title.style().polish(window.empty_title)
 
 
 def apply_light_theme(window, app) -> None:
