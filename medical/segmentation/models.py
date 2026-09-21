@@ -130,7 +130,7 @@ class AttentionUNet(nn.Module):
 class SAMROIExtractor:
     def __init__(self, device: str | None = None) -> None:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self._sam = None
+        self._sam: Any | bool | None = None
 
     def _load_sam(self) -> Any:
         if self._sam is None:
@@ -149,9 +149,11 @@ class SAMROIExtractor:
                 self._sam = SamPredictor(sam)
             except Exception:
                 self._sam = False
-        return self._sam if self._sam is not None else None
+        return self._sam if self._sam is not False else None
 
     def extract_roi(self, image: np.ndarray, points: list[tuple[int, int]] | None = None) -> SegmentationResult | None:
+        if image is None or image.size == 0:
+            return None
         predictor = self._load_sam()
         if predictor is None:
             return self._fallback_roi(image)

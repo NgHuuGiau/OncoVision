@@ -38,6 +38,15 @@ class SegmentationROIIntegrationTests(unittest.TestCase):
         self.assertIn("bbox", roi_info)
         self.assertGreater(out.size, 0)
 
+    def test_roi_empty_image_returns_original_without_traceback(self) -> None:
+        analyzer = self._analyzer(enable_segmentation_roi=True)
+        image = np.zeros((0, 0, 3), dtype=np.uint8)
+
+        out, roi_info = analyzer._apply_segmentation_roi(image)
+
+        self.assertIsNone(roi_info)
+        self.assertEqual(out.shape, image.shape)
+
     def test_roi_failure_returns_original(self) -> None:
         analyzer = self._analyzer(enable_segmentation_roi=True)
         bad_image = np.zeros((0, 0, 3), dtype=np.uint8)
