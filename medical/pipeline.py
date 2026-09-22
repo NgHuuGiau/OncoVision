@@ -295,7 +295,9 @@ class MedicalImageAnalyzer:
 
     def _active_model_path(self, body_region: str | None = None) -> Path:
         if self._uses_brain_model(body_region):
-            return Path(self.config.brain_model_path)
+            brain_model_path = self.config.brain_model_path
+            if brain_model_path is not None:
+                return Path(brain_model_path)
         return Path(self.config.model_path)
 
     def cleanup_cached_images(self) -> int:
@@ -1134,7 +1136,10 @@ class MedicalImageAnalyzer:
         return None
 
     def _load_brain_wrapper(self) -> MedicalCNNClassifierWrapper | None:
-        model_path = Path(self.config.brain_model_path)
+        brain_model_path = self.config.brain_model_path
+        if brain_model_path is None:
+            return None
+        model_path = Path(brain_model_path)
         if self._brain_wrapper_cache is not None and self._brain_wrapper_cache_path == model_path:
             return self._brain_wrapper_cache
         if is_cnn_classifier_path(model_path):

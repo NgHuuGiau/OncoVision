@@ -10,6 +10,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal, cast
 from urllib.parse import quote
 
 import aiofiles
@@ -682,8 +683,8 @@ def list_cases(request: Request, limit: int = 50, offset: int = 0):
         return {"ok": True, "cases": []}
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
-    cases = get_case_db().list_cases(assigned_to=user.username if user.role == "clinician" else None, limit=limit, offset=offset)
-    cases = [_case_summary(record) for record in cases]
+    records = get_case_db().list_cases(assigned_to=user.username if user.role == "clinician" else None, limit=limit, offset=offset)
+    cases = [_case_summary(record) for record in records]
     return {"ok": True, "cases": cases}
 
 
@@ -890,14 +891,19 @@ async def get_conversation(conv_id: int):
 @app.post("/api/conversations/{conv_id}/messages", dependencies=[ADMIN_REQUIRED])
 async def add_message(conv_id: int, sender: str = Form(...), text: str = Form(""), attachment_path: str = Form(""), attachment_kind: str = Form(""), metadata_json: str = Form("")):
     db = get_db()
+    if sender not in {"user", "assistant"}:
+        raise HTTPException(status_code=422, detail="Người gửi không hợp lệ.")
+    normalized_attachment_kind = attachment_kind or None
+    if normalized_attachment_kind not in {None, "image", "text", "camera"}:
+        raise HTTPException(status_code=422, detail="Loại tệp đính kèm không hợp lệ.")
     conv = db.get_conversation(conv_id)
     if conv is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
     msg = ChatMessage(
-        sender=sender,
+        sender=cast(Literal["user", "assistant"], sender),
         text=text,
         attachment_path=attachment_path or None,
-        attachment_kind=attachment_kind or None,
+        attachment_kind=cast(Literal["image", "text", "camera"] | None, normalized_attachment_kind),
         metadata_json=metadata_json or None,
     )
     msg_id = db.add_message(conv_id, msg)

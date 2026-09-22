@@ -99,6 +99,7 @@ def _load_image_as_tensor(
     *,
     assume_bgr: bool = True,
 ) -> torch.Tensor:
+    image: Image.Image
     if isinstance(source, np.ndarray):
         if source.ndim == 2:
             source = np.stack([source] * 3, axis=-1)

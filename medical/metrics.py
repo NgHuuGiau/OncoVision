@@ -129,8 +129,10 @@ ScoreMatrix = Sequence[Sequence[float]] | np.ndarray
 
 
 def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
-    integrate = getattr(np, "trapezoid", None) or np.trapz
-    return float(integrate(y, x))
+    integrate = getattr(np, "trapezoid", None)
+    if integrate is not None:
+        return float(integrate(y, x))
+    return float(np.sum((y[1:] + y[:-1]) * np.diff(x) / 2.0))
 
 
 def _as_score_matrix(scores: ScoreMatrix) -> np.ndarray:

@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.utils.hooks import RemovableHandle
 
 from medical.cnn_classifier import MedicalCNNClassifierWrapper, _load_image_as_tensor
 
+DeviceLike = str | torch.device | None
 
 class GradCAMError(Exception):
     pass
@@ -40,7 +43,7 @@ def _get_target_conv_layer(model: nn.Module, backbone_name: str) -> nn.Module:
         return backbone.features[-1][-1].mlp
     elif backbone_name.startswith("vit_"):
         return backbone.encoder.layers[-1].mlp
-        raise GradCAMUnsupportedError(f"Backbone '{backbone_name}' không hỗ trợ Grad-CAM.")
+    raise GradCAMUnsupportedError(f"Backbone '{backbone_name}' không hỗ trợ Grad-CAM.")
 
 
 def _jet_colormap(heatmap: np.ndarray) -> np.ndarray:
@@ -70,22 +73,30 @@ class GradCAMResult:
 
 
 class GradCAM:
-    def __init__(self, model: nn.Module, target_layer: nn.Module, device: str | None = None) -> None:
+    def __init__(self, model: nn.Module, target_layer: nn.Module, device: DeviceLike = None) -> None:
         self.model = model
         self.target_layer = target_layer
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.model.to(self.device)
         self.model.eval()
         self.activations: torch.Tensor | None = None
         self.gradients: torch.Tensor | None = None
-        self._forward_handle = target_layer.register_forward_hook(self._forward_hook)
-        self._backward_handle = target_layer.register_full_backward_hook(self._backward_hook)
+        self._forward_handle: RemovableHandle | None = target_layer.register_forward_hook(self._forward_hook)
+        self._backward_handle: RemovableHandle | None = target_layer.register_full_backward_hook(self._backward_hook)
 
-    def _forward_hook(self, module: nn.Module, inputs: tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
+    def _forward_hook(self, module: nn.Module, inputs: tuple[torch.Tensor, ...] | torch.Tensor, output: tuple[torch.Tensor, ...] | torch.Tensor) -> None:
+        if isinstance(output, tuple):
+            if not output:
+                return
+            output = output[0]
         self.activations = output.detach()
 
-    def _backward_hook(self, module: nn.Module, grad_input: tuple[torch.Tensor, ...], grad_output: tuple[torch.Tensor, ...]) -> None:
-        self.gradients = grad_output[0].detach()
+    def _backward_hook(self, module: nn.Module, grad_input: tuple[torch.Tensor, ...] | torch.Tensor, grad_output: tuple[torch.Tensor, ...] | torch.Tensor) -> None:
+        if isinstance(grad_output, tuple):
+            if not grad_output:
+                return
+            grad_output = grad_output[0]
+        self.gradients = grad_output.detach()
 
     def generate(self, input_tensor: torch.Tensor, class_idx: int) -> np.ndarray:
         x = input_tensor.to(self.device)
@@ -104,11 +115,13 @@ class GradCAM:
         score.backward(retain_graph=False)
         activations = self.activations
         gradients = self.gradients
+        if activations is None or gradients is None:
+            raise GradCAMError("Chua co dac trung hoac gradient.")
         weights = gradients.mean(dim=(2, 3), keepdim=True)
-        cam = (weights * activations).sum(dim=1, keepdim=True)
-        cam = torch.relu(cam)
-        cam = F.interpolate(cam, size=(x.shape[2], x.shape[3]), mode="bilinear", align_corners=False)
-        cam = cam.squeeze().cpu().numpy()
+        cam_tensor = (weights * activations).sum(dim=1, keepdim=True)
+        cam_tensor = torch.relu(cam_tensor)
+        cam_tensor = F.interpolate(cam_tensor, size=(x.shape[2], x.shape[3]), mode="bilinear", align_corners=False)
+        cam = cam_tensor.squeeze().cpu().numpy()
         cam_min, cam_max = cam.min(), cam.max()
         if cam_max > cam_min:
             cam = (cam - cam_min) / (cam_max - cam_min)
@@ -134,8 +147,6 @@ class GradCAM:
 
 class GradCAMPlusPlus(GradCAM):
     def generate(self, input_tensor: torch.Tensor, class_idx: int) -> np.ndarray:
-        if self.activations is None or self.gradients is None:
-            raise GradCAMError("Chua co dac trung hoac gradient.")
         x = input_tensor.to(self.device)
         if x.dim() == 3:
             x = x.unsqueeze(0)
@@ -146,15 +157,17 @@ class GradCAMPlusPlus(GradCAM):
         score.backward(retain_graph=False)
         activations = self.activations
         gradients = self.gradients
+        if activations is None or gradients is None:
+            raise GradCAMError("Chua co dac trung hoac gradient.")
         grads_power_2 = gradients ** 2
         grads_power_3 = grads_power_2 * gradients
         sum_activations = (activations * grads_power_2).sum(dim=(2, 3), keepdim=True) + 1e-6
         alpha = grads_power_2 / (2 * grads_power_2 + sum_activations * grads_power_3 + 1e-6)
         weights = alpha * torch.relu(gradients)
-        cam = (weights * activations).sum(dim=1, keepdim=True)
-        cam = torch.relu(cam)
-        cam = F.interpolate(cam, size=(x.shape[2], x.shape[3]), mode="bilinear", align_corners=False)
-        cam = cam.squeeze().cpu().numpy()
+        cam_tensor = (weights * activations).sum(dim=1, keepdim=True)
+        cam_tensor = torch.relu(cam_tensor)
+        cam_tensor = F.interpolate(cam_tensor, size=(x.shape[2], x.shape[3]), mode="bilinear", align_corners=False)
+        cam = cam_tensor.squeeze().cpu().numpy()
         cam_min, cam_max = cam.min(), cam.max()
         if cam_max > cam_min:
             cam = (cam - cam_min) / (cam_max - cam_min)
@@ -165,24 +178,24 @@ class GradCAMPlusPlus(GradCAM):
 
 
 class EigenCAM:
-    def __init__(self, model: nn.Module, target_layer: nn.Module, device: str | None = None) -> None:
+    def __init__(self, model: nn.Module, target_layer: nn.Module, device: DeviceLike = None) -> None:
         self.model = model
         self.target_layer = target_layer
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.activations: torch.Tensor | None = None
-        self._handle = target_layer.register_forward_hook(self._forward_hook)
+        self._handle: RemovableHandle | None = target_layer.register_forward_hook(self._forward_hook)
 
     def _forward_hook(self, module: nn.Module, inputs: tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
         self.activations = output.detach()
 
     def generate(self, input_tensor: torch.Tensor) -> np.ndarray:
-        if self.activations is None:
-            raise GradCAMError("Chua co activations.")
         x = input_tensor.to(self.device)
         if x.dim() == 3:
             x = x.unsqueeze(0)
         with torch.no_grad():
             _ = self.model(x)
+        if self.activations is None:
+            raise GradCAMError("Chua co activations.")
         acts = self.activations.squeeze(0).cpu().numpy()
         reshaped = acts.reshape(acts.shape[0], -1)
         reshaped = reshaped - reshaped.mean(axis=1, keepdims=True)
@@ -209,25 +222,25 @@ class EigenCAM:
 
 
 class ScoreCAM:
-    def __init__(self, model: nn.Module, target_layer: nn.Module, device: str | None = None) -> None:
+    def __init__(self, model: nn.Module, target_layer: nn.Module, device: DeviceLike = None) -> None:
         self.model = model
         self.target_layer = target_layer
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.activations: torch.Tensor | None = None
-        self._handle = target_layer.register_forward_hook(self._forward_hook)
+        self._handle: RemovableHandle | None = target_layer.register_forward_hook(self._forward_hook)
 
     def _forward_hook(self, module: nn.Module, inputs: tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
         self.activations = output.detach()
 
     def generate(self, input_tensor: torch.Tensor, class_idx: int) -> np.ndarray:
-        if self.activations is None:
-            raise GradCAMError("Chua co activations.")
         x = input_tensor.to(self.device)
         if x.dim() == 3:
             x = x.unsqueeze(0)
         with torch.no_grad():
             base_output = self.model(x)
             base_score = torch.softmax(base_output, dim=1)[0, class_idx].item()
+        if self.activations is None:
+            raise GradCAMError("Chua co activations.")
         acts = self.activations.squeeze(0)
         cams = []
         for i in range(acts.shape[0]):
@@ -258,16 +271,17 @@ class ScoreCAM:
 
 
 class AttentionRollout:
-    def __init__(self, model: nn.Module, device: str | None = None) -> None:
+    def __init__(self, model: nn.Module, device: DeviceLike = None) -> None:
         self.model = model
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.attentions: list[torch.Tensor] = []
+        self._handles: list[RemovableHandle] = []
         self._register_hooks()
 
     def _register_hooks(self) -> None:
         for module in self.model.modules():
             if isinstance(module, nn.MultiheadAttention):
-                module.register_forward_hook(self._attention_hook)
+                self._handles.append(module.register_forward_hook(self._attention_hook))
 
     def _attention_hook(self, module: nn.Module, inputs: tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
         _, attn_weights = output
@@ -293,10 +307,9 @@ class AttentionRollout:
         return rollout.astype(np.float32)
 
     def remove_hooks(self) -> None:
-        for module in self.model.modules():
-            if isinstance(module, nn.MultiheadAttention):
-                for handle in module._forward_hooks.values():
-                    handle.remove()
+        for handle in self._handles:
+            handle.remove()
+        self._handles.clear()
 
 
 def generate_gradcam_overlay(image: np.ndarray, heatmap: np.ndarray, *, alpha: float = 0.5, colormap: str = "jet") -> np.ndarray:
@@ -317,7 +330,7 @@ def generate_gradcam_overlay(image: np.ndarray, heatmap: np.ndarray, *, alpha: f
     return overlay
 
 
-def _load_raw_rgb(source: str | np.ndarray) -> np.ndarray:
+def _load_raw_rgb(source: str | Path | np.ndarray) -> np.ndarray:
     if isinstance(source, np.ndarray):
         arr = source
         if arr.ndim == 2:
@@ -326,8 +339,8 @@ def _load_raw_rgb(source: str | np.ndarray) -> np.ndarray:
             arr = arr[:, :, ::-1]
         return arr.astype(np.uint8)
     from PIL import Image, ImageOps
-    with Image.open(source) as img:
-        img = ImageOps.exif_transpose(img).convert("RGB")
+    with Image.open(source) as opened:
+        img = ImageOps.exif_transpose(opened).convert("RGB")
         return np.array(img, dtype=np.uint8)
 
 
@@ -341,7 +354,7 @@ _TTA_SPECS: tuple[tuple[str, Callable[[torch.Tensor], torch.Tensor], Callable[[n
 
 
 class MedicalGradCAMExplainer:
-    def __init__(self, wrapper: MedicalCNNClassifierWrapper, image_size: int = 320, device: str | None = None) -> None:
+    def __init__(self, wrapper: MedicalCNNClassifierWrapper, image_size: int = 320, device: DeviceLike = None) -> None:
         self.wrapper = wrapper
         self.image_size = image_size
         self.device = device or wrapper.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -376,7 +389,7 @@ class MedicalGradCAMExplainer:
     def is_supported(self) -> bool:
         return self.gradcam is not None
 
-    def explain(self, image: str | np.ndarray, top_k: int = 1, *, tta: bool = False, alpha: float = 0.5, methods: list[str] | None = None) -> list[GradCAMResult]:
+    def explain(self, image: str | Path | np.ndarray, top_k: int = 1, *, tta: bool = False, alpha: float = 0.5, methods: list[str] | None = None) -> list[GradCAMResult]:
         raw_image = _load_raw_rgb(image)
         h, w = raw_image.shape[:2]
         preds = self.wrapper.predict(image, top_k=max(1, top_k), tta=tta)

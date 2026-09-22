@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from medical.cancer_catalog import supported_cancer_labels, supported_cancer_modalities
 from medical.case_payloads import build_detection_metadata
@@ -19,7 +20,7 @@ ProgressCallback = Callable[[str, float], None] | None
 class MedicalChatResponse:
     reply_text: str
     attachment_path: str | None
-    attachment_kind: str | None
+    attachment_kind: Literal["image", "text", "camera"] | None
     metadata_json: str
 
 

@@ -122,31 +122,31 @@ def main() -> int:
         return 0
 
     if args.command == "show-case":
-        item = MedicalCaseDatabase().get_case(args.case_id)
-        if item is None:
+        case = MedicalCaseDatabase().get_case(args.case_id)
+        if case is None:
             print(f"Không tìm thấy ca bệnh #{args.case_id}.")
             return 1
-        print(f"Ca bệnh #{item.case_id} | Mã bệnh nhân: {item.patient_code} | Thời gian: {item.created_at}")
-        print(f"Nguy cơ: {item.risk_level}")
-        print(f"Ảnh gốc: {item.image_path}")
-        print(f"Ảnh xử lý: {item.processed_image_path}")
-        print(f"Báo cáo JSON: {item.report_json_path}")
-        print(f"Báo cáo MD: {item.report_md_path}")
-        print(f"Metadata: {json.dumps(item.metadata, ensure_ascii=False, indent=2)}")
+        print(f"Ca bệnh #{case.case_id} | Mã bệnh nhân: {case.patient_code} | Thời gian: {case.created_at}")
+        print(f"Nguy cơ: {case.risk_level}")
+        print(f"Ảnh gốc: {case.image_path}")
+        print(f"Ảnh xử lý: {case.processed_image_path}")
+        print(f"Báo cáo JSON: {case.report_json_path}")
+        print(f"Báo cáo MD: {case.report_md_path}")
+        print(f"Metadata: {json.dumps(case.metadata, ensure_ascii=False, indent=2)}")
         return 0
 
     if args.command == "export-case":
-        item = MedicalCaseDatabase().get_case(args.case_id)
-        if item is None:
+        case = MedicalCaseDatabase().get_case(args.case_id)
+        if case is None:
             print(f"Không tìm thấy ca bệnh #{args.case_id}.")
             return 1
         bundle = export_case_bundle(
-            build_case_export_payload(item),
+            build_case_export_payload(case),
             args.output_dir,
-            include_files=[item.image_path, item.processed_image_path, item.report_json_path, item.report_md_path],
+            include_files=[case.image_path, case.processed_image_path, case.report_json_path, case.report_md_path],
             include_pdf=args.pdf,
         )
-        print(f"Đã xuất ca bệnh #{item.case_id}: {bundle}")
+        print(f"Đã xuất ca bệnh #{case.case_id}: {bundle}")
         return 0
 
     if args.command == "delete-case":

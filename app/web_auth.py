@@ -172,7 +172,7 @@ class WebAuthDatabase:
                 "SELECT id, username, email, role, is_active, created_at "
                 "FROM web_users ORDER BY username COLLATE NOCASE"
             ).fetchall()
-        return [self._user(row) for row in rows]
+        return [user for row in rows if (user := self._user(row)) is not None]
 
     def create_user(
         self,
