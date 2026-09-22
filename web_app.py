@@ -578,6 +578,7 @@ async def upload_file(request: Request):
 
 @app.post("/api/analyze", dependencies=[STAFF_REQUIRED])
 def analyze_image(
+    request: Request,
     image_path: str = Form(""),
     patient_code: str = Form("WEB"),
     user_prompt: str = Form(""),
@@ -609,6 +610,11 @@ def analyze_image(
     finally:
         ANALYSIS_SEMAPHORE.release()
     metadata = json.loads(response.metadata_json) if response.metadata_json else {}
+    case_id = metadata.get("medical_case_id")
+    actor = request.state.current_user
+    if actor.role == "clinician" and isinstance(case_id, int):
+        if not get_case_db().assign_case(case_id, actor.username):
+            logger.error("Không thể gán ca #%s cho nhân viên %s.", case_id, actor.username)
 
     if conversation_id and get_db().conversation_exists(conversation_id):
         return {

@@ -5,12 +5,13 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
 import web_app
 from app.web_auth import WebAuthDatabase, hash_password
+from medical.chat_service import MedicalChatResponse
 from medical.storage import MedicalCaseDatabase
 
 
@@ -99,6 +100,30 @@ class WebCaseRoutesTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 409)
 
+    def test_clinician_analysis_assigns_new_case_to_self(self) -> None:
+        clinician, csrf = self.login_as("clinician01", "ValidClinicianPass123!")
+        output_dir = Path(self._tmp.name) / "output"
+        output_dir.mkdir()
+        (output_dir / "scan.png").write_bytes(b"scan")
+        service = Mock()
+        service.analyze_attachment.return_value = MedicalChatResponse(
+            reply_text="Kết quả",
+            attachment_path=None,
+            attachment_kind=None,
+            metadata_json=json.dumps({"medical_case_id": self.case_id}),
+        )
+        with (
+            patch.object(web_app, "OUTPUT_DIR", output_dir),
+            patch.object(web_app, "get_medical_service", return_value=service),
+            patch.object(web_app, "_require_ready_target", return_value=Mock(key="brain")),
+        ):
+            response = clinician.post(
+                "/api/analyze",
+                data={"image_path": "scan.png"},
+                headers={"X-CSRF-Token": csrf},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(web_app.get_case_db().get_case(self.case_id).assigned_to, "clinician01")
     def test_get_missing_case_returns_404(self) -> None:
         self.assertEqual(self.client.get("/api/cases/9999").status_code, 404)
 
