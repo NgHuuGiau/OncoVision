@@ -21,7 +21,6 @@ Model suy luận được chuẩn bị bên ngoài và đặt trong `models/pret
 | Nhóm | Trạng thái |
 |---|---|
 | Não | Có model hiện tại; hỗ trợ 4 nhãn glioma, meningioma, pituitary, no_tumor |
-| Gan, phổi, vú, dạ dày, đại trực tràng, tuyến tiền liệt, cổ tử cung, thận, tụy, tuyến giáp | Đã đăng ký luồng nhận diện đầu vào; chờ model suy luận tương ứng |
 | Nhận diện modality | Dùng model có sẵn nếu được cấu hình |
 
 Khi có model mới, đặt file model và metadata cần thiết vào vị trí cấu hình rồi chạy:

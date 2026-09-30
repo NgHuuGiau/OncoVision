@@ -100,7 +100,7 @@ Kiểm tra app khác có đang dùng webcam, đổi `camera-index` (0, 1, 2).
 
 ### Thiếu model
 
-Kiểm tra `models/pretrained/` và `models/trained/`. Chạy `training/download_models.py` nếu cần tải pretrained.
+Kiểm tra `models/pretrained/` và `models/trained/`. Copy model train sẵn vào đó, không tải tự động.
 
 ### Lỗi CUDA / torch
 

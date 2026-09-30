@@ -27,7 +27,7 @@ Kiểm tra:
 - `models/pretrained/` — model tiền huấn luyện
 - `models/trained/` — model suy luận bổ sung do người dùng cung cấp
 
-Nếu cần tải pretrained: `python training/download_models.py`.
+Copy model train sẵn vào `models/pretrained/`.
 
 ---
 
@@ -57,14 +57,11 @@ python run_medical.py status
 **Trạng thái model (09/2026):**
 - ✅ `brain_classifier.pt` — Não (4 loại u) — **SẴN SÀNG**
 - ✅ `modality_classifier.pt` — 8 modality — **99.93%**
-- ❌ `medical_10_cancers_cnn.pt` — 10 nhóm ung thư ngoài não — **CHƯA CÓ MODEL**
 
 Nếu thiếu model:
 - Bổ sung file đã train vào `models/pretrained/`
 - Hoặc sửa đường dẫn trong `config/medical_settings.yaml`
 - Xem `medical/model_policy.py` để hiểu cách resolve đường dẫn model
-
-> **Lưu ý**: Chưa có model 10 nhóm ung thư → hiện chỉ dùng được brain model. Nhóm bệnh đã có trong catalog nhưng chưa có model suy luận tương ứng.
 
 ---
 
@@ -105,4 +102,3 @@ Nếu lỗi:
 - Kiểm tra port 8000 có bị chiếm: `netstat -ano | findstr :8000`
 - Thử port khác: `python -m uvicorn web_app:app --host 127.0.0.1 --port 8080`
 - Xem log server để tìm lỗi cụ thể
-- Admin DB: `http://127.0.0.1:8000/admin/db`

@@ -29,7 +29,7 @@ OncoVision là ứng dụng suy luận ảnh y khoa. Luồng ứng dụng nhận
   → lưu báo cáo và lịch sử ca
 ```
 
-Nếu không có model phù hợp, hệ thống báo chưa hỗ trợ thay vì suy luận bằng model sai loại. Model não hiện có thể dùng độc lập; các nhóm ung thư khác cần model suy luận tương ứng được cung cấp sau.
+Nếu không có model phù hợp, hệ thống báo chưa hỗ trợ thay vì suy luận bằng model sai loại. Hiện chỉ có model não (u não) và model nhận diện modality.
 
 ## Entrypoint
 

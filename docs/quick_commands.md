@@ -33,7 +33,6 @@ python web_app.py
 # hoặc
 python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
 # Mở http://127.0.0.1:8000
-# Admin DB: http://127.0.0.1:8000/admin/db
 ```
 
 ---
@@ -72,9 +71,6 @@ python run_doctor.py --skip-camera-check
 |---|---|---|---|
 | **Brain** | `brain_classifier.pt` | ✅ **Sẵn sàng** | 4 loại u não (glioma/meningioma/pituitary/no_tumor) — fallback tự động |
 | **Modality** | `modality_classifier.pt` | ✅ **99.93%** | 8 loại ảnh (CT, MRI, X-quang, Mammogram, Nội soi, Siêu âm, PET/CT, EUS) |
-| **10 nhóm ung thư ngoài não** | `medical_10_cancers_cnn.pt` | ❌ **Chưa có model** | Model suy luận sẽ được bổ sung bên ngoài |
-
-> **Hành vi hiện tại**: Thiếu model 10 nhóm → chỉ phân tích được ảnh não. Không xem các nhóm mới đăng ký là đã được AI hỗ trợ lâm sàng.
 
 ---
 
@@ -109,3 +105,17 @@ python run_chat.py --check-only
 1. Đặt model và metadata cần thiết vào `models/pretrained/`
 2. Chạy `python run_doctor.py --skip-camera-check` để xác nhận nhận diện
 3. `python run_medical.py analyze --image ...` để test
+
+---
+
+## 9. Bảo trì định kỳ
+
+```powershell
+# Sao lưu DB (giữ 7 bản mới nhất trong output/backups/)
+python run_medical.py backup-db
+
+# Dọn file output cũ hơn 30 ngày
+python run_chat.py --cleanup-output --older-than-days 30
+```
+
+Biến môi trường: `ONCOVISION_MAX_CONCURRENT_ANALYSIS` (mặc định 1) — số ca web phân tích song song; chỉ tăng khi GPU còn dư VRAM.

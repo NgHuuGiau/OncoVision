@@ -2,34 +2,26 @@
 
 Web app không có tài khoản mặc định và không mở đăng ký công khai. Tài khoản được lưu trong `output/onco.db`, bảng `web_users`. Khi khởi chạy server lần đầu, ứng dụng tự tạo bảng nhưng không tự tạo admin.
 
-## Tạo admin đầu tiên bằng SQL
+## Tạo admin đầu tiên bằng CLI
 
-1. Khởi chạy web app một lần để tạo `output/onco.db` và bảng `web_users`.
-2. Tạo hash mật khẩu an toàn bằng lệnh sau; mật khẩu được nhập ẩn và phải dài ít nhất 12 ký tự:
+1. Khởi chạy web app một lần để tạo `output/onco.db` và bảng `web_users` (hoặc CLI tự tạo).
+2. Chạy lệnh sau; mật khẩu nhập ẩn, ít nhất 12 ký tự:
 
    ```powershell
-   python -m app.web_auth hash-password
+   python -m app.web_auth create-admin --username admin --email admin@example.com
    ```
 
-3. Mở `output/onco.db` bằng DB Browser for SQLite hoặc công cụ SQLite bạn đang dùng, rồi chạy SQL sau. Thay `<HASH_VUA_TAO>` và email admin đã xác minh:
+3. Đăng nhập tại `/login`. Tên đã tồn tại thì chọn username khác.
 
-   ```sql
-   INSERT INTO web_users (username, password_hash, email, role, is_active)
-   VALUES ('admin', '<HASH_VUA_TAO>', 'admin@example.com', 'admin', 1);
-   ```
-
-4. Đăng nhập tại `/login`. Nếu tên `admin` đã tồn tại, hãy chọn username khác hoặc cập nhật bản ghi hiện có.
-5. Khởi chạy web với cấu hình Gmail SMTP bên dưới. Email admin cần là hộp thư bạn có thể truy cập.
-
-Không lưu mật khẩu dạng chữ thường trong SQL. Hash dùng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên.
+Muốn hash rời để chèn tay thì dùng `python -m app.web_auth hash-password`. Không lưu mật khẩu dạng chữ thường. Hash dùng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên.
 
 ## Vai trò
 
 | Vai trò | Quyền |
 |---|---|
-| `admin` | Tạo/đổi vai trò/khóa tài khoản; tải dữ liệu, chạy phân tích và phân công từng ca tại `/admin/users` và màn hình chính |
-| `clinician` | Chỉ xem ca được giao; kiểm tra ảnh/kết quả, chỉnh mức nguy cơ và khuyến nghị, rồi duyệt báo cáo |
-| `viewer` | Chỉ tra cứu bằng mã 10 ký tự do nhân viên y tế cấp và đọc/tải PDF của kết quả đã duyệt; không xem danh sách ca, hội thoại hoặc ảnh gốc |
+| `admin` | Tạo/đổi vai trò/khóa tài khoản; tải dữ liệu, chạy phân tích, phân công ca, **duyệt kết quả nhân viên gửi và gán ca cho tài khoản người dùng** |
+| `clinician` | Chỉ xem ca được giao; kiểm tra ảnh/kết quả, chỉnh mức nguy cơ và khuyến nghị, rồi **gửi admin duyệt** (chưa phát hành) |
+| `viewer` | Xem **danh sách ca được gán cho mình** + tải PDF; vẫn tra cứu được bằng mã 10 ký tự; không xem ca người khác, hội thoại hoặc ảnh gốc chưa duyệt |
 
 Admin tạo tài khoản và gán email khôi phục trong trang **Quản lý tài khoản**. Khi quên mật khẩu, người dùng chỉ nhập username; hệ thống tự tìm email đã lưu và gửi mã 6 ký tự đến đó. Sau khi nhận thư, người dùng nhập mã và mật khẩu mới, không cần nhập lại username/email. Mã được lưu dưới dạng hash, dùng một lần, hết hạn sau 10 phút và không hiển thị trên trang. Email phải được xác minh với người dùng trước khi lưu. Tài khoản SQL cũ chưa có email cần được cập nhật trong trang quản trị trước khi khôi phục. Mã khôi phục cũ không có thời hạn bị vô hiệu hóa khi cập nhật cơ sở dữ liệu.
 
@@ -54,9 +46,9 @@ Hệ thống không cho khóa hoặc hạ quyền admin cuối cùng. Mọi phi�
 ### Luồng xử lý ca bệnh
 
 1. Admin tải ảnh/dữ liệu lên, chạy phân tích và giao ca cho một tài khoản `clinician` đang hoạt động.
-2. Nhân viên chỉ thấy các ca được giao cho chính tài khoản đó. Họ rà soát ảnh và kết quả AI, chỉnh mức nguy cơ/khuyến nghị nếu cần, rồi bấm **Lưu và duyệt kết quả**.
-3. Khi duyệt, hệ thống tạo mã tra cứu ngẫu nhiên 10 ký tự. Chuyển ca sang nhân viên khác sẽ đưa ca về trạng thái chờ duyệt và vô hiệu hóa mã cũ.
-4. Người dùng đăng nhập bằng vai trò `viewer`, nhập mã được cấp để đọc tóm tắt đã duyệt hoặc tải PDF. Tệp PDF dành cho người đọc không chứa đường dẫn nội bộ hay ảnh gốc.
+2. Nhân viên chỉ thấy các ca được giao cho chính tài khoản đó. Họ rà soát ảnh và kết quả AI, chỉnh mức nguy cơ/khuyến nghị nếu cần, rồi bấm **Lưu và gửi admin duyệt** (chưa phát hành cho người dùng).
+3. Admin duyệt ca đã gửi trong modal **Phân công ca bệnh** (nút Duyệt & phát hành), hệ thống tạo mã tra cứu 10 ký tự; sau đó admin **gán ca cho tài khoản `viewer`** của người bệnh. Chuyển ca sang nhân viên khác sẽ đưa ca về chờ duyệt, vô hiệu mã cũ và gỡ link tài khoản.
+4. Người dùng đăng nhập bằng vai trò `viewer` xem mục **Ca của tôi** để đọc khuyến nghị và tải PDF (vẫn tra được bằng mã). Tệp PDF dành cho người đọc không chứa đường dẫn nội bộ hay ảnh gốc.
 
 API cũng kiểm tra vai trò và quyền sở hữu ca; ẩn nút trên giao diện không phải biện pháp phân quyền. Mã tra cứu là thông tin cần giữ kín và chỉ gửi cho đúng người nhận. Ứng dụng hiện vẫn phù hợp chạy localhost; trước khi cho nhiều máy truy cập cần bổ sung triển khai HTTPS, sao lưu và quy trình bảo vệ dữ liệu bệnh nhân.
 

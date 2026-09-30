@@ -19,12 +19,11 @@
 |---|---|
 | **Modality Classifier** | ✅ Sẵn sàng — ResNet18, 8 loại ảnh, **99.93% acc** (test 5,640 ảnh) |
 | **Brain Classifier** | ✅ Sẵn sàng — ConvNeXt-Tiny, 4 loại u não (glioma/meningioma/pituitary/no_tumor), **fallback tự động** khi thiếu model tổng |
-| **Model 10 nhóm ung thư** | ❌ Chưa có — cần bổ sung model suy luận đã xây dựng bên ngoài |
 | **Web UI (FastAPI)** | ✅ Chạy được — `python web_app.py` → http://127.0.0.1:8000 |
 | **Desktop Chat (PySide6)** | ✅ Chạy được — `python run_chat.py` |
 | **Test suite** | ✅ **293 tests pass** |
 
-> **Lưu ý**: Model hiện có chỉ phân tích **u não**. Mười nhóm còn lại đã có trong catalog/luồng nhận diện đầu vào nhưng chỉ được phân tích khi bạn bổ sung model suy luận tương ứng. Việc chuẩn bị dữ liệu và tạo model diễn ra bên ngoài ứng dụng.
+> **Lưu ý**: Dự án đang thử nghiệm 2 model — **u não** và **modality**. Catalog chỉ có nhóm u não; nhóm khác trả lỗi khi gọi phân tích.
 
 ---
 
@@ -33,7 +32,7 @@
 | Nhóm | Mô tả |
 |---|---|
 | **Chat AI Y khoa** | Giao diện desktop (PySide6) và web (FastAPI) để đặt câu hỏi, tải ảnh y khoa và nhận phân tích tự động |
-| **Phân tích ảnh y tế** | **U não** (4 loại u) — modality tự động nhận diện; 10 nhóm khác chờ model suy luận |
+| **Phân tích ảnh y tế** | **U não** (4 loại u) — modality tự động nhận diện (8 loại ảnh) |
 | **Camera thông minh** | Chạy realtime object detection với nhiều chế độ (auto/high/medium/low), tự động gợi ý cấu hình runtime phù hợp với máy |
 
 ---
@@ -116,16 +115,13 @@ Hệ thống **chỉ suy luận bằng model có sẵn**. Hãy đặt model đã
 # Đặt các model suy luận đã chuẩn bị bên ngoài vào models/pretrained/:
 #   brain_classifier.pt        → Não (4 sub-label) — **ĐÃ CÓ, SẴN SÀNG**
 #   modality_classifier.pt     → Modality (8 loại ảnh y tế) — **ĐÃ CÓ, 99.93%**
-#   medical_10_cancers_cnn.pt  → 10 nhóm ung thư ngoài não — **chưa được bổ sung**
 
 # Kiểm tra hệ thống đã nhận đủ model chưa
 python run_doctor.py --skip-camera-check
 
-# Phân tích 1 ảnh (ưu tiên não)
+# Phân tích 1 ảnh não
 python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
 ```
-
-> Thiếu `medical_10_cancers_cnn.pt` thì ứng dụng không giả vờ chẩn đoán các nhóm còn lại; hiện chỉ có thể phân tích bằng model não.
 
 ---
 
@@ -138,8 +134,7 @@ OncoVision/
 │   └── chat_ui/            # Chat desktop, theme, storage, widgets
 ├── core/                   # Xử lý camera, model loader, hardware info
 ├── medical/                # Kiểm tra ảnh, suy luận, giải thích và báo cáo
-├── training/               # Tiện ích terminal và tải model camera; không có pipeline huấn luyện
-├── utils/                  # Helper dùng chung
+├── utils/                  # Helper dùng chung (console, terminal UI, file, camera)
 ├── config/                 # Cấu hình YAML
 ├── models/                 # Mô hình
 │   ├── pretrained/         # Model suy luận (brain, modality, yolo11*)
