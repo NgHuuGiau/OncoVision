@@ -7,6 +7,12 @@ import sys
 import time
 from pathlib import Path
 
+from app.chat_ui.desktop_auth import (
+    authenticate_desktop_user,
+    can_analyze,
+    create_bootstrap_admin,
+    needs_bootstrap,
+)
 from app.chat_ui.medical_controller import MedicalChatController
 from app.chat_ui.medical_worker import build_patient_code, create_medical_worker_base
 from app.chat_ui.models import ChatMessage, Conversation
@@ -33,6 +39,7 @@ except ImportError:
 
 
 def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str = "medium", selected_model: str | None = None) -> int:
+    whisper_model_path = Path("models/pretrained/whisper-small")
     try:
         from PySide6.QtCore import (
             QEasingCurve,
@@ -89,7 +96,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         import pyaudio
         import torch
         from faster_whisper import WhisperModel
-        VOICE_LOCAL_AVAILABLE = True
+        VOICE_LOCAL_AVAILABLE = whisper_model_path.is_dir()
     except ImportError:
         VOICE_LOCAL_AVAILABLE = False
 
@@ -100,7 +107,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         model = voice_model_cache.get(cache_key)
         if model is None:
             compute_type = "int8" if device == "cpu" else "float16"
-            model = WhisperModel("small", device=device, compute_type=compute_type)
+            model = WhisperModel(
+                str(whisper_model_path), device=device, compute_type=compute_type, local_files_only=True
+            )
             voice_model_cache[cache_key] = model
         return model
 
@@ -868,6 +877,10 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                 self.scroll_to_bottom()
 
         def _start_medical_analysis(self, *, prompt: str, attach_path: str, attach_kind: str = "") -> None:
+            current_user = getattr(self, "current_user", None)
+            if current_user is not None and not can_analyze(current_user.role):
+                self.add_message(ChatMessage(sender="assistant", text="Tài khoản của bạn chỉ có quyền xem. Liên hệ quản trị viên nếu cần phân tích ảnh."))
+                return
             if self.medical_controller.active:
                 self.add_message(ChatMessage(sender="assistant", text=tr(self.language, "medical_pending")))
                 return
@@ -1125,8 +1138,68 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def open_settings(self) -> None:
             SettingsDialog(parent_window=self).exec()
 
+    from app.web_auth import WebAuthDatabase
+
+    def _run_desktop_login() -> object | None:
+        """Hộp thoại đăng nhập desktop dùng chung DB web. None = hủy/thất bại."""
+        from app.chat_ui.paths import CHAT_HISTORY_DB_PATH as _DB_PATH
+
+        auth_db = WebAuthDatabase(_DB_PATH)
+        dialog = QDialog()
+        dialog.setWindowTitle("Đăng nhập OncoVision")
+        dialog.setMinimumWidth(320)
+        layout = QVBoxLayout(dialog)
+        info = QLabel("Đăng nhập để dùng OncoVision desktop.")
+        layout.addWidget(info)
+        if needs_bootstrap(auth_db):
+            info.setText("Chưa có tài khoản nào. Hãy tạo tài khoản admin đầu tiên.")
+        layout.addWidget(QLabel("Tên đăng nhập:"))
+        username_edit = QLineEdit()
+        layout.addWidget(username_edit)
+        layout.addWidget(QLabel("Mật khẩu:"))
+        password_edit = QLineEdit()
+        password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        layout.addWidget(password_edit)
+        error_label = QLabel("")
+        layout.addWidget(error_label)
+        login_button = QPushButton("Tạo admin" if needs_bootstrap(auth_db) else "Đăng nhập")
+        layout.addWidget(login_button)
+        chosen: dict[str, object] = {}
+
+        def _submit() -> None:
+            username = username_edit.text().strip()
+            password = password_edit.text()
+            if needs_bootstrap(auth_db):
+                if len(password) < 12:
+                    error_label.setText("Mật khẩu phải từ 12 ký tự.")
+                    return
+                user = create_bootstrap_admin(auth_db, username, password)
+                if user is None:
+                    error_label.setText("Không tạo được (tên đã tồn tại hoặc sai quy tắc).")
+                    return
+                chosen["user"] = user
+                dialog.accept()
+                return
+            user = authenticate_desktop_user(auth_db, username, password)
+            if user is None:
+                error_label.setText("Sai tên/mật khẩu hoặc tài khoản tạm khóa.")
+                return
+            chosen["user"] = user
+            dialog.accept()
+
+        login_button.clicked.connect(_submit)
+        password_edit.returnPressed.connect(_submit)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return chosen.get("user")
+
     app = QApplication.instance() or QApplication(sys.argv)
+    login_user = _run_desktop_login()
+    if login_user is None:
+        return 1
     window = ChatWindow(title=window_title, initial_camera_index=camera_index, mode_label=app_mode, model_label=selected_model)
+    window.current_user = login_user
+    window.setWindowTitle(f"{window_title} — {login_user.username} ({login_user.role})")
     window.show()
     return app.exec()
 

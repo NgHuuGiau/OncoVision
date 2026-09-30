@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 from medical.case_payloads import build_case_export_payload, build_detection_metadata
 from medical.cli_helpers import print_medical_status_block
@@ -48,6 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     cleanup = subparsers.add_parser("cleanup-output", help="Dọn tệp kết quả y khoa cũ.")
     cleanup.add_argument("--older-than-days", type=int, default=None)
+
+    backup = subparsers.add_parser("backup-db", help="Sao lưu SQLite onco.db (chat + ca bệnh + tài khoản).")
+    backup.add_argument("--keep", type=int, default=7, help="Giữ lại N bản sao lưu mới nhất.")
     return parser
 
 
@@ -166,6 +170,34 @@ def main() -> int:
     if args.command == "cleanup-output":
         summary = cleanup_directories(_medical_output_directories(), older_than_days=args.older_than_days)
         print(f"Đã xóa {summary.removed_files} tệp, {summary.removed_dirs} thư mục rỗng; giải phóng {summary.freed_bytes} byte.")
+        return 0
+
+    if args.command == "backup-db":
+        import sqlite3
+        import time
+
+        from app.chat_ui.paths import CHAT_HISTORY_DB_PATH
+
+        backup_dir = Path("output/backups")
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        dest = backup_dir / f"onco_{time.strftime('%Y%m%d_%H%M%S')}.db"
+        try:
+            src_conn = sqlite3.connect(str(CHAT_HISTORY_DB_PATH))
+            try:
+                dst_conn = sqlite3.connect(str(dest))
+                try:
+                    src_conn.backup(dst_conn)
+                finally:
+                    dst_conn.close()
+            finally:
+                src_conn.close()
+        except Exception as exc:
+            print(f"Sao lưu thất bại: {exc}")
+            return 1
+        keep = max(1, args.keep)
+        for old in sorted(backup_dir.glob("onco_*.db"))[: -keep]:
+            old.unlink(missing_ok=True)
+        print(f"Đã sao lưu: {dest}")
         return 0
 
     return 2

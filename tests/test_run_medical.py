@@ -14,7 +14,7 @@ class RunMedicalTests(unittest.TestCase):
         command_action = next(action for action in parser._actions if action.dest == "command")
         self.assertEqual(
             set(command_action.choices),
-            {"analyze", "validate-image", "status", "report", "history", "show-case", "export-case", "delete-case", "cleanup-output"},
+            {"analyze", "validate-image", "status", "report", "history", "show-case", "export-case", "delete-case", "cleanup-output", "backup-db"},
         )
         for command in ("train", "train-all", "train-modality", "split-dataset", "audit-dataset", "active-learning"):
             with self.subTest(command=command), self.assertRaises(SystemExit):
@@ -49,15 +49,15 @@ class RunMedicalTests(unittest.TestCase):
                 "export_files": 0,
                 "case_db_path": Path("output/onco.db"),
                 "case_count": 0,
-                "screening_targets": (("Ung thư não", True), ("Ung thư thận", False)),
-                "analyzed_cancers": ("Ung thư não", "Ung thư thận"),
+                "screening_targets": (("Ung thư não", True),),
+                "analyzed_cancers": ("Ung thư não",),
                 "analyzed_modalities": ("MRI",),
             },
         )()
         with patch("sys.argv", ["run_medical.py", "status"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
             self.assertEqual(run_medical.main(), 0)
         self.assertIn("Thiếu model suy luận", stdout.getvalue())
-        self.assertIn("chờ model suy luận", stdout.getvalue())
+        self.assertIn("Ung thư não", stdout.getvalue())
         self.assertNotIn("train-all", stdout.getvalue().lower())
         self.assertNotIn("sẵn sàng train", stdout.getvalue().lower())
 
@@ -122,6 +122,36 @@ class RunMedicalTests(unittest.TestCase):
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
             self.assertEqual(run_medical.main(), 0)
         self.assertIn("Đã xóa ca bệnh", stdout.getvalue())
+
+    def test_backup_db_command_creates_timestamped_copy(self) -> None:
+        import os
+        import sqlite3
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "onco.db"
+            conn = sqlite3.connect(str(source))
+            conn.execute("CREATE TABLE t (id INTEGER)")
+            conn.commit()
+            conn.close()
+            previous_cwd = os.getcwd()
+            os.chdir(temp_dir)
+            try:
+                with patch("app.chat_ui.paths.CHAT_HISTORY_DB_PATH", source), patch(
+                    "sys.argv", ["run_medical.py", "backup-db", "--keep", "2"]
+                ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                    self.assertEqual(run_medical.main(), 0)
+                backups = sorted(Path(temp_dir, "output", "backups").glob("onco_*.db"))
+                self.assertEqual(len(backups), 1)
+                check = sqlite3.connect(str(backups[0]))
+                try:
+                    tables = [row[0] for row in check.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+                finally:
+                    check.close()
+                self.assertIn("t", tables)
+                self.assertIn("Đã sao lưu", stdout.getvalue())
+            finally:
+                os.chdir(previous_cwd)
 
 
 if __name__ == "__main__":

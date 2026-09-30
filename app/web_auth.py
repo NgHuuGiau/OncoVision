@@ -388,20 +388,47 @@ _DUMMY_PASSWORD_HASH = hash_password("OncoVision-invalid-account-placeholder")
 
 
 def main() -> int:
-    if sys.argv[1:] != ["hash-password"]:
-        print("Dùng: python -m app.web_auth hash-password", file=sys.stderr)
-        return 2
-    password = getpass.getpass("Nhập mật khẩu (ít nhất 12 ký tự): ")
-    confirmation = getpass.getpass("Nhập lại mật khẩu: ")
-    if password != confirmation:
-        print("Mật khẩu nhập lại không khớp.", file=sys.stderr)
-        return 1
-    try:
-        print(hash_password(password))
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    return 0
+    if sys.argv[1:2] == ["hash-password"] and len(sys.argv) == 2:
+        password = getpass.getpass("Nhập mật khẩu (ít nhất 12 ký tự): ")
+        confirmation = getpass.getpass("Nhập lại mật khẩu: ")
+        if password != confirmation:
+            print("Mật khẩu nhập lại không khớp.", file=sys.stderr)
+            return 1
+        try:
+            print(hash_password(password))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        return 0
+    if sys.argv[1:2] == ["create-admin"]:
+        import argparse
+
+        from app.chat_ui.paths import CHAT_HISTORY_DB_PATH
+
+        parser = argparse.ArgumentParser(description="Tạo tài khoản admin OncoVision.")
+        parser.add_argument("--username", required=True)
+        parser.add_argument("--email", required=True)
+        parser.add_argument("--db", default=str(CHAT_HISTORY_DB_PATH))
+        args = parser.parse_args(sys.argv[2:])
+        password = getpass.getpass("Nhập mật khẩu (ít nhất 12 ký tự): ")
+        confirmation = getpass.getpass("Nhập lại mật khẩu: ")
+        if password != confirmation:
+            print("Mật khẩu nhập lại không khớp.", file=sys.stderr)
+            return 1
+        try:
+            password_hash = hash_password(password)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        try:
+            user_id = WebAuthDatabase(args.db).create_user(args.username, password_hash, "admin", email=args.email)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"Đã tạo admin '{args.username}' (id={user_id}).")
+        return 0
+    print("Dùng: python -m app.web_auth hash-password | create-admin --username X --email Y", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":

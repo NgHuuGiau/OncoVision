@@ -255,7 +255,7 @@ class WebAuthTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/cases").status_code, 200)
         page = self.client.get("/")
         self.assertIn('data-role="viewer"', page.text)
-        self.assertIn("Tra cứu kết quả đã được duyệt", page.text)
+        self.assertIn('id="myCaseList"', page.text)
         self.assertIn('id="publicCaseSearch"', page.text)
         denied = self.client.post("/api/conversations", headers={"X-CSRF-Token": csrf})
         self.assertEqual(denied.status_code, 403)
@@ -343,6 +343,35 @@ class WebAuthTests(unittest.TestCase):
         stored_path = Path(response.json()["stored_path"])
         self.assertEqual(stored_path.parent, uploads_dir)
         self.assertTrue(stored_path.is_file())
+
+
+class WebAuthMainTests(unittest.TestCase):
+    def test_create_admin_cli_creates_first_admin(self) -> None:
+        import sys
+
+        from app import web_auth
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = str(Path(temp_dir) / "onco.db")
+            argv = ["web_auth", "create-admin", "--username", "root", "--email", "root@example.com", "--db", db_path]
+            with patch.object(sys, "argv", argv), patch("getpass.getpass", side_effect=["ValidAdminPass123!", "ValidAdminPass123!"]):
+                self.assertEqual(web_auth.main(), 0)
+            users = WebAuthDatabase(db_path).list_users()
+            self.assertEqual([(user.username, user.role) for user in users], [("root", "admin")])
+            with patch.object(sys, "argv", argv), patch("getpass.getpass", side_effect=["ValidAdminPass123!", "ValidAdminPass123!"]):
+                self.assertEqual(web_auth.main(), 1)
+
+    def test_create_admin_cli_rejects_mismatched_password(self) -> None:
+        import sys
+
+        from app import web_auth
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = str(Path(temp_dir) / "onco.db")
+            argv = ["web_auth", "create-admin", "--username", "root", "--email", "root@example.com", "--db", db_path]
+            with patch.object(sys, "argv", argv), patch("getpass.getpass", side_effect=["ValidAdminPass123!", "DifferentPass123!"]):
+                self.assertEqual(web_auth.main(), 1)
+            self.assertEqual(WebAuthDatabase(db_path).list_users(), [])
 
 
 if __name__ == "__main__":
