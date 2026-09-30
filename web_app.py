@@ -52,7 +52,16 @@ WEB_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 _UPLOAD_CHUNK_BYTES = 1024 * 1024
 MAX_FORM_BYTES = 1024 * 1024
-ANALYSIS_SEMAPHORE = threading.BoundedSemaphore(1)
+
+
+def _max_concurrent_analyses() -> int:
+    try:
+        return max(1, int(os.environ.get("ONCOVISION_MAX_CONCURRENT_ANALYSIS", "1")))
+    except ValueError:
+        return 1
+
+
+ANALYSIS_SEMAPHORE = threading.BoundedSemaphore(_max_concurrent_analyses())
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -518,8 +527,6 @@ def _require_ready_target(target_key: str, modality: str):
     target = get_cancer_target(target_key)
     if target is None:
         raise HTTPException(status_code=400, detail="Nhóm bệnh không hợp lệ.")
-    if not target.model_ready:
-        raise HTTPException(status_code=409, detail=f"{target.label} chưa có model suy luận tích hợp.")
     if modality and modality not in target.modalities:
         raise HTTPException(status_code=400, detail="Modality không phù hợp với nhóm bệnh đã chọn.")
     return target
@@ -604,6 +611,15 @@ def analyze_image(
             target_key=target.key,
             modality=modality or None,
         )
+    except ValueError as exc:
+        # Lỗi đầu vào do pipeline báo (TARGET_MISMATCH, UNKNOWN_TARGET, mã validator...)
+        # thì trả 400; chỉ lỗi cấu hình server mới 500.
+        detail = str(exc)
+        if detail.startswith("Cấu hình medical không hợp lệ"):
+            logger.exception("Cấu hình medical sai.")
+            raise HTTPException(status_code=500, detail="Cấu hình hệ thống chưa đúng. Vui lòng kiểm tra nhật ký hệ thống.")
+        _, _, message = detail.partition(":")
+        raise HTTPException(status_code=400, detail=message.strip() or detail)
     except Exception:
         logger.exception("Phân tích ảnh thất bại.")
         raise HTTPException(status_code=500, detail="Không thể phân tích ảnh. Vui lòng thử lại hoặc kiểm tra nhật ký hệ thống.")
@@ -677,6 +693,7 @@ def _case_summary(record) -> dict:
         "reviewed_by": record.reviewed_by,
         "reviewed_at": record.reviewed_at,
         "public_code": record.public_code,
+        "patient_username": record.patient_username,
         "modality": record.metadata.get("modality"),
         "body_region": record.metadata.get("body_region"),
     }
@@ -685,13 +702,26 @@ def _case_summary(record) -> dict:
 @app.get("/api/cases")
 def list_cases(request: Request, limit: int = 50, offset: int = 0):
     user = request.state.current_user
-    if user.role == "viewer":
-        return {"ok": True, "cases": []}
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
-    records = get_case_db().list_cases(assigned_to=user.username if user.role == "clinician" else None, limit=limit, offset=offset)
+    if user.role == "viewer":
+        records = get_case_db().list_cases_for_patient(user.username, limit=limit, offset=offset)
+    else:
+        records = get_case_db().list_cases(assigned_to=user.username if user.role == "clinician" else None, limit=limit, offset=offset)
     cases = [_case_summary(record) for record in records]
     return {"ok": True, "cases": cases}
+
+
+def _can_read_case(record, user) -> bool:
+    if user.role == "admin":
+        return True
+    if user.role == "clinician":
+        return record.assigned_to == user.username
+    return (
+        record.review_status == "approved"
+        and record.patient_username is not None
+        and record.patient_username.casefold() == user.username.casefold()
+    )
 
 
 @app.get("/api/cases/{case_id}")
@@ -700,7 +730,7 @@ def get_case(case_id: int, request: Request):
     if record is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
     user = request.state.current_user
-    if user.role == "viewer" or (user.role == "clinician" and record.assigned_to != user.username):
+    if not _can_read_case(record, user):
         raise HTTPException(status_code=403, detail="Bạn không được phân quyền xem ca bệnh này.")
     return {"ok": True, "case": _case_summary(record)}
 
@@ -711,6 +741,15 @@ def list_clinicians():
         {"username": user.username}
         for user in get_auth_db().list_users()
         if user.role == "clinician" and user.is_active
+    ]}
+
+
+@app.get("/api/viewers", dependencies=[ADMIN_REQUIRED])
+def list_viewers():
+    return {"ok": True, "viewers": [
+        {"username": user.username}
+        for user in get_auth_db().list_users()
+        if user.role == "viewer" and user.is_active
     ]}
 
 
@@ -728,13 +767,14 @@ def assign_case(case_id: int, username: str = Form(...)):
 
 
 @app.post("/api/cases/{case_id}/review", dependencies=[Depends(require_role("clinician"))])
-def approve_case(
+def submit_case_review(
     case_id: int,
     request: Request,
     risk_level: str = Form(...),
     suspected_malignant: bool = Form(...),
     recommendation: str = Form(...),
 ):
+    """Nhân viên rà soát xong gửi chờ admin duyệt (chưa publish cho người dùng)."""
     if risk_level not in {"low", "medium", "high", "uncertain"}:
         raise HTTPException(status_code=400, detail="Mức nguy cơ không hợp lệ.")
     recommendation = recommendation.strip()
@@ -747,22 +787,64 @@ def approve_case(
     user = request.state.current_user
     if record.assigned_to != user.username:
         raise HTTPException(status_code=403, detail="Ca bệnh chưa được phân công cho bạn.")
+    if not db.submit_review(
+        case_id,
+        reviewer=user.username,
+        risk_level=risk_level,
+        suspected_malignant=suspected_malignant,
+        recommendation=recommendation,
+    ):
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    return {"ok": True, "review_status": "submitted"}
+
+
+@app.post("/api/cases/{case_id}/approve", dependencies=[ADMIN_REQUIRED])
+def approve_case(case_id: int):
+    """Admin duyệt kết quả nhân viên đã gửi, phát hành mã tra cứu cho người dùng."""
+    db = get_case_db()
+    record = db.get_case(case_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    if record.review_status not in {"submitted", "approved"}:
+        raise HTTPException(status_code=409, detail="Ca bệnh chưa được nhân viên gửi duyệt.")
+    if record.review_status == "approved" and record.public_code:
+        return {"ok": True, "public_code": record.public_code}
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     for _ in range(5):
         public_code = "".join(secrets.choice(alphabet) for _ in range(10))
         try:
             if db.approve_case(
                 case_id,
-                reviewer=user.username,
-                risk_level=risk_level,
-                suspected_malignant=suspected_malignant,
-                recommendation=recommendation,
+                reviewer=record.reviewed_by or "admin",
+                risk_level=record.risk_level,
+                suspected_malignant=record.suspected_malignant,
+                recommendation=record.recommendation,
                 public_code=public_code,
             ):
                 return {"ok": True, "public_code": public_code}
         except sqlite3.IntegrityError:
             continue
     raise HTTPException(status_code=500, detail="Không thể tạo mã đọc kết quả, vui lòng thử lại.")
+
+
+@app.post("/api/cases/{case_id}/link-patient", dependencies=[ADMIN_REQUIRED])
+def link_case_patient(case_id: int, username: str = Form(...)):
+    """Admin gán ca đã duyệt cho tài khoản người dùng để họ đăng nhập xem."""
+    patient = next(
+        (user for user in get_auth_db().list_users() if user.username.casefold() == username.strip().casefold()),
+        None,
+    )
+    if patient is None or patient.role != "viewer" or not patient.is_active:
+        raise HTTPException(status_code=400, detail="Hãy chọn tài khoản người dùng đang hoạt động.")
+    db = get_case_db()
+    record = db.get_case(case_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    if record.review_status != "approved":
+        raise HTTPException(status_code=409, detail="Chỉ gán tài khoản cho ca đã được admin duyệt.")
+    if not db.link_patient(case_id, patient.username):
+        raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
+    return {"ok": True}
 
 
 @app.get("/api/public/cases/{public_code}", dependencies=[Depends(require_role("viewer"))])
@@ -818,7 +900,7 @@ def get_case_image(case_id: int, request: Request):
     if record is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
     user = request.state.current_user
-    if user.role == "viewer" or (user.role == "clinician" and record.assigned_to != user.username):
+    if not _can_read_case(record, user):
         raise HTTPException(status_code=403, detail="Bạn không được xem ảnh của ca bệnh này.")
     image_path = Path(record.processed_image_path).resolve()
     if not image_path.is_relative_to(OUTPUT_DIR.resolve()) or not image_path.is_file():
@@ -832,7 +914,7 @@ def download_case_pdf(case_id: int, request: Request):
     if record is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy ca bệnh.")
     user = request.state.current_user
-    if user.role == "viewer" or (user.role == "clinician" and record.assigned_to != user.username):
+    if not _can_read_case(record, user):
         raise HTTPException(status_code=403, detail="Bạn không được xuất ca bệnh này.")
     try:
         pdf_path = export_case_pdf(OUTPUT_DIR / "medical" / "reports", build_case_export_payload(record))

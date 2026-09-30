@@ -176,9 +176,7 @@ function updateTargetSelection() {
   if (!target) return;
   updateModalityList(target.modalities);
   const th = document.getElementById('targetHint');
-  if (th) th.textContent = target.model_ready
-    ? 'Ảnh thường dùng: ' + target.modalities.join(', ')
-    : (target.notes || 'Nhóm bệnh này chưa có model suy luận tích hợp.');
+  if (th) th.textContent = 'Ảnh thường dùng: ' + target.modalities.join(', ');
 }
 
 function updateModalityList(modalities) {
@@ -589,8 +587,8 @@ async function triggerAIScreening() {
   const selected = selectedTarget();
   const modalitySelect = document.getElementById('modalitySelect');
   const modality = modalitySelect ? modalitySelect.value : '';
-  if (!selected || !selected.model_ready) {
-    alert('Nhóm bệnh này chưa có model suy luận tích hợp.');
+  if (!selected) {
+    alert('Chưa chọn nhóm bệnh.');
     return;
   }
   if (input && !input.value.trim()) {
@@ -694,7 +692,7 @@ async function sendMessage() {
       fd.append('image_path', att.path);
       fd.append('user_prompt', prompt);
       const target = selectedTarget();
-      if (!target || !target.model_ready) throw new Error('Nhóm bệnh chưa có model suy luận tích hợp.');
+      if (!target) throw new Error('Chưa chọn nhóm bệnh.');
       fd.append('target_key', target.key);
       fd.append('modality', document.getElementById('modalitySelect')?.value || '');
       if (c.id) fd.append('conversation_id', c.id);

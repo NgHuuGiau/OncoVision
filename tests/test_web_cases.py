@@ -82,23 +82,23 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["case"]["patient_code"], "TEST-001")
 
-    def test_web_ui_lists_new_targets_as_not_model_ready(self) -> None:
+    def test_web_ui_lists_only_brain_target(self) -> None:
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Ung thư thận", response.text)
-        self.assertIn("Ung thư tụy", response.text)
-        self.assertIn("Ung thư tuyến giáp", response.text)
+        self.assertIn("Ung thư não", response.text)
+        self.assertNotIn("Ung thư thận", response.text)
+        self.assertNotIn("Ung thư tuyến giáp", response.text)
         self.assertIn("model_ready", response.text)
         self.assertIn('id="caseAssignmentModal"', response.text)
         self.assertIn('id="lightBtn"', response.text)
 
-    def test_analyze_rejects_target_without_runtime_model(self) -> None:
+    def test_analyze_rejects_unknown_target(self) -> None:
         response = self.client.post(
             "/api/analyze",
             data={"image_path": "not-used", "target_key": "thyroid"},
             headers={"X-CSRF-Token": self.csrf},
         )
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 400)
 
     def test_clinician_analysis_assigns_new_case_to_self(self) -> None:
         clinician, csrf = self.login_as("clinician01", "ValidClinicianPass123!")
@@ -124,6 +124,46 @@ class WebCaseRoutesTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(web_app.get_case_db().get_case(self.case_id).assigned_to, "clinician01")
+
+    def test_analyze_maps_input_errors_to_400(self) -> None:
+        clinician, csrf = self.login_as("clinician01", "ValidClinicianPass123!")
+        output_dir = Path(self._tmp.name) / "output"
+        output_dir.mkdir(exist_ok=True)
+        (output_dir / "scan.png").write_bytes(b"scan")
+        service = Mock()
+        service.analyze_attachment.side_effect = ValueError("TARGET_MISMATCH: Ảnh không khớp.")
+        with (
+            patch.object(web_app, "OUTPUT_DIR", output_dir),
+            patch.object(web_app, "get_medical_service", return_value=service),
+            patch.object(web_app, "_require_ready_target", return_value=Mock(key="brain")),
+        ):
+            response = clinician.post(
+                "/api/analyze",
+                data={"image_path": "scan.png"},
+                headers={"X-CSRF-Token": csrf},
+            )
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertIn("Ảnh không khớp", response.json()["detail"])
+
+    def test_analyze_maps_unexpected_errors_to_500(self) -> None:
+        clinician, csrf = self.login_as("clinician01", "ValidClinicianPass123!")
+        output_dir = Path(self._tmp.name) / "output"
+        output_dir.mkdir(exist_ok=True)
+        (output_dir / "scan.png").write_bytes(b"scan")
+        service = Mock()
+        service.analyze_attachment.side_effect = RuntimeError("cuda oom")
+        with (
+            patch.object(web_app, "OUTPUT_DIR", output_dir),
+            patch.object(web_app, "get_medical_service", return_value=service),
+            patch.object(web_app, "_require_ready_target", return_value=Mock(key="brain")),
+        ):
+            response = clinician.post(
+                "/api/analyze",
+                data={"image_path": "scan.png"},
+                headers={"X-CSRF-Token": csrf},
+            )
+        self.assertEqual(response.status_code, 500, response.text)
+
     def test_get_missing_case_returns_404(self) -> None:
         self.assertEqual(self.client.get("/api/cases/9999").status_code, 404)
 
@@ -146,7 +186,7 @@ class WebCaseRoutesTests(unittest.TestCase):
             "/api/analyze", data={"image_path": "not-used"}, headers={"X-CSRF-Token": clinician_csrf}
         ).status_code, 400)
         self.assertEqual(clinician.get(f"/api/cases/{self.case_id}/image").status_code, 404)
-        approved = clinician.post(
+        submitted = clinician.post(
             f"/api/cases/{self.case_id}/review",
             data={
                 "risk_level": "medium",
@@ -155,23 +195,57 @@ class WebCaseRoutesTests(unittest.TestCase):
             },
             headers={"X-CSRF-Token": clinician_csrf},
         )
-        self.assertEqual(approved.status_code, 200, approved.text)
-        public_code = approved.json()["public_code"]
-        self.assertRegex(public_code, r"^[A-Z0-9]{10}$")
+        self.assertEqual(submitted.status_code, 200, submitted.text)
+        self.assertEqual(submitted.json()["review_status"], "submitted")
+        self.assertNotIn("public_code", submitted.json())
+        # Nhân viên không được tự duyệt phát hành.
+        self.assertEqual(clinician.post(
+            f"/api/cases/{self.case_id}/approve", headers={"X-CSRF-Token": clinician_csrf}
+        ).status_code, 403)
 
-        viewer, _ = self.login_as("viewer01", "ValidViewerPassword123!")
+        viewer, viewer_csrf = self.login_as("viewer01", "ValidViewerPassword123!")
         viewer_page = viewer.get("/")
         self.assertIn('id="publicCaseSearch"', viewer_page.text)
+        self.assertIn('id="myCaseList"', viewer_page.text)
         self.assertNotIn('class="app-container"', viewer_page.text)
+        # Chưa duyệt + chưa gán TK: người dùng chưa thấy gì.
         self.assertEqual(viewer.get("/api/cases").json()["cases"], [])
         self.assertEqual(viewer.get(f"/api/cases/{self.case_id}").status_code, 403)
         self.assertEqual(viewer.get(f"/api/cases/{self.case_id}/pdf").status_code, 403)
         self.assertEqual(viewer.get("/api/conversations").status_code, 403)
         self.assertEqual(viewer.get("/api/public/cases/AAAAAAAAAA").status_code, 404)
+
+        # Admin duyệt mới phát hành mã tra cứu.
+        approved = self.client.post(
+            f"/api/cases/{self.case_id}/approve", headers={"X-CSRF-Token": self.csrf}
+        )
+        self.assertEqual(approved.status_code, 200, approved.text)
+        public_code = approved.json()["public_code"]
+        self.assertRegex(public_code, r"^[A-Z0-9]{10}$")
+
+        # Chưa gán TK: vẫn chỉ tra được bằng mã.
+        self.assertEqual(viewer.get("/api/cases").json()["cases"], [])
         public_result = viewer.get(f"/api/public/cases/{public_code}")
         self.assertEqual(public_result.status_code, 200)
         self.assertEqual(public_result.json()["case"]["recommendation"], "Đã được nhân viên rà soát.")
         self.assertNotIn("image_path", public_result.json()["case"])
+
+        # Admin gán TK: người dùng đăng nhập xem ca của mình.
+        linked = self.client.post(
+            f"/api/cases/{self.case_id}/link-patient",
+            data={"username": "viewer01"},
+            headers={"X-CSRF-Token": self.csrf},
+        )
+        self.assertEqual(linked.status_code, 200, linked.text)
+        my_cases = viewer.get("/api/cases").json()["cases"]
+        self.assertEqual([case["case_id"] for case in my_cases], [self.case_id])
+        self.assertEqual(my_cases[0]["patient_username"], "viewer01")
+        self.assertEqual(my_cases[0]["detections"][0]["bbox"], [1, 2, 3, 4])
+        self.assertEqual(viewer.get(f"/api/cases/{self.case_id}").status_code, 200)
+        with patch.object(web_app, "OUTPUT_DIR", Path(self._tmp.name)):
+            viewer_pdf = viewer.get(f"/api/cases/{self.case_id}/pdf")
+        self.assertEqual(viewer_pdf.status_code, 200)
+        self.assertEqual(viewer_pdf.headers["content-type"], "application/pdf")
 
         pdf = Path(self._tmp.name) / "public.pdf"
         pdf.write_bytes(b"%PDF public report")
@@ -190,6 +264,27 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(reassigned.status_code, 200)
         self.assertEqual(clinician.get(f"/api/cases/{self.case_id}").status_code, 403)
         self.assertEqual(viewer.get(f"/api/public/cases/{public_code}").status_code, 404)
+        self.assertEqual(viewer.get("/api/cases").json()["cases"], [])
+
+    def test_link_patient_requires_approved_case_and_viewer(self) -> None:
+        bad_role = self.client.post(
+            f"/api/cases/{self.case_id}/link-patient",
+            data={"username": "clinician01"},
+            headers={"X-CSRF-Token": self.csrf},
+        )
+        self.assertEqual(bad_role.status_code, 400)
+        not_approved = self.client.post(
+            f"/api/cases/{self.case_id}/link-patient",
+            data={"username": "viewer01"},
+            headers={"X-CSRF-Token": self.csrf},
+        )
+        self.assertEqual(not_approved.status_code, 409)
+        missing = self.client.post(
+            "/api/cases/9999/link-patient",
+            data={"username": "viewer01"},
+            headers={"X-CSRF-Token": self.csrf},
+        )
+        self.assertEqual(missing.status_code, 404)
 
     def test_clinician_cannot_read_case_assigned_to_another_employee(self) -> None:
         self.assertTrue(web_app.get_case_db().assign_case(self.case_id, "clinician02"))

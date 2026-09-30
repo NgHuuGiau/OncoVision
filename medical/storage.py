@@ -32,6 +32,7 @@ class MedicalCaseRecord:
     reviewed_by: str | None
     reviewed_at: str | None
     public_code: str | None
+    patient_username: str | None
 
 
 class MedicalCaseDatabase:
@@ -83,6 +84,7 @@ class MedicalCaseDatabase:
                 ("reviewed_by", "TEXT"),
                 ("reviewed_at", "TEXT"),
                 ("public_code", "TEXT"),
+                ("patient_username", "TEXT"),
             ):
                 if name not in columns:
                     conn.execute(f"ALTER TABLE medical_cases ADD COLUMN {name} {definition}")
@@ -102,6 +104,11 @@ class MedicalCaseDatabase:
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_medical_cases_public_code "
             "ON medical_cases (public_code) WHERE public_code IS NOT NULL"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_medical_cases_patient "
+            "ON medical_cases (patient_username, review_status, id DESC) "
+            "WHERE patient_username IS NOT NULL"
         )
         conn.execute(
             """
@@ -140,7 +147,7 @@ class MedicalCaseDatabase:
             query = """
                 SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path,
                        suspected_malignant, risk_level, recommendation, metadata_json, created_at,
-                       assigned_to, review_status, reviewed_by, reviewed_at, public_code
+                       assigned_to, review_status, reviewed_by, reviewed_at, public_code, patient_username
                 FROM medical_cases
             """
             rows = (
@@ -150,13 +157,31 @@ class MedicalCaseDatabase:
             )
         return [self._row_to_record(row) for row in rows]
 
+    def list_cases_for_patient(self, username: str, *, limit: int = 50, offset: int = 0) -> list[MedicalCaseRecord]:
+        """Ca đã duyệt được gán cho tài khoản người dùng (viewer) đăng nhập."""
+        limit = max(1, min(int(limit), 200))
+        offset = max(0, int(offset))
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path,
+                       suspected_malignant, risk_level, recommendation, metadata_json, created_at,
+                       assigned_to, review_status, reviewed_by, reviewed_at, public_code, patient_username
+                FROM medical_cases
+                WHERE patient_username = ? COLLATE NOCASE AND review_status = 'approved'
+                ORDER BY id DESC LIMIT ? OFFSET ?
+                """,
+                (username.strip(), limit, offset),
+            ).fetchall()
+        return [self._row_to_record(row) for row in rows]
+
     def get_case(self, case_id: int) -> MedicalCaseRecord | None:
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path,
                        suspected_malignant, risk_level, recommendation, metadata_json, created_at,
-                       assigned_to, review_status, reviewed_by, reviewed_at, public_code
+                       assigned_to, review_status, reviewed_by, reviewed_at, public_code, patient_username
                 FROM medical_cases
                 WHERE id = ?
                 """,
@@ -169,7 +194,7 @@ class MedicalCaseDatabase:
             row = conn.execute(
                 "SELECT id, patient_code, image_path, processed_image_path, report_json_path, report_md_path, "
                 "suspected_malignant, risk_level, recommendation, metadata_json, created_at, assigned_to, "
-                "review_status, reviewed_by, reviewed_at, public_code FROM medical_cases "
+                "review_status, reviewed_by, reviewed_at, public_code, patient_username FROM medical_cases "
                 "WHERE public_code = ? AND review_status = 'approved'",
                 (public_code.upper(),),
             ).fetchone()
@@ -179,8 +204,36 @@ class MedicalCaseDatabase:
         with self._connect() as conn:
             cursor = conn.execute(
                 "UPDATE medical_cases SET assigned_to = ?, review_status = 'pending', reviewed_by = NULL, "
-                "reviewed_at = NULL, public_code = NULL WHERE id = ?",
+                "reviewed_at = NULL, public_code = NULL, patient_username = NULL WHERE id = ?",
                 (username, case_id),
+            )
+        return cursor.rowcount == 1
+
+    def link_patient(self, case_id: int, username: str) -> bool:
+        """Gán ca cho tài khoản người dùng để họ đăng nhập xem kết quả đã duyệt."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE medical_cases SET patient_username = ? WHERE id = ?",
+                (username.strip(), case_id),
+            )
+        return cursor.rowcount == 1
+
+    def submit_review(
+        self,
+        case_id: int,
+        *,
+        reviewer: str,
+        risk_level: str,
+        suspected_malignant: bool,
+        recommendation: str,
+    ) -> bool:
+        """Nhân viên rà soát xong gửi chờ admin duyệt (chưa publish)."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE medical_cases SET risk_level = ?, suspected_malignant = ?, recommendation = ?, "
+                "review_status = 'submitted', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, public_code = NULL "
+                "WHERE id = ?",
+                (risk_level, int(suspected_malignant), recommendation, reviewer, case_id),
             )
         return cursor.rowcount == 1
 
@@ -247,4 +300,5 @@ class MedicalCaseDatabase:
             reviewed_by=row[13],
             reviewed_at=row[14],
             public_code=row[15],
+            patient_username=row[16],
         )
