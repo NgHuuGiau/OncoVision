@@ -245,6 +245,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.medical_controller = MedicalChatController(MedicalChatService())
             self.medical_worker: MedicalAnalysisWorker | None = None
             self.medical_status_message = ""
+            self.current_user: WebUser | None = None
 
             self.language = self.db.get_setting("language", "vi")
             self.theme_mode = self.db.get_setting("theme", "system")
@@ -1138,9 +1139,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def open_settings(self) -> None:
             SettingsDialog(parent_window=self).exec()
 
-    from app.web_auth import WebAuthDatabase
+    from app.web_auth import WebAuthDatabase, WebUser
 
-    def _run_desktop_login() -> object | None:
+    def _run_desktop_login() -> WebUser | None:
         """Hộp thoại đăng nhập desktop dùng chung DB web. None = hủy/thất bại."""
         from app.chat_ui.paths import CHAT_HISTORY_DB_PATH as _DB_PATH
 
