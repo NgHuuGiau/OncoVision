@@ -80,6 +80,8 @@ python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
 
 Lần đầu dùng web: khởi chạy server để tạo bảng tài khoản, sau đó tạo admin theo hướng dẫn [đăng nhập và phân quyền](docs/web_auth.md). Không có tài khoản mặc định.
 
+Desktop (`run_chat.py`) cũng yêu cầu đăng nhập bằng tài khoản trong `output/onco.db`; DB trống thì app hỏi tạo admin đầu tiên. Tài khoản `viewer` trên desktop chỉ xem, không chạy phân tích ảnh.
+
 ---
 
 ## Bản đồ entrypoint

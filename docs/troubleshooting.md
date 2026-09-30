@@ -63,6 +63,8 @@ Nếu thiếu model:
 - Hoặc sửa đường dẫn trong `config/medical_settings.yaml`
 - Xem `medical/model_policy.py` để hiểu cách resolve đường dẫn model
 
+API `/api/analyze` trả **400** khi ảnh không khớp nhóm bệnh đã chọn (ví dụ đưa ảnh thận cho model não); chỉ lỗi cấu hình server mới trả 500.
+
 ---
 
 ## 5. Medical status sai
