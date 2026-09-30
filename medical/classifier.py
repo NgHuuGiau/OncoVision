@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pickle
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,7 +9,6 @@ from PIL import Image
 
 from medical.cnn_classifier import is_cnn_classifier_path, load_cnn_classifier
 
-MEDICAL_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 DEFAULT_FEATURE_SIZE = (32, 32)
 
 
@@ -51,10 +49,6 @@ def _resample_filter() -> int:
     return getattr(Image, "Resampling", Image).BILINEAR
 
 
-def is_supported_medical_image_path(path: str | Path) -> bool:
-    return Path(path).suffix.lower() in MEDICAL_IMAGE_EXTENSIONS
-
-
 def _extract_medical_features(source, *, feature_size=DEFAULT_FEATURE_SIZE, assume_bgr: bool = True) -> np.ndarray:
     if isinstance(source, np.ndarray):
         array = source
@@ -69,17 +63,6 @@ def _extract_medical_features(source, *, feature_size=DEFAULT_FEATURE_SIZE, assu
     resized = image.resize(feature_size, _resample_filter())
     array = np.asarray(resized, dtype=np.float32) / 255.0
     return array.reshape(-1)
-
-
-def iter_medical_image_paths(directory: str | Path) -> Iterable[Path]:
-    root = Path(directory)
-    if not root.exists():
-        return ()
-    return (
-        path
-        for path in sorted(root.rglob("*"))
-        if path.is_file() and is_supported_medical_image_path(path)
-    )
 
 
 def load_medical_classifier(path: str | Path):

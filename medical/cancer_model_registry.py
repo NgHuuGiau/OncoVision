@@ -11,18 +11,7 @@ from pathlib import Path
 CANCERS_DIR = Path("models/pretrained/cancers")
 
 KEY_TO_DIR = {
-    "liver": "liver",
-    "lung": "lung",
-    "breast": "breast",
-    "stomach": "stomach",
-    "colorectal": "colorectal",
-    "prostate": "prostate",
-    "cervical": "cervix",
-    "cervix": "cervix",
     "brain": "brain",
-    "kidney": "kidney",
-    "pancreas": "pancreas",
-    "thyroid": "thyroid",
 }
 
 _KIND_BY_SUFFIX = {

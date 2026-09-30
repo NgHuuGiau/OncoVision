@@ -43,7 +43,7 @@ ProgressCallback = Callable[[str, float], None] | None
 
 
 def _canonical_body_region_key(target_key: str) -> str | None:
-    """Chuyen target_key tu dataset (vd 'brain', 'cervical') sang body_region."""
+    """Chuyen target_key sang body_region (hiện chỉ 'brain')."""
     return _canonical_body_region(target_key)
 
 
@@ -60,16 +60,6 @@ _BENIGN_LABELS = frozenset(
         "no_cancer_finding",
         "control",
     }
-)
-
-
-MINIMAL_PROGRESS_STAGES: tuple[tuple[str, float], ...] = (
-    ("Validating image...", 0.05),
-    ("Normalizing image...", 0.10),
-    ("Running CNN inference...", 0.35),
-    ("Generating heatmap...", 0.65),
-    ("Analyzing results...", 0.85),
-    ("Writing report...", 0.95),
 )
 
 
@@ -199,7 +189,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     advanced = settings.get("advanced", {})
     if not isinstance(advanced, dict):
         advanced = {}
-    configured_model = Path(settings.get("model", "medical_10_cancers_cnn.pt"))
+    configured_model = Path(settings.get("model", "models/pretrained/brain_classifier.pt"))
     brain_model = settings.get("brain_model")
     return MedicalImageAnalyzerConfig(
         model_path=configured_model,
@@ -327,12 +317,16 @@ class MedicalImageAnalyzer:
     ) -> MedicalAnalysisResult:
         _start_t = time.monotonic()
         self._call_progress(progress_callback, "Validating image...", 0.05)
+        requested_target_key = target_key.strip().lower() if target_key else None
+        requested_body_region = _canonical_body_region_key(requested_target_key) if requested_target_key else None
+        if requested_target_key and requested_body_region is None:
+            raise ValueError("UNKNOWN_TARGET: Nhóm bệnh được chọn không hợp lệ.")
         try:
-            self.ensure_ready()
+            self.ensure_ready(requested_target_key)
         except FileNotFoundError as exc:
             raise FileNotFoundError(
                 "Chưa có model medical để phân tích. Hãy bổ sung model suy luận đã chuẩn bị bên ngoài vào "
-                "models/pretrained/cancers/<nhóm-bệnh>/ hoặc kiểm tra config/medical_settings.yaml "
+                "models/pretrained/ hoặc kiểm tra config/medical_settings.yaml "
                 "(brain_model, modality_model).\n"
                 f"Chi tiet: {exc}"
             ) from exc
@@ -342,9 +336,6 @@ class MedicalImageAnalyzer:
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
             raise ValueError(f"{validation.error_code}: {validation.message}")
-        requested_body_region = _canonical_body_region_key(target_key) if target_key else None
-        if target_key and requested_body_region is None:
-            raise ValueError("UNKNOWN_TARGET: Nhóm bệnh được chọn không hợp lệ.")
         if self._brain_fallback_active:
             if requested_body_region not in {None, "brain"}:
                 raise ValueError("UNSUPPORTED_TARGET: Runtime hiện tại chỉ hỗ trợ phân tích u não.")
@@ -383,7 +374,9 @@ class MedicalImageAnalyzer:
         quality_warnings = sorted(
             set(self._evaluate_image_quality(prepared_image) + list(validation.quality_warnings))
         )
-        stage_results = self._run_pipeline_stages(prepared_image, normalized_path, validation, modality_profile=modality_profile)
+        stage_results = self._run_pipeline_stages(
+            prepared_image, normalized_path, validation, modality_profile=modality_profile
+        )
         detect_stage = stage_results["detect"]
         detect_details = detect_stage.details or {}
         raw_detections = detect_details.get("detections", [])
@@ -763,7 +756,9 @@ class MedicalImageAnalyzer:
             return False
         return self._brain_fallback_active or body_region == "brain"
 
-    def _detect_findings(self, image: np.ndarray, *, body_region: str | None = None) -> list[DetectionFinding]:
+    def _detect_findings(
+        self, image: np.ndarray, *, body_region: str | None = None
+    ) -> list[DetectionFinding]:
         cnn_wrapper = self._load_brain_wrapper() if self._uses_brain_model(body_region) else self._load_cnn_wrapper()
         if self._detector_backend is not None:
             yolo_detections = self._detect_with_backend(image)
@@ -845,7 +840,7 @@ class MedicalImageAnalyzer:
                 )
         return findings
 
-    def ensure_ready(self) -> Path:
+    def ensure_ready(self, target_key: str | None = None) -> Path:
         try:
             model_path = resolve_medical_runtime_model_path(self.config)
         except FileNotFoundError:
@@ -988,37 +983,6 @@ class MedicalImageAnalyzer:
 
         consistency_score = 1.0 - (overlapping_pairs / total_pairs)
         return float(consistency_score), conflicting_pairs
-
-    def log_ensemble_metrics(
-        self,
-        yolo_detections: list[DetectionFinding],
-        cnn_detections: list[DetectionFinding],
-        ensemble_detections: list[DetectionFinding],
-    ) -> dict[str, Any]:
-        yolo_count = len(yolo_detections)
-        cnn_count = len(cnn_detections)
-        ensemble_count = len(ensemble_detections)
-
-        yolo_avg = float(np.mean([item.confidence for item in yolo_detections])) if yolo_detections else 0.0
-        cnn_avg = float(np.mean([item.confidence for item in cnn_detections])) if cnn_detections else 0.0
-        ensemble_avg = float(np.mean([item.confidence for item in ensemble_detections])) if ensemble_detections else 0.0
-
-        print(
-            f"[EnsembleMetrics] yolo={yolo_count} (avg_conf={yolo_avg:.3f}), "
-            f"cnn={cnn_count} (avg_conf={cnn_avg:.3f}), "
-            f"ensemble={ensemble_count} (avg_conf={ensemble_avg:.3f})"
-        )
-
-        return {
-            "yolo_count": yolo_count,
-            "cnn_count": cnn_count,
-            "ensemble_count": ensemble_count,
-            "avg_confidences": {
-                "yolo": yolo_avg,
-                "cnn": cnn_avg,
-                "ensemble": ensemble_avg,
-            },
-        }
 
     def _read_dicom_header_modality(self, image_path: str | Path) -> str | None:
         source = Path(image_path)
@@ -1212,7 +1176,7 @@ class MedicalImageAnalyzer:
             return (
                 "uncertain",
                 False,
-                f"Kết quả chưa đủ tin tưởng (max_confidence={max_confidence:.2f} < {certainty_threshold:.2f}). Không được phân loại bệnh nhân. Cần khám chuyên khoa để bảo đảm doanh nghiệp.",
+                f"Kết quả chưa đủ tin tưởng (max_confidence={max_confidence:.2f} < {certainty_threshold:.2f}). Không đủ cơ sở phân loại. Cần khám chuyên khoa để được chẩn đoán xác định.",
                 average_confidence,
             )
         top_detection = max(detections, key=lambda item: item.confidence)
@@ -1227,7 +1191,7 @@ class MedicalImageAnalyzer:
             return (
                 "high",
                 True,
-                "Phát hiện vùng tổn thương có nguy cơ cao. Nên chuyển bệnh nhân đến bác sĩ da liễu/ung bướu để đánh giá tiếp và sinh thiết nếu cần.",
+                "Phát hiện vùng tổn thương có nguy cơ cao. Nên chuyển bệnh nhân đến bác sĩ chuyên khoa thần kinh/ung bướu để đánh giá tiếp và sinh thiết nếu cần.",
                 average_confidence,
             )
         if max_confidence >= medium_threshold:
@@ -1276,7 +1240,9 @@ class MedicalImageAnalyzer:
             logger.warning("[Compliance] De-identification failed", exc_info=True)
             return None
 
-    def _run_gradcam_if_possible(self, prepared_image: np.ndarray, detections: list[DetectionFinding], validation: ValidationResult) -> list[str]:
+    def _run_gradcam_if_possible(
+        self, prepared_image: np.ndarray, detections: list[DetectionFinding], validation: ValidationResult
+    ) -> list[str]:
         overlays: list[str] = []
         try:
             cnn_wrapper = self._load_brain_wrapper() if self._uses_brain_model(validation.body_region) else self._load_cnn_wrapper()

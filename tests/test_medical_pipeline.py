@@ -66,7 +66,7 @@ class MedicalPipelineTests(unittest.TestCase):
                 ),
             )
             analyzer._brain_fallback_active = True
-            analyzer.ensure_ready = lambda: Path(temp_dir) / "brain.pt"
+            analyzer.ensure_ready = lambda *_: Path(temp_dir) / "brain.pt"
             analyzer.validate_input = lambda _: ValidationResult(status="success", body_region="lung")
 
             with self.assertRaisesRegex(ValueError, "TARGET_MISMATCH"):
@@ -314,9 +314,9 @@ class MedicalPipelineTests(unittest.TestCase):
         )
         fake_wrapper = SimpleNamespace(
             predict=lambda source, **kw: [
-                {"label": "Ung thư gan", "confidence": 0.7, "probabilities": {}},
-                {"label": "Ung thư phổi", "confidence": 0.2, "probabilities": {}},
-                {"label": "Ung thư vú", "confidence": 0.1, "probabilities": {}},
+                {"label": "glioma", "confidence": 0.7, "probabilities": {}},
+                {"label": "meningioma", "confidence": 0.2, "probabilities": {}},
+                {"label": "pituitary", "confidence": 0.1, "probabilities": {}},
             ]
         )
         analyzer._load_cnn_wrapper = lambda: fake_wrapper  # type: ignore[assignment]
@@ -325,5 +325,5 @@ class MedicalPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(findings), 3)
         labels = [item.label for item in findings]
-        self.assertIn("Ung thư gan", labels)
+        self.assertIn("glioma", labels)
         self.assertAlmostEqual(findings[0].confidence, 0.7)

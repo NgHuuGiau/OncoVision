@@ -94,8 +94,8 @@ class DoctorTests(unittest.TestCase):
             export_files=0,
             case_db_path=Path("output/medical/medical_cases.db"),
             case_count=0,
-            screening_targets=(("Ung thư da", True), ("Ung thư vú", False)),
-            analyzed_cancers=("Ung thư da", "Ung thư vú"),
+            screening_targets=(("Ung thư não", True),),
+            analyzed_cancers=("Ung thư não",),
             analyzed_modalities=("CT", "MRI"),
         )
 
@@ -106,7 +106,7 @@ class DoctorTests(unittest.TestCase):
             run_doctor.main()
 
         output = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
-        self.assertIn("download_models.py", output)
+        self.assertIn("models/pretrained", output)
         self.assertIn("model local", output)
         self.assertIn("run_doctor.py --fix", output)
         self.assertNotIn("train-all", output.lower())
@@ -157,8 +157,8 @@ class DoctorTests(unittest.TestCase):
             export_files=0,
             case_db_path=Path("output/medical/medical_cases.db"),
             case_count=0,
-            screening_targets=(("Ung thư da", True), ("Ung thư vú", False)),
-            analyzed_cancers=("Ung thư da", "Ung thư vú"),
+            screening_targets=(("Ung thư não", True),),
+            analyzed_cancers=("Ung thư não",),
             analyzed_modalities=("CT", "MRI"),
         )
 

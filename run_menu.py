@@ -91,10 +91,6 @@ def _wrap_text(text: str, width: int) -> list[str]:
     return textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False) or [""]
 
 
-def _center(text: str, width: int) -> str:
-    return f"{(width - len(text)) // 2 * ' '}{text}"
-
-
 def _print_menu_lines(title: str, items: list[tuple[str, str, str]], header_color: str, item_color: str, print_fn=print) -> None:
     width = _get_terminal_width()
     content_width = max(width - 8, 48)
@@ -124,10 +120,6 @@ def _render_main_menu(print_fn=print) -> None:
         ("5", "Dọn cache", "Xóa output chat và medical cũ cho repo gọn hơn."),
     ]
     _print_menu_lines("OncoVision", items, CYAN, GREEN, print_fn=print_fn)
-
-
-def _render_menu(print_fn=print) -> None:
-    _render_main_menu(print_fn=print_fn)
 
 
 def _render_medical_menu(print_fn=print) -> None:

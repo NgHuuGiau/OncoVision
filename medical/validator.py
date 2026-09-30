@@ -10,13 +10,9 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from medical.compliance import deidentify_dicom_file, deidentify_dicom_series
 from medical.dataset import supported_medical_modalities_for_target
-from medical.reporting import build_artifact_stamp
-from medical.router import InputRoute, route_input
 from utils.file_utils import load_yaml
 
-MEDICAL_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"})
 DEFAULT_MIN_CONFIDENCE = 0.70
 
 _DEFAULT_ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".dcm", ".nii", ".nii.gz"]
@@ -320,30 +316,10 @@ class ValidationResult:
     modality_confidence: float = 0.0
     body_region_confidence: float = 0.0
     quality_warnings: tuple[str, ...] = ()
-    route: InputRoute | None = None
 
 
 def _is_size_only_warning(warnings: list[str] | tuple[str, ...]) -> bool:
     return bool(warnings) and all("kích thước" in warning.lower() for warning in warnings)
-
-
-def _deidentify_dicom_path(source: Path, working_dir: Path | None = None) -> Path:
-    if source.suffix.lower() != ".dcm" and not source.is_dir():
-        return source
-    target = source
-    if working_dir is not None:
-        stamp = build_artifact_stamp()
-        relative = source.relative_to(source.anchor) if source.is_absolute() else Path(source.name)
-        target = working_dir / f"deid_{stamp}_{relative.name}"
-        target.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        if source.is_dir():
-            deidentify_dicom_series(source, target)
-        else:
-            deidentify_dicom_file(source, target)
-    except Exception:
-        return source
-    return target
 
 
 def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
@@ -405,128 +381,6 @@ def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
     return warnings, quality_score
 
 
-def _validate_single_file(source, allowed, min_confidence):
-    from medical.dataset import (
-        _DICOM_MODALITY_MAP,
-        _MODALITY_HINTS,
-        _MODALITY_TO_TARGET_KEY,
-        _TARGET_HINTS,
-        _find_first_matching_hint,
-        _normalize_medical_text,
-    )
-
-    raw_text = _collect_image_text(source)
-    normalized = _normalize_medical_text(raw_text)
-
-    modality_label = _find_first_matching_hint(normalized, _MODALITY_HINTS)
-    if modality_label is None:
-        modality_label = _fallback_modality_label(normalized)
-    modality_confidence = _score_hint_confidence(normalized, _MODALITY_HINTS, modality_label)
-
-    if modality_label is None and source.suffix.lower() == ".dcm":
-        try:
-            import pydicom
-            ds = pydicom.dcmread(str(source), stop_before_pixels=True, force=True)
-            dicom_modality = getattr(ds, "Modality", "").upper()
-            mapped_modality = _DICOM_MODALITY_MAP.get(dicom_modality)
-            if mapped_modality:
-                modality_label = mapped_modality
-                modality_confidence = 0.9
-        except Exception:
-            pass
-
-    target_key_hint = _find_first_matching_hint(normalized, _TARGET_HINTS)
-    if modality_label is None and target_key_hint == "cervical":
-        return ValidationResult(
-            status="error",
-            error_code="NON_IMAGE_CERVICAL_INPUT",
-            message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
-            body_region="cervical",
-            route=route_input(None, "cervix"),
-        )
-
-    canonical_modality = _canonical_modality(modality_label)
-    if canonical_modality is None:
-        warnings, quality_score = assess_image_quality(source)
-        return ValidationResult(
-            status="uncertain",
-            error_code="UNKNOWN_IMAGE_TYPE",
-            message="Không xác định được ảnh, pipeline vẫn tiếp tục phân tích nhưng kết quả có thể không chính xác.",
-            quality_warnings=tuple(warnings),
-        )
-
-    tuning = get_modality_tuning(canonical_modality)
-
-    if modality_confidence < min_confidence:
-        return ValidationResult(
-            status="uncertain",
-            error_code="LOW_CONFIDENCE",
-            message="Không đủ độ tin cậy để nhận diện loại ảnh một cách chắc chắn. Hãy dùng ảnh rõ hơn hoặc có thêm thông tin mô tả.",
-            modality=canonical_modality,
-            modality_confidence=modality_confidence,
-        )
-
-    target_key, target_hint_confidence = _infer_body_region_from_text(source, normalized, modality_label)
-    if target_key is None:
-        target_key = _find_first_matching_hint(normalized, _TARGET_HINTS)
-
-    canonical_body = _canonical_body_region(target_key)
-    if canonical_body is None:
-        return ValidationResult(
-            status="uncertain",
-            error_code="UNKNOWN_BODY_REGION",
-            message="Không xác định được vùng cơ thể trong ảnh, pipeline vẫn tiếp tục phân tích.",
-        )
-
-    body_confidence = _score_hint_confidence(normalized, _TARGET_HINTS, target_key)
-    if target_key is not None and target_hint_confidence > 0.0:
-        body_confidence = max(body_confidence, target_hint_confidence)
-    if target_key and modality_label and modality_label in _MODALITY_TO_TARGET_KEY and _MODALITY_TO_TARGET_KEY[modality_label] == target_key:
-        body_confidence = max(body_confidence, 0.80)
-    if body_confidence < min_confidence:
-        return ValidationResult(
-            status="uncertain",
-            error_code="LOW_CONFIDENCE",
-            message="Không đủ độ tin cậy để xác định vùng cơ thể. Hãy cung cấp ảnh có góc chụp rõ và vùng quan tâm được thấy đầy đủ.",
-            modality=canonical_modality,
-            body_region=canonical_body,
-            modality_confidence=modality_confidence,
-            body_region_confidence=body_confidence,
-        )
-
-    if source.name.lower().endswith(".nii.gz"):
-        from medical.validator import SUPPORTED_MAPPING
-        if canonical_body not in SUPPORTED_MAPPING:
-            return ValidationResult(
-                status="error",
-                error_code="UNSUPPORTED_BODY_REGION",
-                message="Vùng cơ thể này chưa được hệ thống hỗ trợ.",
-            )
-        if canonical_modality not in SUPPORTED_MAPPING[canonical_body]:
-            return ValidationResult(
-                status="error",
-                error_code="UNSUPPORTED_IMAGE_FOR_CANCER_TYPE",
-                message="Loại ảnh này không được hỗ trợ cho nhóm ung thư cần nhận diện.",
-            )
-
-    warnings, quality_score = assess_image_quality(source)
-    quality_warnings = tuple(warnings)
-    status = "success"
-    if quality_warnings and quality_score < float(tuning["quality_threshold"]) and not _is_size_only_warning(quality_warnings):
-        status = "uncertain"
-    if status == "uncertain" and quality_warnings and (modality_confidence >= min_confidence or body_confidence >= min_confidence):
-        status = "success"
-
-    routed = route_input(canonical_modality, canonical_body)
-    return ValidationResult(
-        status=status,
-        modality=canonical_modality,
-        body_region=canonical_body,
-        modality_confidence=modality_confidence,
-        body_region_confidence=body_confidence,
-        quality_warnings=quality_warnings,
-        route=routed,
-    )
 
 
 def _validate_single_file_strict(source, allowed, min_confidence):
@@ -575,7 +429,6 @@ def _validate_single_file_strict(source, allowed, min_confidence):
             error_code="NON_IMAGE_CERVICAL_INPUT",
             message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
             body_region="cervical",
-            route=route_input(None, "cervix"),
         )
 
     canonical_modality = _canonical_modality(modality_label)
@@ -585,10 +438,9 @@ def _validate_single_file_strict(source, allowed, min_confidence):
             return ValidationResult(
                 status="error",
                 error_code="NON_IMAGE_CERVICAL_INPUT",
-                message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
-                body_region="cervical",
-                route=route_input(None, "cervix"),
-            )
+            message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
+            body_region="cervical",
+        )
         warnings, quality_score = assess_image_quality(source)
         return ValidationResult(
             status="uncertain",
@@ -625,7 +477,6 @@ def _validate_single_file_strict(source, allowed, min_confidence):
             error_code="NON_IMAGE_CERVICAL_INPUT",
             message="Pap, HPV, colposcopy và các dấu hiệu lâm sàng tương tự không phải ảnh y khoa để đưa qua cùng pipeline này.",
             body_region="cervical",
-            route=route_input(None, "cervix"),
         )
 
     supported_modalities = SUPPORTED_MAPPING.get(canonical_body)
@@ -666,7 +517,6 @@ def _validate_single_file_strict(source, allowed, min_confidence):
     if status == "uncertain" and quality_warnings and (modality_confidence >= min_confidence or body_confidence >= min_confidence):
         status = "success"
 
-    routed = route_input(canonical_modality, canonical_body)
     return ValidationResult(
         status=status,
         modality=canonical_modality,
@@ -674,7 +524,6 @@ def _validate_single_file_strict(source, allowed, min_confidence):
         modality_confidence=modality_confidence,
         body_region_confidence=body_confidence,
         quality_warnings=quality_warnings,
-        route=routed,
     )
 
 
@@ -753,6 +602,5 @@ def _validate_directory(source, allowed, min_confidence):
             modality_confidence=result.modality_confidence,
             body_region_confidence=result.body_region_confidence,
             quality_warnings=result.quality_warnings,
-            route=result.route,
         )
     return result

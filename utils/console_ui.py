@@ -453,28 +453,6 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
     )
 
 
-def print_runtime_failure(title: str, error: Exception, *, print_fn=print) -> None:
-    reason, suggestions, commands = explain_runtime_failure(error)
-    lines = [
-        _line(_rule("="), CYAN),
-        _line(_pad(title), BOLD + RED),
-        _line(_rule("="), CYAN),
-        _section("LÝ DO", RED),
-        _row("Lý do", reason, RED, bounded=False),
-        _row("Chi tiết", str(error), YELLOW, bounded=False),
-        _line(_rule("-"), CYAN),
-        _section("GỢI Ý", GREEN),
-    ]
-    for index, suggestion in enumerate(suggestions, start=1):
-        lines.append(_row(f"Bước {index}", suggestion, GREEN if index == len(suggestions) else YELLOW, bounded=False))
-    lines.extend([_line(_rule("-"), CYAN), _section("LỆNH THỬ", CYAN)])
-    for index, command in enumerate(commands, start=1):
-        lines.append(_row(f"Lệnh {index}", command, CYAN, bounded=False))
-    lines.append(_line(_rule("="), CYAN))
-    for item in lines:
-        print_fn(item)
-
-
 class BootProgress:
     def __init__(self, title: str, enabled: bool | None = None) -> None:
         self.enabled = sys.stdout.isatty() and os.getenv("YOLO_DISABLE_PROGRESS") != "1" if enabled is None else enabled

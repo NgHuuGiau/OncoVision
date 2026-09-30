@@ -68,7 +68,7 @@ class RunMenuTests(unittest.TestCase):
     def test_render_menu_wraps_long_descriptions(self) -> None:
         outputs: list[str] = []
         with patch("run_menu.os.get_terminal_size", return_value=type("Size", (), {"columns": 60})()):
-            run_menu._render_menu(print_fn=outputs.append)
+            run_menu._render_main_menu(print_fn=outputs.append)
         lines = [ANSI_RE.sub("", item) for item in outputs if ANSI_RE.sub("", item).strip()]
         self.assertGreater(len(lines), len(run_menu.MENU_OPTIONS))
         self.assertTrue(all(len(line) <= 60 for line in lines))
