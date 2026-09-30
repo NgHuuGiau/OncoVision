@@ -14,17 +14,6 @@ from medical.system_status import (
     get_medical_system_status,
     recommended_medical_commands,
 )
-from training.terminal_ui import (
-    CYAN,
-    GREEN,
-    RED,
-    YELLOW,
-    header,
-    line,
-    row,
-    rule,
-    section,
-)
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
 from utils.doctor_helpers import (
@@ -35,6 +24,17 @@ from utils.doctor_helpers import (
 from utils.entrypoint_checks import medical_config_issues, runtime_config_issues
 from utils.entrypoint_common import run_entrypoint
 from utils.file_utils import ensure_project_directories
+from utils.terminal_ui import (
+    CYAN,
+    GREEN,
+    RED,
+    YELLOW,
+    header,
+    line,
+    row,
+    rule,
+    section,
+)
 
 YOLO11_MODELS = YOLO11_MODELS_ASC
 PRETRAINED_DIR = Path("models/pretrained")

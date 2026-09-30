@@ -19,4 +19,3 @@ ignore = [
 # project modules, and in core/* to avoid heavy/optional import side effects.
 [lint.per-file-ignores]
 "core/**" = ["E402"]
-"training/**" = ["E402"]

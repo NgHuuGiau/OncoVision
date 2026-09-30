@@ -40,15 +40,6 @@ tmp*.db
 output/
 runs/
 
-# Dataset generated locally (chỉ giữ .gitkeep + README)
-dataset/**
-!dataset/**/.gitkeep
-!dataset/**/README.md
-dataset/cancer_download_plan.json
-dataset/medical/tcia/**
-!dataset/medical/tcia/**/.gitkeep
-!dataset/medical/tcia/**/README.md
-
 # Cache files
 *.cache
 .cache/
@@ -72,9 +63,6 @@ output/medical/
 # Large binary files (safety)
 *.bin
 *.safetensors
-
-# Generated config
-training/.generated_data.yaml
 
 # Nested repo (do not touch)
 HieraChain/

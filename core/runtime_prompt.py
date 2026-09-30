@@ -306,7 +306,7 @@ def prompt_runtime_model(
     recommended = _recommended_models_for_mode(selected_mode, recommendations)
     options = list(dict.fromkeys([*recommended, *available_models]))
     if not options:
-        raise RuntimeError("Không có model local nào để chọn. Hãy chạy training/download_models.py trước.")
+        raise RuntimeError("Không có model local nào để chọn. Hãy copy model train sẵn vào models/pretrained/.")
     if len(options) == 1:
         chosen = options[0]
         print_fn("")

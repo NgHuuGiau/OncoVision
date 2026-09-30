@@ -14,10 +14,10 @@ class NetworkPolicyTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             self.assertFalse(network_policy.weight_download_allowed())
 
-    def test_download_allowed_when_env_set(self) -> None:
+    def test_download_stays_blocked_when_env_set(self) -> None:
         for value in ("1", "true", "yes", "on", "TRUE"):
             with patch.dict("os.environ", {"ONCOVISION_ALLOW_WEIGHT_DOWNLOAD": value}, clear=True):
-                self.assertTrue(network_policy.weight_download_allowed(), value)
+                self.assertFalse(network_policy.weight_download_allowed(), value)
 
     def test_resolve_pretrained_false_stays_false(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
@@ -27,19 +27,20 @@ class NetworkPolicyTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             self.assertFalse(network_policy.resolve_pretrained(True, context="test-backbone"))
 
-    def test_resolve_pretrained_true_kept_when_allowed(self) -> None:
+    def test_resolve_pretrained_true_stays_blocked_when_env_set(self) -> None:
         with patch.dict("os.environ", {"ONCOVISION_ALLOW_WEIGHT_DOWNLOAD": "1"}, clear=True):
-            self.assertTrue(network_policy.resolve_pretrained(True, context="test-backbone"))
+            self.assertFalse(network_policy.resolve_pretrained(True, context="test-backbone"))
 
     def test_resolve_pretrained_raises_when_required_but_blocked(self) -> None:
         with patch.dict("os.environ", {"ONCOVISION_REQUIRE_PRETRAINED": "1"}, clear=True):
             with self.assertRaises(RuntimeError):
                 network_policy.resolve_pretrained(True, context="serving")
 
-    def test_require_pretrained_ignored_when_download_allowed(self) -> None:
+    def test_require_pretrained_still_fails_when_download_env_set(self) -> None:
         env = {"ONCOVISION_ALLOW_WEIGHT_DOWNLOAD": "1", "ONCOVISION_REQUIRE_PRETRAINED": "1"}
         with patch.dict("os.environ", env, clear=True):
-            self.assertTrue(network_policy.resolve_pretrained(True, context="serving"))
+            with self.assertRaises(RuntimeError):
+                network_policy.resolve_pretrained(True, context="serving")
 
     def test_warns_only_once_per_context(self) -> None:
         with patch.dict("os.environ", {}, clear=True):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from medical.system_status import MedicalSystemStatus
-from training.terminal_ui import (
+from utils.terminal_ui import (
     CYAN,
     GREEN,
     RED,
@@ -62,7 +62,7 @@ def print_recommended_commands(
     command_index = 1
     commands: list[str] = []
     if missing_models:
-        commands.append("python training/download_models.py")
+        commands.append("copy model train san vao models/pretrained/")
     if icon_count < icon_warning_threshold:
         commands.append("python run_doctor.py --fix")
     commands.append("python run_chat.py")
