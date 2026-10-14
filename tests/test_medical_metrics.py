@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from medical.metrics import compute_medical_metrics
+from medical.metrics import compute_medical_metrics, compute_multiclass_metrics
 
 
 class MedicalMetricsTests(unittest.TestCase):
+    def test_multiclass_specificity_uses_true_negatives(self) -> None:
+        metrics = compute_multiclass_metrics([0, 0, 1, 1], [0, 1, 1, 1], ["negative", "positive"])
+        self.assertAlmostEqual(metrics["per_class"][0].specificity, 1.0)
+
     def test_compute_medical_metrics_returns_expected_values(self) -> None:
         metrics = compute_medical_metrics(
             truths=[True, True, False, False],

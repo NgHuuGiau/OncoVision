@@ -99,13 +99,14 @@ def compute_multiclass_metrics(truths: list[int], predictions: list[int], class_
         fp = sum(confusion[j][i] for j in range(num_classes)) - tp
         fn = sum(confusion[i]) - tp
         support = sum(confusion[i])
+        tn = len(truths) - tp - fp - fn
         total_support += support
         correct += tp
         precision = _safe_divide(tp, tp + fp)
         recall = _safe_divide(tp, tp + fn)
         f1 = _safe_divide(2 * precision * recall, precision + recall)
         sensitivity = recall
-        specificity = _safe_divide(confusion[i][i], max(confusion[i][i] + sum(confusion[j][i] for j in range(num_classes) if j != i), 1e-6))
+        specificity = _safe_divide(tn, tn + fp)
         macro_p += precision
         macro_r += recall
         macro_f1 += f1
