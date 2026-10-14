@@ -220,8 +220,19 @@ def main() -> int:
         for issue in issues:
             print(row("⚠", issue, RED, bounded=False))
     else:
-        print(section("KẾT LUẬN", GREEN))
-        print(row("", "Hệ thống đã sẵn sàng!", GREEN, bounded=False))
+        complete = (
+            getattr(medical_status, "all_targets_ready", False)
+            and medical_status.localization_ready
+            and medical_status.volume_ready
+            and medical_status.clinical_validation_ready
+        )
+        print(section("KẾT LUẬN", GREEN if complete else YELLOW))
+        summary = (
+            "Hệ thống đã sẵn sàng."
+            if complete
+            else "Hệ thống kỹ thuật sẵn sàng cho phân loại; còn thiếu định vị 2D, model 3D hoặc kiểm định lâm sàng."
+        )
+        print(row("", summary, GREEN if complete else YELLOW, bounded=False))
 
     if camera_probe is not None and camera_probe.level != "PASS":
         print(row("Camera", camera_probe.detail.replace("Lý do không chạy  ", ""), YELLOW, bounded=False))

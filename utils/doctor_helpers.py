@@ -19,7 +19,14 @@ from utils.terminal_ui import (
 def medical_status_color(status: MedicalSystemStatus) -> str:
     if not status.model_ready:
         return RED
-    if status.using_fallback_model or status.allow_fallback_model:
+    if (
+        status.using_fallback_model
+        or status.allow_fallback_model
+        or not getattr(status, "all_targets_ready", False)
+        or not getattr(status, "localization_ready", False)
+        or not getattr(status, "volume_ready", False)
+        or not getattr(status, "clinical_validation_ready", False)
+    ):
         return YELLOW
     return GREEN
 
@@ -34,6 +41,21 @@ def print_medical_status(status: MedicalSystemStatus) -> None:
     if status.resolved_model_path is not None:
         print(row("Model runtime", str(status.resolved_model_path), color, bounded=False))
     print(row("Fallback", "Bật" if status.allow_fallback_model else "Tắt", YELLOW if status.allow_fallback_model else GREEN, bounded=False))
+    print(
+        row(
+            "Năng lực",
+            " | ".join(
+                (
+                    f"phân loại: {'có' if getattr(status, 'classification_ready', status.model_ready) else 'thiếu'}",
+                    f"định vị: {'có' if getattr(status, 'localization_ready', False) else 'thiếu'}",
+                    f"volume 3D: {'có' if getattr(status, 'volume_ready', False) else 'thiếu'}",
+                    f"kiểm định lâm sàng: {'có' if getattr(status, 'clinical_validation_ready', False) else 'thiếu'}",
+                )
+            ),
+            color,
+            bounded=False,
+        )
+    )
     print(row("Trạng thái", status.model_message, color, bounded=False))
     print(
         row(
