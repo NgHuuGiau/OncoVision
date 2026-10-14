@@ -4,9 +4,15 @@ import argparse
 import json
 from pathlib import Path
 
+from medical.case_manifest import load_case_manifest
 from medical.case_payloads import build_case_export_payload, build_detection_metadata
 from medical.cli_helpers import print_medical_status_block
+from medical.clinical_validation import (
+    build_independent_validation_report,
+    plan_binary_validation_sample_size,
+)
 from medical.compliance import MEDICAL_DISCLAIMER
+from medical.dataset_manifest import split_dataset_by_patient, validate_dataset_manifest
 from medical.output_management import _medical_output_directories
 from medical.pipeline import MedicalImageAnalyzer
 from medical.reporting import export_case_bundle, update_case_report_case_id
@@ -22,8 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     analyze = subparsers.add_parser("analyze", help="Phân tích một ảnh y khoa bằng model có sẵn.")
-    analyze.add_argument("--image", required=True)
-    analyze.add_argument("--patient-code", required=True)
+    analyze_source = analyze.add_mutually_exclusive_group(required=True)
+    analyze_source.add_argument("--image")
+    analyze_source.add_argument("--manifest", help="YAML gồm patient_id, cancer_target, modality và image.")
+    analyze.add_argument("--patient-code")
+    analyze.add_argument("--target", default=None)
+    analyze.add_argument("--modality", default=None)
 
     validate = subparsers.add_parser("validate-image", help="Kiểm tra ảnh y khoa và nhận diện modality/vùng cơ thể.")
     validate.add_argument("--image", required=True)
@@ -52,6 +62,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     backup = subparsers.add_parser("backup-db", help="Sao lưu SQLite onco.db (chat + ca bệnh + tài khoản).")
     backup.add_argument("--keep", type=int, default=7, help="Giữ lại N bản sao lưu mới nhất.")
+    cohort = subparsers.add_parser("validate-cohort", help="Tạo báo cáo chỉ số trên cohort độc lập theo bệnh nhân.")
+    cohort.add_argument("--csv", required=True, help="CSV gồm patient_id, truth, prediction.")
+    cohort.add_argument("--model", required=True)
+    cohort.add_argument("--cohort-id", required=True)
+    cohort.add_argument("--output", default="output/medical/validation/independent_validation.json")
+
+    plan = subparsers.add_parser("plan-validation", help="Ước lượng cỡ mẫu kiểm định nhị phân.")
+    plan.add_argument("--sensitivity", type=float, required=True)
+    plan.add_argument("--specificity", type=float, required=True)
+    plan.add_argument("--prevalence", type=float, required=True)
+    plan.add_argument("--margin", type=float, default=0.05)
+    plan.add_argument("--confidence", type=float, default=0.95)
+    plan.add_argument("--output")
+
+    dataset = subparsers.add_parser("validate-dataset", help="Kiểm tra manifest dữ liệu, mask và rò rỉ bệnh nhân.")
+    dataset.add_argument("--csv", required=True)
+
+    split = subparsers.add_parser("split-dataset", help="Chia train/validation/test cố định theo bệnh nhân.")
+    split.add_argument("--csv", required=True)
+    split.add_argument("--output", required=True)
+    split.add_argument("--train-ratio", type=float, default=0.70)
+    split.add_argument("--validation-ratio", type=float, default=0.15)
+    split.add_argument("--seed", default="oncovision")
     return parser
 
 
@@ -61,8 +94,27 @@ def main() -> int:
     if args.command == "analyze":
         analyzer = MedicalImageAnalyzer()
         db = MedicalCaseDatabase()
+        if args.manifest:
+            manifest = load_case_manifest(args.manifest)
+            image_path = str(manifest.image)
+            patient_code = args.patient_code or manifest.patient_id
+            target_key = args.target or manifest.cancer_target
+            modality = args.modality or manifest.modality
+        else:
+            if not args.patient_code:
+                print("--patient-code là bắt buộc khi dùng --image.")
+                return 2
+            image_path = args.image
+            patient_code = args.patient_code
+            target_key = args.target or "brain"
+            modality = args.modality
         try:
-            result = analyzer.analyze_image(args.image, patient_code=args.patient_code)
+            result = analyzer.analyze_image(
+                image_path,
+                patient_code=patient_code,
+                target_key=target_key,
+                requested_modality=modality,
+            )
         except ValueError as exc:
             message = str(exc)
             error_code, _, error_message = message.partition(": ")
@@ -147,7 +199,14 @@ def main() -> int:
         bundle = export_case_bundle(
             build_case_export_payload(case),
             args.output_dir,
-            include_files=[case.image_path, case.processed_image_path, case.report_json_path, case.report_md_path],
+            include_files=[
+                case.image_path,
+                case.processed_image_path,
+                case.report_json_path,
+                case.report_md_path,
+                case.metadata.get("segmentation_mask_path"),
+                case.metadata.get("volume_mask_path"),
+            ],
             include_pdf=args.pdf,
         )
         print(f"Đã xuất ca bệnh #{case.case_id}: {bundle}")
@@ -198,6 +257,55 @@ def main() -> int:
         for old in sorted(backup_dir.glob("onco_*.db"))[: -keep]:
             old.unlink(missing_ok=True)
         print(f"Đã sao lưu: {dest}")
+        return 0
+
+    if args.command == "validate-cohort":
+        report = build_independent_validation_report(
+            args.csv,
+            args.model,
+            args.output,
+            cohort_id=args.cohort_id,
+        )
+        print(f"Đã tạo báo cáo kiểm định: {report}")
+        print("Báo cáo chưa được xem là kiểm định lâm sàng hoàn tất cho tới khi đơn vị độc lập phê duyệt.")
+        return 0
+
+    if args.command == "plan-validation":
+        plan = plan_binary_validation_sample_size(
+            sensitivity=args.sensitivity,
+            specificity=args.specificity,
+            prevalence=args.prevalence,
+            margin=args.margin,
+            confidence=args.confidence,
+        )
+        rendered = json.dumps(plan, ensure_ascii=False, indent=2)
+        if args.output:
+            destination = Path(args.output)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(rendered, encoding="utf-8")
+            print(f"Đã lưu kế hoạch cỡ mẫu: {destination}")
+        else:
+            print(rendered)
+        return 0
+
+    if args.command == "validate-dataset":
+        audit = validate_dataset_manifest(args.csv)
+        print(f"Dòng: {audit.row_count} | Bệnh nhân: {audit.patient_count}")
+        for warning in audit.warnings:
+            print(f"CẢNH BÁO: {warning}")
+        for error in audit.errors:
+            print(f"LỖI: {error}")
+        return 0 if audit.valid else 1
+
+    if args.command == "split-dataset":
+        output = split_dataset_by_patient(
+            args.csv,
+            args.output,
+            train_ratio=args.train_ratio,
+            validation_ratio=args.validation_ratio,
+            seed=args.seed,
+        )
+        print(f"Đã chia dataset theo bệnh nhân: {output}")
         return 0
 
     return 2

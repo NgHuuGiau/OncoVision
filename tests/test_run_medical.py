@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import io
 import unittest
 from pathlib import Path
@@ -9,14 +10,50 @@ import run_medical
 
 
 class RunMedicalTests(unittest.TestCase):
+    def test_validate_cohort_command_writes_unapproved_report(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cohort = root / "cohort.csv"
+            with cohort.open("w", encoding="utf-8", newline="") as output:
+                writer = csv.DictWriter(output, fieldnames=["patient_id", "truth", "prediction"])
+                writer.writeheader()
+                writer.writerows(
+                    [
+                        {"patient_id": "P1", "truth": "tumor", "prediction": "tumor"},
+                        {"patient_id": "P2", "truth": "normal", "prediction": "normal"},
+                    ]
+                )
+            model = root / "model.pt"
+            model.write_bytes(b"model")
+            report = root / "report.json"
+            with patch(
+                "sys.argv",
+                [
+                    "run_medical.py",
+                    "validate-cohort",
+                    "--csv",
+                    str(cohort),
+                    "--model",
+                    str(model),
+                    "--cohort-id",
+                    "external-01",
+                    "--output",
+                    str(report),
+                ],
+            ):
+                self.assertEqual(run_medical.main(), 0)
+            self.assertTrue(report.is_file())
+
     def test_cli_exposes_analysis_and_case_management_only(self) -> None:
         parser = run_medical.build_parser()
         command_action = next(action for action in parser._actions if action.dest == "command")
         self.assertEqual(
             set(command_action.choices),
-            {"analyze", "validate-image", "status", "report", "history", "show-case", "export-case", "delete-case", "cleanup-output", "backup-db"},
+            {"analyze", "validate-image", "validate-cohort", "plan-validation", "validate-dataset", "split-dataset", "status", "report", "history", "show-case", "export-case", "delete-case", "cleanup-output", "backup-db"},
         )
-        for command in ("train", "train-all", "train-modality", "split-dataset", "audit-dataset", "active-learning"):
+        for command in ("train", "train-all", "train-modality", "audit-dataset", "active-learning"):
             with self.subTest(command=command), self.assertRaises(SystemExit):
                 parser.parse_args([command])
 
