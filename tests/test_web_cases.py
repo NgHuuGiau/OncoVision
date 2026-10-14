@@ -11,8 +11,18 @@ from fastapi.testclient import TestClient
 
 import web_app
 from app.web_auth import WebAuthDatabase, hash_password
+from medical.case_payloads import case_detections, case_localization_available
 from medical.chat_service import MedicalChatResponse
 from medical.storage import MedicalCaseDatabase
+
+
+class CasePayloadTests(unittest.TestCase):
+    def test_legacy_placeholder_and_explicit_false_do_not_show_coordinates(self) -> None:
+        metadata = {"detections": [{"label": "no_tumor", "bbox": [0, 0, 0, 0]}]}
+        self.assertFalse(case_localization_available(metadata))
+        metadata["localization_available"] = False
+        metadata["detections"][0]["bbox"] = [1, 2, 3, 4]
+        self.assertIsNone(case_detections(metadata)[0]["bbox"])
 
 
 class WebCaseRoutesTests(unittest.TestCase):
@@ -82,23 +92,22 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["case"]["patient_code"], "TEST-001")
 
-    def test_web_ui_lists_only_brain_target(self) -> None:
+    def test_web_ui_lists_all_targets_and_marks_missing_models(self) -> None:
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("Ung thư não", response.text)
-        self.assertNotIn("Ung thư thận", response.text)
-        self.assertNotIn("Ung thư tuyến giáp", response.text)
+        self.assertIn("Ung thư thận", response.text)
+        self.assertIn("Ung thư tuyến giáp", response.text)
         self.assertIn("model_ready", response.text)
         self.assertIn('id="caseAssignmentModal"', response.text)
-        self.assertIn('id="lightBtn"', response.text)
 
-    def test_analyze_rejects_unknown_target(self) -> None:
+    def test_analyze_rejects_target_without_model(self) -> None:
         response = self.client.post(
             "/api/analyze",
             data={"image_path": "not-used", "target_key": "thyroid"},
             headers={"X-CSRF-Token": self.csrf},
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 503)
 
     def test_clinician_analysis_assigns_new_case_to_self(self) -> None:
         clinician, csrf = self.login_as("clinician01", "ValidClinicianPass123!")

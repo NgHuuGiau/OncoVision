@@ -13,7 +13,7 @@ class EmailServiceTests(unittest.TestCase):
         "ONCOVISION_SMTP_PORT": "587",
         "ONCOVISION_SMTP_USERNAME": "sender@example.com",
         "ONCOVISION_SMTP_PASSWORD": "test-app-password",
-    }, clear=True)
+    })
     @patch("app.email_service.smtplib.SMTP")
     def test_sends_plaintext_code_over_starttls(self, smtp_class) -> None:
         smtp = smtp_class.return_value.__enter__.return_value
@@ -25,7 +25,10 @@ class EmailServiceTests(unittest.TestCase):
         self.assertIn("A1B2C3", message.get_content())
         self.assertIn("10 phút", message.get_content())
 
-    @patch.dict(os.environ, {}, clear=True)
+    @patch.dict(os.environ, {
+        "ONCOVISION_SMTP_USERNAME": "",
+        "ONCOVISION_SMTP_PASSWORD": "",
+    })
     @patch("app.email_service.smtplib.SMTP")
     def test_missing_smtp_credentials_fail_closed(self, smtp_class) -> None:
         with self.assertRaisesRegex(RuntimeError, "Chưa cấu hình"):

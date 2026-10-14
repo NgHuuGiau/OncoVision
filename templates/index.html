@@ -57,7 +57,7 @@
     </div>
     <div class="header-title-group">
       <h1>OncoVision AI™</h1>
-      <p>Hệ Thống Sàng Lọc & Phân Tích Ung Thư Y Khoa</p>
+      <p>Phân tích ảnh y khoa</p>
     </div>
   </div>
   
@@ -69,11 +69,6 @@
   </div>
 
   <div class="header-right">
-    <div class="theme-selector">
-      <button class="theme-btn" onclick="setTheme('light')" id="lightBtn">☼ Sáng</button>
-      <button class="theme-btn" onclick="setTheme('dark')" id="darkBtn">☾ Tối</button>
-      <button class="theme-btn" onclick="setTheme('system')" id="systemBtn">Hệ thống</button>
-    </div>
   </div>
 </header>
 
@@ -122,11 +117,11 @@
       </button>
       <div class="viewer-controls">
         <div class="control-group">
-          <label>Nhóm bệnh học:</label>
+          <label for="targetSelect">1. Nhóm phân tích</label>
           <select id="targetSelect"></select>
         </div>
         <div class="control-group">
-          <label>Loại hình ảnh (Modality):</label>
+          <label for="modalitySelect">Modality khai báo</label>
           <select id="modalitySelect"></select>
         </div>
       </div>
@@ -134,16 +129,10 @@
 
     <div class="pacs-screen" id="pacsScreen">
       <div class="pacs-screen-overlay-topleft">
-        PATIENT ID: <span id="pacsPatientCode">CHƯA CÓ</span><br>
-        STUDY: ONCOVISION_SCREENING<br>
-        FPS: 30.00 Hz<br>
-        ACQUISITION: LOCAL
+        MÃ CA: <span id="pacsPatientCode">CHƯA CÓ</span>
       </div>
       <div class="pacs-screen-overlay-topright">
-        DATE: <span id="pacsDate">-</span><br>
-        W: 256 L: 128<br>
-        GRID: 30mm<br>
-        STATUS: SYSTEM_READY
+        NGÀY TẢI: <span id="pacsDate">-</span>
       </div>
 
       <div class="empty-dropzone" id="emptyDropzone">
@@ -152,12 +141,12 @@
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
           </svg>
         </div>
-        <h3>Trình Xem Ảnh Chẩn Đoán</h3>
+        <h3>2. Tải ảnh của ca bệnh</h3>
         {% if current_user.role == 'viewer' %}
         <p>Chọn một ca bệnh trong danh sách bên trái để xem ảnh và báo cáo.</p>
         {% else %}
-        <p>Kéo và thả tệp phim chụp (DICOM, NIfTI, JPG, PNG, WEBP) hoặc chọn nút bên dưới để bắt đầu sàng lọc AI.</p>
-        <button class="upload-trigger-btn" onclick="pickImage()">Chọn tệp phim chụp</button>
+        <p>Kéo thả ảnh vào đây hoặc chọn tệp để bắt đầu. Bạn có thể xem lại ảnh trước khi gửi phân tích.</p>
+        <button class="upload-trigger-btn" onclick="pickImage()">Chọn ảnh</button>
         {% endif %}
       </div>
 
@@ -167,7 +156,7 @@
         <div class="pacs-action-overlay">
           <button class="pacs-btn" onclick="triggerAIScreening()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            Phân Tích AI
+            Phân tích ảnh
           </button>
           <button class="pacs-btn" onclick="pickImage()">
             Đổi phim chụp
@@ -181,7 +170,7 @@
         <span id="targetHint"></span>
         <span id="modalityHint"></span>
       </div>
-      <div>Chỉ số phân giải chuẩn đoán • Mode: GPU (FP16)</div>
+      <div>AI hỗ trợ sàng lọc; kết quả cần được chuyên gia đánh giá.</div>
     </div>
   </main>
 
@@ -195,12 +184,6 @@
       <div class="greeting-card" id="greetingCard">
         <h3>Hệ Thống Trợ Lý Chẩn Đoán</h3>
         <p>Xin chào! Hãy tải phim chụp lên bảng điều khiển trung tâm hoặc đặt câu hỏi y khoa dưới đây để nhận hỗ trợ sàng lọc tự động.</p>
-      </div>
-
-      <div class="empty-state" id="emptyState">
-        <div class="empty-state-icon">🧬</div>
-        <h3>Tư Vấn & Đọc Kết Quả</h3>
-        <p>Gửi ảnh chụp hoặc văn bản mô tả bệnh lý để nhận phân tích chi tiết tự động từ mô hình chuyên biệt.</p>
       </div>
 
       <div id="messagesContainer"></div>
@@ -243,15 +226,6 @@
   <div class="modal">
     <button class="modal-close" onclick="closeSettings()">✕</button>
     <h2>Cấu hình hệ thống</h2>
-    <div class="modal-section">
-      <label>Giao diện</label>
-      <div class="desc">Chọn chế độ màu hiển thị tối ưu cho môi trường làm việc.</div>
-      <select id="themeSetting" onchange="applyThemeSetting(this.value)">
-        <option value="system">Hệ thống (Tự động)</option>
-        <option value="dark">PACS Mode (Tối chuyên nghiệp)</option>
-        <option value="light">Clinic Mode (Sáng sạch)</option>
-      </select>
-    </div>
     <div class="modal-section">
       <label>Ngôn ngữ (Language)</label>
       <div class="desc">Chọn ngôn ngữ hiển thị giao diện chính.</div>

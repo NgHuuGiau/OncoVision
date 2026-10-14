@@ -35,6 +35,7 @@ Thumbs.db
 tmp*/
 tmp-ds/
 tmp*.db
+mydatabase.db
 
 # Runtime output
 output/

@@ -1,23 +1,4 @@
 :root,
-[data-theme="dark"] {
-  color-scheme: dark;
-  --page: #08111f;
-  --surface: #101d30;
-  --surface-raised: #15253a;
-  --field: #0b1727;
-  --line: #2a3c53;
-  --text: #eaf1fa;
-  --muted: #a1b1c5;
-  --accent: #0ea5e9;
-  --accent-hover: #0284c7;
-  --focus: #38bdf8;
-  --success-bg: #103a31;
-  --success-text: #b7f7da;
-  --danger-bg: #4a1d2a;
-  --danger-text: #fecdd3;
-  --shadow: 0 24px 72px rgb(0 0 0 / 28%);
-}
-
 [data-theme="light"] {
   color-scheme: light;
   --page: #edf3f9;
@@ -35,6 +16,25 @@
   --danger-bg: #fff0f0;
   --danger-text: #9f2525;
   --shadow: 0 20px 56px rgb(28 55 82 / 12%);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #08111f;
+  --surface: #101d30;
+  --surface-raised: #15253a;
+  --field: #0b1727;
+  --line: #2a3c53;
+  --text: #eaf1fa;
+  --muted: #a1b1c5;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --focus: #38bdf8;
+  --success-bg: #103a31;
+  --success-text: #b7f7da;
+  --danger-bg: #4a1d2a;
+  --danger-text: #fecdd3;
+  --shadow: 0 24px 72px rgb(0 0 0 / 28%);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -78,6 +78,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: var(--field);
   color: var(--text);
 }
+.password-wrap { position: relative; display: grid; }
+.password-wrap input { padding-right: 64px; }
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.password-toggle:hover { color: var(--text); background: var(--surface-raised); }
 .auth-primary, .admin-shell button {
   min-height: 42px;
   padding: 10px 15px;
@@ -135,4 +151,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .admin-hint { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+@media (max-width: 600px) {
+  body { min-width: 0; }
+  .auth-page { padding: 68px 12px 24px; }
+  .auth-shell { padding: 22px 18px; }
+  .admin-grid, .row-form { grid-template-columns: 1fr; }
 }

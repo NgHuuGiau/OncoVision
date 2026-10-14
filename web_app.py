@@ -35,7 +35,11 @@ from app.web_auth import (
     hash_recovery_code,
 )
 from medical.cancer_catalog import COMMON_CANCER_TARGETS, get_cancer_target
-from medical.case_payloads import build_case_export_payload
+from medical.case_payloads import (
+    build_case_export_payload,
+    case_detections,
+    case_localization_available,
+)
 from medical.chat_service import MedicalChatResponse, MedicalChatService
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dataset import infer_medical_upload_context
@@ -243,8 +247,15 @@ def _safe_path(base: Path, path: str) -> Path | None:
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
+    medical = get_medical_system_status()
     cancer_targets = [
-        {"key": t.key, "label": t.label, "modalities": list(t.modalities), "model_ready": t.model_ready}
+        {
+            "key": t.key,
+            "label": t.label,
+            "modalities": list(t.modalities),
+            "model_ready": medical.target_capabilities.get(t.key, {}).get("runtime_ready", False),
+            "capabilities": medical.target_capabilities.get(t.key, {}),
+        }
         for t in COMMON_CANCER_TARGETS
     ]
     return templates.TemplateResponse(request, "index.html", {
@@ -479,6 +490,12 @@ def api_status():
         "ok": True,
         "model_ready": medical.model_ready,
         "model_message": medical.model_message,
+        "classification_ready": medical.classification_ready,
+        "localization_ready": medical.localization_ready,
+        "volume_ready": medical.volume_ready,
+        "clinical_validation_ready": medical.clinical_validation_ready,
+        "all_targets_ready": medical.all_targets_ready,
+        "target_capabilities": medical.target_capabilities,
         "case_count": medical.case_count,
         "analyzed_cancers": list(medical.analyzed_cancers),
         "analyzed_modalities": list(medical.analyzed_modalities),
@@ -520,7 +537,7 @@ def _has_allowed_magic(path: Path, filename: str) -> bool:
     if lower.endswith(".dcm") or head[128:132] == b"DICM":
         return True
     img_magic = (b"\xff\xd8\xff", b"\x89PNG", b"BM", b"II*\x00", b"MM\x00*", b"RIFF", b"\x49\x49\x2b\x00")
-    return head.startswith(img_magic)
+    return head.startswith(img_magic) or (lower.endswith((".mp4", ".mov")) and head[4:8] == b"ftyp")
 
 
 def _require_ready_target(target_key: str, modality: str):
@@ -529,6 +546,9 @@ def _require_ready_target(target_key: str, modality: str):
         raise HTTPException(status_code=400, detail="Nhóm bệnh không hợp lệ.")
     if modality and modality not in target.modalities:
         raise HTTPException(status_code=400, detail="Modality không phù hợp với nhóm bệnh đã chọn.")
+    capabilities = get_medical_system_status().target_capabilities.get(target.key, {})
+    if not capabilities.get("runtime_ready", False):
+        raise HTTPException(status_code=503, detail=f"Chưa có model suy luận cho {target.label}.")
     return target
 
 
@@ -549,7 +569,7 @@ async def upload_file(request: Request):
         if not filename or filename in {".", ".."}:
             raise HTTPException(status_code=400, detail="Tên file không hợp lệ.")
         lower_name = filename.lower()
-        allowed_ext = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".dcm"}
+        allowed_ext = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".dcm", ".mp4", ".avi", ".mov", ".mkv"}
         if Path(filename).suffix.lower() not in allowed_ext and not lower_name.endswith((".nii", ".nii.gz")):
             raise HTTPException(status_code=400, detail=f"Định dạng file không được hỗ trợ: {filename}")
         timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -620,6 +640,8 @@ def analyze_image(
             raise HTTPException(status_code=500, detail="Cấu hình hệ thống chưa đúng. Vui lòng kiểm tra nhật ký hệ thống.")
         _, _, message = detail.partition(":")
         raise HTTPException(status_code=400, detail=message.strip() or detail)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     except Exception:
         logger.exception("Phân tích ảnh thất bại.")
         raise HTTPException(status_code=500, detail="Không thể phân tích ảnh. Vui lòng thử lại hoặc kiểm tra nhật ký hệ thống.")
@@ -680,11 +702,13 @@ def _case_summary(record) -> dict:
         "patient_code": record.patient_code,
         "risk_level": record.risk_level,
         "suspected_malignant": record.suspected_malignant,
+        "clinical_assessment_available": record.review_status in {"submitted", "approved"},
         "image_path": record.image_path,
         "processed_image_path": record.processed_image_path,
         "recommendation": record.recommendation,
         "created_at": record.created_at,
-        "detections": record.metadata.get("detections", []),
+        "detections": case_detections(record.metadata),
+        "localization_available": case_localization_available(record.metadata),
         "average_confidence": record.metadata.get("average_confidence", 0),
         "model_name": record.metadata.get("model_name", "-"),
         "quality_warnings": record.metadata.get("quality_warnings", []),
@@ -696,6 +720,10 @@ def _case_summary(record) -> dict:
         "patient_username": record.patient_username,
         "modality": record.metadata.get("modality"),
         "body_region": record.metadata.get("body_region"),
+        "segmentation_mask_path": record.metadata.get("segmentation_mask_path"),
+        "volume_mask_path": record.metadata.get("volume_mask_path"),
+        "analyzed_frame_count": record.metadata.get("analyzed_frame_count", 1),
+        "representative_frame_index": record.metadata.get("representative_frame_index"),
     }
 
 
@@ -860,6 +888,7 @@ def get_public_case(public_code: str):
             "patient_code": record.patient_code,
             "risk_level": record.risk_level,
             "suspected_malignant": record.suspected_malignant,
+            "clinical_assessment_available": True,
             "recommendation": record.recommendation,
             "created_at": record.created_at,
             "reviewed_at": record.reviewed_at,
@@ -880,6 +909,7 @@ def download_public_case_pdf(public_code: str):
             "processed_image": "",
             "risk_level": record.risk_level,
             "suspected_malignant": record.suspected_malignant,
+            "clinical_assessment_available": True,
             "recommendation": record.recommendation,
             "review_status": "approved",
             "reviewed_by": "Nhân viên y tế",

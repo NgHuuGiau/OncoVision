@@ -110,13 +110,13 @@ class WebAuthTests(unittest.TestCase):
         empty_db = WebAuthDatabase(self.root / "empty.db")
         self.assertEqual(empty_db.list_users(), [])
 
-    def test_auth_pages_use_shared_dark_light_theme(self) -> None:
+    def test_auth_pages_use_shared_theme_styles(self) -> None:
         anonymous = TestClient(web_app.app, follow_redirects=False)
         for path in ("/login", "/forgot-password"):
             response = anonymous.get(path)
             self.assertEqual(response.status_code, 200)
             self.assertIn('/static/css/auth.css', response.text)
-            self.assertIn("toggleAuthTheme()", response.text)
+            self.assertIn('data-theme="light"', response.text)
         self.assertIn('action="/forgot-password/request"', response.text)
         self.assertNotIn('name="email"', response.text)
         self.assertNotIn('name="username"', response.text.split('action="/forgot-password"')[1])

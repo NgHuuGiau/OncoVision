@@ -1,16 +1,13 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <script>const savedTheme=localStorage.getItem('theme')||'system';document.documentElement.dataset.theme=savedTheme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):savedTheme;</script>
   <link rel="stylesheet" href="/static/css/auth.css">
-  <script defer src="/static/js/auth-theme.js"></script>
   <title>Đăng nhập · OncoVision</title>
 </head>
 <body class="auth-page">
-  <button class="theme-toggle" type="button" onclick="toggleAuthTheme()" aria-label="Chuyển đổi giao diện sáng/tối">◐ Giao diện</button>
   <main class="auth-shell">
     <h1>OncoVision</h1>
     <p class="auth-subtitle">Đăng nhập để truy cập hồ sơ phân tích.</p>
@@ -19,7 +16,12 @@
     <form method="post" action="/login" autocomplete="on">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field"><label for="username">Tài khoản</label><input id="username" name="username" autocomplete="username" required autofocus></div>
-      <div class="field"><label for="password">Mật khẩu</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+      <div class="field"><label for="password">Mật khẩu</label>
+        <div class="password-wrap">
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="password-toggle" onclick="const p=document.getElementById('password');const on=p.type==='password';p.type=on?'text':'password';this.textContent=on?'Ẩn':'Hiện';this.setAttribute('aria-pressed',on);" aria-label="Hiện mật khẩu" aria-pressed="false">Hiện</button>
+        </div>
+      </div>
       <button class="auth-primary" type="submit">Đăng nhập</button>
     </form>
     <p class="auth-foot"><a href="/forgot-password">Quên mật khẩu?</a></p>
