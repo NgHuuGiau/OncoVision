@@ -13,17 +13,21 @@
 
 ---
 
-## Trạng thái hiện tại (09/2026)
+## Trạng thái hiện tại (10/2026)
 
 | Thành phần | Trạng thái |
 |---|---|
 | **Modality Classifier** | ✅ Sẵn sàng — ResNet18, 8 loại ảnh, **99.93% acc** (test 5,640 ảnh) |
 | **Brain Classifier** | ✅ Sẵn sàng — ConvNeXt-Tiny, 4 loại u não (glioma/meningioma/pituitary/no_tumor), **fallback tự động** khi thiếu model tổng |
+| **Brain Detector** | ⏳ Đã có adapter tự nạp YOLO detect/segment; còn thiếu `brain_detector.pt` y khoa |
+| **Brain Volume 3D** | ⏳ Đã có runtime NIfTI/MHA/MHD/DICOM và tọa độ voxel/mm; còn thiếu model TorchScript 3D cùng manifest |
+| **Catalog 11 nhóm ung thư** | ✅ Đã có định tuyến dữ liệu và model riêng theo nhóm; hiện repository mới có trọng số classifier não |
+| **Kiểm định lâm sàng** | ⏳ Chưa có bộ đánh giá độc lập theo bệnh nhân; kết quả hiện chỉ dùng hỗ trợ sàng lọc |
 | **Web UI (FastAPI)** | ✅ Chạy được — `python web_app.py` → http://127.0.0.1:8000 |
 | **Desktop Chat (PySide6)** | ✅ Chạy được — `python run_chat.py` |
-| **Test suite** | ✅ **293 tests pass** |
+| **Test suite** | ✅ **346 tests** |
 
-> **Lưu ý**: Dự án đang thử nghiệm 2 model — **u não** và **modality**. Catalog chỉ có nhóm u não; nhóm khác trả lỗi khi gọi phân tích.
+> **Lưu ý**: Catalog đã có 11 nhóm và runtime chọn model riêng theo nhóm. Repository hiện chỉ có trọng số classifier não và classifier modality; 10 nhóm còn lại vẫn bị khóa cho tới khi bổ sung model tương thích.
 
 ---
 
@@ -114,12 +118,27 @@ Web:     web_app.py → SQLite → output/onco.db
 Hệ thống **chỉ suy luận bằng model có sẵn**. Hãy đặt model đã được chuẩn bị bên ngoài trong `models/pretrained/`:
 
 ```powershell
-# Đặt các model suy luận đã chuẩn bị bên ngoài vào models/pretrained/:
+# Đặt model não cũ hoặc model theo nhóm vào models/pretrained/:
 #   brain_classifier.pt        → Não (4 sub-label) — **ĐÃ CÓ, SẴN SÀNG**
 #   modality_classifier.pt     → Modality (8 loại ảnh y tế) — **ĐÃ CÓ, 99.93%**
+#   brain_detector.pt          → YOLO detect/segment y khoa — thêm file này để bật tọa độ
+#   brain_volume_model.pt      → TorchScript MRI/CT 3D
+#   brain_volume_model.json    → manifest task, nhãn, input shape và ngưỡng mask
+#   cancers/<key>/classifier.pt
+#   cancers/<key>/detector.pt
+#   cancers/<key>/volume.pt + volume.json
+#   cancers/<key>/clinical_validation.json
+# Khi biết modality, model phải nằm đúng thư mục, ví dụ cancers/lung/ct/ hoặc cancers/lung/xray/.
 
 # Kiểm tra hệ thống đã nhận đủ model chưa
 python run_doctor.py --skip-camera-check
+
+# Kiểm tra dữ liệu và chia tập không rò rỉ bệnh nhân
+python run_medical.py validate-dataset --csv dataset.csv
+python run_medical.py split-dataset --csv dataset.csv --output dataset_split.csv
+
+# Ước lượng cỡ mẫu kiểm định nhị phân
+python run_medical.py plan-validation --sensitivity 0.90 --specificity 0.85 --prevalence 0.20
 
 # Phân tích 1 ảnh não
 python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
