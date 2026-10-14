@@ -1,0 +1,24 @@
+{
+  "task": "volume_multitask",
+  "target": "prostate",
+  "class_labels": [
+    "clinically_significant_cancer",
+    "no_clinically_significant_cancer"
+  ],
+  "input_modalities": [
+    "t2",
+    "dwi",
+    "adc",
+    "dce"
+  ],
+  "segmentation_labels": [
+    "prostate_lesion"
+  ],
+  "segmentation_activation": "sigmoid",
+  "input_shape": [
+    96,
+    160,
+    160
+  ],
+  "mask_threshold": 0.5
+}

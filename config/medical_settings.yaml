@@ -1,6 +1,15 @@
 medical:
+  # Ưu tiên models/pretrained/cancers/<key>/<modality>/{classifier.pt,detector.pt,volume.pt,volume.json}.
+  target_model_root: models/pretrained/cancers
   brain_model: models/pretrained/brain_classifier.pt
   modality_model: models/pretrained/modality_classifier.pt
+  # Model YOLO detect/segment y khoa; nếu bỏ dòng này, hệ thống tự tìm brain_detector.pt.
+  yolo_model_path: models/pretrained/brain_detector.pt
+  volume_model_path: models/pretrained/brain_volume_model.pt
+  volume_manifest_path: models/pretrained/brain_volume_model.json
+  # Chỉ trỏ tới báo cáo đã được đơn vị lâm sàng độc lập phê duyệt và khớp hash model.
+  clinical_validation_report:
+  max_volume_voxels: 256000000
   allow_fallback_model: false
 
   output_root: output/medical
@@ -8,7 +17,8 @@ medical:
   processed_dir: output/medical/normalized_images
   overlay_dir: output/medical/processed_images
 
-  image_size: 320
+  image_size: 640
+  video_sample_frames: 12
   cnn_image_size: 224
   cnn_tta: true
   analyze_topk: 3
@@ -30,6 +40,10 @@ medical:
     - .nii.gz
     - .mha
     - .mhd
+    - .mp4
+    - .avi
+    - .mov
+    - .mkv
 
   modality_tuning:
     default:
