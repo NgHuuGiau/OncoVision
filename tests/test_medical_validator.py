@@ -134,14 +134,15 @@ class MedicalValidatorTests(unittest.TestCase):
 
             self.assertIn(result.status, {"success", "uncertain"})
 
-    def test_cervical_pap_input_returns_non_image_error(self) -> None:
+    def test_colposcopy_image_is_supported_for_cervical_target(self) -> None:
         with TemporaryDirectory() as temp_dir:
             image_path = Path(temp_dir) / "cervical_pap_colposcopy.jpg"
             cv2.imwrite(str(image_path), np.full((64, 64, 3), 128, dtype=np.uint8))
 
             result = validate_image(image_path, min_confidence=0.15)
 
-            self.assertEqual(result.status, "uncertain")
+            self.assertIn(result.status, {"success", "uncertain"})
+            self.assertEqual(result.modality, "colposcopy")
 
     def test_custom_allowed_extensions(self) -> None:
         with TemporaryDirectory() as temp_dir:

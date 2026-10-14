@@ -159,6 +159,8 @@ def draw_detection_results(
     if detection_list and show_heatmap:
         heatmap = np.zeros((image.shape[0], image.shape[1]), dtype=np.float32)
         for detection in detection_list:
+            if detection.bbox is None:
+                continue
             clamped_bbox = _clamp_bbox_to_image(detection.bbox, image.shape)
             if clamped_bbox is None:
                 continue
@@ -179,6 +181,8 @@ def draw_detection_results(
             image = cv2.addWeighted(image, 0.75, heatmap_color, 0.25, 0.0)
 
     for detection in detection_list:
+        if detection.bbox is None:
+            continue
         clamped_bbox = _clamp_bbox_to_image(detection.bbox, image.shape)
         if clamped_bbox is None:
             continue

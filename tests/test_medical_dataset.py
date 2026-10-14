@@ -3,7 +3,9 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+import cv2
 import nibabel as nib
 import numpy as np
 import pydicom
@@ -18,10 +20,36 @@ from medical.dataset import (
     load_medical_volume_slices,
     normalize_uploaded_image,
     resolve_medical_upload_path,
+    sample_medical_video_frames,
 )
 
 
 class MedicalDatasetTests(unittest.TestCase):
+    def test_video_sampler_spreads_frames_across_video(self) -> None:
+        class FakeCapture:
+            def __init__(self):
+                self.index = 0
+
+            def isOpened(self):
+                return True
+
+            def get(self, prop):
+                return 10 if prop in {cv2.CAP_PROP_FRAME_COUNT, cv2.CAP_PROP_FPS} else 0
+
+            def set(self, _prop, value):
+                self.index = int(value)
+
+            def read(self):
+                return True, np.full((8, 8, 3), self.index, dtype=np.uint8)
+
+            def release(self):
+                return None
+
+        with patch("medical.dataset.cv2.VideoCapture", return_value=FakeCapture()):
+            frames = sample_medical_video_frames("case.mp4", max_frames=3)
+        self.assertEqual([item[0] for item in frames], [0, 4, 9])
+        self.assertEqual(frames[-1][1], 0.9)
+
     def test_normalize_uploaded_image_letterboxes_to_square_rgb(self) -> None:
         with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "input.png"

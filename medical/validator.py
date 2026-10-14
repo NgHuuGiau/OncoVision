@@ -15,7 +15,7 @@ from utils.file_utils import load_yaml
 
 DEFAULT_MIN_CONFIDENCE = 0.70
 
-_DEFAULT_ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".dcm", ".nii", ".nii.gz"]
+_DEFAULT_ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".dcm", ".nii", ".nii.gz", ".mp4", ".avi", ".mov", ".mkv"]
 
 _MODALITY_LABEL_TO_CANONICAL = {
     "Mammogram": "mammogram",
@@ -48,6 +48,7 @@ _MODALITY_LABEL_TO_CANONICAL = {
     "CT tuyến giáp": "ct",
     "MRI tuyến giáp": "mri",
     "PET/CT tuyến giáp": "pet_ct",
+    "Ảnh soi cổ tử cung": "colposcopy",
 }
 
 _TARGET_LABEL_TO_CANONICAL = {
@@ -95,6 +96,7 @@ _MODALITY_TO_TARGET_KEY = {
     "CT tuyến giáp": "thyroid",
     "MRI tuyến giáp": "thyroid",
     "PET/CT tuyến giáp": "thyroid",
+    "Ảnh soi cổ tử cung": "cervical",
 }
 
 _DICOM_MODALITY_MAP = {
@@ -184,6 +186,7 @@ def _fallback_modality_label(normalized_text: str) -> str | None:
         ("EUS", r"\beus\b"),
         ("PET/CT", r"\bpet\s*/?\s*ct\b|\bpetct\b"),
         ("PET", r"\bpet\b"),
+        ("Ảnh soi cổ tử cung", r"\bcolposcopy\b|\bcervical photo\b"),
     )
     for label, pattern in patterns:
         if re.search(pattern, padded):
@@ -201,6 +204,8 @@ def _canonical_modality(label):
 
 
     lowered = label.lower()
+    if lowered in {"ct", "mri", "xray", "ultrasound", "mammogram", "endoscopy", "colonoscopy", "colposcopy", "pet_ct", "eus"}:
+        return lowered
     if lowered.startswith(("pet/ct", "pet")) or "pet ct" in lowered:
         return "pet_ct"
     if lowered.startswith("ct"):
@@ -219,6 +224,8 @@ def _canonical_modality(label):
         return "xray"
     if lowered.startswith("mammogram") or "mammo" in lowered:
         return "mammogram"
+    if "colposcopy" in lowered or "soi cổ tử cung" in lowered or "soi co tu cung" in lowered:
+        return "colposcopy"
     return None
 
 
@@ -328,7 +335,20 @@ def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
         return ["Không thể đọc ảnh để đánh giá chất lượng đầu vào."], 0.0
 
     image = None
-    if source.suffix.lower() == ".dcm":
+    if source.suffix.lower() in {".mp4", ".avi", ".mov", ".mkv"}:
+        capture = cv2.VideoCapture(str(source))
+        try:
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            if frame_count > 1:
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_count // 2)
+            ok, frame = capture.read()
+        finally:
+            capture.release()
+        if ok and frame is not None:
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        else:
+            return ["Không thể đọc video để đánh giá chất lượng đầu vào."], 0.0
+    elif source.suffix.lower() == ".dcm":
         try:
             import pydicom
 
@@ -423,7 +443,7 @@ def _validate_single_file_strict(source, allowed, min_confidence):
             pass
 
     target_key_hint = _find_first_matching_hint(normalized, _TARGET_HINTS)
-    if modality_label is None and target_key_hint == "cervical":
+    if modality_label is None and target_key_hint == "cervical" and any(term in normalized for term in (" pap ", " hpv ")):
         return ValidationResult(
             status="error",
             error_code="NON_IMAGE_CERVICAL_INPUT",
@@ -434,7 +454,7 @@ def _validate_single_file_strict(source, allowed, min_confidence):
     canonical_modality = _canonical_modality(modality_label)
     if canonical_modality is None:
         target_key_hint = _find_first_matching_hint(normalized, _TARGET_HINTS)
-        if target_key_hint == "cervical":
+        if target_key_hint == "cervical" and any(term in normalized for term in (" pap ", " hpv ")):
             return ValidationResult(
                 status="error",
                 error_code="NON_IMAGE_CERVICAL_INPUT",
@@ -471,7 +491,7 @@ def _validate_single_file_strict(source, allowed, min_confidence):
             message="Không xác định được vùng cơ thể trong ảnh, pipeline vẫn tiếp tục phân tích.",
         )
 
-    if target_key == "cervical" and modality_label is None:
+    if target_key == "cervical" and modality_label is None and any(term in normalized for term in (" pap ", " hpv ")):
         return ValidationResult(
             status="error",
             error_code="NON_IMAGE_CERVICAL_INPUT",
@@ -554,7 +574,13 @@ def validate_image(image_path, allowed_extensions=None, min_confidence=DEFAULT_M
         return _validate_directory(source, allowed, min_confidence)
 
     try:
-        if source.suffix.lower() not in {".dcm", ".nii", ".nii.gz"}:
+        if source.suffix.lower() in {".mp4", ".avi", ".mov", ".mkv"}:
+            capture = cv2.VideoCapture(str(source))
+            ok, frame = capture.read()
+            capture.release()
+            if not ok or frame is None:
+                raise ValueError("Video không có khung hình đọc được.")
+        elif source.suffix.lower() not in {".dcm", ".nii", ".nii.gz"}:
             with Image.open(source) as img:
                 img.convert("RGB")
     except Exception:

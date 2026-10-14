@@ -11,6 +11,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from medical.cancer_catalog import get_cancer_target
+from medical.cancer_model_registry import modality_key, target_model_paths
 from medical.classifier import MedicalClassifierModel, load_medical_classifier
 from medical.cnn_classifier import (
     MedicalCNNClassifierWrapper,
@@ -19,7 +21,11 @@ from medical.cnn_classifier import (
 )
 from medical.compliance import MEDICAL_DISCLAIMER
 from medical.dashboard import write_inference_dashboard
-from medical.dataset import infer_medical_upload_context, normalize_uploaded_image
+from medical.dataset import (
+    infer_medical_upload_context,
+    normalize_uploaded_image,
+    sample_medical_video_frames,
+)
 from medical.model_policy import (
     iter_medical_runtime_model_paths,
     resolve_medical_runtime_model_path,
@@ -30,9 +36,15 @@ from medical.validator import (
     _DICOM_MODALITY_MAP,
     ValidationResult,
     _canonical_body_region,
+    _canonical_modality,
     _load_modality_tuning_from_config,
     get_modality_tuning,
     validate_image,
+)
+from medical.volume_inference import (
+    TorchScriptVolumeRuntime,
+    load_medical_volume,
+    render_volume_overlay,
 )
 from utils.draw_utils import draw_detection_results
 from utils.file_utils import load_yaml
@@ -45,22 +57,6 @@ ProgressCallback = Callable[[str, float], None] | None
 def _canonical_body_region_key(target_key: str) -> str | None:
     """Chuyen target_key sang body_region (hiện chỉ 'brain')."""
     return _canonical_body_region(target_key)
-
-
-_BENIGN_LABELS = frozenset(
-    {
-        "no_tumor",
-        "notumor",
-        "benign",
-        "normal",
-        "non_malignant",
-        "nonmalignant",
-        "healthy",
-        "no_cancer",
-        "no_cancer_finding",
-        "control",
-    }
-)
 
 
 class DetectorBackend(Protocol):
@@ -97,6 +93,11 @@ class MedicalImageAnalyzerConfig:
     cnn_tta: bool = True
     analyze_topk: int = 3
     yolo_model_path: Path | None = None
+    volume_model_path: Path | None = None
+    volume_manifest_path: Path | None = None
+    max_volume_voxels: int = 256_000_000
+    clinical_validation_report_path: Path | None = None
+    target_model_root: Path = Path("models/pretrained/cancers")
     ensemble_yolo_weight: float = 0.4
     ensemble_cnn_weight: float = 0.6
     detection_consistency_threshold: float = 0.5
@@ -107,6 +108,7 @@ class MedicalImageAnalyzerConfig:
     mc_dropout_samples: int = 20
     enable_advanced_preprocessing: bool = False
     max_cached_images: int = 100
+    video_sample_frames: int = 12
 
     def with_model_path(self, model_path: str | Path) -> MedicalImageAnalyzerConfig:
         return replace(self, model_path=Path(model_path))
@@ -116,7 +118,10 @@ class MedicalImageAnalyzerConfig:
 class DetectionFinding:
     label: str
     confidence: float
-    bbox: tuple[int, int, int, int]
+    bbox: tuple[int, int, int, int] | None
+    segmentation: tuple[tuple[int, int], ...] | None = None
+    frame_index: int | None = None
+    timestamp_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -153,6 +158,15 @@ class MedicalAnalysisResult:
     analysis_time_seconds: float = 0.0
     modality: str | None = None
     body_region: str | None = None
+    input_dimension: str = "2d"
+    volume_findings: list[dict[str, Any]] = field(default_factory=list)
+    volume_shape: tuple[int, ...] | None = None
+    volume_spacing_xyz_mm: tuple[float, float, float] | None = None
+    volume_coordinate_system: str | None = None
+    segmentation_mask_path: Path | None = None
+    analyzed_frame_count: int = 1
+    representative_frame_index: int | None = None
+    volume_mask_path: Path | None = None
 
 
 def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
@@ -162,18 +176,75 @@ def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
             detections.append(item)
             continue
         if isinstance(item, dict) and "label" in item and "confidence" in item:
-            raw_bbox = item.get("bbox") or (0, 0, 0, 0)
-            bbox = tuple(int(value) for value in raw_bbox)
-            if len(bbox) != 4:
-                bbox = (0, 0, 0, 0)
+            raw_bbox = item.get("bbox")
+            bbox = tuple(int(value) for value in raw_bbox) if raw_bbox and len(raw_bbox) == 4 else None
             detections.append(
                 DetectionFinding(
                     label=str(item["label"]),
                     confidence=float(item["confidence"]),
                     bbox=bbox,
+                    segmentation=tuple(tuple(map(int, point)) for point in (item.get("segmentation") or ())) or None,
+                    frame_index=int(item["frame_index"]) if item.get("frame_index") is not None else None,
+                    timestamp_seconds=(
+                        float(item["timestamp_seconds"])
+                        if item.get("timestamp_seconds") is not None
+                        else None
+                    ),
                 )
             )
     return detections
+
+
+def _decode_raw_image(source: str | Path | None) -> np.ndarray | None:
+    """Đọc pixel ảnh gốc (chưa thumbnail/canvas) cho detector; file hỏng/video trả None."""
+    if source is None:
+        return None
+    path = Path(source)
+    if not path.is_file():
+        return None
+    try:
+        buffer = np.frombuffer(path.read_bytes(), np.uint8)
+    except OSError:
+        return None
+    return cv2.imdecode(buffer, cv2.IMREAD_COLOR)
+
+
+def _map_detections_to_canvas(
+    detections: list[DetectionFinding],
+    raw_hw: tuple[int, int],
+    canvas_hw: tuple[int, int],
+) -> list[DetectionFinding]:
+    """Đổi bbox/polygon từ hệ tọa độ ảnh gốc sang canvas.
+
+    Phép biến đổi khớp normalize_uploaded_image: thumbnail (không phóng to) rồi
+    dán giữa canvas vuông nền đen.
+    """
+    raw_h, raw_w = raw_hw
+    canvas_h, canvas_w = canvas_hw
+    if raw_h <= 0 or raw_w <= 0 or (raw_h, raw_w) == (canvas_h, canvas_w):
+        return detections
+    scale = min(1.0, canvas_w / raw_w, canvas_h / raw_h)
+    off_x = (canvas_w - round(raw_w * scale)) // 2
+    off_y = (canvas_h - round(raw_h * scale)) // 2
+    mapped: list[DetectionFinding] = []
+    for item in detections:
+        bbox = item.bbox
+        new_bbox = bbox
+        if bbox is not None:
+            new_bbox = (
+                round(bbox[0] * scale) + off_x,
+                round(bbox[1] * scale) + off_y,
+                round(bbox[2] * scale) + off_x,
+                round(bbox[3] * scale) + off_y,
+            )
+        new_seg = item.segmentation
+        if new_seg:
+            new_seg = tuple(
+                (round(x * scale) + off_x, round(y * scale) + off_y)
+                for x, y in new_seg
+            )
+        mapped.append(replace(item, bbox=new_bbox, segmentation=new_seg))
+    return mapped
 
 
 def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
@@ -191,6 +262,11 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         advanced = {}
     configured_model = Path(settings.get("model", "models/pretrained/brain_classifier.pt"))
     brain_model = settings.get("brain_model")
+    detector_model = settings.get("yolo_model_path")
+    if detector_model is None:
+        detector_model = "models/pretrained/brain_detector.pt"
+    volume_model = Path(settings.get("volume_model_path", "models/pretrained/brain_volume_model.pt"))
+    volume_manifest = Path(settings.get("volume_manifest_path", "models/pretrained/brain_volume_model.json"))
     return MedicalImageAnalyzerConfig(
         model_path=configured_model,
         working_dir=Path(settings.get("output_root", "output/medical")),
@@ -213,7 +289,16 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         cnn_image_size=int(settings.get("cnn_image_size", 224)),
         cnn_tta=bool(settings.get("cnn_tta", True)),
         analyze_topk=int(settings.get("analyze_topk", 3)),
-        yolo_model_path=Path(settings["yolo_model_path"]) if settings.get("yolo_model_path") else None,
+        yolo_model_path=Path(detector_model),
+        volume_model_path=volume_model,
+        volume_manifest_path=volume_manifest,
+        max_volume_voxels=int(settings.get("max_volume_voxels", 256_000_000)),
+        clinical_validation_report_path=(
+            Path(settings["clinical_validation_report"])
+            if settings.get("clinical_validation_report")
+            else None
+        ),
+        target_model_root=Path(settings.get("target_model_root", "models/pretrained/cancers")),
         ensemble_yolo_weight=float(settings.get("ensemble_yolo_weight", 0.4)),
         ensemble_cnn_weight=float(settings.get("ensemble_cnn_weight", 0.6)),
         detection_consistency_threshold=float(settings.get("detection_consistency_threshold", 0.5)),
@@ -223,6 +308,7 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         enable_mc_dropout=bool(advanced.get("enable_mc_dropout", False)),
         mc_dropout_samples=int(advanced.get("mc_dropout_samples", 20)),
         enable_advanced_preprocessing=bool(advanced.get("enable_advanced_preprocessing", False)),
+        video_sample_frames=int(settings.get("video_sample_frames", 12)),
     )
 
 
@@ -248,6 +334,10 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
         issues.append("segmentation_roi_margin không được âm.")
     if config.mc_dropout_samples <= 0:
         issues.append("mc_dropout_samples phải lớn hơn 0.")
+    if config.max_volume_voxels <= 0:
+        issues.append("max_volume_voxels phải lớn hơn 0.")
+    if config.video_sample_frames <= 0:
+        issues.append("video_sample_frames phải lớn hơn 0.")
     total_ensemble_weight = config.ensemble_yolo_weight + config.ensemble_cnn_weight
     if not config.ensemble_yolo_weight >= 0.0 or not config.ensemble_cnn_weight >= 0.0:
         issues.append("ensemble weights không được âm.")
@@ -264,7 +354,10 @@ class MedicalImageAnalyzer:
     def __init__(self, config: MedicalImageAnalyzerConfig | None = None, detector_backend: DetectorBackend | None = None) -> None:
         self.config = config or build_default_medical_analyzer_config()
         self._detector_backend = detector_backend
+        self._injected_detector_backend = detector_backend is not None
+        self._detector_backend_path: Path | None = None
         self._classifier_model: MedicalClassifierModel | None = None
+        self._classifier_model_path: Path | None = None
         self._dicom_modality_cache: dict[Path, str | None] = {}
         self._cnn_wrapper_cache: MedicalCNNClassifierWrapper | None = None
         self._cnn_wrapper_cache_path: Path | None = None
@@ -273,6 +366,11 @@ class MedicalImageAnalyzer:
         self._modality_wrapper_cache: MedicalCNNClassifierWrapper | None = None
         self._modality_wrapper_cache_path: Path | None = None
         self._roi_extractor: Any = None
+        self._volume_runtime: TorchScriptVolumeRuntime | None = None
+        self._volume_runtime_path: tuple[Path, Path] | None = None
+        self._runtime_model_path: Path | None = None
+        self._active_target_key: str | None = None
+        self._active_modality: str | None = None
         self._brain_fallback_active = False
 
     @staticmethod
@@ -284,11 +382,42 @@ class MedicalImageAnalyzer:
                 pass
 
     def _active_model_path(self, body_region: str | None = None) -> Path:
+        if self._runtime_model_path is not None:
+            return self._runtime_model_path
+        target_key = self._active_target_key or self._target_key_from_body_region(body_region)
+        if target_key is not None:
+            classifier = self._target_paths(target_key, self._active_modality)["classifier"]
+            if classifier.is_file():
+                return classifier
         if self._uses_brain_model(body_region):
             brain_model_path = self.config.brain_model_path
             if brain_model_path is not None:
                 return Path(brain_model_path)
         return Path(self.config.model_path)
+
+    @staticmethod
+    def _target_key_from_body_region(body_region: str | None) -> str | None:
+        if body_region == "cervix":
+            return "cervical"
+        return body_region if body_region and get_cancer_target(body_region) is not None else None
+
+    def _target_paths(self, target_key: str, modality: str | None = None) -> dict[str, Path]:
+        paths = target_model_paths(target_key, self.config.target_model_root, modality)
+        if target_key != "brain":
+            return paths
+        if modality is not None and modality_key(modality) != "mri":
+            return paths
+        legacy = {
+            "classifier": self.config.brain_model_path,
+            "detector": self.config.yolo_model_path,
+            "volume_model": self.config.volume_model_path,
+            "volume_manifest": self.config.volume_manifest_path,
+            "clinical_validation": self.config.clinical_validation_report_path,
+        }
+        for name, candidate in legacy.items():
+            if not paths[name].is_file() and candidate is not None:
+                paths[name] = Path(candidate)
+        return paths
 
     def cleanup_cached_images(self) -> int:
         """Xoa normalized image cu neu vuot qua max_cached_images."""
@@ -313,16 +442,73 @@ class MedicalImageAnalyzer:
         patient_code: str,
         case_id: int | None = None,
         target_key: str | None = None,
+        requested_modality: str | None = None,
         progress_callback: ProgressCallback = None,
     ) -> MedicalAnalysisResult:
         _start_t = time.monotonic()
         self._call_progress(progress_callback, "Validating image...", 0.05)
         requested_target_key = target_key.strip().lower() if target_key else None
-        requested_body_region = _canonical_body_region_key(requested_target_key) if requested_target_key else None
-        if requested_target_key and requested_body_region is None:
+        if requested_target_key and get_cancer_target(requested_target_key) is None:
             raise ValueError("UNKNOWN_TARGET: Nhóm bệnh được chọn không hợp lệ.")
+        requested_body_region = _canonical_body_region_key(requested_target_key) if requested_target_key else None
+        resolved_source = Path(image_path)
+        validation = self.validate_input(resolved_source)
+        if validation.status == "error":
+            raise ValueError(f"{validation.error_code}: {validation.message}")
+        if requested_modality:
+            requested_modality_key = _canonical_modality(requested_modality)
+            if requested_modality_key is None:
+                raise ValueError("INVALID_MODALITY: Loại ảnh được chọn không hợp lệ.")
+            if validation.modality_confidence >= self.config.validation_min_confidence:
+                if validation.modality != requested_modality_key:
+                    raise ValueError(
+                        "MODALITY_MISMATCH: Loại ảnh bạn chọn không khớp với modality nhận diện từ tệp "
+                        f"({requested_modality} ≠ {validation.modality}). Hãy chọn đúng loại ảnh hoặc tải tệp khác."
+                    )
+            else:
+                validation = replace(
+                    validation,
+                    modality=requested_modality_key,
+                    quality_warnings=(
+                        *validation.quality_warnings,
+                        (
+                            f"Chưa xác minh được modality {requested_modality} từ thông tin ảnh; "
+                            "lựa chọn này chỉ là khai báo của người dùng."
+                        ),
+                    ),
+                )
+        if requested_body_region is not None:
+            if (
+                validation.body_region is not None
+                and (
+                    validation.status == "success"
+                    or validation.body_region_confidence >= self.config.validation_min_confidence
+                )
+                and validation.body_region != requested_body_region
+            ):
+                raise ValueError(
+                    "TARGET_MISMATCH: Vùng cơ thể nhận diện từ ảnh không khớp nhóm ung thư đã chọn."
+                )
+            validation = replace(validation, body_region=requested_body_region)
+        self._active_target_key = requested_target_key or self._target_key_from_body_region(validation.body_region)
+        self._active_modality = validation.modality
+        self._runtime_model_path = None
+        self._brain_fallback_active = False
+        is_volume_input = resolved_source.is_dir() or resolved_source.name.lower().endswith(
+            (".nii", ".nii.gz", ".mha", ".mhd")
+        )
+        if self._active_target_key is not None and is_volume_input:
+            return self._analyze_volume(
+                resolved_source,
+                validation=validation,
+                patient_code=patient_code,
+                case_id=case_id,
+                requested_target_key=requested_target_key,
+                progress_callback=progress_callback,
+                started_at=_start_t,
+            )
         try:
-            self.ensure_ready(requested_target_key)
+            self.ensure_ready(self._active_target_key, validation.modality)
         except FileNotFoundError as exc:
             raise FileNotFoundError(
                 "Chưa có model medical để phân tích. Hãy bổ sung model suy luận đã chuẩn bị bên ngoài vào "
@@ -331,11 +517,6 @@ class MedicalImageAnalyzer:
                 f"Chi tiet: {exc}"
             ) from exc
         self._call_progress(progress_callback, "Normalizing image...", 0.10)
-
-        resolved_source = Path(image_path)
-        validation = self.validate_input(resolved_source)
-        if validation.status == "error":
-            raise ValueError(f"{validation.error_code}: {validation.message}")
         if self._brain_fallback_active:
             if requested_body_region not in {None, "brain"}:
                 raise ValueError("UNSUPPORTED_TARGET: Runtime hiện tại chỉ hỗ trợ phân tích u não.")
@@ -369,20 +550,57 @@ class MedicalImageAnalyzer:
         if image is None:
             raise RuntimeError(f"Không đọc được ảnh: {normalized_path}")
         modality_profile = self._get_modality_profile(validation.modality)
-        prepared_image = self._prepare_image_for_analysis(image, modality=validation.modality)
-        prepared_image, roi_info = self._apply_segmentation_roi(prepared_image)
-        quality_warnings = sorted(
-            set(self._evaluate_image_quality(prepared_image) + list(validation.quality_warnings))
+        is_video = resolved_source.suffix.lower() in {".mp4", ".avi", ".mov", ".mkv"}
+        analyzed_frame_count = 1
+        representative_frame_index = None
+        if is_video:
+            (
+                image,
+                prepared_image,
+                detections,
+                overlay_detections,
+                stage_results,
+                quality_warnings,
+                analyzed_frame_count,
+                representative_frame_index,
+            ) = self._run_video_samples(resolved_source, normalized_path, validation, modality_profile)
+            report_detections = detections
+        else:
+            analyzed_image, roi_info = self._apply_segmentation_roi(image)
+            prepared_image = self._prepare_image_for_analysis(analyzed_image, modality=validation.modality)
+            quality_warnings = sorted(
+                set(self._evaluate_image_quality(prepared_image) + list(validation.quality_warnings))
+            )
+            # Detector chạy trên pixel ảnh gốc: model train trên ảnh thô, cho qua
+            # thumbnail/canvas + chuẩn hóa modality làm rơi phát hiện (thực tế trên ảnh CT thận).
+            raw_image = _decode_raw_image(deidentified_source or resolved_source)
+            detect_input = analyzed_image
+            if raw_image is not None and roi_info is None:
+                detect_input = raw_image
+            stage_results = self._run_pipeline_stages(
+                prepared_image,
+                normalized_path,
+                validation,
+                modality_profile=modality_profile,
+                detect_image=detect_input,
+            )
+            detect_stage = stage_results["detect"]
+            detect_details = detect_stage.details or {}
+            raw_detections = detect_details.get("detections", [])
+            detections = _coerce_detections(raw_detections) if detect_stage.status == "success" else []
+            if detect_input is raw_image:
+                detections = _map_detections_to_canvas(detections, raw_image.shape[:2], image.shape[:2])
+            report_detections = self._detections_in_source_frame(detections, roi_info)
+            overlay_detections = detections
+        segmentation_mask_path = self._write_segmentation_mask(
+            image.shape,
+            overlay_detections if is_video else report_detections,
+            patient_code=patient_code,
         )
-        stage_results = self._run_pipeline_stages(
-            prepared_image, normalized_path, validation, modality_profile=modality_profile
-        )
-        detect_stage = stage_results["detect"]
-        detect_details = detect_stage.details or {}
-        raw_detections = detect_details.get("detections", [])
-        detections = _coerce_detections(raw_detections) if detect_stage.status == "success" else []
-        report_detections = self._detections_in_source_frame(detections, roi_info)
         consistency_score, conflicting_pairs = self._compute_detection_consistency(detections)
+        slot_warning = self._detector_slot_warning()
+        if slot_warning:
+            quality_warnings.append(slot_warning)
         if self._detector_backend is not None and consistency_score < self.config.detection_consistency_threshold:
             quality_warnings.append(
                 f"Phát hiện không nhất quán giữa các vùng (consistency={consistency_score:.2f} "
@@ -397,11 +615,7 @@ class MedicalImageAnalyzer:
                     f"Độ tin cậy thấp giữa các lớp (top1={top1_conf:.2f}, top2={top2_conf:.2f}, "
                     f"gap={top1_conf-top2_conf:.2f}). Kết quả có thể không chính xác."
                 )
-        risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(
-            detections,
-            modality=validation.modality,
-            modality_profile=modality_profile,
-        )
+        risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(detections)
         uncertainty_info = self._estimate_uncertainty(prepared_image)
         if uncertainty_info and uncertainty_info.get("high_uncertainty"):
             quality_warnings.append(
@@ -409,9 +623,9 @@ class MedicalImageAnalyzer:
                 f"confidence={uncertainty_info['confidence']:.2f}). Can bac si xem lai."
             )
         self._call_progress(progress_callback, "Generating heatmap...", 0.65)
-        gradcam_overlays = self._run_gradcam_if_possible(prepared_image, detections, validation)
+        gradcam_overlays = self._run_gradcam_if_possible(prepared_image, overlay_detections, validation)
         self._call_progress(progress_callback, "Analyzing results...", 0.85)
-        processed_path = self._render_overlay(prepared_image.copy(), detections, patient_code=patient_code, gradcam_overlays=gradcam_overlays)
+        processed_path = self._render_overlay(prepared_image.copy(), overlay_detections, patient_code=patient_code, gradcam_overlays=gradcam_overlays)
         payload = {
             "case_id": case_id,
             "patient_code": patient_code,
@@ -421,11 +635,25 @@ class MedicalImageAnalyzer:
             "model_name": self._active_model_path(validation.body_region).name,
             "risk_level": risk_level,
             "suspected_malignant": suspected_malignant,
+            "clinical_assessment_available": False,
             "average_confidence": average_confidence,
             "recommendation": recommendation,
             "detections": [
-                {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in report_detections
+                {
+                    "label": item.label,
+                    "confidence": item.confidence,
+                    "bbox": list(item.bbox) if item.bbox else None,
+                    "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
+                    "frame_index": item.frame_index,
+                    "timestamp_seconds": item.timestamp_seconds,
+                }
+                for item in report_detections
             ],
+            "segmentation_mask_path": str(segmentation_mask_path) if segmentation_mask_path else None,
+            "input_dimension": "video" if is_video else "2d",
+            "analyzed_frame_count": analyzed_frame_count,
+            "representative_frame_index": representative_frame_index,
+            "localization_available": any(item.bbox or item.segmentation for item in report_detections),
             "quality_warnings": quality_warnings,
             "stages": {name: {"status": item.status, "confidence": item.confidence, "message": item.message} for name, item in stage_results.items()},
             "disclaimer": MEDICAL_DISCLAIMER,
@@ -445,6 +673,7 @@ class MedicalImageAnalyzer:
             "source_image": str(resolved_source),
             "risk_level": risk_level,
             "suspected_malignant": suspected_malignant,
+            "clinical_assessment_available": False,
             "average_confidence": average_confidence,
             "detection_count": len(detections),
             "quality_warnings": quality_warnings,
@@ -478,6 +707,172 @@ class MedicalImageAnalyzer:
             analysis_time_seconds=time.monotonic() - _start_t,
             modality=validation.modality,
             body_region=validation.body_region,
+            segmentation_mask_path=segmentation_mask_path,
+            input_dimension="video" if is_video else "2d",
+            analyzed_frame_count=analyzed_frame_count,
+            representative_frame_index=representative_frame_index,
+        )
+
+    def _analyze_volume(
+        self,
+        source: Path,
+        *,
+        validation: ValidationResult,
+        patient_code: str,
+        case_id: int | None,
+        requested_target_key: str | None,
+        progress_callback: ProgressCallback,
+        started_at: float,
+    ) -> MedicalAnalysisResult:
+        target_key = requested_target_key or self._target_key_from_body_region(validation.body_region)
+        if target_key is None:
+            raise ValueError("UNKNOWN_3D_TARGET: Không xác định được nhóm ung thư cho volume 3D.")
+        paths = self._target_paths(target_key, validation.modality)
+        model_path = paths["volume_model"]
+        manifest_path = paths["volume_manifest"]
+        if model_path is None or manifest_path is None or not Path(model_path).is_file() or not Path(manifest_path).is_file():
+            raise ValueError(
+                f"MISSING_3D_MODEL: Cần cả volume.pt và volume.json trong "
+                f"{paths['directory']} để phân tích {target_key} trên MRI/CT 3D."
+            )
+        runtime_paths = (Path(model_path), Path(manifest_path))
+        if self._volume_runtime is None or (
+            self._volume_runtime_path is not None and self._volume_runtime_path != runtime_paths
+        ):
+            self._volume_runtime = TorchScriptVolumeRuntime(model_path, manifest_path)
+            self._volume_runtime_path = runtime_paths
+        if self._volume_runtime.manifest.target != target_key:
+            raise ValueError(
+                "TARGET_MODEL_MISMATCH: target trong volume.json không khớp nhóm ung thư đã chọn."
+            )
+
+        deidentified_source = self._deidentify_input(source) if source.is_dir() else None
+        analysis_source = deidentified_source or source
+        self._call_progress(progress_callback, "Loading 3D volume...", 0.20)
+        volume = load_medical_volume(
+            analysis_source,
+            max_voxels=self.config.max_volume_voxels,
+            input_modalities=self._volume_runtime.manifest.input_modalities,
+        )
+        self._call_progress(progress_callback, "Running 3D inference...", 0.50)
+        inference = self._volume_runtime.predict(volume)
+        volume_mask_path = self._write_volume_mask(
+            inference.mask,
+            volume,
+            patient_code=patient_code,
+        )
+        normalized_path, processed_path = render_volume_overlay(
+            volume,
+            inference,
+            self.config.processed_dir,
+            self.config.overlay_dir,
+            patient_code=patient_code,
+        )
+        detections = [
+            DetectionFinding(label=str(item["label"]), confidence=float(item["confidence"]), bbox=None)
+            for item in inference.predictions
+        ]
+        if not detections and inference.findings:
+            detections = [
+                DetectionFinding(label=item.label, confidence=item.confidence, bbox=None)
+                for item in inference.findings
+            ]
+        volume_findings = [
+            {
+                "label": item.label,
+                "confidence": item.confidence,
+                "bbox_voxel": list(item.bbox_voxel),
+                "bbox_mm": [round(value, 3) for value in item.bbox_mm],
+                "coordinate_system": volume.coordinate_system,
+                "voxel_count": item.voxel_count,
+                "volume_mm3": round(item.volume_mm3, 3),
+            }
+            for item in inference.findings
+        ]
+        risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(detections)
+        warnings = sorted(set(validation.quality_warnings))
+        if not volume_findings:
+            warnings.append("Model 3D không trả về vùng tổn thương vượt ngưỡng segmentation.")
+        elapsed = time.monotonic() - started_at
+        payload = {
+            "case_id": case_id,
+            "patient_code": patient_code,
+            "source_image": str(source),
+            "normalized_image": str(normalized_path),
+            "processed_image": str(processed_path),
+            "model_name": Path(model_path).name,
+            "input_dimension": "3d",
+            "volume_shape": list(volume.array.shape),
+            "spacing_xyz_mm": list(volume.spacing_xyz),
+            "coordinate_system": volume.coordinate_system,
+            "risk_level": risk_level,
+            "suspected_malignant": suspected_malignant,
+            "clinical_assessment_available": False,
+            "average_confidence": average_confidence,
+            "recommendation": recommendation,
+            "detections": [
+                {"label": item.label, "confidence": item.confidence, "bbox": None} for item in detections
+            ],
+            "volume_findings": volume_findings,
+            "volume_mask_path": str(volume_mask_path) if volume_mask_path else None,
+            "localization_available": bool(volume_findings),
+            "quality_warnings": warnings,
+            "stages": {
+                "validate": {"status": validation.status, "confidence": max(validation.modality_confidence, validation.body_region_confidence), "message": validation.message},
+                "volume_inference": {"status": "success", "confidence": average_confidence, "message": "Đã chạy model 3D trên toàn volume."},
+            },
+            "disclaimer": MEDICAL_DISCLAIMER,
+            "gradcam_overlays": [],
+            "deidentified": deidentified_source is not None,
+            "dicom_info": None,
+            "modality": validation.modality or volume.modality,
+            "body_region": validation.body_region or target_key,
+            "analysis_time_seconds": elapsed,
+        }
+        self._call_progress(progress_callback, "Writing 3D report...", 0.90)
+        report_json_path, report_md_path, _ = write_case_report(self.config.reports_dir, payload)
+        write_inference_dashboard(
+            self.config.reports_dir,
+            {
+                "patient_code": patient_code,
+                "source_image": str(source),
+                "risk_level": risk_level,
+                "suspected_malignant": suspected_malignant,
+                "clinical_assessment_available": False,
+                "average_confidence": average_confidence,
+                "detection_count": len(volume_findings),
+                "quality_warnings": warnings,
+                "model_name": Path(model_path).name,
+            },
+        )
+        return MedicalAnalysisResult(
+            case_id=case_id,
+            patient_code=patient_code,
+            source_image=source,
+            normalized_image=normalized_path,
+            processed_image=processed_path,
+            report_json_path=report_json_path,
+            report_md_path=report_md_path,
+            detections=detections,
+            risk_level=risk_level,
+            suspected_malignant=suspected_malignant,
+            recommendation=recommendation,
+            disclaimer=MEDICAL_DISCLAIMER,
+            average_confidence=average_confidence,
+            model_name=Path(model_path).name,
+            quality_warnings=warnings,
+            stage_confidences={"validate": max(validation.modality_confidence, validation.body_region_confidence), "volume_inference": average_confidence},
+            stage_messages={"validate": validation.message, "volume_inference": "Đã chạy model 3D trên toàn volume."},
+            deidentified_source=deidentified_source,
+            analysis_time_seconds=elapsed,
+            modality=validation.modality or volume.modality,
+            body_region=validation.body_region or target_key,
+            input_dimension="3d",
+            volume_findings=volume_findings,
+            volume_shape=tuple(int(value) for value in volume.array.shape),
+            volume_spacing_xyz_mm=volume.spacing_xyz,
+            volume_coordinate_system=volume.coordinate_system,
+            volume_mask_path=volume_mask_path,
         )
 
     def _run_pipeline_stages(
@@ -487,6 +882,7 @@ class MedicalImageAnalyzer:
         validation: ValidationResult,
         *,
         modality_profile: dict[str, Any] | None = None,
+        detect_image: np.ndarray | None = None,
     ) -> dict[str, PipelineStageResult]:
         validate_stage = PipelineStageResult(
             stage="validate",
@@ -521,16 +917,27 @@ class MedicalImageAnalyzer:
                 details={},
             )
         else:
-            detections = self._detect_findings(image, body_region=validation.body_region)
+            # Detector chạy trên ảnh đúng kích thước gốc, chưa qua chuẩn hóa modality:
+            # model YOLO train trên pixel thô, preprocessing CT/US bóp mạnh recall của nó.
+            detector_input = image if detect_image is None else detect_image
+            detections = self._detect_findings(detector_input, body_region=validation.body_region)
             if detections:
                 confidence = float(np.mean([item.confidence for item in detections]))
                 detect_stage = PipelineStageResult(
                     stage="detect",
                     status="success",
                     confidence=confidence,
-                    message="Phát hiện vùng quan tâm thành công.",
+                    message="Đã tạo dự đoán từ model.",
                     details={"detections": [
-                        {"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in detections
+                        {
+                            "label": item.label,
+                            "confidence": item.confidence,
+                            "bbox": list(item.bbox) if item.bbox else None,
+                            "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
+                            "frame_index": item.frame_index,
+                            "timestamp_seconds": item.timestamp_seconds,
+                        }
+                        for item in detections
                     ]},
                 )
             else:
@@ -538,7 +945,7 @@ class MedicalImageAnalyzer:
                     stage="detect",
                     status="uncertain",
                     confidence=0.0,
-                    message="Không phát hiện được vùng quan tâm rõ ràng trên ảnh.",
+                    message="Model không trả về nhãn dự đoán đủ điều kiện.",
                     details={},
                 )
 
@@ -557,7 +964,7 @@ class MedicalImageAnalyzer:
                 stage="classify",
                 status="success" if average_confidence >= certainty_threshold else "uncertain",
                 confidence=average_confidence,
-                message="Phân loại rủi ro dựa trên vùng phát hiện.",
+                message="Đã tính điểm dự đoán của model.",
                 details={"average_confidence": average_confidence, "certainty_threshold": certainty_threshold},
             )
 
@@ -576,6 +983,123 @@ class MedicalImageAnalyzer:
             "classify": classify_stage,
             "report": report_stage,
         }
+
+    @staticmethod
+    def _fit_video_frame(frame: np.ndarray, image_size: int) -> np.ndarray:
+        height, width = frame.shape[:2]
+        scale = min(image_size / max(width, 1), image_size / max(height, 1))
+        resized = cv2.resize(frame, (max(1, round(width * scale)), max(1, round(height * scale))))
+        canvas = np.zeros((image_size, image_size, 3), dtype=np.uint8)
+        x = (image_size - resized.shape[1]) // 2
+        y = (image_size - resized.shape[0]) // 2
+        canvas[y : y + resized.shape[0], x : x + resized.shape[1]] = resized
+        return canvas
+
+    @staticmethod
+    def _aggregate_video_detections(items: list[DetectionFinding]) -> list[DetectionFinding]:
+        grouped: dict[str, list[DetectionFinding]] = {}
+        for item in items:
+            grouped.setdefault(item.label, []).append(item)
+        aggregated: list[DetectionFinding] = []
+        for label_items in grouped.values():
+            best = max(label_items, key=lambda item: item.confidence)
+            aggregated.append(
+                replace(
+                    best,
+                    confidence=float(np.mean([item.confidence for item in label_items])),
+                )
+            )
+        return sorted(aggregated, key=lambda item: item.confidence, reverse=True)
+
+    def _run_video_samples(
+        self,
+        source: Path,
+        normalized_path: Path,
+        validation: ValidationResult,
+        modality_profile: dict[str, Any],
+    ) -> tuple[
+        np.ndarray,
+        np.ndarray,
+        list[DetectionFinding],
+        list[DetectionFinding],
+        dict[str, PipelineStageResult],
+        list[str],
+        int,
+        int,
+    ]:
+        samples = sample_medical_video_frames(source, max_frames=self.config.video_sample_frames)
+        analyzed: list[tuple[int, np.ndarray, np.ndarray, list[DetectionFinding], dict[str, PipelineStageResult]]] = []
+        warnings = list(validation.quality_warnings)
+        for frame_index, timestamp, frame in samples:
+            image = self._fit_video_frame(frame, self.config.image_size)
+            prepared = self._prepare_image_for_analysis(image, modality=validation.modality)
+            warnings.extend(self._evaluate_image_quality(prepared))
+            stages = self._run_pipeline_stages(
+                prepared,
+                normalized_path,
+                validation,
+                modality_profile=modality_profile,
+                detect_image=image,
+            )
+            raw = (stages["detect"].details or {}).get("detections", [])
+            detections = [
+                replace(item, frame_index=frame_index, timestamp_seconds=timestamp)
+                for item in _coerce_detections(raw)
+            ]
+            analyzed.append((frame_index, image, prepared, detections, stages))
+        representative = max(
+            analyzed,
+            key=lambda item: max((finding.confidence for finding in item[3]), default=-1.0),
+        )
+        representative_index, image, prepared, overlay_detections, stages = representative
+        detections = self._aggregate_video_detections(
+            [finding for _index, _image, _prepared, findings, _stages in analyzed for finding in findings]
+        )
+        detect_confidence = float(np.mean([item.confidence for item in detections])) if detections else 0.0
+        stages["detect"] = replace(
+            stages["detect"],
+            status="success" if detections else "uncertain",
+            confidence=detect_confidence,
+            message=f"Đã tổng hợp dự đoán từ {len(samples)} khung hình trải đều video.",
+            details={
+                "detections": [
+                    {
+                        "label": item.label,
+                        "confidence": item.confidence,
+                        "bbox": list(item.bbox) if item.bbox else None,
+                        "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
+                        "frame_index": item.frame_index,
+                        "timestamp_seconds": item.timestamp_seconds,
+                    }
+                    for item in detections
+                ]
+            },
+        )
+        certainty_threshold = modality_profile.get("certainty_threshold", self.config.certainty_threshold)
+        stages["classify"] = replace(
+            stages["classify"],
+            status="success" if detect_confidence >= certainty_threshold else "uncertain",
+            confidence=detect_confidence,
+            message="Đã tính điểm tổng hợp trên các khung video được lấy mẫu.",
+            details={"average_confidence": detect_confidence, "certainty_threshold": certainty_threshold},
+        )
+        stages["report"] = replace(
+            stages["report"],
+            confidence=min(stages["validate"].confidence, stages["preprocess"].confidence, detect_confidence),
+        )
+        warnings.append(f"Video được lấy mẫu {len(samples)} khung hình trải đều; overlay dùng khung {representative_index}.")
+        if not cv2.imwrite(str(normalized_path), image):
+            raise OSError(f"Không thể ghi khung video đại diện: {normalized_path}")
+        return (
+            image,
+            prepared,
+            detections,
+            overlay_detections,
+            stages,
+            sorted(set(warnings)),
+            len(samples),
+            representative_index,
+        )
 
     def _get_modality_profile(self, modality: str | None) -> dict[str, Any]:
         modality_key = (modality or "").lower()
@@ -759,42 +1283,47 @@ class MedicalImageAnalyzer:
     def _detect_findings(
         self, image: np.ndarray, *, body_region: str | None = None
     ) -> list[DetectionFinding]:
-        cnn_wrapper = self._load_brain_wrapper() if self._uses_brain_model(body_region) else self._load_cnn_wrapper()
-        if self._detector_backend is not None:
+        cnn_wrapper = self._load_cnn_wrapper()
+        detector_path = self._active_detector_path()
+        if (
+            not self._injected_detector_backend
+            and self._detector_backend is not None
+            and self._detector_backend_path != detector_path
+        ):
+            self._detector_backend = None
+        if self._detector_backend is not None or (detector_path is not None and Path(detector_path).is_file()):
             yolo_detections = self._detect_with_backend(image)
             if cnn_wrapper is not None and yolo_detections:
-                return self._ensemble_detections(image, yolo_detections)
+                return self._ensemble_detections(image, yolo_detections, body_region=body_region)
             return yolo_detections
         if cnn_wrapper is not None:
             cnn_predictions = cnn_wrapper.predict(image, top_k=max(1, self.config.analyze_topk), tta=self.config.cnn_tta)
-            height, width = image.shape[:2]
-            bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
             return [
                 DetectionFinding(
                     label=str(item.get("label", "")),
                     confidence=float(item.get("confidence", 0.0)),
-                    bbox=bbox,
+                    bbox=None,
                 )
                 for item in cnn_predictions
             ]
         classifier = self._load_classifier()
         classifier_predictions = classifier.predict(image, top_k=max(1, self.config.analyze_topk))
-        height, width = image.shape[:2]
-        bbox = (max(0, width // 8), max(0, height // 8), max(1, width - width // 8), max(1, height - height // 8))
         return [
             DetectionFinding(
                 label=str(item.label),
                 confidence=float(item.confidence),
-                bbox=bbox,
+                bbox=None,
             )
             for item in classifier_predictions
         ]
 
     def _detect_with_backend(self, image: np.ndarray) -> list[DetectionFinding]:
-        backend = self._detector_backend or self._load_default_backend()
+        backend = self._detector_backend
+        if backend is None:
+            backend = self._load_default_backend()
+            self._detector_backend = backend
         results = backend.predict(
             source=image,
-            imgsz=self.config.image_size,
             conf=self.config.conf_threshold,
             verbose=False,
             stream=False,
@@ -803,22 +1332,30 @@ class MedicalImageAnalyzer:
         for result in results:
             if hasattr(result, "boxes"):
                 names = getattr(result, "names", {})
-                for box in getattr(result, "boxes", []):
+                mask_polygons = list(getattr(getattr(result, "masks", None), "xy", ()) or ())
+                for box_index, box in enumerate(getattr(result, "boxes", [])):
                     cls_id = int(box.cls[0].item())
                     confidence = float(box.conf[0].item())
-                    x1, y1, x2, y2 = [int(value) for value in box.xyxy[0].tolist()]
+                    bbox = self._normalize_bbox(box.xyxy[0].tolist(), image.shape)
+                    segmentation = None
+                    if box_index < len(mask_polygons):
+                        height, width = image.shape[:2]
+                        points = tuple(
+                            (max(0, min(width - 1, round(float(point[0])))), max(0, min(height - 1, round(float(point[1])))))
+                            for point in mask_polygons[box_index]
+                        )
+                        segmentation = points if len(points) >= 3 else None
                     findings.append(
                         DetectionFinding(
                             label=str(names.get(cls_id, cls_id)),
                             confidence=confidence,
-                            bbox=(x1, y1, x2, y2),
+                            bbox=bbox,
+                            segmentation=segmentation,
                         )
                     )
             elif hasattr(result, "label") and hasattr(result, "confidence"):
-                raw_bbox = getattr(result, "bbox", None) or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
-                bbox = tuple(int(value) for value in raw_bbox)
-                if len(bbox) != 4:
-                    bbox = (0, 0, image.shape[1] - 1, image.shape[0] - 1)
+                raw_bbox = getattr(result, "bbox", None)
+                bbox = self._normalize_bbox(raw_bbox, image.shape)
                 findings.append(
                     DetectionFinding(
                         label=str(result.label),
@@ -827,10 +1364,8 @@ class MedicalImageAnalyzer:
                     )
                 )
             elif isinstance(result, dict) and "label" in result and "confidence" in result:
-                raw_bbox = result.get("bbox") or (0, 0, image.shape[1] - 1, image.shape[0] - 1)
-                bbox = tuple(int(value) for value in raw_bbox)
-                if len(bbox) != 4:
-                    bbox = (0, 0, image.shape[1] - 1, image.shape[0] - 1)
+                raw_bbox = result.get("bbox")
+                bbox = self._normalize_bbox(raw_bbox, image.shape)
                 findings.append(
                     DetectionFinding(
                         label=str(result["label"]),
@@ -840,7 +1375,47 @@ class MedicalImageAnalyzer:
                 )
         return findings
 
-    def ensure_ready(self, target_key: str | None = None) -> Path:
+    @staticmethod
+    def _normalize_bbox(
+        raw_bbox: Any,
+        image_shape: tuple[int, ...],
+    ) -> tuple[int, int, int, int] | None:
+        try:
+            if raw_bbox is None or len(raw_bbox) != 4:
+                return None
+            coordinates = tuple(round(float(value)) for value in raw_bbox)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        height, width = image_shape[:2]
+        x1, y1, x2, y2 = coordinates
+        x1, x2 = sorted((max(0, min(width, x1)), max(0, min(width, x2))))
+        y1, y2 = sorted((max(0, min(height, y1)), max(0, min(height, y2))))
+        return (x1, y1, x2, y2) if x2 > x1 and y2 > y1 else None
+
+    def ensure_ready(self, target_key: str | None = None, modality: str | None = None) -> Path:
+        issues = validate_medical_analyzer_config(self.config)
+        if issues:
+            raise ValueError("Cấu hình medical không hợp lệ: " + "; ".join(issues))
+        if target_key is not None:
+            target = get_cancer_target(target_key)
+            if target is None:
+                raise FileNotFoundError(f"Nhóm ung thư không có trong catalog: {target_key}")
+            paths = self._target_paths(target.key, modality)
+            model_path = paths["classifier"] if paths["classifier"].is_file() else paths["detector"]
+            if not model_path.is_file():
+                raise FileNotFoundError(
+                    f"Thiếu classifier.pt hoặc detector.pt cho {target.label} trong {paths['directory']}."
+                )
+            if self._runtime_model_path != model_path:
+                self._classifier_model = None
+                self._classifier_model_path = None
+                self._cnn_wrapper_cache = None
+                self._cnn_wrapper_cache_path = None
+            self._runtime_model_path = model_path
+            self._active_target_key = target.key
+            self._active_modality = modality
+            self._log_model_manifest(model_path)
+            return model_path
         try:
             model_path = resolve_medical_runtime_model_path(self.config)
         except FileNotFoundError:
@@ -851,20 +1426,17 @@ class MedicalImageAnalyzer:
                     "Chỉ phân tích được ảnh vùng đầu (body_region=brain).",
                     brain_model_path.name,
                 )
-                issues = validate_medical_analyzer_config(self.config)
-                if issues:
-                    raise ValueError("Cấu hình medical không hợp lệ: " + "; ".join(issues))
                 self._brain_fallback_active = True
+                self._runtime_model_path = brain_model_path
+                self._active_target_key = "brain"
                 return brain_model_path
             candidates = ", ".join(str(p) for p in iter_medical_runtime_model_paths(self.config))
             raise FileNotFoundError(
                 "Thiếu model medical để phân tích. Đã thử các đường dẫn: "
                 f"{candidates}. Hãy cập nhật model_path, fallback_model_path hoặc brain_model trong config/medical_settings.yaml."
             )
-        issues = validate_medical_analyzer_config(self.config)
-        if issues:
-            raise ValueError("Cấu hình medical không hợp lệ: " + "; ".join(issues))
         self.config = self.config.with_model_path(model_path)
+        self._runtime_model_path = model_path
         self._log_model_manifest(model_path)
         return model_path
 
@@ -889,7 +1461,13 @@ class MedicalImageAnalyzer:
         except Exception:
             logger.warning("[ModelManifest] Không đọc được manifest", exc_info=True)
 
-    def _ensemble_detections(self, image: np.ndarray, yolo_detections: list[DetectionFinding]) -> list[DetectionFinding]:
+    def _ensemble_detections(
+        self,
+        image: np.ndarray,
+        yolo_detections: list[DetectionFinding],
+        *,
+        body_region: str | None = None,
+    ) -> list[DetectionFinding]:
         if not yolo_detections:
             return yolo_detections
 
@@ -934,6 +1512,9 @@ class MedicalImageAnalyzer:
                     label=cnn_label or detection.label,
                     confidence=ensemble_confidence,
                     bbox=detection.bbox,
+                    segmentation=detection.segmentation,
+                    frame_index=detection.frame_index,
+                    timestamp_seconds=detection.timestamp_seconds,
                 )
             )
         return combined
@@ -973,6 +1554,9 @@ class MedicalImageAnalyzer:
         for i in range(len(detections)):
             for j in range(i + 1, len(detections)):
                 total_pairs += 1
+                if detections[i].bbox is None or detections[j].bbox is None:
+                    total_pairs -= 1
+                    continue
                 iou = self._bbox_iou(detections[i].bbox, detections[j].bbox)
                 if iou > iou_threshold:
                     overlapping_pairs += 1
@@ -1074,22 +1658,65 @@ class MedicalImageAnalyzer:
             return None
 
     def _load_default_backend(self) -> DetectorBackend:
-        if self.config.yolo_model_path and Path(self.config.yolo_model_path).exists():
+        detector_path = self._active_detector_path()
+        if detector_path and detector_path.is_file():
             try:
                 from ultralytics import YOLO
 
-                return YOLO(str(self.config.yolo_model_path))
-            except Exception:
-                logger.warning("[Ensemble] Không thể tải YOLO backend", exc_info=True)
-        raise RuntimeError("Medical pipeline hiện tại dùng classifier local, không cần backend YOLO.")
+                backend = YOLO(str(detector_path))
+                self._validate_detector_backend(backend)
+                self._detector_backend_path = detector_path
+                return backend
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Không thể nạp model định vị {detector_path}: {exc}"
+                ) from exc
+        raise RuntimeError(
+            "Chưa có model định vị YOLO detect/segment cho nhóm ung thư đã chọn."
+        )
+
+    def _active_detector_path(self) -> Path | None:
+        if self._active_target_key is not None:
+            return self._target_paths(self._active_target_key, self._active_modality)["detector"]
+        return Path(self.config.yolo_model_path) if self.config.yolo_model_path is not None else None
+
+    def _detector_slot_warning(self) -> str | None:
+        """Báo khi detector đang nằm ở cấp cơ quan nhưng ảnh dùng ô modality trống."""
+        if self._active_target_key is None or self._detector_backend is not None:
+            return None
+        active = self._active_detector_path()
+        if active is None or Path(active).is_file():
+            return None
+        root_detector = target_model_paths(self._active_target_key, self.config.target_model_root)["detector"]
+        if not root_detector.is_file():
+            return None
+        return (
+            f"Không dùng detector định vị: {active} không tồn tại, trong khi detector đang đặt ở cấp "
+            f"cơ quan ({root_detector}). Ảnh có modality={self._active_modality} nên runtime tìm model "
+            f"trong đúng ô {self._active_target_key}/<modality>/ — đặt lại bằng "
+            "scripts/fetch_model.py --modality để định vị hoạt động."
+        )
+
+    @staticmethod
+    def _validate_detector_backend(backend: Any) -> None:
+        task = getattr(backend, "task", None)
+        if task not in {"detect", "segment"}:
+            raise ValueError(f"task={task!r}; cần model detect hoặc segment")
+        names = getattr(backend, "names", {})
+        labels = {str(value).lower() for value in (names.values() if isinstance(names, dict) else names)}
+        coco_markers = {"person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck"}
+        if len(labels) >= 20 and len(labels & coco_markers) >= 5:
+            raise ValueError("đây là model vật thể phổ thông, không phải model định vị y khoa")
 
     def _load_classifier(self) -> MedicalClassifierModel:
-        if self._classifier_model is None:
-            self._classifier_model = load_medical_classifier(self.config.model_path)
+        model_path = self._active_model_path()
+        if self._classifier_model is None or self._classifier_model_path != model_path:
+            self._classifier_model = load_medical_classifier(model_path)
+            self._classifier_model_path = model_path
         return self._classifier_model
 
     def _load_cnn_wrapper(self) -> MedicalCNNClassifierWrapper | None:
-        model_path = Path(self.config.model_path)
+        model_path = self._active_model_path()
         if self._cnn_wrapper_cache is not None and self._cnn_wrapper_cache_path == model_path:
             return self._cnn_wrapper_cache
         if is_cnn_classifier_path(model_path):
@@ -1100,10 +1727,9 @@ class MedicalImageAnalyzer:
         return None
 
     def _load_brain_wrapper(self) -> MedicalCNNClassifierWrapper | None:
-        brain_model_path = self.config.brain_model_path
-        if brain_model_path is None:
+        model_path = self._target_paths("brain")["classifier"]
+        if not model_path.is_file():
             return None
-        model_path = Path(brain_model_path)
         if self._brain_wrapper_cache is not None and self._brain_wrapper_cache_path == model_path:
             return self._brain_wrapper_cache
         if is_cnn_classifier_path(model_path):
@@ -1143,68 +1769,32 @@ class MedicalImageAnalyzer:
             return detections
         shifted: list[DetectionFinding] = []
         for item in detections:
+            if item.bbox is None:
+                shifted.append(item)
+                continue
             x1, y1, x2, y2 = item.bbox
             shifted.append(
                 DetectionFinding(
                     label=item.label,
                     confidence=item.confidence,
                     bbox=(x1 + off_x, y1 + off_y, x2 + off_x, y2 + off_y),
+                    segmentation=(
+                        tuple((x + off_x, y + off_y) for x, y in item.segmentation)
+                        if item.segmentation
+                        else None
+                    ),
+                    frame_index=item.frame_index,
+                    timestamp_seconds=item.timestamp_seconds,
                 )
             )
         return shifted
 
-    def _classify_findings(
-        self,
-        detections: list[DetectionFinding],
-        *,
-        modality: str | None = None,
-        modality_profile: dict[str, Any] | None = None,
-    ) -> tuple[str, bool, str, float]:
-        if not detections:
-            return (
-                "low",
-                False,
-                "Không ghi nhận vùng tổn thương rõ ràng trên ảnh này. Nếu bệnh nhân có triệu chứng hoặc tổn thương tồn tại, vẫn nên khám chuyên khoa.",
-                0.0,
-            )
-        average_confidence = sum(item.confidence for item in detections) / len(detections)
-        max_confidence = max(item.confidence for item in detections)
-        profile = modality_profile or self._get_modality_profile(modality)
-        certainty_threshold = profile.get("certainty_threshold", self.config.certainty_threshold)
-        medium_threshold = profile.get("medium_threshold", self.config.classify_medium_risk_threshold)
-        if max_confidence < certainty_threshold:
-            return (
-                "uncertain",
-                False,
-                f"Kết quả chưa đủ tin tưởng (max_confidence={max_confidence:.2f} < {certainty_threshold:.2f}). Không đủ cơ sở phân loại. Cần khám chuyên khoa để được chẩn đoán xác định.",
-                average_confidence,
-            )
-        top_detection = max(detections, key=lambda item: item.confidence)
-        if _BENIGN_LABELS.intersection(str(top_detection.label).lower().split()):
-            return (
-                "low",
-                False,
-                "Không phát hiện dấu hiệu u ác tính rõ ràng trên ảnh. Kết quả mang tính hỗ trợ, vẫn nên khám chuyên khoa nếu có triệu chứng lâm sàng.",
-                average_confidence,
-            )
-        if max_confidence >= self.config.classify_high_risk_threshold or len(detections) >= 3:
-            return (
-                "high",
-                True,
-                "Phát hiện vùng tổn thương có nguy cơ cao. Nên chuyển bệnh nhân đến bác sĩ chuyên khoa thần kinh/ung bướu để đánh giá tiếp và sinh thiết nếu cần.",
-                average_confidence,
-            )
-        if max_confidence >= medium_threshold:
-            return (
-                "medium",
-                True,
-                "Phát hiện vùng tổn thương có nguy cơ trung bình. Nên tái khám sớm và đối chiếu với khám lâm sàng chuyên khoa.",
-                average_confidence,
-            )
+    def _classify_findings(self, detections: list[DetectionFinding]) -> tuple[str, bool, str, float]:
+        average_confidence = sum(item.confidence for item in detections) / len(detections) if detections else 0.0
         return (
-            "low",
+            "uncertain",
             False,
-            "Có một vài vùng tổn thương nguy cơ thấp. Nên theo dõi và khám chuyên khoa nếu tổn thương thay đổi kích thước, màu sắc hoặc hình dạng.",
+            "Đây là nhãn và điểm dự đoán của model, không phải kết luận về vị trí tổn thương hay tính ác tính. Cần được nhân viên y tế đánh giá trước khi đưa ra nhận định lâm sàng.",
             average_confidence,
         )
 
@@ -1294,4 +1884,43 @@ class MedicalImageAnalyzer:
         self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
         path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}.jpg"
         cv2.imwrite(str(path), overlay)
+        return path
+
+    def _write_segmentation_mask(
+        self,
+        image_shape: tuple[int, ...],
+        detections: list[DetectionFinding],
+        *,
+        patient_code: str,
+    ) -> Path | None:
+        polygons = [item.segmentation for item in detections if item.segmentation and len(item.segmentation) >= 3]
+        if not polygons:
+            return None
+        mask = np.zeros(image_shape[:2], dtype=np.uint8)
+        for polygon in polygons:
+            cv2.fillPoly(mask, [np.asarray(polygon, dtype=np.int32)], 255)
+        self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
+        path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}_mask.png"
+        if not cv2.imwrite(str(path), mask):
+            raise OSError(f"Không thể ghi segmentation mask: {path}")
+        return path
+
+    def _write_volume_mask(
+        self,
+        mask: np.ndarray | None,
+        volume: Any,
+        *,
+        patient_code: str,
+    ) -> Path | None:
+        if mask is None:
+            return None
+        self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
+        path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}_volume_mask.npz"
+        np.savez_compressed(
+            path,
+            mask=np.asarray(mask, dtype=np.uint8),
+            affine=np.asarray(volume.affine, dtype=np.float64),
+            spacing_xyz_mm=np.asarray(volume.spacing_xyz, dtype=np.float64),
+            coordinate_system=np.asarray(volume.coordinate_system),
+        )
         return path

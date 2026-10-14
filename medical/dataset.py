@@ -5,6 +5,7 @@ import re
 import unicodedata
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image, ImageOps
 
@@ -38,6 +39,10 @@ MEDICAL_UPLOAD_EXTENSIONS = frozenset({
     ".nii.gz",
     ".mha",
     ".mhd",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".mkv",
 })
 
 _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -73,6 +78,7 @@ _MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Mammogram", ("mammogram", "mammo")),
     ("EUS", ("eus", "endoscopic ultrasound")),
     ("PET/CT", ("pet ct", "petct", "pet/ct")),
+    ("Ảnh soi cổ tử cung", ("colposcopy", "cervical photo", "soi co tu cung", "soi cổ tử cung")),
     ("PET", (" pet ", " pet-", "pet scan", "pet whole body")),
     ("Nội soi", ("noi soi", "endoscopy", "gastroscopy", "egd")),
     ("Siêu âm", ("sieu am", "ultrasound", "sonography")),
@@ -136,6 +142,7 @@ _MODALITY_TO_TARGET_KEY: dict[str, str] = {
     "PET/CT dạ dày": "stomach",
     "PET/CT tuyến tiền liệt": "prostate",
     "PET/CT cổ tử cung": "cervical",
+    "Ảnh soi cổ tử cung": "cervical",
     "PET gan": "liver",
     "PET phổi": "lung",
     "PET đại trực tràng": "colorectal",
@@ -191,7 +198,7 @@ SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
     "stomach": ("endoscopy", "ct", "mri", "pet_ct", "eus"),
     "colorectal": ("colonoscopy", "ct", "mri", "pet_ct"),
     "prostate": ("mri", "ultrasound", "pet_ct"),
-    "cervical": ("ct", "mri", "pet_ct"),
+    "cervical": ("colposcopy", "ct", "mri", "pet_ct"),
     "brain": ("mri", "ct", "pet_ct"),
     "kidney": ("ct", "mri", "ultrasound", "pet_ct"),
     "pancreas": ("ct", "mri", "pet_ct"),
@@ -598,6 +605,19 @@ def _load_dicom_with_window(source: Path) -> Image.Image:
 
 def load_medical_source_image(source_path: str | Path) -> Image.Image:
     source = Path(source_path)
+    if _medical_upload_suffix(source) in {".mp4", ".avi", ".mov", ".mkv"}:
+        capture = cv2.VideoCapture(str(source))
+        try:
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            if frame_count > 1:
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_count // 2)
+            ok, frame = capture.read()
+        finally:
+            capture.release()
+        if not ok or frame is None:
+            raise ValueError(f"Không đọc được khung hình từ video: {source}")
+        # Khung giữa chỉ dùng để tạo preview; pipeline suy luận lấy mẫu nhiều khung riêng.
+        return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     if is_medical_volume_source(source):
         return _load_medical_volume_image(source)
     if source.suffix.lower() == ".dcm":
@@ -614,6 +634,45 @@ def load_medical_source_image(source_path: str | Path) -> Image.Image:
         else:
             normalized = normalized.convert("RGB")
         return normalized.copy()
+
+
+def sample_medical_video_frames(
+    source_path: str | Path,
+    *,
+    max_frames: int = 12,
+) -> list[tuple[int, float, np.ndarray]]:
+    if max_frames <= 0:
+        raise ValueError("max_frames phải lớn hơn 0.")
+    source = Path(source_path)
+    capture = cv2.VideoCapture(str(source))
+    if not capture.isOpened():
+        raise ValueError(f"Không mở được video: {source}")
+    try:
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = float(capture.get(cv2.CAP_PROP_FPS))
+        if frame_count > 0:
+            indices = sorted(set(np.linspace(0, frame_count - 1, min(max_frames, frame_count), dtype=int).tolist()))
+            frames: list[tuple[int, float, np.ndarray]] = []
+            for index in indices:
+                capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+                ok, frame = capture.read()
+                if ok and frame is not None:
+                    frames.append((index, index / fps if fps > 0 else 0.0, frame))
+        else:
+            # shortcut: video không khai báo frame count chỉ lấy N frame đầu; nâng cấp nếu gặp stream dài.
+            frames = []
+            index = 0
+            while len(frames) < max_frames:
+                ok, frame = capture.read()
+                if not ok or frame is None:
+                    break
+                frames.append((index, index / fps if fps > 0 else 0.0, frame))
+                index += 1
+    finally:
+        capture.release()
+    if not frames:
+        raise ValueError(f"Không đọc được khung hình từ video: {source}")
+    return frames
 
 
 def normalize_uploaded_image(

@@ -11,6 +11,7 @@ from medical.dataset import (
 )
 
 STANDARD_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff")
+VIDEO_EXTENSIONS = (".mp4", ".avi", ".mov", ".mkv")
 VOLUME_EXTENSIONS = (".dcm", ".nii", ".nii.gz", ".mha", ".mhd")
 VOLUME_MODALITIES = {
     "CT",
@@ -32,6 +33,8 @@ def is_volume_modality(modality: str) -> bool:
 def modality_upload_extensions(modality: str) -> tuple[str, ...]:
     if is_volume_modality(modality):
         return STANDARD_IMAGE_EXTENSIONS + VOLUME_EXTENSIONS
+    if modality in {"Nội soi", "Nội soi đại tràng", "Ảnh soi cổ tử cung"}:
+        return STANDARD_IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + (".dcm",)
     return STANDARD_IMAGE_EXTENSIONS + (".dcm",)
 
 
