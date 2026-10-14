@@ -51,6 +51,7 @@ class MedicalChatService:
                 image_path,
                 patient_code=patient_code,
                 target_key=target_key,
+                requested_modality=modality,
                 progress_callback=progress_callback,
             )
         except ValueError as exc:
@@ -101,6 +102,9 @@ class MedicalChatService:
             "medical_case_id": case_id,
             "risk_level": result.risk_level,
             "suspected_malignant": result.suspected_malignant,
+            "clinical_assessment_available": False,
+            "localization_available": bool(result.volume_findings)
+            or any(item.bbox or item.segmentation for item in result.detections),
             "processed_image_path": str(result.processed_image),
             "gradcam_overlays": gradcam_paths,
             "dicom_info": dicom_info,
@@ -113,37 +117,57 @@ class MedicalChatService:
             "quality_warnings": result.quality_warnings,
             "supported_screening_targets": supported_cancer_labels(),
             "supported_modalities": supported_cancer_modalities(),
-            "detections": [{"label": item.label, "confidence": item.confidence, "bbox": list(item.bbox)} for item in result.detections],
+            "detections": [
+                {
+                    "label": item.label,
+                    "confidence": item.confidence,
+                    "bbox": list(item.bbox) if item.bbox else None,
+                    "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
+                    "frame_index": item.frame_index,
+                    "timestamp_seconds": item.timestamp_seconds,
+                }
+                for item in result.detections
+            ],
             "predicted_labels": [item.label for item in result.detections],
             "modality": result.modality,
             "body_region": result.body_region,
+            "input_dimension": result.input_dimension,
+            "volume_findings": result.volume_findings,
+            "volume_shape": result.volume_shape,
+            "volume_spacing_xyz_mm": result.volume_spacing_xyz_mm,
+            "volume_coordinate_system": result.volume_coordinate_system,
+            "segmentation_mask_path": (
+                str(result.segmentation_mask_path) if result.segmentation_mask_path else None
+            ),
+            "analyzed_frame_count": result.analyzed_frame_count,
+            "representative_frame_index": result.representative_frame_index,
+            "volume_mask_path": str(result.volume_mask_path) if result.volume_mask_path else None,
             "requested_target": target_key,
             "requested_modality": modality,
         }
         top_detections = result.detections[:3]
         if result.detections:
             detection_summary = "\n".join(
-                f"• {item.label}: {item.confidence*100:.1f}%" for item in top_detections
+                f"• {item.label}: điểm dự đoán {item.confidence*100:.1f}%" for item in top_detections
             )
         else:
-            detection_summary = "không ghi nhận vùng nghi ngờ rõ ràng"
+            detection_summary = "model không trả về nhãn dự đoán"
         quality_text = (
             f"\n⚠️ Cảnh báo: {'; '.join(result.quality_warnings)}"
             if result.quality_warnings
             else ""
         )
-        risk_icon = {"high": "🔴", "medium": "🟡", "low": "🟢", "uncertain": "⚪"}
-        risk_text = f"{risk_icon.get(result.risk_level, '⚪')} Mức nguy cơ: {result.risk_level}"
+        risk_text = "⚪ Đánh giá lâm sàng: chưa thực hiện"
         grad_summary = ""
         if result.gradcam_overlays:
-            grad_summary = f"\n📊 Heatmap: {len(result.gradcam_overlays)} ảnh"
+            grad_summary = f"\n📊 Grad-CAM: {len(result.gradcam_overlays)} heatmap; chỉ minh họa ảnh hưởng đến dự đoán, không xác nhận ranh giới tổn thương."
         elapsed = result.analysis_time_seconds
         time_str = f"{elapsed:.1f}s" if elapsed > 0 else ""
         reply_text = (
             f"📋 **Kết quả phân tích** — Mã BN: {patient_code}\n\n"
             f"{risk_text}\n"
-            f"🎯 Vùng: {result.body_region or 'chưa xác định'} | Modality: {result.modality or 'chưa xác định'}\n"
-            f"🔬 Phát hiện: {len(result.detections)} vùng\n"
+            f"🎯 Vùng chọn: {result.body_region or 'chưa xác định'} | Modality: {result.modality or 'chưa xác định'}\n"
+            f"🔬 Nhãn dự đoán: {len(result.detections)}\n"
             f"{detection_summary}\n"
             f"{grad_summary}"
             f"{quality_text}\n\n"

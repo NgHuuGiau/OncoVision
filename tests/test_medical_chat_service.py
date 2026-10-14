@@ -17,7 +17,7 @@ class _FakeAnalyzer:
     def ensure_ready(self):
         return Path("models/trained/fake.pt")
 
-    def analyze_image(self, image_path, *, patient_code: str, case_id=None, target_key=None, progress_callback=None):
+    def analyze_image(self, image_path, *, patient_code: str, case_id=None, target_key=None, requested_modality=None, progress_callback=None):
         return self.result
 
 
@@ -88,8 +88,9 @@ class MedicalChatServiceTests(unittest.TestCase):
             self.assertIn("BN777", response.reply_text)
             self.assertIn("Ảnh hơi mờ", response.reply_text)
             self.assertIn("lesion", response.reply_text)
-            self.assertIn("91.0%", response.reply_text)
-            self.assertIn("high", response.reply_text)
+            self.assertIn("điểm dự đoán 91.0%", response.reply_text)
+            self.assertIn("Đánh giá lâm sàng: chưa thực hiện", response.reply_text)
+            self.assertFalse(metadata["clinical_assessment_available"])
             self.assertIn("Cần khám chuyên khoa", response.reply_text)
             synced_payload = json.loads(report_json.read_text(encoding="utf-8"))
             self.assertEqual(synced_payload["case_id"], metadata["medical_case_id"])

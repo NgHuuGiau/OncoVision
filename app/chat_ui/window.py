@@ -295,9 +295,24 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
         def _initialize_medical_status(self) -> None:
             try:
-                model_path = self.medical_controller.ensure_ready()
+                from medical.system_status import get_medical_system_status
+
+                status = get_medical_system_status()
+                ready_target = next(
+                    (
+                        target for target in self.medical_targets
+                        if status.target_capabilities.get(target.key, {}).get("runtime_ready", False)
+                    ),
+                    None,
+                )
+                if ready_target is None:
+                    raise RuntimeError("Chưa có model suy luận cho nhóm ung thư nào.")
+                self.current_medical_target = ready_target
+                self.current_medical_modality = ready_target.modalities[0]
+                model_path = status.resolved_model_path
                 self.medical_status_message = (
-                    f"Medical model \u0111\u00e3 s\u1eb5n s\u00e0ng: {Path(model_path).name}"
+                    f"Medical model \u0111\u00e3 s\u1eb5n s\u00e0ng: "
+                    f"{Path(model_path).name if model_path else ready_target.label}"
                 )
             except Exception as exc:
                 self.medical_status_message = (
@@ -900,6 +915,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                 image_path=attach_path,
                 patient_code=self._build_patient_code(),
                 user_prompt=prompt,
+                target_key=self.current_medical_target.key,
+                modality=self.current_medical_modality,
             )
             self.medical_worker.result_ready.connect(self._on_medical_analysis_success)
             self.medical_worker.error.connect(self._on_medical_analysis_error)

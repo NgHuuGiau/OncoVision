@@ -19,12 +19,23 @@ def create_medical_worker_base(QThread, Signal):
         progress = Signal(str, float)
         finished = Signal()
 
-        def __init__(self, service: MedicalChatService, *, image_path: str, patient_code: str, user_prompt: str):
+        def __init__(
+            self,
+            service: MedicalChatService,
+            *,
+            image_path: str,
+            patient_code: str,
+            user_prompt: str,
+            target_key: str | None = None,
+            modality: str | None = None,
+        ):
             super().__init__()
             self.service = service
             self.image_path = image_path
             self.patient_code = patient_code
             self.user_prompt = user_prompt
+            self.target_key = target_key
+            self.modality = modality
 
         def run(self) -> None:
             try:
@@ -34,6 +45,8 @@ def create_medical_worker_base(QThread, Signal):
                     image_path=self.image_path,
                     patient_code=self.patient_code,
                     user_prompt=self.user_prompt,
+                    target_key=self.target_key,
+                    modality=self.modality,
                     progress_callback=_on_progress,
                 )
                 self.result_ready.emit(response)

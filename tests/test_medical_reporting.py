@@ -85,6 +85,7 @@ class MedicalReportingTests(unittest.TestCase):
             "patient_code": "BN017",
             "risk_level": "medium",
             "suspected_malignant": False,
+            "clinical_assessment_available": True,
             "model_name": "Kết quả đã được nhân viên y tế duyệt",
             "recommendation": "Tiếp tục theo dõi.",
             "review_status": "approved",
@@ -95,7 +96,7 @@ class MedicalReportingTests(unittest.TestCase):
             "detections": [],
         })
         self.assertIn("Báo cáo kết quả phân tích hình ảnh y khoa", report)
-        self.assertIn("Mức nguy cơ:</strong> Trung bình", report)
+        self.assertIn("Đánh giá lâm sàng:</strong> Trung bình", report)
         self.assertIn("Đã được nhân viên y tế duyệt", report)
         self.assertIn("Tiếp tục theo dõi.", report)
         self.assertNotIn("D:\\OncoVision", report)

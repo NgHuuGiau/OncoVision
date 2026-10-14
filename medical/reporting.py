@@ -23,6 +23,24 @@ def _risk_label(value: Any) -> str:
     )
 
 
+def _malignancy_label(payload: dict[str, Any]) -> str:
+    if not payload.get("clinical_assessment_available"):
+        return "Chưa được nhân viên y tế đánh giá"
+    return "Có" if payload.get("suspected_malignant") else "Không"
+
+
+def _position_label(item: dict[str, Any]) -> str:
+    bbox = item.get("bbox")
+    if bbox:
+        return str(bbox)
+    bbox_voxel = item.get("bbox_voxel")
+    if bbox_voxel:
+        bbox_mm = item.get("bbox_mm")
+        coordinate_system = item.get("coordinate_system", "unknown")
+        return f"voxel={bbox_voxel}; mm={bbox_mm} ({coordinate_system})" if bbox_mm else f"voxel={bbox_voxel}"
+    return "Model không cung cấp tọa độ"
+
+
 def _reportlab_font_name() -> str:
     candidates = (
         Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf",
@@ -82,7 +100,7 @@ def update_case_report_case_id(json_path: str | Path, md_path: str | Path, *, ca
     _write_case_report_files(json_file, md_file, payload)
 
 
-def export_case_bundle(case_payload: dict[str, Any], export_dir: str | Path, *, include_files: list[str] | None = None, include_pdf: bool = False) -> Path:
+def export_case_bundle(case_payload: dict[str, Any], export_dir: str | Path, *, include_files: list[str | None] | None = None, include_pdf: bool = False) -> Path:
     target_dir = Path(export_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     case_id = case_payload.get("case_id", "unknown")
@@ -97,6 +115,8 @@ def export_case_bundle(case_payload: dict[str, Any], export_dir: str | Path, *, 
             pdf_path = export_case_pdf(target_dir, case_payload)
             archive.write(pdf_path, arcname=pdf_path.name)
         for path_str in include_files:
+            if not path_str:
+                continue
             path = Path(path_str)
             if path.exists() and path.is_file():
                 archive.write(path, arcname=path.name)
@@ -212,13 +232,13 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
         bottomMargin=2 * cm,
     )
 
-    detections = payload.get("detections", [])
+    detections = payload.get("volume_findings") or payload.get("detections", [])
     quality_warnings = payload.get("quality_warnings", [])
 
     summary_data = [
         ["Mã ca bệnh", str(payload.get("patient_code") or payload.get("case_id", "-"))],
-        ["Mức nguy cơ", _risk_label(payload.get("risk_level"))],
-        ["Nghi ngờ ác tính", "Có" if payload.get("suspected_malignant") else "Không"],
+        ["Đánh giá lâm sàng", _risk_label(payload.get("risk_level")) if payload.get("clinical_assessment_available") else "Chưa thực hiện"],
+        ["Nhận định ác tính", _malignancy_label(payload)],
         ["Mô hình", str(payload.get("model_name", "-"))],
         ["Khuyến nghị", str(payload.get("recommendation", "-"))],
     ]
@@ -238,16 +258,16 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
 
-    findings_rows = [[Paragraph("<b>Vùng nghi ngờ</b>", body_style), Paragraph("<b>Độ tin cậy</b>", body_style), Paragraph("<b>Vị trí</b>", body_style)]]
+    findings_rows = [[Paragraph("<b>Nhãn model</b>", body_style), Paragraph("<b>Điểm dự đoán</b>", body_style), Paragraph("<b>Vị trí (nếu có)</b>", body_style)]]
     if detections:
         for item in detections:
             findings_rows.append([
                 Paragraph(html.escape(str(item.get("label", "-"))), body_style),
                 Paragraph(f"{item.get('confidence', 0):.2f}", body_style),
-                Paragraph(html.escape(str(item.get("bbox", []))), body_style),
+                Paragraph(html.escape(_position_label(item)), body_style),
             ])
     else:
-        findings_rows.append([Paragraph("Không có vùng nghi ngờ nào được ghi nhận.", body_style), Paragraph("", body_style), Paragraph("", body_style)])
+        findings_rows.append([Paragraph("Model không trả về nhãn dự đoán.", body_style), Paragraph("", body_style), Paragraph("", body_style)])
     findings_table = Table(findings_rows, colWidths=[5 * cm, 4 * cm, 7 * cm])
     findings_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eff6ff")),
@@ -290,13 +310,25 @@ def _dicom_section(payload: dict[str, Any]) -> str:
     return f'<div class="card"><h2>DICOM Info</h2><table><thead><tr><th>Tag</th><th>Value</th></tr></thead><tbody>{rows}</tbody></table></div>'
 
 
+def _segmentation_mask_section(payload: dict[str, Any]) -> str:
+    path = payload.get("segmentation_mask_path")
+    uri = _as_file_uri(path)
+    if not uri:
+        return ""
+    return (
+        '<div class="image-card"><h3>Segmentation mask</h3>'
+        f'<p><strong>Đường dẫn:</strong> {html.escape(str(path))}</p>'
+        f'<img src="{html.escape(uri)}" alt="Segmentation mask" /></div>'
+    )
+
+
 def _html_report(payload: dict[str, Any]) -> str:
-    detections = payload.get("detections", [])
+    detections = payload.get("volume_findings") or payload.get("detections", [])
     quality_warnings = payload.get("quality_warnings", [])
     findings_rows = "".join(
-        f"<tr><td>{html.escape(str(item.get('label', '-')))}</td><td>{item.get('confidence', 0):.2f}</td><td>{html.escape(str(item.get('bbox', [])))}</td></tr>"
+        f"<tr><td>{html.escape(str(item.get('label', '-')))}</td><td>{item.get('confidence', 0):.2f}</td><td>{html.escape(_position_label(item))}</td></tr>"
         for item in detections
-    ) or '<tr><td colspan="3">Không có vùng nghi ngờ nào được ghi nhận.</td></tr>'
+    ) or '<tr><td colspan="3">Model không trả về nhãn dự đoán.</td></tr>'
     warning_rows = "".join(f"<li>{html.escape(str(warning))}</li>" for warning in quality_warnings) or "<li>Không có cảnh báo chất lượng ảnh.</li>"
     source_uri = _as_file_uri(payload.get("source_image"))
     processed_uri = _as_file_uri(payload.get("processed_image"))
@@ -324,12 +356,13 @@ def _html_report(payload: dict[str, Any]) -> str:
             )
             gradcam_sections += gsection
     gradcam_block = (
-        f'<div class="card"><h2>Grad-CAM Heatmap</h2><div class="image-grid">{gradcam_sections}</div></div>'
+        f'<div class="card"><h2>Grad-CAM Heatmap</h2><p>Minh họa vùng ảnh ảnh hưởng đến dự đoán; không phải ranh giới tổn thương đã xác nhận.</p><div class="image-grid">{gradcam_sections}</div></div>'
         if gradcam_sections else ""
     )
     risk = payload.get('risk_level', 'unknown')
     risk_colors = {"high": "#b91c1c", "medium": "#92400e", "low": "#166534", "uncertain": "#4b5563"}
     risk_color = risk_colors.get(risk, "#4b5563")
+    assessment = _risk_label(risk) if payload.get("clinical_assessment_available") else "Chưa đánh giá"
     return f"""<!DOCTYPE html>
 <html lang=\"vi\">
 <head>
@@ -376,30 +409,29 @@ def _html_report(payload: dict[str, Any]) -> str:
              &middot; Case ID: {html.escape(str(payload.get('case_id', '-')))}
              &middot; Model: {html.escape(str(payload.get('model_name', '-')))}</p>
         </div>
-        <div class="risk-badge">{risk.upper()}</div>
+        <div class="risk-badge">{html.escape(assessment)}</div>
       </div>
     </div>
     <div class="card">
       <h2>Summary</h2>
       <div class="grid-2">
-        <div class="stat"><div class="stat-value" style="color:{risk_color}">{risk.upper()}</div><div class="stat-label">Risk Level</div></div>
-        <div class="stat"><div class="stat-value">{payload.get('average_confidence', 0):.0%}</div><div class="stat-label">Avg Confidence</div></div>
-        <div class="stat"><div class="stat-value">{'Yes' if payload.get('suspected_malignant') else 'No'}</div><div class="stat-label">Suspected Malignant</div></div>
-        <div class="stat"><div class="stat-value">{len(detections)}</div><div class="stat-label">Findings</div></div>
+        <div class="stat"><div class="stat-value" style="color:{risk_color}">{html.escape(assessment)}</div><div class="stat-label">Clinical assessment status</div></div>
+        <div class="stat"><div class="stat-value">{html.escape(_malignancy_label(payload))}</div><div class="stat-label">Clinical assessment</div></div>
+        <div class="stat"><div class="stat-value">{len(detections)}</div><div class="stat-label">Predicted labels</div></div>
       </div>
       <p style="margin-top:12px;font-size:13px;"><strong>Recommendation:</strong> {html.escape(str(payload.get('recommendation', '')))}</p>
     </div>
     <div class="card">
-      <h2>Findings</h2>
+      <h2>Model predictions</h2>
       <table>
-        <thead><tr><th>Label</th><th>Confidence</th><th>BBox</th></tr></thead>
+        <thead><tr><th>Model label</th><th>Prediction score</th><th>Position if available</th></tr></thead>
         <tbody>{findings_rows}</tbody>
       </table>
     </div>
     {_dicom_section(payload)}
     <div class="card">
       <h2>Images</h2>
-      <div class="image-grid">{source_section}{processed_section}</div>
+      <div class="image-grid">{source_section}{processed_section}{_segmentation_mask_section(payload)}</div>
     </div>
     {gradcam_block}
     <div class="card">
@@ -414,12 +446,12 @@ def _html_report(payload: dict[str, Any]) -> str:
 
 
 def _pdf_report_html(payload: dict[str, Any]) -> str:
-    detections = payload.get("detections", [])
+    detections = payload.get("volume_findings") or payload.get("detections", [])
     quality_warnings = payload.get("quality_warnings", [])
     findings_rows = "".join(
-        f"<tr><td>{html.escape(str(item.get('label', '-')))}</td><td>{item.get('confidence', 0):.2f}</td><td>{html.escape(str(item.get('bbox', [])))}</td></tr>"
+        f"<tr><td>{html.escape(str(item.get('label', '-')))}</td><td>{item.get('confidence', 0):.2f}</td><td>{html.escape(_position_label(item))}</td></tr>"
         for item in detections
-    ) or '<tr><td colspan="3">Không có vùng nghi ngờ nào được ghi nhận.</td></tr>'
+    ) or '<tr><td colspan="3">Model không trả về nhãn dự đoán.</td></tr>'
     warning_rows = "".join(f"<li>{html.escape(str(warning))}</li>" for warning in quality_warnings) or "<li>Không có cảnh báo chất lượng ảnh.</li>"
     source_uri = _as_file_uri(payload.get("source_image"))
     processed_uri = _as_file_uri(payload.get("processed_image"))
@@ -447,7 +479,7 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
             )
             gradcam_sections += gsection
     gradcam_block = (
-        f'<h2>Grad-CAM Heatmap</h2><div class="image-grid">{gradcam_sections}</div>'
+        f'<h2>Grad-CAM Heatmap</h2><p>Minh họa vùng ảnh ảnh hưởng đến dự đoán; không phải ranh giới tổn thương đã xác nhận.</p><div class="image-grid">{gradcam_sections}</div>'
         if gradcam_sections else ""
     )
     disclaimer_text = html.escape(str(payload.get("disclaimer", MEDICAL_DISCLAIMER)))
@@ -488,20 +520,20 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
   <h1>Báo cáo kết quả phân tích hình ảnh y khoa</h1>
   <div class=\"summary\">
     <p><strong>Mã ca bệnh:</strong> {html.escape(str(payload.get('patient_code') or payload.get('case_id', '-')))}</p>
-    <p><strong>Mức nguy cơ:</strong> {html.escape(_risk_label(payload.get('risk_level')))}</p>
-    <p><strong>Nghi ngờ ác tính:</strong> {'Có' if payload.get('suspected_malignant') else 'Không'}</p>
+    <p><strong>Đánh giá lâm sàng:</strong> {html.escape(_risk_label(payload.get('risk_level')) if payload.get('clinical_assessment_available') else 'Chưa thực hiện')}</p>
+    <p><strong>Nhận định ác tính:</strong> {html.escape(_malignancy_label(payload))}</p>
     <p><strong>Mô hình:</strong> {html.escape(str(payload.get('model_name', '-')))}</p>
     <p><strong>Khuyến nghị:</strong> {html.escape(str(payload.get('recommendation', '-')))}</p>
     {f"<p><strong>Trạng thái:</strong> Đã được nhân viên y tế duyệt</p><p><strong>Ngày duyệt:</strong> {html.escape(str(payload.get('reviewed_at') or '-'))}</p>" if payload.get('review_status') == 'approved' else ''}
   </div>
-  <h2>Kết quả phát hiện</h2>
+  <h2>Nhãn model dự đoán</h2>
   <table>
-    <thead><tr><th>Vùng nghi ngờ</th><th>Độ tin cậy</th><th>Vị trí</th></tr></thead>
+    <thead><tr><th>Nhãn model</th><th>Điểm dự đoán</th><th>Vị trí nếu có</th></tr></thead>
     <tbody>{findings_rows}</tbody>
   </table>
   <h2>Chất lượng ảnh</h2>
   <ul>{warning_rows}</ul>
-  <div class=\"image-grid\">{source_section}{processed_section}</div>
+  <div class=\"image-grid\">{source_section}{processed_section}{_segmentation_mask_section(payload)}</div>
   {gradcam_block}
   <div class=\"page-break\"></div>
   <div class=\"disclaimer\">
@@ -514,29 +546,33 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
 
 
 def _markdown_report(payload: dict[str, Any]) -> str:
-    detections = payload.get("detections", [])
+    detections = payload.get("volume_findings") or payload.get("detections", [])
     quality_warnings = payload.get("quality_warnings", [])
     detection_lines = "\n".join(
-        f"- {item['label']} | conf={item['confidence']:.2f} | bbox={item['bbox']}" for item in detections
-    ) or "- Không có vùng nghi ngờ nào được ghi nhận."
+        f"- {item['label']} | prediction_score={item['confidence']:.2f} | position={_position_label(item)}" for item in detections
+    ) or "- Model không trả về nhãn dự đoán."
     quality_lines = "\n".join(f"- {warning}" for warning in quality_warnings) or "- Không có cảnh báo chất lượng ảnh."
     supported_targets = ", ".join(supported_cancer_labels())
     supported_modalities = ", ".join(supported_cancer_modalities())
     risk_display = payload.get("risk_level", "-")
-    if risk_display == "uncertain":
-        risk_display = "uncertain - KẾT QUẢ CHƯA ĐỦ TIN TƯỞNG"
+    if not payload.get("clinical_assessment_available"):
+        risk_display = "Chưa có đánh giá lâm sàng"
+    elif risk_display == "uncertain":
+        risk_display = "Chưa xác định"
     return (
         "# Medical Imaging Case Report\n\n"
         f"- Case ID: {payload.get('case_id', '-')}\n"
-        f"- Risk level: {risk_display}\n"
-        f"- Suspected malignant: {payload.get('suspected_malignant', False)}\n"
+        f"- Clinical assessment: {risk_display}\n"
+        f"- Malignancy assessment: {_malignancy_label(payload)}\n"
         f"- Model: {payload.get('model_name', '-')}\n"
         f"- Supported screening targets: {supported_targets}\n"
         f"- Supported modalities: {supported_modalities}\n"
         f"- Source image: {payload.get('source_image', '-')}\n"
         f"- Normalized image: {payload.get('normalized_image', '-')}\n"
-        f"- Processed image: {payload.get('processed_image', '-')}\n\n"
-        "## Findings\n"
+        f"- Processed image: {payload.get('processed_image', '-')}\n"
+        f"- Segmentation mask: {payload.get('segmentation_mask_path') or '-'}\n\n"
+        f"- Volume mask (NPZ): {payload.get('volume_mask_path') or '-'}\n\n"
+        "## Model predictions\n"
         f"{detection_lines}\n\n"
         "## Image Quality\n"
         f"{quality_lines}\n\n"
