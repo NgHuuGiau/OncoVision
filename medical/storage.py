@@ -262,9 +262,15 @@ class MedicalCaseDatabase:
             return cursor.rowcount > 0
 
     def delete_case_with_files(self, case_id: int) -> tuple[bool, list[str]]:
+        """Xóa ca và các tệp do ứng dụng tạo.
+
+        Ảnh gốc người dùng trỏ từ ngoài thư mục dữ liệu (ví dụ ổ D:) được giữ lại:
+        xóa ca chỉ nên dọn những gì app tự sinh ra.
+        """
         item = self.get_case(case_id)
         if item is None:
             return False, []
+        data_root = self.db_path.parent.resolve()
         deleted_paths: list[str] = []
         for path_str in (
             item.image_path,
@@ -273,12 +279,16 @@ class MedicalCaseDatabase:
             item.report_md_path,
         ):
             path = Path(path_str)
-            if path.exists() and path.is_file():
-                try:
-                    os.remove(path)
-                    deleted_paths.append(str(path))
-                except OSError:
-                    logger.warning("Failed to delete medical artifact: %s", path)
+            if not path.is_file():
+                continue
+            if not path.resolve().is_relative_to(data_root):
+                logger.warning("Giữ lại tệp ngoài thư mục dữ liệu khi xóa ca: %s", path)
+                continue
+            try:
+                os.remove(path)
+                deleted_paths.append(str(path))
+            except OSError:
+                logger.warning("Failed to delete medical artifact: %s", path)
         deleted = self.delete_case(case_id)
         return deleted, deleted_paths
 

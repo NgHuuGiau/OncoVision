@@ -30,9 +30,13 @@ def _malignancy_label(payload: dict[str, Any]) -> str:
 
 
 def _position_label(item: dict[str, Any]) -> str:
+    bbox_source = item.get("bbox_source")
+    coordinate_frame = item.get("coordinate_frame")
+    if bbox_source:
+        return f"ảnh gốc (x1,y1,x2,y2)={bbox_source}"
     bbox = item.get("bbox")
     if bbox:
-        return str(bbox)
+        return f"ảnh chuẩn hóa (x1,y1,x2,y2)={bbox}" if coordinate_frame == "normalized_canvas" else str(bbox)
     bbox_voxel = item.get("bbox_voxel")
     if bbox_voxel:
         bbox_mm = item.get("bbox_mm")

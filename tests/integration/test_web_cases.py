@@ -101,12 +101,34 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertIn("model_ready", response.text)
         self.assertIn('id="caseAssignmentModal"', response.text)
 
+    def test_analyze_validates_input_before_model_capability(self) -> None:
+        # Ghim nguyên nhân gốc: input hỏng trả 400 và không được đụng tới
+        # capability check, kể cả khi nhóm bệnh đang thiếu model (503).
+        status = Mock(target_capabilities={"brain": {"runtime_ready": False}})
+        with patch.object(web_app, "get_medical_system_status", return_value=status) as status_mock:
+            response = self.client.post(
+                "/api/analyze",
+                data={"image_path": ""},
+                headers={"X-CSRF-Token": self.csrf},
+            )
+        self.assertEqual(response.status_code, 400)
+        status_mock.assert_not_called()
+
     def test_analyze_rejects_target_without_model(self) -> None:
-        response = self.client.post(
-            "/api/analyze",
-            data={"image_path": "not-used", "target_key": "thyroid"},
-            headers={"X-CSRF-Token": self.csrf},
-        )
+        output_dir = Path(self._tmp.name) / "output"
+        output_dir.mkdir(exist_ok=True)
+        (output_dir / "scan.png").write_bytes(b"scan")
+        # Patch system status để 503 không phụ thuộc model có sẵn trên máy.
+        status = Mock(target_capabilities={"thyroid": {"runtime_ready": False}})
+        with (
+            patch.object(web_app, "OUTPUT_DIR", output_dir),
+            patch.object(web_app, "get_medical_system_status", return_value=status),
+        ):
+            response = self.client.post(
+                "/api/analyze",
+                data={"image_path": "scan.png", "target_key": "thyroid"},
+                headers={"X-CSRF-Token": self.csrf},
+            )
         self.assertEqual(response.status_code, 503)
 
     def test_clinician_analysis_assigns_new_case_to_self(self) -> None:
@@ -124,7 +146,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         with (
             patch.object(web_app, "OUTPUT_DIR", output_dir),
             patch.object(web_app, "get_medical_service", return_value=service),
-            patch.object(web_app, "_require_ready_target", return_value=Mock(key="brain")),
+            patch.object(web_app, "_require_ready_capability", return_value=None),
         ):
             response = clinician.post(
                 "/api/analyze",
@@ -144,7 +166,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         with (
             patch.object(web_app, "OUTPUT_DIR", output_dir),
             patch.object(web_app, "get_medical_service", return_value=service),
-            patch.object(web_app, "_require_ready_target", return_value=Mock(key="brain")),
+            patch.object(web_app, "_require_ready_capability", return_value=None),
         ):
             response = clinician.post(
                 "/api/analyze",
@@ -164,7 +186,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         with (
             patch.object(web_app, "OUTPUT_DIR", output_dir),
             patch.object(web_app, "get_medical_service", return_value=service),
-            patch.object(web_app, "_require_ready_target", return_value=Mock(key="brain")),
+            patch.object(web_app, "_require_ready_capability", return_value=None),
         ):
             response = clinician.post(
                 "/api/analyze",
@@ -191,6 +213,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         cases = clinician.get("/api/cases").json()["cases"]
         self.assertEqual([case["case_id"] for case in cases], [self.case_id])
         self.assertEqual(clinician.get("/api/cases/9999").status_code, 404)
+        # Input không hợp lệ luôn trả 400 trước cả khi kiểm tra model.
         self.assertEqual(clinician.post(
             "/api/analyze", data={"image_path": "not-used"}, headers={"X-CSRF-Token": clinician_csrf}
         ).status_code, 400)
@@ -322,6 +345,12 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         conv = web_app.get_db().get_conversation(conv_id)
         self.assertEqual(conv.messages[0].metadata_json, meta)
+
+    def test_healthz_is_public_for_docker_healthcheck(self) -> None:
+        resp = TestClient(web_app.app).get("/healthz")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"status": "ok"})
 
     def test_static_files_served(self) -> None:
         css_resp = self.client.get("/static/css/styles.css")

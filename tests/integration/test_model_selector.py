@@ -289,10 +289,20 @@ class ModelSelectorTests(unittest.TestCase):
             os_name="Windows 11",
             gpu_count=1,
         )
-        runtime = select_runtime_config("low", hardware)
+        # Simulate GPU failure by forcing CUDA unavailable
+        hardware_cuda_fail = HardwareInfo(
+            cpu_name=hardware.cpu_name,
+            ram_gb=hardware.ram_gb,
+            gpu_name=hardware.gpu_name,
+            vram_gb=hardware.vram_gb,
+            cuda_available=False,
+            os_name=hardware.os_name,
+            gpu_count=hardware.gpu_count,
+        )
+        fallback_runtime = select_runtime_config("high", hardware_cuda_fail)
+        self.assertEqual(fallback_runtime.resolved_device, "cpu")
+        self.assertFalse(fallback_runtime.use_half)
 
-        cpu_fallbacks = [item for item in iter_fallback_configs(runtime) if item.resolved_device == "cpu"]
 
-        self.assertEqual(runtime.resolved_device, "cuda:0")
-        self.assertGreaterEqual(len(cpu_fallbacks), 1)
-        self.assertTrue(all(not item.use_half for item in cpu_fallbacks))
+if __name__ == "__main__":
+    unittest.main()

@@ -44,7 +44,7 @@ def preprocess_pet_ct(image: np.ndarray, target_size: int = 320, metadata: dict[
 
 
 def _suv_normalization(image: np.ndarray) -> np.ndarray:
-    image_f = image.astype(np.float32)
+    image_f: np.ndarray = image.astype(np.float32)
     p99 = float(np.percentile(image_f, 99))
     if p99 > 0:
         normalized = image_f / p99 * 255

@@ -137,7 +137,7 @@ def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
 
 
 def _as_score_matrix(scores: ScoreMatrix) -> np.ndarray:
-    arr = np.asarray(scores, dtype=np.float64)
+    arr: np.ndarray = np.asarray(scores, dtype=np.float64)
     if arr.ndim == 1:
         arr = arr.reshape(-1, 1)
     if arr.ndim != 2:
@@ -146,7 +146,7 @@ def _as_score_matrix(scores: ScoreMatrix) -> np.ndarray:
 
 
 def _validate_inputs(y_true: ArrayLike, scores: np.ndarray) -> np.ndarray:
-    labels = np.asarray(y_true, dtype=np.int64)
+    labels: np.ndarray = np.asarray(y_true, dtype=np.int64)
     if labels.ndim != 1:
         raise ValueError("y_true must be a 1D sequence of integer class indices")
     if labels.shape[0] != scores.shape[0]:
@@ -163,8 +163,8 @@ def _binary_roc_auc(labels: np.ndarray, scores: np.ndarray) -> float:
         return float("nan")
     order = np.argsort(scores, kind="mergesort")[::-1]
     sorted_labels = labels[order]
-    tps = np.cumsum(sorted_labels == 1)
-    fps = np.cumsum(sorted_labels == 0)
+    tps: np.ndarray = np.cumsum(sorted_labels == 1)
+    fps: np.ndarray = np.cumsum(sorted_labels == 0)
     tpr = np.concatenate(([0.0], tps / positives))
     fpr = np.concatenate(([0.0], fps / negatives))
     return _trapezoid(tpr, fpr)
@@ -176,8 +176,8 @@ def _binary_pr_auc(labels: np.ndarray, scores: np.ndarray) -> float:
         return float("nan")
     order = np.argsort(scores, kind="mergesort")[::-1]
     sorted_labels = labels[order]
-    tps = np.cumsum(sorted_labels == 1)
-    fps = np.cumsum(sorted_labels == 0)
+    tps: np.ndarray = np.cumsum(sorted_labels == 1)
+    fps: np.ndarray = np.cumsum(sorted_labels == 0)
     recall = tps / positives
     precision = np.where((tps + fps) > 0, tps / np.maximum(tps + fps, 1), 1.0)
     recall = np.concatenate(([0.0], recall))
@@ -228,9 +228,9 @@ def compute_calibration_curve(y_true: ArrayLike, y_scores: ScoreMatrix, n_bins: 
     correct = (predictions == labels).astype(np.float64)
     bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
     bin_indices = np.clip(np.digitize(confidences, bin_edges[1:-1], right=False), 0, n_bins - 1)
-    bin_counts = np.zeros(n_bins, dtype=np.int64)
-    bin_confidences = np.full(n_bins, np.nan, dtype=np.float64)
-    bin_accuracies = np.full(n_bins, np.nan, dtype=np.float64)
+    bin_counts: np.ndarray = np.zeros(n_bins, dtype=np.int64)
+    bin_confidences: np.ndarray = np.full(n_bins, np.nan, dtype=np.float64)
+    bin_accuracies: np.ndarray = np.full(n_bins, np.nan, dtype=np.float64)
     ece = 0.0
     for b in range(n_bins):
         mask = bin_indices == b

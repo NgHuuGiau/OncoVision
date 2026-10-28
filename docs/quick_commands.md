@@ -63,9 +63,15 @@ python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
 Hệ thống chỉ suy luận bằng model có sẵn (đặt trong `models/pretrained/`):
 
 ```powershell
+# Máy mới: tải toàn bộ model ung thư có sẵn bằng 1 lệnh (kèm probe + đặt đúng tên)
+python scripts/fetch_model.py --all
+
 # Kiểm tra đã đủ model chưa
 python run_doctor.py --skip-camera-check
+python run_medical.py status     # -> "x/11 nhóm có model runtime"
 ```
+
+Bảng trạng thái 11 nhóm, quy ước tên file và model nền bắt buộc: xem `models/README.md`.
 
 | Model | File | Trạng thái | Mô tả |
 |---|---|---|---|
@@ -85,6 +91,8 @@ python run_doctor.py --skip-camera-check
 | `run_chat.py --check-only` | Kiểm tra chat UI và medical sẵn sàng |
 | `run_chat.py --cleanup-output` | Dọn file output cũ |
 | `run_medical.py analyze` | Phân tích 1 ảnh y khoa (ưu tiên não) |
+| `run_medical.py evaluate --model <.pt> --data <dir>` | Đánh giá model trên bộ ảnh có nhãn (thư mục/lớp) |
+| `run_medical.py evaluate-detector --model <.pt> --data <dir>` | Đánh giá YOLO detector (mAP@0.5) trên bộ bbox YOLO format |
 
 ---
 

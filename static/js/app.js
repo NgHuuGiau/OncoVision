@@ -156,6 +156,22 @@ function applyThemeSetting(v) {
   setTheme(v);
 }
 
+function setTheme(mode) {
+  localStorage.setItem('theme', mode);
+  const light = mode === 'light'
+    || (mode === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches);
+  document.documentElement.classList.toggle('light', light);
+  document.body.classList.toggle('light', light);
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = light ? '◑ Giao diện tối' : '◑ Giao diện sáng';
+}
+
+function toggleTheme() {
+  setTheme(document.documentElement.classList.contains('light') ? 'dark' : 'light');
+}
+
+setTheme(localStorage.getItem('theme') || 'system');
+
 function closeAllModals() {
   document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
   const preview = document.getElementById('imagePreviewModal');
@@ -462,8 +478,14 @@ function togglePlusMenu(e) {
     </button>
   `;
   const rect = e.currentTarget.getBoundingClientRect();
-  m.style.top = (rect.bottom + 4) + 'px';
-  m.style.left = rect.left + 'px';
+  // Menu mở ngược lên khi không đủ chỗ bên dưới, và không tràn mép phải
+  const menuHeight = m.offsetHeight;
+  const menuWidth = m.offsetWidth;
+  const top = rect.bottom + 4 + menuHeight > window.innerHeight
+    ? Math.max(8, rect.top - menuHeight - 4)
+    : rect.bottom + 4;
+  m.style.top = top + 'px';
+  m.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8)) + 'px';
 }
 
 document.addEventListener('click', e => {

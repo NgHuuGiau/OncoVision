@@ -96,7 +96,7 @@ def _request_csrf_token(request: Request) -> str:
 
 
 async def require_authenticated(request: Request) -> WebUser | None:
-    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/favicon.svg"}:
+    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/favicon.svg", "/healthz"}:
         return None
 
     user_id = request.session.get("user_id")
@@ -479,6 +479,12 @@ _STATUS_CACHE_TTL_SECONDS = 60.0
 _status_cache: tuple[float, dict] | None = None
 
 
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    """Healthcheck công khai cho Docker/compose (không qua auth)."""
+    return {"status": "ok"}
+
+
 @app.get("/api/status")
 def api_status():
     global _status_cache
@@ -540,16 +546,21 @@ def _has_allowed_magic(path: Path, filename: str) -> bool:
     return head.startswith(img_magic) or (lower.endswith((".mp4", ".mov")) and head[4:8] == b"ftyp")
 
 
-def _require_ready_target(target_key: str, modality: str):
+def _validate_target_input(target_key: str, modality: str):
+    """Kiểm tra input nhóm bệnh/modality — lỗi request thì 400."""
     target = get_cancer_target(target_key)
     if target is None:
         raise HTTPException(status_code=400, detail="Nhóm bệnh không hợp lệ.")
     if modality and modality not in target.modalities:
         raise HTTPException(status_code=400, detail="Modality không phù hợp với nhóm bệnh đã chọn.")
+    return target
+
+
+def _require_ready_capability(target) -> None:
+    """Kiểm tra model đã sẵn sàng — thiếu model thì 503."""
     capabilities = get_medical_system_status().target_capabilities.get(target.key, {})
     if not capabilities.get("runtime_ready", False):
         raise HTTPException(status_code=503, detail=f"Chưa có model suy luận cho {target.label}.")
-    return target
 
 
 @app.post("/api/upload", dependencies=[STAFF_REQUIRED])
@@ -613,12 +624,15 @@ def analyze_image(
     target_key: str = Form("brain"),
     modality: str = Form(""),
 ):
-    target = _require_ready_target(target_key, modality)
+    # Input không hợp lệ luôn là 400, kể cả khi server thiếu model;
+    # chỉ request hợp lệ mới gặp 503 ở bước kiểm tra capability.
+    target = _validate_target_input(target_key, modality)
     if not image_path or not image_path.strip():
         raise HTTPException(status_code=400, detail="Thieu file anh.")
     stored = _safe_path(OUTPUT_DIR, image_path)
     if stored is None:
         raise HTTPException(status_code=400, detail=f"Không tìm thấy file hợp lệ: {image_path}")
+    _require_ready_capability(target)
     pc = patient_code or f"WEB-{uuid.uuid4().hex[:8].upper()}"
     if not ANALYSIS_SEMAPHORE.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Hệ thống đang phân tích một ca khác. Vui lòng thử lại sau.")
@@ -1102,4 +1116,4 @@ async def custom_500_exception_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=os.environ.get("ONCOVISION_HOST", "127.0.0.1"), port=8000)

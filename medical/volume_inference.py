@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import cv2
@@ -12,6 +14,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class VolumeData:
@@ -50,7 +53,7 @@ class VolumeModelManifest:
         raw_shape = data.get("input_shape")
         if not isinstance(raw_shape, list) or len(raw_shape) != 3:
             raise ValueError("Manifest 3D phải có input_shape=[depth,height,width].")
-        input_shape = tuple(int(value) for value in raw_shape)
+        input_shape = cast(tuple[int, int, int], tuple(int(value) for value in raw_shape))
         if any(value <= 0 or value > 512 for value in input_shape) or int(np.prod(input_shape)) > 16_777_216:
             raise ValueError("input_shape của model 3D không hợp lệ hoặc vượt giới hạn bộ nhớ.")
         labels = tuple(str(value).strip() for value in data.get("class_labels", []) if str(value).strip())
@@ -98,15 +101,15 @@ class VolumeInferenceResult:
 
 
 def _sitk_volume(image: Any, *, modality: str | None = None) -> VolumeData:
-    import SimpleITK as sitk  # type: ignore[import-not-found]
+    import SimpleITK as sitk
 
     array = np.asarray(sitk.GetArrayFromImage(image), dtype=np.float32)
     if array.ndim != 3:
         raise ValueError("Volume SimpleITK phải là ảnh vô hướng 3D; dữ liệu vector/time-series chưa được hỗ trợ.")
-    spacing = tuple(float(value) for value in image.GetSpacing())
+    spacing = cast(tuple[float, float, float], tuple(float(value) for value in image.GetSpacing()))
     origin = np.asarray(image.GetOrigin(), dtype=np.float64)
     direction = np.asarray(image.GetDirection(), dtype=np.float64).reshape(3, 3)
-    affine = np.eye(4, dtype=np.float64)
+    affine: np.ndarray = np.eye(4, dtype=np.float64)
     affine[:3, :3] = direction @ np.diag(spacing)
     affine[:3, 3] = origin
     return VolumeData(
@@ -173,16 +176,17 @@ def load_medical_volume(
                 coordinate_system=reference.coordinate_system,
             )
         try:
-            import SimpleITK as sitk  # type: ignore[import-not-found]
+            import SimpleITK as sitk
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("Cần SimpleITK để đọc DICOM series 3D.") from exc
         series_ids = sitk.ImageSeriesReader.GetGDCMSeriesIDs(str(path)) or ()
         if not series_ids:
             raise ValueError("Thư mục không chứa DICOM series 3D hợp lệ.")
-        series_files = {
+        series_files: dict[str, tuple[str, ...]] = {
             series_id: tuple(sitk.ImageSeriesReader.GetGDCMSeriesFileNames(str(path), series_id))
             for series_id in series_ids
         }
+        selected: list[tuple[str, ...]]
         if input_modalities == ("image",):
             if len(series_files) != 1:
                 raise ValueError("Thư mục có nhiều DICOM series; manifest phải khai báo input_modalities/phase để chọn đúng thứ tự.")
@@ -191,15 +195,17 @@ def load_medical_volume(
             selected = []
             used: set[str] = set()
             for modality in input_modalities:
-                matches = [
+                matching_series = [
                     (series_id, files)
                     for series_id, files in series_files.items()
                     if modality.lower() in _dicom_series_tokens(files) and series_id not in used
                 ]
-                if len(matches) != 1:
-                    raise ValueError(f"Cần đúng một DICOM series cho modality/phase {modality!r}, tìm thấy {len(matches)}.")
-                used.add(matches[0][0])
-                selected.append(matches[0][1])
+                if len(matching_series) != 1:
+                    raise ValueError(
+                        f"Cần đúng một DICOM series cho modality/phase {modality!r}, tìm thấy {len(matching_series)}."
+                    )
+                used.add(matching_series[0][0])
+                selected.append(matching_series[0][1])
 
         volumes: list[VolumeData] = []
         for files in selected:
@@ -232,7 +238,7 @@ def load_medical_volume(
         if len(shape) != 3 or int(np.prod(shape)) > max_voxels:
             raise ValueError("Volume NIfTI không phải 3D hoặc vượt giới hạn voxel cho phép.")
         array_xyz = np.asarray(image.dataobj, dtype=np.float32)
-        spacing = tuple(float(value) for value in image.header.get_zooms()[:3])
+        spacing = cast(tuple[float, float, float], tuple(float(value) for value in image.header.get_zooms()[:3]))
         return VolumeData(
             array=np.transpose(array_xyz, (2, 1, 0)),
             spacing_xyz=spacing,
@@ -242,7 +248,7 @@ def load_medical_volume(
 
     if lower_name.endswith((".mha", ".mhd")):
         try:
-            import SimpleITK as sitk  # type: ignore[import-not-found]
+            import SimpleITK as sitk
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("Cần SimpleITK để đọc MHA/MHD 3D.") from exc
         image = sitk.ReadImage(str(path))
@@ -268,7 +274,7 @@ def _normalize_volume(array: np.ndarray) -> np.ndarray:
 
 def _component_masks(mask: np.ndarray) -> list[np.ndarray]:
     try:
-        import SimpleITK as sitk  # type: ignore[import-not-found]
+        import SimpleITK as sitk
 
         connected = sitk.ConnectedComponent(sitk.GetImageFromArray(mask.astype(np.uint8)))
         relabeled = sitk.RelabelComponent(connected, sortByObjectSize=True)
@@ -295,21 +301,66 @@ def _bbox_mm(volume: VolumeData, bbox: tuple[int, int, int, int, int, int]) -> t
         for y in (y1, y2)
         for z in (z1, z2)
     ]
-    points = np.asarray(corners, dtype=np.float64)
+    points: np.ndarray = np.asarray(corners, dtype=np.float64)
     minimum = points.min(axis=0)
     maximum = points.max(axis=0)
     return tuple(float(value) for value in (*minimum, *maximum))  # type: ignore[return-value]
 
 
-class TorchScriptVolumeRuntime:
+def load_volume_model(path: str | Path, device: str | torch.device = "cpu") -> torch.nn.Module:
+    source = Path(path)
+    target = torch.device(device)
+    if source.suffix.lower() == ".pt2":
+        model = torch.export.load(str(source)).module()
+        return model.to(target)
+    logger.info("Đang nạp model 3D từ %s", source)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        # Try TorchScript first
+        try:
+            return torch.jit.load(str(source), map_location=target).eval()
+        except Exception:
+            # Fallback: load as regular PyTorch model
+            logger.info("Không phải TorchScript, thử nạp sebagai model PyTorch thường")
+            checkpoint = torch.load(str(source), map_location=target, weights_only=False)
+            if isinstance(checkpoint, dict):
+                if "model_state_dict" in checkpoint:
+                    # Wrapped model format
+                    from medical.cnn_classifier import _build_backbone
+                    backbone_name = checkpoint.get("backbone", "resnet50")
+                    num_classes = checkpoint.get("num_classes", 2)
+                    model = torch.nn.Sequential(
+                        _build_backbone(backbone_name, pretrained=False)[0],
+                        torch.nn.Linear(512, checkpoint.get("num_classes", 2))
+                    )
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                elif "state_dict" in checkpoint:
+                    # Regular checkpoint with state_dict
+                    import torchvision.models as models
+                    model = models.resnet50(weights=None)
+                    model.fc = torch.nn.Linear(2048, 2)
+                    model.load_state_dict(checkpoint["state_dict"])
+                else:
+                    # Assume it's a raw state_dict
+                    import torchvision.models as models
+                    model = models.resnet50(weights=None)
+                    model.fc = torch.nn.Linear(2048, 2)
+                    model.load_state_dict(checkpoint)
+            else:
+                # Raw model
+                model = checkpoint
+            return model.to(target).eval()
+
+
+class TorchVolumeRuntime:
     def __init__(self, model_path: str | Path, manifest_path: str | Path, *, device: str | None = None) -> None:
         self.model_path = Path(model_path)
         self.manifest = VolumeModelManifest.load(manifest_path)
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         try:
-            self.model = torch.jit.load(str(self.model_path), map_location=self.device).eval()
+            self.model = load_volume_model(self.model_path, self.device)
         except Exception as exc:
-            raise RuntimeError(f"Không nạp được TorchScript model 3D: {self.model_path}") from exc
+            raise RuntimeError(f"Không nạp được model 3D: {self.model_path}") from exc
 
     @staticmethod
     def _outputs(raw: Any) -> tuple[torch.Tensor | None, torch.Tensor | None]:
@@ -418,7 +469,7 @@ def render_volume_overlay(
     else:
         z_index = volume.array.shape[0] // 2
     display_volume = volume.array[0] if volume.array.ndim == 4 else volume.array
-    normalized = (_normalize_volume(display_volume[z_index]) * 255).astype(np.uint8)
+    normalized: np.ndarray = (_normalize_volume(display_volume[z_index]) * 255).astype(np.uint8)
     base = cv2.cvtColor(normalized, cv2.COLOR_GRAY2BGR)
     overlay = base.copy()
     for finding in result.findings:
@@ -436,10 +487,16 @@ def render_volume_overlay(
 
 __all__ = [
     "TorchScriptVolumeRuntime",
+    "TorchVolumeRuntime",
     "VolumeData",
     "VolumeFinding",
     "VolumeInferenceResult",
     "VolumeModelManifest",
     "load_medical_volume",
+    "load_volume_model",
     "render_volume_overlay",
 ]
+
+
+# Keep imports from older integrations working while new models use torch.export.
+TorchScriptVolumeRuntime = TorchVolumeRuntime

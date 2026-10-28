@@ -1,11 +1,11 @@
 medical:
-  # Ưu tiên models/pretrained/cancers/<key>/<modality>/{classifier.pt,detector.pt,volume.pt,volume.json}.
+  # Ưu tiên models/pretrained/cancers/<key>/<modality>/{classifier.pt,detector.pt,volume.pt2,volume.json}.
   target_model_root: models/pretrained/cancers
   brain_model: models/pretrained/brain_classifier.pt
   modality_model: models/pretrained/modality_classifier.pt
   # Model YOLO detect/segment y khoa; nếu bỏ dòng này, hệ thống tự tìm brain_detector.pt.
   yolo_model_path: models/pretrained/brain_detector.pt
-  volume_model_path: models/pretrained/brain_volume_model.pt
+  volume_model_path: models/pretrained/brain_volume_model.pt2
   volume_manifest_path: models/pretrained/brain_volume_model.json
   # Chỉ trỏ tới báo cáo đã được đơn vị lâm sàng độc lập phê duyệt và khớp hash model.
   clinical_validation_report:
@@ -26,7 +26,7 @@ medical:
   classify_high_risk_threshold: 0.35
   classify_medium_risk_threshold: 0.25
   certainty_threshold: 0.3
-  validation_min_confidence: 0.7
+  validation_min_confidence: 0.9
   validation_allowed_extensions:
     - .jpg
     - .jpeg

@@ -13,9 +13,18 @@ from medical.cancer_model_registry import (
 )
 
 
-def _write_project_classifier(path: Path) -> None:
+def _write_project_classifier(path: Path, num_classes: int = 2) -> None:
+    from medical.cnn_classifier import MedicalCNNClassifier
+
+    model = MedicalCNNClassifier(num_classes=num_classes, backbone="resnet18", pretrained=False)
     torch.save(
-        {"model_state_dict": {}, "class_labels": ["a"], "num_classes": 1, "backbone": "resnet50"},
+        {
+            "model_state_dict": model.state_dict(),
+            "class_labels": ["a", "b"][:num_classes],
+            "num_classes": num_classes,
+            "backbone": "resnet18",
+            "image_size": 32,
+        },
         path,
     )
 
@@ -46,6 +55,18 @@ class CancerRegistryTests(unittest.TestCase):
         self.assertTrue(m["runtime_ready"])
         self.assertTrue(m["classification_ready"])
         self.assertEqual(m["kind"], "torch-state")
+
+    def test_classifier_missing_num_classes_is_not_runtime_ready(self):
+        # Checkpoint chỉ có 2 key như tài liệu cũ: status từng báo sẵn sàng
+        # nhưng analyze crash KeyError 'num_classes'. Probe phải chạy load thật.
+        with TemporaryDirectory() as temp_dir:
+            brain_dir = Path(temp_dir) / "brain"
+            brain_dir.mkdir()
+            torch.save({"model_state_dict": {}, "class_labels": ["a", "b"]}, brain_dir / "classifier.pt")
+            m = find_cancer_model("brain", base=Path(temp_dir))
+        self.assertFalse(m["classification_ready"])
+        self.assertFalse(m["runtime_ready"])
+        self.assertIn("num_classes", m["note"])
 
     def test_garbage_classifier_is_not_runtime_ready(self):
         with TemporaryDirectory() as temp_dir:
@@ -87,24 +108,62 @@ class CancerRegistryTests(unittest.TestCase):
         self.assertFalse(m["localization_ready"])
         self.assertFalse(m["runtime_ready"])
 
+    def test_detector_that_loads_but_predict_fails_is_not_ready(self):
+        with TemporaryDirectory() as temp_dir:
+            brain_dir = Path(temp_dir) / "brain"
+            brain_dir.mkdir()
+            (brain_dir / "detector.pt").write_bytes(b"weights")
+            with patch("ultralytics.YOLO") as yolo:
+                yolo.return_value.task = "detect"
+                yolo.return_value.predict.side_effect = RuntimeError("state_dict mismatch")
+                m = find_cancer_model("brain", base=Path(temp_dir))
+        self.assertFalse(m["localization_ready"])
+        self.assertIn("không predict được", m["note"])
+
+    def test_onnx_detector_is_discovered(self):
+        with TemporaryDirectory() as temp_dir:
+            breast_dir = Path(temp_dir) / "breast"
+            breast_dir.mkdir()
+            (breast_dir / "detector.onnx").write_bytes(b"onnx-bytes")
+            with patch("ultralytics.YOLO") as yolo:
+                yolo.return_value.task = "detect"
+                m = find_cancer_model("breast", base=Path(temp_dir))
+        self.assertTrue(m["localization_ready"])
+        self.assertTrue(m["runtime_ready"])
+        self.assertEqual(m["kind"], "onnx")
+
+    def test_probe_cache_is_per_kind(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "model.pt"
+            path.write_bytes(b"weights")
+            with patch("ultralytics.YOLO") as yolo:
+                yolo.return_value.task = "detect"
+                yolo.return_value.predict.side_effect = None
+                ok_detector, _ = registry.probe_runtime_capability(path, "detector")
+            # kind khác không được lấy nhầm kết quả cache của detector
+            ok_volume, volume_reason = registry.probe_runtime_capability(path, "volume")
+            self.assertTrue(ok_detector)
+            self.assertFalse(ok_volume)
+            self.assertIn("model 3D", volume_reason)
+
     def test_garbage_volume_is_not_runtime_ready(self):
         with TemporaryDirectory() as temp_dir:
             brain_dir = Path(temp_dir) / "brain"
             brain_dir.mkdir()
-            (brain_dir / "volume.pt").write_bytes(b"weights")
+            (brain_dir / "volume.pt2").write_bytes(b"weights")
             (brain_dir / "volume.json").write_text("{}", encoding="utf-8")
             m = find_cancer_model("brain", base=Path(temp_dir))
         self.assertTrue(m["artifact_ready"])
         self.assertFalse(m["volume_ready"])
         self.assertFalse(m["runtime_ready"])
-        self.assertIn("volume.pt", m["note"])
+        self.assertIn("volume.pt2", m["note"])
 
-    def test_torchscript_volume_is_runtime_ready(self):
+    def test_torch_export_volume_is_runtime_ready(self):
         with TemporaryDirectory() as temp_dir:
             brain_dir = Path(temp_dir) / "brain"
             brain_dir.mkdir()
-            traced = torch.jit.trace(lambda x: x + 1, torch.zeros(1))
-            torch.jit.save(traced, str(brain_dir / "volume.pt"))
+            exported = torch.export.export(torch.nn.Identity(), (torch.zeros(1),))
+            torch.export.save(exported, str(brain_dir / "volume.pt2"))
             (brain_dir / "volume.json").write_text("{}", encoding="utf-8")
             m = find_cancer_model("brain", base=Path(temp_dir))
         self.assertTrue(m["volume_ready"])

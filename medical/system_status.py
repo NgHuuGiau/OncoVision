@@ -14,7 +14,7 @@ from medical.clinical_validation import clinical_validation_status
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.pipeline import build_default_medical_analyzer_config
 from medical.status_helpers import count_files
-from medical.volume_inference import TorchScriptVolumeRuntime
+from medical.volume_inference import TorchVolumeRuntime
 
 
 @dataclass(frozen=True)
@@ -165,7 +165,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
             if not (item["volume_model"].is_file() and item["volume_manifest"].is_file()):
                 continue
             try:
-                runtime = TorchScriptVolumeRuntime(item["volume_model"], item["volume_manifest"], device="cpu")
+                runtime = TorchVolumeRuntime(item["volume_model"], item["volume_manifest"], device="cpu")
                 if runtime.manifest.target == target.key:
                     volume = True
                     paths = item
@@ -248,7 +248,7 @@ def recommended_medical_commands(status: MedicalSystemStatus) -> list[str]:
     if hasattr(status, "localization_ready") and not status.localization_ready:
         commands.append("Bổ sung detector.pt cho từng nhóm cần tọa độ trong models/pretrained/cancers/<key>/")
     if hasattr(status, "volume_ready") and not status.volume_ready:
-        commands.append("Bổ sung volume.pt và volume.json cho từng nhóm MRI/CT 3D")
+        commands.append("Bổ sung volume.pt2 và volume.json cho từng nhóm MRI/CT 3D")
     if hasattr(status, "clinical_validation_ready") and not status.clinical_validation_ready:
         commands.append("Chạy validate-cohort và gửi báo cáo cho đơn vị lâm sàng độc lập phê duyệt")
     return commands

@@ -27,7 +27,7 @@ def preprocess_endoscopy(image: np.ndarray, target_size: int = 320, metadata: di
 def _remove_specular_highlights(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     _, mask = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY)
-    kernel = np.ones((3, 3), np.uint8)
+    kernel: np.ndarray = np.ones((3, 3), np.uint8)
     mask = cv2.dilate(mask, kernel, iterations=1)
     result = image.copy()
     result[mask > 0] = cv2.inpaint(result, mask, 3, cv2.INPAINT_TELEA)[mask > 0]
@@ -46,7 +46,7 @@ def _correct_color_distribution(image: np.ndarray) -> np.ndarray:
 def _correct_lens_distortion(image: np.ndarray) -> np.ndarray:
     h, w = image.shape[:2]
     camera_matrix = np.array([[w, 0, w / 2], [0, h, h / 2], [0, 0, 1]], dtype=np.float32)
-    dist_coeffs = np.zeros((4, 1), dtype=np.float32)
+    dist_coeffs: np.ndarray = np.zeros((4, 1), dtype=np.float32)
     dist_coeffs[0, 0] = -0.3
     dist_coeffs[1, 0] = 0.1
     return cv2.undistort(image, camera_matrix, dist_coeffs)

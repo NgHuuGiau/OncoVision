@@ -42,19 +42,20 @@ File không nạp được (sai định dạng, sai task YOLO) sẽ bị từ ch
 ```text
 models/pretrained/cancers/<key>/
 ├── classifier.pt             # tùy chọn: checkpoint classifier 2D của dự án
-├── detector.pt               # tùy chọn: Ultralytics YOLO detect/segment
-├── volume.pt                 # tùy chọn: TorchScript 3D
-├── volume.json               # bắt buộc cùng volume.pt
+├── detector.pt               # tùy chọn: Ultralytics YOLO detect/segment (hoặc detector.onnx)
+├── volume.pt2                # tùy chọn: torch.export 3D
+├── volume.json               # bắt buộc cùng volume.pt2
 └── clinical_validation.json  # báo cáo cohort độc lập đã phê duyệt
 ```
 
 Nếu một cơ quan có nhiều loại ảnh, đặt model trong thư mục modality như `lung/ct/`, `lung/xray/` hoặc `cervical/colposcopy/`. Khi modality đã được xác định, runtime bắt buộc model nằm trong đúng thư mục modality và không rơi về model cấp cơ quan. Các khóa chuẩn gồm `ct`, `mri`, `xray`, `ultrasound`, `mammogram`, `endoscopy`, `colonoscopy`, `colposcopy`, `pet_ct` và `eus`.
 
-Chỉ cần một trong `classifier.pt`, `detector.pt` hoặc cặp `volume.pt + volume.json` để nhóm xuất hiện ở trạng thái có runtime. Khả năng phân loại, tọa độ 2D, volume 3D và kiểm định lâm sàng được báo riêng; có một khả năng không làm các khả năng còn lại thành sẵn sàng.
+Chỉ cần một trong `classifier.pt`, `detector.pt` hoặc cặp `volume.pt2 + volume.json` để nhóm xuất hiện ở trạng thái có runtime. Model TorchScript cũ có đuôi `.pt` vẫn được nạp để tương thích. Khả năng phân loại, tọa độ 2D, volume 3D và kiểm định lâm sàng được báo riêng; có một khả năng không làm các khả năng còn lại thành sẵn sàng.
 
-- `classifier.pt` chứa `model_state_dict`, `class_labels`, `backbone` và `num_classes` theo checkpoint classifier của dự án.
-- `detector.pt` là model Ultralytics YOLO có task `detect` hoặc `segment`. Hệ thống chỉ công bố tọa độ khi model trả bbox hợp lệ.
-- `volume.pt` nhận tensor `[N,C,D,H,W]` và trả `classification_logits`, `segmentation_logits`, hoặc tuple gồm hai tensor đó.
+- `classifier.pt` chứa `model_state_dict`, `class_labels`, `backbone` và `num_classes` theo checkpoint classifier của dự án. Nên thêm khóa `image_size` (số pixel đầu vào lúc train, ví dụ 320 hoặc 512); nếu thiếu, runtime mặc định resize về 320px — sai độ phân giải train sẽ làm giảm chất lượng phân loại mà không báo lỗi. Sau khi có model, chạy `python run_medical.py evaluate --model <.pt> --data <thư mục có nhãn>` để lấy accuracy/sensitivity/specificity mức dataset.
+- `detector.pt` (hoặc `detector.onnx`) là model Ultralytics YOLO có task `detect` hoặc `segment`. Hệ thống chỉ công bố tọa độ khi model trả bbox hợp lệ. Sau khi thả model, đo chất lượng tọa độ bằng `python run_medical.py evaluate-detector --model <detector.pt> --data <dir>` với bố cục YOLO `dir/images/` + `dir/labels/`.
+- `volume.pt2` nhận tensor `[N,C,D,H,W]` và trả `classification_logits`, `segmentation_logits`, hoặc tuple gồm hai tensor đó.
+- Export model ở chế độ `eval` và chạy inference bằng cùng phiên bản PyTorch đã export; định dạng `.pt2` chưa đảm bảo tương thích giữa các phiên bản.
 - `volume.json` khai báo target, task, modality, shape đầu vào, nhãn và ngưỡng mask. Tọa độ segmentation được đổi về volume gốc và xuất cả voxel `(x1,y1,z1,x2,y2,z2)`, mm cùng thể tích `mm³`.
 - Mask 3D được lưu dạng NPZ nén với các mảng `mask`, `affine`, `spacing_xyz_mm` và `coordinate_system`, rồi đưa vào metadata và gói xuất ca.
 - Các đường dẫn `brain_model`, `yolo_model_path`, `volume_model_path` và `volume_manifest_path` cũ vẫn được dùng làm tương thích ngược cho nhóm não.
@@ -90,7 +91,7 @@ CSV đánh giá phải có đúng một dòng cho mỗi bệnh nhân với các 
 ```powershell
 python run_medical.py validate-cohort `
   --csv external_cohort_predictions.csv `
-  --model models/pretrained/cancers/brain/volume.pt `
+  --model models/pretrained/cancers/brain/volume.pt2 `
   --cohort-id external-hospital-01 `
   --output models/pretrained/cancers/brain/clinical_validation.json
 ```

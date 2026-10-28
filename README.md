@@ -20,12 +20,12 @@
 | **Modality Classifier** | ✅ Sẵn sàng — ResNet18, 8 loại ảnh, **99.93% acc** (test 5,640 ảnh) |
 | **Brain Classifier** | ✅ Sẵn sàng — ConvNeXt-Tiny, 4 loại u não (glioma/meningioma/pituitary/no_tumor), **fallback tự động** khi thiếu model tổng |
 | **Brain Detector** | ⏳ Đã có adapter tự nạp YOLO detect/segment; còn thiếu `brain_detector.pt` y khoa |
-| **Brain Volume 3D** | ⏳ Đã có runtime NIfTI/MHA/MHD/DICOM và tọa độ voxel/mm; còn thiếu model TorchScript 3D cùng manifest |
+| **Brain Volume 3D** | ⏳ Đã có runtime NIfTI/MHA/MHD/DICOM và tọa độ voxel/mm; còn thiếu model torch.export 3D cùng manifest |
 | **Catalog 11 nhóm ung thư** | ✅ Đã có định tuyến dữ liệu và model riêng theo nhóm; hiện repository mới có trọng số classifier não |
 | **Kiểm định lâm sàng** | ⏳ Chưa có bộ đánh giá độc lập theo bệnh nhân; kết quả hiện chỉ dùng hỗ trợ sàng lọc |
 | **Web UI (FastAPI)** | ✅ Chạy được — `python web_app.py` → http://127.0.0.1:8000 |
 | **Desktop Chat (PySide6)** | ✅ Chạy được — `python run_chat.py` |
-| **Test suite** | ✅ **346 tests** |
+| **Test suite** | ✅ **391 tests** |
 
 > **Lưu ý**: Catalog đã có 11 nhóm và runtime chọn model riêng theo nhóm. Repository hiện chỉ có trọng số classifier não và classifier modality; 10 nhóm còn lại vẫn bị khóa cho tới khi bổ sung model tương thích.
 
@@ -48,6 +48,12 @@
 - Windows 10/11
 - Python 3.10+
 - GPU NVIDIA khuyến nghị để suy luận nhanh hơn; CPU vẫn dùng được
+
+Với GPU NVIDIA, sau khi cài `requirements.txt`, cài wheel CUDA chính thức phù hợp với driver (lệnh dưới dùng CUDA 13.0):
+
+```powershell
+python -m pip install --upgrade torch torchvision --index-url https://download.pytorch.org/whl/cu130
+```
 
 ### Cài đặt
 
@@ -86,6 +92,23 @@ Lần đầu dùng web: khởi chạy server để tạo bảng tài khoản, sa
 
 Desktop (`run_chat.py`) cũng yêu cầu đăng nhập bằng tài khoản trong `output/onco.db`; DB trống thì app hỏi tạo admin đầu tiên. Tài khoản `viewer` trên desktop chỉ xem, không chạy phân tích ảnh.
 
+### Chạy bằng Docker (web app)
+
+```powershell
+# Build image (lần đầu ~5-10 phút, cần mạng)
+docker build -t onkovision:latest .
+
+# Chạy (CPU). Mở http://localhost:8000
+docker run -d --name onkovision -p 8000:8000 `
+  -v ${PWD}/models:/app/models -v ${PWD}/output:/app/output `
+  -v ${PWD}/data:/app/data -v ${PWD}/config:/app/config onkovision:latest
+
+# Hoặc dùng compose
+docker compose up -d
+```
+
+Model đặt trong `./models` (bind mount) — image không chứa model. GPU: thêm `--gpus all` vào `docker run` (cần nvidia-container-toolkit). Kiểm tra: `docker exec onkovision python -m pytest -q`.
+
 ---
 
 ## Bản đồ entrypoint
@@ -119,14 +142,14 @@ Hệ thống **chỉ suy luận bằng model có sẵn**. Hãy đặt model đã
 
 ```powershell
 # Đặt model não cũ hoặc model theo nhóm vào models/pretrained/:
-#   brain_classifier.pt        → Não (4 sub-label) — **ĐÃ CÓ, SẴN SÀNG**
-#   modality_classifier.pt     → Modality (8 loại ảnh y tế) — **ĐÃ CÓ, 99.93%**
+#   brain_classifier.pt        → Não (4 sub-label) — có sẵn trên máy dev, KHÔNG đi kèm repo (gitignored)
+#   modality_classifier.pt     → Modality (8 loại ảnh y tế) — có sẵn trên máy dev, 99.93% (gitignored)
 #   brain_detector.pt          → YOLO detect/segment y khoa — thêm file này để bật tọa độ
-#   brain_volume_model.pt      → TorchScript MRI/CT 3D
+#   brain_volume_model.pt2     → torch.export MRI/CT 3D (.pt cũ vẫn được hỗ trợ)
 #   brain_volume_model.json    → manifest task, nhãn, input shape và ngưỡng mask
 #   cancers/<key>/classifier.pt
 #   cancers/<key>/detector.pt
-#   cancers/<key>/volume.pt + volume.json
+#   cancers/<key>/volume.pt2 + volume.json
 #   cancers/<key>/clinical_validation.json
 # Khi biết modality, model phải nằm đúng thư mục, ví dụ cancers/lung/ct/ hoặc cancers/lung/xray/.
 
@@ -156,13 +179,17 @@ OncoVision/
 ├── core/                   # Xử lý camera, model loader, hardware info
 ├── medical/                # Kiểm tra ảnh, suy luận, giải thích và báo cáo
 ├── utils/                  # Helper dùng chung (console, terminal UI, file, camera)
+├── scripts/                # fetch_model, import_foreign_model; scripts/dev/ = debug một lần
+├── static/                 # CSS/JS cho web app
+├── templates/              # Jinja2 (index, login, admin, error pages)
+├── assets/                 # Icon
 ├── config/                 # Cấu hình YAML
-├── models/                 # Mô hình
+├── models/                 # Mô hình (gitignored; người dùng tự đặt)
 │   ├── pretrained/         # Model suy luận (brain, modality, yolo11*)
 │   └── trained/            # Model suy luận bổ sung do người dùng cung cấp
-├── output/                 # Kết quả đầu ra
+├── output/                 # Kết quả đầu ra (gitignored)
 ├── docs/                   # Tài liệu
-└── tests/                  # Unit test
+└── tests/                  # Unit test (391 tests)
 ```
 
 ---

@@ -1,0 +1,54 @@
+# Backup DB: chạy trên host bằng `python run_medical.py backup-db --keep 7`
+# (SQLite backup API, an toàn khi DB đang mở, có luân hồi bản cũ).
+#
+# GPU: compose mặc định chạy trên CPU. Nếu máy có NVIDIA + nvidia-container-toolkit,
+# thêm `--gpus all` vào `docker run` hoặc dùng override:
+#   docker compose run --gpus all onkovision
+services:
+  onkovision:
+    build: .
+    container_name: onkovision
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./output:/app/output
+      - ./data:/app/data
+      - ./assets:/app/assets
+      - ./config:/app/config
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  onkovision-monai:
+    build:
+      context: .
+      dockerfile: Dockerfile.monai
+    container_name: onkovision-monai
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./models:/app/models
+      - ./output:/app/output
+      - ./data:/app/data
+      - ./assets:/app/assets
+      - ./config:/app/config
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

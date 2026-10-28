@@ -4,7 +4,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from core.hardware_info import HardwareInfo, detect_hardware, get_live_usage_snapshot
+from core.hardware_info import (
+    HardwareInfo,
+    _detect_gpu,
+    detect_hardware,
+    get_live_usage_snapshot,
+)
 
 
 class HardwareDetectorTests(unittest.TestCase):
@@ -29,7 +34,7 @@ class HardwareDetectorTests(unittest.TestCase):
     @patch("core.hardware_info._detect_cpu_name", return_value="Intel Core i7-11800H")
     @patch("core.hardware_info.psutil.cpu_percent", return_value=18.5)
     @patch("core.hardware_info.psutil.virtual_memory")
-    @patch("core.hardware_info._detect_gpu_from_gputil")
+    @patch("core.hardware_info._detect_gpu")
     @patch("core.hardware_info.torch")
     def test_detect_hardware_prefers_torch_cuda_details(
         self,
@@ -42,7 +47,17 @@ class HardwareDetectorTests(unittest.TestCase):
         _release_mock,
     ) -> None:
         virtual_memory_mock.return_value = SimpleNamespace(total=16 * (1024**3), percent=42.0)
-        gpu_detect_mock.return_value = ("Fallback GPU", 2.0, 1, 25.0, 50.0)
+        gpu_detect_mock.return_value = (
+            "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+            4.0,
+            1,
+            True,
+            False,
+            False,
+            False,
+            25.0,
+            50.0,
+        )
         torch_mock.cuda.is_available.return_value = True
         torch_mock.cuda.current_device.return_value = 0
         torch_mock.cuda.get_device_name.return_value = "NVIDIA GeForce RTX 3050 Ti Laptop GPU"
@@ -65,7 +80,7 @@ class HardwareDetectorTests(unittest.TestCase):
 
     @patch("core.hardware_info.psutil.cpu_percent", return_value=12.5)
     @patch("core.hardware_info.psutil.virtual_memory", return_value=SimpleNamespace(percent=37.0))
-    @patch("core.hardware_info._detect_gpu_from_gputil", return_value=("GPU", 8.0, 1, 44.0, 66.0))
+    @patch("core.hardware_info._detect_gpu", return_value=("GPU", 8.0, 1, True, False, False, False, 44.0, 66.0))
     def test_get_live_usage_snapshot_collects_current_utilization(
         self,
         _gpu_detect_mock,
@@ -86,7 +101,7 @@ class HardwareDetectorTests(unittest.TestCase):
 
     @patch("core.hardware_info.psutil.cpu_percent", side_effect=RuntimeError("cpu unavailable"))
     @patch("core.hardware_info.psutil.virtual_memory", side_effect=RuntimeError("ram unavailable"))
-    @patch("core.hardware_info._detect_gpu_from_gputil", return_value=("GPU", 8.0, 1, None, None))
+    @patch("core.hardware_info._detect_gpu", return_value=("GPU", 8.0, 1, True, False, False, False, 44.0, 66.0))
     def test_get_live_usage_snapshot_falls_back_to_none_on_probe_errors(
         self,
         _gpu_detect_mock,
@@ -104,3 +119,49 @@ class HardwareDetectorTests(unittest.TestCase):
                 "vram_usage_percent": None,
             },
         )
+
+
+    @patch("core.hardware_info.platform.system", return_value="Linux")
+    @patch("core.hardware_info._get_gpu_info_linux", return_value=("AMD Radeon", 8.0, 2))
+    def test_detect_gpu_linux_returns_nine_fields_for_detect_hardware(
+        self,
+        _gpu_info_mock,
+        _system_mock,
+    ) -> None:
+        result = _detect_gpu()
+
+        self.assertEqual(len(result), 9)
+        self.assertEqual(result[0], "AMD Radeon")
+        self.assertEqual(result[2], 2)
+        self.assertIsNone(result[7])
+        self.assertIsNone(result[8])
+
+    @patch("core.hardware_info.platform.system", return_value="Darwin")
+    @patch("core.hardware_info._get_gpu_info_macos", return_value=("Apple M3", 0.0, 1))
+    def test_detect_gpu_macos_returns_nine_fields_for_detect_hardware(
+        self,
+        _gpu_info_mock,
+        _system_mock,
+    ) -> None:
+        result = _detect_gpu()
+
+        self.assertEqual(len(result), 9)
+        self.assertEqual(result[0], "Apple M3")
+
+    @patch("core.hardware_info.platform.system", return_value="Windows")
+    @patch("core.hardware_info._get_gpu_info_windows", return_value=("RTX 3050", 4.0, 2, 30.0, 40.0))
+    def test_detect_gpu_windows_keeps_live_usage_and_gpu_count(
+        self,
+        _gpu_info_mock,
+        _system_mock,
+    ) -> None:
+        result = _detect_gpu()
+
+        self.assertEqual(len(result), 9)
+        self.assertEqual(result[2], 2)
+        self.assertEqual(result[7], 30.0)
+        self.assertEqual(result[8], 40.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,3 +1,6 @@
+# Script debug một lần (mật khẩu hardcode, không phải code sản phẩm) — xem scripts/dev/README.md
+exclude = ["scripts/dev"]
+
 [lint]
 # Cac rule tu dong chay "strict" khong phai bug, dac biet trong GUI/camera code
 # noi catch Exception la chu chuong (S110/BLE001), datetime naive duoc chap nhan

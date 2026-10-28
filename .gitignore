@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
 
 # Virtual environment
 .venv/
@@ -36,6 +37,7 @@ tmp*/
 tmp-ds/
 tmp*.db
 mydatabase.db
+data/*.db
 
 # Runtime output
 output/

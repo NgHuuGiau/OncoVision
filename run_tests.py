@@ -8,6 +8,7 @@ import sys
 import time
 import unittest
 from dataclasses import dataclass
+from typing import Any, cast
 
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
@@ -64,8 +65,8 @@ class PrettyTestResult(unittest.TextTestResult):
         self.test_outputs: dict[unittest.case.TestCase, str] = {}
         self._stdout_capture: io.StringIO | None = None
         self._stderr_capture: io.StringIO | None = None
-        self._stdout_redirect = None
-        self._stderr_redirect = None
+        self._stdout_redirect: Any = None
+        self._stderr_redirect: Any = None
         self.total_tests = total_tests
         self.current_test = 0
         self.passed_count = 0
@@ -239,7 +240,7 @@ class PrettyTestRunner(unittest.TextTestRunner):
         self.output_stream.flush()
 
         start = time.perf_counter()
-        result: PrettyTestResult = super().run(test)
+        result = cast(PrettyTestResult, super().run(test))
         duration = time.perf_counter() - start
 
         pass_bar, pass_style = status_meter(result.passed_count, self.total_tests, GREEN)

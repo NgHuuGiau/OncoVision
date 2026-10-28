@@ -27,7 +27,7 @@ def preprocess_mri(image: np.ndarray, target_size: int = 320, metadata: dict[str
 
 
 def _n4_bias_field_correction(image: np.ndarray) -> np.ndarray:
-    image_f = image.astype(np.float32)
+    image_f: np.ndarray = image.astype(np.float32)
     mask = (image_f > 0).astype(np.uint8)
     small = cv2.resize(image_f, (0, 0), fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
     blurred = cv2.GaussianBlur(small, (0, 0), sigmaX=min(small.shape) // 4)
@@ -39,7 +39,7 @@ def _n4_bias_field_correction(image: np.ndarray) -> np.ndarray:
 
 
 def _slice_normalization(image: np.ndarray) -> np.ndarray:
-    image_f = image.astype(np.float32)
+    image_f: np.ndarray = image.astype(np.float32)
     mean = float(np.mean(image_f))
     std = float(np.std(image_f))
     if std < 1e-6:

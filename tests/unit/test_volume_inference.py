@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -9,7 +10,7 @@ import numpy as np
 import torch
 
 from medical.volume_inference import (
-    TorchScriptVolumeRuntime,
+    TorchVolumeRuntime,
     VolumeData,
     VolumeModelManifest,
     load_medical_volume,
@@ -26,10 +27,10 @@ class _TinyVolumeModel(torch.nn.Module):
 
 class VolumeInferenceTests(unittest.TestCase):
     def _write_runtime(self, root: Path) -> tuple[Path, Path]:
-        model_path = root / "brain_volume_model.pt"
+        model_path = root / "brain_volume_model.pt2"
         manifest_path = root / "brain_volume_model.json"
-        traced = torch.jit.trace(_TinyVolumeModel(), torch.zeros((1, 1, 8, 8, 8)))
-        traced.save(str(model_path))
+        exported = torch.export.export(_TinyVolumeModel(), (torch.zeros((1, 1, 8, 8, 8)),))
+        torch.export.save(exported, str(model_path))
         manifest_path.write_text(
             json.dumps(
                 {
@@ -45,6 +46,20 @@ class VolumeInferenceTests(unittest.TestCase):
             encoding="utf-8",
         )
         return model_path, manifest_path
+
+    def test_legacy_torchscript_load_suppresses_upstream_futurewarning(self) -> None:
+        from medical.volume_inference import load_volume_model
+
+        with TemporaryDirectory() as temp_dir:
+            model_path = Path(temp_dir) / "legacy-volume.pt"
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                torch.jit.trace(torch.nn.Identity(), torch.ones(1)).save(str(model_path))
+            with warnings.catch_warnings(record=True) as caught:
+                model = load_volume_model(model_path, "cpu")
+
+        self.assertIsInstance(model, torch.nn.Module)
+        self.assertEqual(caught, [])
 
     def test_manifest_rejects_unbounded_shape(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -65,7 +80,7 @@ class VolumeInferenceTests(unittest.TestCase):
             affine = np.diag([2.0, 3.0, 4.0, 1.0])
             volume = VolumeData(array=array, spacing_xyz=(2.0, 3.0, 4.0), affine=affine)
 
-            result = TorchScriptVolumeRuntime(model_path, manifest_path, device="cpu").predict(volume)
+            result = TorchVolumeRuntime(model_path, manifest_path, device="cpu").predict(volume)
 
             self.assertEqual(result.findings[0].bbox_voxel, (3, 1, 2, 7, 5, 6))
             self.assertEqual(result.findings[0].bbox_mm, (6.0, 3.0, 8.0, 14.0, 15.0, 24.0))

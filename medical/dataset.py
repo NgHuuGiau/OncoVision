@@ -4,6 +4,7 @@ import logging
 import re
 import unicodedata
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
@@ -291,14 +292,16 @@ def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:
             return label
 
     if source.is_file() and _medical_upload_suffix(source) == ".dcm":
-        pydicom = None
+        pydicom_module: Any = None
         try:
-            import pydicom  # type: ignore[assignment]
+            from importlib import import_module
+
+            pydicom_module = import_module("pydicom")
         except ImportError:# pragma: no cover
             pass
-        if pydicom is not None:
+        if pydicom_module is not None:
             try:
-                dataset = pydicom.dcmread(str(source), stop_before_pixels=True, force=True)
+                dataset = pydicom_module.dcmread(str(source), stop_before_pixels=True, force=True)
                 dicom_modality = str(getattr(dataset, "Modality", "")).upper()
                 mapped = _DICOM_MODALITY_MAP.get(dicom_modality)
                 if mapped:
@@ -434,7 +437,7 @@ def _load_nifti_volume(source: Path) -> np.ndarray:
         raise RuntimeError("Không đọc được NIfTI. Hãy cài đặt nibabel để mở file .nii/.nii.gz.") from exc
 
     image = nib.load(str(source))
-    volume = np.asanyarray(image.dataobj)  # type: ignore[attr-defined]
+    volume = np.asanyarray(image.dataobj)
     if volume.ndim == 4:
         volume = volume[..., 0]
     return _limit_volume_slices(np.asarray(volume), max_slices=256)
@@ -442,7 +445,7 @@ def _load_nifti_volume(source: Path) -> np.ndarray:
 
 def _load_mha_volume(source: Path) -> np.ndarray:
     try:
-        import SimpleITK as sitk  # type: ignore[import-not-found]
+        import SimpleITK as sitk
     except ImportError as exc:# pragma: no cover
         raise RuntimeError("Không đọc được MHA/MHD. Hãy cài đặt SimpleITK để mở file .mha/.mhd.") from exc
 

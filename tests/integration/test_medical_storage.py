@@ -83,6 +83,35 @@ class MedicalStorageTests(unittest.TestCase):
             self.assertFalse(image.exists())
             self.assertIsNone(db.get_case(case_id))
 
+    def test_delete_case_keeps_source_image_outside_data_dir(self) -> None:
+        """Xóa ca không được xóa ảnh gốc người dùng nằm ngoài output/."""
+        with TemporaryDirectory() as temp_dir, TemporaryDirectory() as source_dir:
+            db = MedicalCaseDatabase(Path(temp_dir) / "onco.db")
+            image = Path(source_dir) / "scan.png"
+            processed = Path(temp_dir) / "processed.jpg"
+            report_json = Path(temp_dir) / "report.json"
+            report_md = Path(temp_dir) / "report.md"
+            for path in (image, processed, report_json, report_md):
+                path.write_text("x", encoding="utf-8")
+            case_id = db.save_case(
+                patient_code="BN004",
+                image_path=str(image),
+                processed_image_path=str(processed),
+                report_json_path=str(report_json),
+                report_md_path=str(report_md),
+                suspected_malignant=False,
+                risk_level="low",
+                recommendation="Theo dõi",
+                metadata={},
+            )
+
+            deleted, deleted_paths = db.delete_case_with_files(case_id)
+
+            self.assertTrue(deleted)
+            self.assertEqual(len(deleted_paths), 3)
+            self.assertTrue(image.exists())
+            self.assertFalse(processed.exists())
+
     def test_init_creates_indexes_for_lookup_and_history(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "medical.db"

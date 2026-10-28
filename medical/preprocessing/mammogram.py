@@ -38,7 +38,7 @@ def _detect_and_invert(gray: np.ndarray) -> np.ndarray:
 def _segment_breast(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    kernel = np.ones((5, 5), np.uint8)
+    kernel: np.ndarray = np.ones((5, 5), np.uint8)
     opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=2)
     closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=2)
     contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

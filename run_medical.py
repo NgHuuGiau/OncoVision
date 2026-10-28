@@ -85,6 +85,26 @@ def build_parser() -> argparse.ArgumentParser:
     split.add_argument("--train-ratio", type=float, default=0.70)
     split.add_argument("--validation-ratio", type=float, default=0.15)
     split.add_argument("--seed", default="oncovision")
+
+    evaluate = subparsers.add_parser(
+        "evaluate",
+        help="Đánh giá model classifier trên bộ ảnh có nhãn (thư mục/lớp) — số mức dataset.",
+    )
+    evaluate.add_argument("--model", required=True, help="Đường dẫn checkpoint .pt.")
+    evaluate.add_argument("--data", required=True, help="Thư mục chứa thư mục con theo tên lớp.")
+    evaluate.add_argument("--per-class-limit", type=int, default=None, help="Giới hạn số ảnh mỗi lớp.")
+    evaluate.add_argument("--output", default=None, help="Lưu JSON báo cáo; bỏ trống thì in ra stdout.")
+
+    evaluate_det = subparsers.add_parser(
+        "evaluate-detector",
+        help="Đánh giá YOLO detector trên bộ bbox có nhãn (data/images + data/labels, YOLO format).",
+    )
+    evaluate_det.add_argument("--model", required=True, help="Đường dẫn detector.pt.")
+    evaluate_det.add_argument("--data", required=True, help="Thư mục gồm images/ và labels/ (YOLO format).")
+    evaluate_det.add_argument("--conf", type=float, default=0.25)
+    evaluate_det.add_argument("--iou", type=float, default=0.5, help="Ngưỡng IoU ghép dự đoán và ground truth.")
+    evaluate_det.add_argument("--imgsz", type=int, default=640)
+    evaluate_det.add_argument("--output", default=None, help="Lưu JSON báo cáo; bỏ trống thì in ra stdout.")
     return parser
 
 
@@ -306,6 +326,57 @@ def main() -> int:
             seed=args.seed,
         )
         print(f"Đã chia dataset theo bệnh nhân: {output}")
+        return 0
+
+    if args.command == "evaluate":
+        from medical.cnn_classifier import load_cnn_classifier
+        from medical.model_evaluation import evaluate_classifier
+
+        wrapper = load_cnn_classifier(args.model)
+        try:
+            evaluation_report = evaluate_classifier(wrapper, args.data, per_class_limit=args.per_class_limit)
+        except ValueError as exc:
+            print(f"Lỗi: {exc}")
+            return 1
+        rendered = json.dumps(evaluation_report, ensure_ascii=False, indent=2)
+        if args.output:
+            destination = Path(args.output)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(rendered, encoding="utf-8")
+            print(f"Đã lưu báo cáo đánh giá: {destination}")
+        else:
+            print(rendered)
+        print(f"Accuracy: {evaluation_report['accuracy']:.1%} trên {evaluation_report['total']} ảnh | image_size={evaluation_report['image_size']}")
+        print(evaluation_report["note"])
+        return 0
+
+    if args.command == "evaluate-detector":
+        from medical.detector_evaluation import evaluate_detector
+
+        try:
+            detector_report = evaluate_detector(
+                args.model,
+                args.data,
+                conf=args.conf,
+                iou=args.iou,
+                imgsz=args.imgsz,
+            )
+        except ValueError as exc:
+            print(f"Lỗi: {exc}")
+            return 1
+        except Exception as exc:
+            print(f"Không đánh giá được detector: {exc}")
+            return 1
+        rendered = json.dumps(detector_report, ensure_ascii=False, indent=2)
+        if args.output:
+            destination = Path(args.output)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(rendered, encoding="utf-8")
+            print(f"Đã lưu báo cáo đánh giá detector: {destination}")
+        else:
+            print(rendered)
+        print(f"mAP@0.5: {detector_report['map50']:.3f} | mAP@0.5:0.95: {detector_report['map']:.3f} | {detector_report['image_count']} ảnh")
+        print(detector_report["note"])
         return 0
 
     return 2

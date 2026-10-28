@@ -87,7 +87,6 @@ _DICOM_PII_TAGS = [
     "StudyInstanceUID",
     "SeriesInstanceUID",
     "SOPInstanceUID",
-    "SOPClassUID",
     "VerifyingObserverName",
     "VerifyingObserverSequence",
     "VerifyingObserverIdentificationCodeSequence",
@@ -160,9 +159,21 @@ def _blank_tag(ds, tag_name: str) -> None:
 
 
 def deidentify_dicom(ds) -> None:
-    """Remove or blank PII tags from a pydicom Dataset in-place."""
+    """Remove or blank PII tags from a pydicom Dataset in-place.
+
+    UID định danh (study/series/instance) không được để trống: DICOM yêu cầu UID hợp lệ,
+    nên thay bằng UID mới. SOPClassUID là loại ảnh, không phải PII → giữ nguyên.
+    """
+    from pydicom.uid import generate_uid
+
     for tag_name in _DICOM_PII_TAGS:
         _blank_tag(ds, tag_name)
+    for tag_name in ("SOPInstanceUID", "StudyInstanceUID", "SeriesInstanceUID", "FrameOfReferenceUID"):
+        if tag_name in ds:
+            ds[tag_name].value = generate_uid()
+    file_meta = getattr(ds, "file_meta", None)
+    if file_meta is not None and "SOPInstanceUID" in ds:
+        file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
 
 
 def deidentify_dicom_file(input_path: str | Path, output_path: str | Path) -> None:

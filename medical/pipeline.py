@@ -5,7 +5,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import cv2
 import numpy as np
@@ -42,7 +42,7 @@ from medical.validator import (
     validate_image,
 )
 from medical.volume_inference import (
-    TorchScriptVolumeRuntime,
+    TorchVolumeRuntime,
     load_medical_volume,
     render_volume_overlay,
 )
@@ -177,13 +177,16 @@ def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
             continue
         if isinstance(item, dict) and "label" in item and "confidence" in item:
             raw_bbox = item.get("bbox")
-            bbox = tuple(int(value) for value in raw_bbox) if raw_bbox and len(raw_bbox) == 4 else None
+            bbox = (int(raw_bbox[0]), int(raw_bbox[1]), int(raw_bbox[2]), int(raw_bbox[3])) if raw_bbox and len(raw_bbox) == 4 else None
             detections.append(
                 DetectionFinding(
                     label=str(item["label"]),
                     confidence=float(item["confidence"]),
                     bbox=bbox,
-                    segmentation=tuple(tuple(map(int, point)) for point in (item.get("segmentation") or ())) or None,
+                    segmentation=cast(
+                        tuple[tuple[int, int], ...],
+                        tuple(tuple(map(int, point)) for point in (item.get("segmentation") or ())),
+                    ) or None,
                     frame_index=int(item["frame_index"]) if item.get("frame_index") is not None else None,
                     timestamp_seconds=(
                         float(item["timestamp_seconds"])
@@ -203,7 +206,7 @@ def _decode_raw_image(source: str | Path | None) -> np.ndarray | None:
     if not path.is_file():
         return None
     try:
-        buffer = np.frombuffer(path.read_bytes(), np.uint8)
+        buffer: np.ndarray = np.frombuffer(path.read_bytes(), np.uint8)
     except OSError:
         return None
     return cv2.imdecode(buffer, cv2.IMREAD_COLOR)
@@ -265,7 +268,10 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     detector_model = settings.get("yolo_model_path")
     if detector_model is None:
         detector_model = "models/pretrained/brain_detector.pt"
-    volume_model = Path(settings.get("volume_model_path", "models/pretrained/brain_volume_model.pt"))
+    volume_model = Path(settings.get("volume_model_path", "models/pretrained/brain_volume_model.pt2"))
+    legacy_volume_model = volume_model.with_suffix(".pt")
+    if volume_model.suffix.lower() == ".pt2" and not volume_model.is_file() and legacy_volume_model.is_file():
+        volume_model = legacy_volume_model
     volume_manifest = Path(settings.get("volume_manifest_path", "models/pretrained/brain_volume_model.json"))
     return MedicalImageAnalyzerConfig(
         model_path=configured_model,
@@ -366,7 +372,7 @@ class MedicalImageAnalyzer:
         self._modality_wrapper_cache: MedicalCNNClassifierWrapper | None = None
         self._modality_wrapper_cache_path: Path | None = None
         self._roi_extractor: Any = None
-        self._volume_runtime: TorchScriptVolumeRuntime | None = None
+        self._volume_runtime: TorchVolumeRuntime | None = None
         self._volume_runtime_path: tuple[Path, Path] | None = None
         self._runtime_model_path: Path | None = None
         self._active_target_key: str | None = None
@@ -459,24 +465,26 @@ class MedicalImageAnalyzer:
             requested_modality_key = _canonical_modality(requested_modality)
             if requested_modality_key is None:
                 raise ValueError("INVALID_MODALITY: Loại ảnh được chọn không hợp lệ.")
-            if validation.modality_confidence >= self.config.validation_min_confidence:
+            # Chỉ kiểm tra strict modality khi validation_min_confidence đủ lớn (>= 0.5)
+            # và classifier có confidence cao. Nếu threshold nhỏ thì coi như user override.
+            if (self.config.validation_min_confidence >= 0.5
+                    and validation.modality_confidence >= self.config.validation_min_confidence):
                 if validation.modality != requested_modality_key:
                     raise ValueError(
                         "MODALITY_MISMATCH: Loại ảnh bạn chọn không khớp với modality nhận diện từ tệp "
                         f"({requested_modality} ≠ {validation.modality}). Hãy chọn đúng loại ảnh hoặc tải tệp khác."
                     )
-            else:
-                validation = replace(
-                    validation,
-                    modality=requested_modality_key,
-                    quality_warnings=(
-                        *validation.quality_warnings,
-                        (
-                            f"Chưa xác minh được modality {requested_modality} từ thông tin ảnh; "
-                            "lựa chọn này chỉ là khai báo của người dùng."
-                        ),
+            validation = replace(
+                validation,
+                modality=requested_modality_key,
+                quality_warnings=(
+                    *validation.quality_warnings,
+                    (
+                        f"Chưa xác minh được modality {requested_modality} từ thông tin ảnh; "
+                        "lựa chọn này chỉ là khai báo của người dùng."
                     ),
-                )
+                ),
+            )
         if requested_body_region is not None:
             if (
                 validation.body_region is not None
@@ -553,6 +561,8 @@ class MedicalImageAnalyzer:
         is_video = resolved_source.suffix.lower() in {".mp4", ".avi", ".mov", ".mkv"}
         analyzed_frame_count = 1
         representative_frame_index = None
+        raw_image: np.ndarray | None = None
+        source_frame_detections: list[DetectionFinding] | None = None
         if is_video:
             (
                 image,
@@ -589,6 +599,7 @@ class MedicalImageAnalyzer:
             raw_detections = detect_details.get("detections", [])
             detections = _coerce_detections(raw_detections) if detect_stage.status == "success" else []
             if detect_input is raw_image:
+                source_frame_detections = self._detections_in_source_frame(detections, roi_info)
                 detections = _map_detections_to_canvas(detections, raw_image.shape[:2], image.shape[:2])
             report_detections = self._detections_in_source_frame(detections, roi_info)
             overlay_detections = detections
@@ -626,6 +637,12 @@ class MedicalImageAnalyzer:
         gradcam_overlays = self._run_gradcam_if_possible(prepared_image, overlay_detections, validation)
         self._call_progress(progress_callback, "Analyzing results...", 0.85)
         processed_path = self._render_overlay(prepared_image.copy(), overlay_detections, patient_code=patient_code, gradcam_overlays=gradcam_overlays)
+        coordinate_frame, source_size = self._report_coordinate_frame(
+            image, raw_image, source_frame_detections is not None
+        )
+        detection_payloads = self._detection_payloads(
+            report_detections, source_frame_detections, coordinate_frame
+        )
         payload = {
             "case_id": case_id,
             "patient_code": patient_code,
@@ -638,18 +655,10 @@ class MedicalImageAnalyzer:
             "clinical_assessment_available": False,
             "average_confidence": average_confidence,
             "recommendation": recommendation,
-            "detections": [
-                {
-                    "label": item.label,
-                    "confidence": item.confidence,
-                    "bbox": list(item.bbox) if item.bbox else None,
-                    "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
-                    "frame_index": item.frame_index,
-                    "timestamp_seconds": item.timestamp_seconds,
-                }
-                for item in report_detections
-            ],
+            "detections": detection_payloads,
             "segmentation_mask_path": str(segmentation_mask_path) if segmentation_mask_path else None,
+            "coordinate_frame": coordinate_frame,
+            "source_size": source_size,
             "input_dimension": "video" if is_video else "2d",
             "analyzed_frame_count": analyzed_frame_count,
             "representative_frame_index": representative_frame_index,
@@ -732,14 +741,14 @@ class MedicalImageAnalyzer:
         manifest_path = paths["volume_manifest"]
         if model_path is None or manifest_path is None or not Path(model_path).is_file() or not Path(manifest_path).is_file():
             raise ValueError(
-                f"MISSING_3D_MODEL: Cần cả volume.pt và volume.json trong "
+                f"MISSING_3D_MODEL: Cần cả volume.pt2 (hoặc volume.pt cũ) và volume.json trong "
                 f"{paths['directory']} để phân tích {target_key} trên MRI/CT 3D."
             )
         runtime_paths = (Path(model_path), Path(manifest_path))
         if self._volume_runtime is None or (
             self._volume_runtime_path is not None and self._volume_runtime_path != runtime_paths
         ):
-            self._volume_runtime = TorchScriptVolumeRuntime(model_path, manifest_path)
+            self._volume_runtime = TorchVolumeRuntime(model_path, manifest_path)
             self._volume_runtime_path = runtime_paths
         if self._volume_runtime.manifest.target != target_key:
             raise ValueError(
@@ -862,7 +871,7 @@ class MedicalImageAnalyzer:
             model_name=Path(model_path).name,
             quality_warnings=warnings,
             stage_confidences={"validate": max(validation.modality_confidence, validation.body_region_confidence), "volume_inference": average_confidence},
-            stage_messages={"validate": validation.message, "volume_inference": "Đã chạy model 3D trên toàn volume."},
+            stage_messages={"validate": validation.message or "", "volume_inference": "Đã chạy model 3D trên toàn volume."},
             deidentified_source=deidentified_source,
             analysis_time_seconds=elapsed,
             modality=validation.modality or volume.modality,
@@ -989,7 +998,7 @@ class MedicalImageAnalyzer:
         height, width = frame.shape[:2]
         scale = min(image_size / max(width, 1), image_size / max(height, 1))
         resized = cv2.resize(frame, (max(1, round(width * scale)), max(1, round(height * scale))))
-        canvas = np.zeros((image_size, image_size, 3), dtype=np.uint8)
+        canvas: np.ndarray = np.zeros((image_size, image_size, 3), dtype=np.uint8)
         x = (image_size - resized.shape[1]) // 2
         y = (image_size - resized.shape[0]) // 2
         canvas[y : y + resized.shape[0], x : x + resized.shape[1]] = resized
@@ -1128,7 +1137,7 @@ class MedicalImageAnalyzer:
             if advanced is not None:
                 image = advanced
         profile = self._get_modality_profile(modality)
-        img = image.astype(np.float32)
+        img: np.ndarray = image.astype(np.float32)
         if profile["normalize"] == "ct":
             img = np.clip(img * 1.08, 0, 255).astype(np.uint8)
         elif profile["normalize"] == "mri":
@@ -1137,22 +1146,22 @@ class MedicalImageAnalyzer:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             enhanced = clahe.apply(gray)
-            img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)  # type: ignore[assignment]
+            img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
         elif profile["normalize"] == "ultrasound":
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            img = cv2.cvtColor(cv2.equalizeHist(blurred), cv2.COLOR_GRAY2BGR)  # type: ignore[assignment]
+            img = cv2.cvtColor(cv2.equalizeHist(blurred), cv2.COLOR_GRAY2BGR)
         else:
             img = image
 
         if profile["contrast_boost"] != 1.0:
-            img_uint8 = img.astype(np.uint8)
+            img_uint8: np.ndarray = img.astype(np.uint8)
             lab = cv2.cvtColor(img_uint8, cv2.COLOR_BGR2LAB)
             l_channel, a, b = cv2.split(lab)
             clahe = cv2.createCLAHE(clipLimit=profile["contrast_boost"], tileGridSize=(8, 8))
             l_channel = clahe.apply(l_channel)
-            img = cv2.merge((l_channel, a, b))  # type: ignore[assignment]
-            img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)  # type: ignore[assignment]
+            img = cv2.merge((l_channel, a, b))
+            img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
         return img.astype(np.uint8)
 
     def _apply_segmentation_roi(self, image: np.ndarray) -> tuple[np.ndarray, dict[str, Any] | None]:
@@ -1554,10 +1563,11 @@ class MedicalImageAnalyzer:
         for i in range(len(detections)):
             for j in range(i + 1, len(detections)):
                 total_pairs += 1
-                if detections[i].bbox is None or detections[j].bbox is None:
+                bbox_i, bbox_j = detections[i].bbox, detections[j].bbox
+                if bbox_i is None or bbox_j is None:
                     total_pairs -= 1
                     continue
-                iou = self._bbox_iou(detections[i].bbox, detections[j].bbox)
+                iou = self._bbox_iou(bbox_i, bbox_j)
                 if iou > iou_threshold:
                     overlapping_pairs += 1
                     conflicting_pairs.append((i, j))
@@ -1789,6 +1799,54 @@ class MedicalImageAnalyzer:
             )
         return shifted
 
+    @staticmethod
+    def _report_coordinate_frame(
+        canvas_image: np.ndarray,
+        raw_image: np.ndarray | None,
+        detections_in_source: bool,
+    ) -> tuple[str, list[int]]:
+        """Hệ tọa độ báo cáo: ưu tiên ảnh gốc người dùng tải lên khi có pixel gốc."""
+        if detections_in_source and raw_image is not None:
+            return "source_image", [int(raw_image.shape[1]), int(raw_image.shape[0])]
+        return "normalized_canvas", [int(canvas_image.shape[1]), int(canvas_image.shape[0])]
+
+    @staticmethod
+    def _detection_payloads(
+        report_detections: list[DetectionFinding],
+        source_frame_detections: list[DetectionFinding] | None,
+        coordinate_frame: str,
+    ) -> list[dict[str, Any]]:
+        """Dựng detections cho báo cáo: giữ bbox canvas + bổ sung bbox hệ ảnh gốc."""
+        payloads: list[dict[str, Any]] = []
+        for index, item in enumerate(report_detections):
+            source_item = (
+                source_frame_detections[index]
+                if source_frame_detections is not None and index < len(source_frame_detections)
+                else item
+            )
+            # coordinate_frame mô tả hệ của "bbox" (canvas), không phải của "bbox_source".
+            bbox_frame = (
+                "source_image"
+                if coordinate_frame == "source_image" and item.bbox == source_item.bbox
+                else "normalized_canvas"
+            )
+            payloads.append(
+                {
+                    "label": item.label,
+                    "confidence": item.confidence,
+                    "bbox": list(item.bbox) if item.bbox else None,
+                    "bbox_source": list(source_item.bbox) if source_item.bbox else None,
+                    "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
+                    "segmentation_source": (
+                        [list(point) for point in source_item.segmentation] if source_item.segmentation else None
+                    ),
+                    "frame_index": item.frame_index,
+                    "timestamp_seconds": item.timestamp_seconds,
+                    "coordinate_frame": bbox_frame,
+                }
+            )
+        return payloads
+
     def _classify_findings(self, detections: list[DetectionFinding]) -> tuple[str, bool, str, float]:
         average_confidence = sum(item.confidence for item in detections) / len(detections) if detections else 0.0
         return (
@@ -1896,7 +1954,7 @@ class MedicalImageAnalyzer:
         polygons = [item.segmentation for item in detections if item.segmentation and len(item.segmentation) >= 3]
         if not polygons:
             return None
-        mask = np.zeros(image_shape[:2], dtype=np.uint8)
+        mask: np.ndarray = np.zeros(image_shape[:2], dtype=np.uint8)
         for polygon in polygons:
             cv2.fillPoly(mask, [np.asarray(polygon, dtype=np.int32)], 255)
         self.config.overlay_dir.mkdir(parents=True, exist_ok=True)

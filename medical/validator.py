@@ -25,7 +25,7 @@ _MODALITY_LABEL_TO_CANONICAL = {
     "CT ngực": "ct",
     "MRI tuyến tiền liệt": "mri",
     "MRI trực tràng": "mri",
-    "Nội soi đại tràng": "colonoscopy",
+    "Nội soi đại tràng": "endoscopy",
     "CT ngực-bụng-chậu": "ct",
     "EUS": "eus",
     "PET/CT": "pet_ct",
@@ -45,10 +45,16 @@ _MODALITY_LABEL_TO_CANONICAL = {
     "MRI tụy": "mri",
     "PET/CT tụy": "pet_ct",
     "Siêu âm tuyến giáp": "ultrasound",
+    "Colonoscopy": "endoscopy",
+    "colonoscopy": "endoscopy",
     "CT tuyến giáp": "ct",
     "MRI tuyến giáp": "mri",
     "PET/CT tuyến giáp": "pet_ct",
     "Ảnh soi cổ tử cung": "colposcopy",
+    "Histopathology": "histopathology",
+    "histopathology": "histopathology",
+    "Histology": "histopathology",
+    "histology": "histopathology",
 }
 
 _TARGET_LABEL_TO_CANONICAL = {
@@ -204,7 +210,9 @@ def _canonical_modality(label):
 
 
     lowered = label.lower()
-    if lowered in {"ct", "mri", "xray", "ultrasound", "mammogram", "endoscopy", "colonoscopy", "colposcopy", "pet_ct", "eus"}:
+    if lowered in {"ct", "mri", "xray", "ultrasound", "mammogram", "endoscopy", "colonoscopy", "colposcopy", "pet_ct", "eus", "histopathology"}:
+        if lowered == "colonoscopy":
+            return "endoscopy"
         return lowered
     if lowered.startswith(("pet/ct", "pet")) or "pet ct" in lowered:
         return "pet_ct"

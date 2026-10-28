@@ -4,7 +4,7 @@ import csv
 import hashlib
 import json
 import math
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import NormalDist
 from typing import Any
@@ -126,7 +126,7 @@ def build_independent_validation_report(
     }
     report = {
         "schema_version": 1,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "cohort_id": cohort_id.strip(),
         "cohort_csv_sha256": sha256_file(csv_path),
         "independent_cohort": True,

@@ -58,6 +58,14 @@ class MedicalConfigTests(unittest.TestCase):
         self.assertEqual(config.fallback_model_path, Path("yolo11n.pt"))
         self.assertFalse(config.allow_fallback_model)
 
+    @patch("medical.pipeline.load_yaml", return_value={"medical": {"volume_model_path": "models/pretrained/brain_volume_model.pt2"}})
+    def test_volume_config_falls_back_to_legacy_torchscript_file(self, _load_yaml_mock) -> None:
+        legacy_path = Path("models/pretrained/brain_volume_model.pt")
+        with patch.object(Path, "is_file", autospec=True, side_effect=lambda path: path == legacy_path):
+            config = build_default_medical_analyzer_config()
+
+        self.assertEqual(config.volume_model_path, legacy_path)
+
     def test_validate_medical_analyzer_config_accepts_valid_config(self) -> None:
         config = build_default_medical_analyzer_config()
         self.assertEqual(validate_medical_analyzer_config(config), [])

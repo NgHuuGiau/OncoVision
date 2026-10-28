@@ -31,7 +31,7 @@ def _resize_and_pad(image: np.ndarray, target_size: int) -> np.ndarray:
     scale = min(target_size / max(h, w), target_size / max(h, w))
     new_h, new_w = int(h * scale), int(w * scale)
     resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-    background = np.zeros((target_size, target_size, 3), dtype=np.uint8)
+    background: np.ndarray = np.zeros((target_size, target_size, 3), dtype=np.uint8)
     y = (target_size - new_h) // 2
     x = (target_size - new_w) // 2
     background[y : y + new_h, x : x + new_w] = resized

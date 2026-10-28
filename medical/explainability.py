@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeAlias
 
 import numpy as np
 import torch
@@ -12,7 +13,7 @@ from torch.utils.hooks import RemovableHandle
 
 from medical.cnn_classifier import MedicalCNNClassifierWrapper, _load_image_as_tensor
 
-DeviceLike = str | torch.device | None
+DeviceLike: TypeAlias = str | torch.device | None
 
 class GradCAMError(Exception):
     pass
@@ -324,7 +325,7 @@ def generate_gradcam_overlay(image: np.ndarray, heatmap: np.ndarray, *, alpha: f
         colored = _jet_colormap(heatmap)
     else:
         raise ValueError(f"Colormap '{colormap}' chưa được hỗ trợ.")
-    base = image.astype(np.float32)
+    base: np.ndarray = image.astype(np.float32)
     alpha = float(np.clip(alpha, 0.0, 1.0))
     overlay = (alpha * colored.astype(np.float32) + (1.0 - alpha) * base).astype(np.uint8)
     return overlay
@@ -354,9 +355,16 @@ _TTA_SPECS: tuple[tuple[str, Callable[[torch.Tensor], torch.Tensor], Callable[[n
 
 
 class MedicalGradCAMExplainer:
-    def __init__(self, wrapper: MedicalCNNClassifierWrapper, image_size: int = 320, device: DeviceLike = None) -> None:
+    def __init__(
+        self,
+        wrapper: MedicalCNNClassifierWrapper,
+        image_size: int = 320,
+        device: DeviceLike = None,
+        interpolation: str = "bilinear",
+    ) -> None:
         self.wrapper = wrapper
         self.image_size = image_size
+        self.interpolation = interpolation
         self.device = device or wrapper.device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.gradcam: GradCAM | None = None
         self.gradcam_pp: GradCAMPlusPlus | None = None
@@ -397,7 +405,9 @@ class MedicalGradCAMExplainer:
         probabilities = preds[0]["probabilities"]
         probs_vec = np.array([float(probabilities[label]) for label in class_labels], dtype=np.float32)
         top_indices = np.argsort(-probs_vec)[: max(1, top_k)]
-        input_tensor = _load_image_as_tensor(image, image_size=self.image_size, assume_bgr=True)
+        input_tensor = _load_image_as_tensor(
+            image, image_size=self.image_size, assume_bgr=True, interpolation=self.interpolation
+        )
         input_tensor = input_tensor.unsqueeze(0).to(self.device)
         model_is_fp16 = next(self.wrapper.model.parameters()).dtype == torch.float16
         if model_is_fp16:

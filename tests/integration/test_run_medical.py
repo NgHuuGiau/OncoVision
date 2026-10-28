@@ -51,11 +51,44 @@ class RunMedicalTests(unittest.TestCase):
         command_action = next(action for action in parser._actions if action.dest == "command")
         self.assertEqual(
             set(command_action.choices),
-            {"analyze", "validate-image", "validate-cohort", "plan-validation", "validate-dataset", "split-dataset", "status", "report", "history", "show-case", "export-case", "delete-case", "cleanup-output", "backup-db"},
+            {"analyze", "validate-image", "validate-cohort", "plan-validation", "validate-dataset", "split-dataset", "evaluate", "evaluate-detector", "status", "report", "history", "show-case", "export-case", "delete-case", "cleanup-output", "backup-db"},
         )
         for command in ("train", "train-all", "train-modality", "audit-dataset", "active-learning"):
             with self.subTest(command=command), self.assertRaises(SystemExit):
                 parser.parse_args([command])
+
+    def test_evaluate_command_prints_accuracy(self) -> None:
+        from pathlib import Path as _Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import Mock
+
+        wrapper = Mock()
+        wrapper.class_labels = ("a", "b")
+        wrapper.image_size = 96
+        wrapper.predict.side_effect = lambda source, top_k=1: [
+            {"label": "a" if "x" in _Path(source).name else "b", "confidence": 0.9}
+        ]
+        with TemporaryDirectory() as temp_dir:
+            root = _Path(temp_dir) / "data"
+            (root / "a").mkdir(parents=True)
+            (root / "b").mkdir(parents=True)
+            (root / "a" / "x1.jpg").write_bytes(b"x")
+            (root / "b" / "y1.jpg").write_bytes(b"x")
+            with patch("medical.cnn_classifier.load_cnn_classifier", return_value=wrapper), patch(
+                "sys.argv", ["run_medical.py", "evaluate", "--model", "m.pt", "--data", str(root)]
+            ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                code = run_medical.main()
+        self.assertEqual(code, 0)
+        self.assertIn("Accuracy: 100.0%", stdout.getvalue())
+
+    def test_evaluate_detector_command_prints_map(self) -> None:
+        report = {"map50": 0.8, "map": 0.5, "image_count": 10, "note": "n"}
+        with patch("medical.detector_evaluation.evaluate_detector", return_value=report), patch(
+            "sys.argv", ["run_medical.py", "evaluate-detector", "--model", "d.pt", "--data", "data"]
+        ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            code = run_medical.main()
+        self.assertEqual(code, 0)
+        self.assertIn("mAP@0.5: 0.800", stdout.getvalue())
 
     @patch("run_medical._medical_output_directories", return_value=[Path("output/medical/reports")])
     @patch("run_medical.cleanup_directories")

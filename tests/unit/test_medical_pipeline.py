@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -135,7 +136,7 @@ class MedicalPipelineTests(unittest.TestCase):
             root = Path(temp_dir)
             source = root / "brain.nii.gz"
             source.write_bytes(b"volume")
-            model_path = root / "brain_volume_model.pt"
+            model_path = root / "brain_volume_model.pt2"
             manifest_path = root / "brain_volume_model.json"
             model_path.write_bytes(b"model")
             manifest_path.write_text("{}", encoding="utf-8")
@@ -300,6 +301,14 @@ class MedicalPipelineTests(unittest.TestCase):
             self.assertEqual(len(result.detections), 1)
             # thumbnail khong phong to (s=1), dan giua canvas 320 -> offset (80, 100)
             self.assertEqual(result.detections[0].bbox, (100, 130, 180, 210))
+
+            report = json.loads(result.report_json_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["coordinate_frame"], "source_image")
+            self.assertEqual(report["source_size"], [160, 120])
+            self.assertEqual(report["detections"][0]["bbox"], [100, 130, 180, 210])
+            self.assertEqual(report["detections"][0]["bbox_source"], [20, 30, 100, 110])
+            # bbox là hệ canvas (đã cộng offset), bbox_source mới là hệ ảnh gốc
+            self.assertEqual(report["detections"][0]["coordinate_frame"], "normalized_canvas")
 
     def test_detector_slot_warning_points_to_modality_slot(self):
         with TemporaryDirectory() as temp_dir:
