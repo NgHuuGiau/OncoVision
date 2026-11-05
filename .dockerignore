@@ -1,0 +1,37 @@
+# Bối cảnh build gọn: không đưa venv Windows, git, dữ liệu bệnh nhân và model vào image.
+.venv/
+venv/
+env/
+
+.git/
+.github/
+.gitignore
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Dữ liệu và kết quả runtime (mount qua volume)
+output/
+runs/
+data/
+*.db
+*.log
+
+# Model lớn: mount qua volume ./models:/app/models
+models/pretrained/
+models/trained/
+models/exported/
+
+# Máy host / IDE
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

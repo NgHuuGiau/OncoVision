@@ -1,0 +1,352 @@
+from __future__ import annotations
+
+import argparse
+import contextlib
+import io
+import logging
+import sys
+import time
+import unittest
+from dataclasses import dataclass
+from typing import Any, cast
+
+from utils.camera_probe import probe_camera
+from utils.camera_utils import open_camera_capture
+from utils.console_ui import (
+    BOLD,
+    CYAN,
+    GREEN,
+    MAGENTA,
+    ORANGE,
+    RED,
+    YELLOW,
+    color,
+    meter,
+    pad,
+    rule,
+    section,
+    status_meter,
+)
+from utils.entrypoint_common import run_entrypoint
+from utils.file_utils import ensure_project_directories
+
+_open_camera_capture = open_camera_capture
+
+
+@dataclass
+class CameraCheckResult:
+    level: str
+    summary: str
+    detail: str
+
+    @property
+    def style(self) -> str:
+        return {"PASS": GREEN, "WARN": YELLOW, "ERROR": RED}.get(self.level, CYAN)
+
+    @property
+    def ok(self) -> bool:
+        return self.level == "PASS"
+
+
+def check_camera(index: int = 0, attempts: int = 3) -> CameraCheckResult:
+    result = probe_camera(
+        index=index,
+        attempts=attempts,
+        unavailable_detail="Lý do không chạy   Camera không sẵn sàng, đang bị app khác chiếm hoặc không có webcam.",
+        open_camera_capture_fn=_open_camera_capture,
+    )
+    return CameraCheckResult(level=result.level, summary=result.summary, detail=result.detail)
+
+
+class PrettyTestResult(unittest.TextTestResult):
+    def __init__(self, stream, descriptions, verbosity, total_tests: int = 0):
+        super().__init__(stream, descriptions, verbosity)
+        self.test_start_time = 0.0
+        self.test_outputs: dict[unittest.case.TestCase, str] = {}
+        self._stdout_capture: io.StringIO | None = None
+        self._stderr_capture: io.StringIO | None = None
+        self._stdout_redirect: Any = None
+        self._stderr_redirect: Any = None
+        self.total_tests = total_tests
+        self.current_test = 0
+        self.passed_count = 0
+        self.failed_count = 0
+        self.error_count = 0
+        self.skipped_count = 0
+        self._last_module = ""
+
+    def _progress_label(self) -> str:
+        width = max(2, len(str(self.total_tests or 0)))
+        return f"{self.current_test:0{width}d}/{self.total_tests:0{width}d}"
+
+    def _write_module_header(self, test) -> None:
+        module_name = test.__class__.__module__.split(".")[-1]
+        if module_name == self._last_module:
+            return
+        self._last_module = module_name
+        self.stream.write("\n")
+        self.stream.write(section(f"MODULE :: {module_name}", YELLOW) + "\n")
+        self.stream.flush()
+
+    def startTest(self, test):
+        super().startTest(test)
+        self.current_test += 1
+        self.test_start_time = time.perf_counter()
+        self._stdout_capture = io.StringIO()
+        self._stderr_capture = io.StringIO()
+        self._stdout_redirect = contextlib.redirect_stdout(self._stdout_capture)
+        self._stderr_redirect = contextlib.redirect_stderr(self._stderr_capture)
+        self._stdout_redirect.__enter__()
+        self._stderr_redirect.__enter__()
+        self._write_module_header(test)
+        self.stream.write(color(pad(f"[ TEST {self._progress_label()} ] {self.getDescription(test)}"), CYAN) + "\n")
+        self.stream.flush()
+
+    def stopTest(self, test):
+        if self._stdout_redirect is not None:
+            self._stdout_redirect.__exit__(None, None, None)
+        if self._stderr_redirect is not None:
+            self._stderr_redirect.__exit__(None, None, None)
+        stdout_value = self._stdout_capture.getvalue() if self._stdout_capture else ""
+        stderr_value = self._stderr_capture.getvalue() if self._stderr_capture else ""
+        self.test_outputs[test] = stdout_value + stderr_value
+        super().stopTest(test)
+
+    def addSuccess(self, test):
+        elapsed = time.perf_counter() - self.test_start_time
+        self.passed_count += 1
+        self.stream.write(color(pad(f"    PASS   {elapsed:.3f}s   | da pass {self.passed_count}/{self.total_tests}"), GREEN) + "\n")
+        self.stream.flush()
+        super().addSuccess(test)
+
+    def addFailure(self, test, err):
+        elapsed = time.perf_counter() - self.test_start_time
+        self.failed_count += 1
+        self.stream.write(color(pad(f"    FAIL   {elapsed:.3f}s   | loi {self.failed_count}"), RED) + "\n")
+        self.stream.flush()
+        super().addFailure(test, err)
+
+    def addError(self, test, err):
+        elapsed = time.perf_counter() - self.test_start_time
+        self.error_count += 1
+        self.stream.write(color(pad(f"    ERROR  {elapsed:.3f}s   | error {self.error_count}"), MAGENTA) + "\n")
+        self.stream.flush()
+        super().addError(test, err)
+
+    def addSkip(self, test, reason):
+        elapsed = time.perf_counter() - self.test_start_time
+        self.skipped_count += 1
+        self.stream.write(color(pad(f"    SKIP   {elapsed:.3f}s   | {reason}"), YELLOW) + "\n")
+        self.stream.flush()
+        super().addSkip(test, reason)
+
+    def printErrors(self):
+        return
+
+
+class SilentStream:
+    def __init__(self, real_stream):
+        self.real_stream = real_stream
+
+    def write(self, text):
+        stripped = text.strip()
+        if not text:
+            return
+        if stripped == "-" * 70:
+            return
+        if text.startswith(("Ran ", "OK", "FAILED", "FAILED ", "OK ", "\nOK", "\nFAILED")):
+            return
+        if stripped in {"OK", "FAILED"}:
+            return
+        if stripped.startswith("Ran "):
+            return
+        if stripped.startswith("FAILED"):
+            return
+        if stripped.startswith("OK"):
+            return
+        if stripped.startswith("(failures="):
+            return
+        self.real_stream.write(text)
+
+    def writeln(self, text=None):
+        self.write("" if text is None else f"{text}\n")
+
+    def flush(self):
+        self.real_stream.flush()
+
+
+class PrettyTestRunner(unittest.TextTestRunner):
+    resultclass = PrettyTestResult
+
+    def __init__(
+        self,
+        *args,
+        total_tests: int = 0,
+        camera_result: CameraCheckResult | None = None,
+        strict_camera: bool = False,
+        **kwargs,
+    ):
+        stream = kwargs.pop("stream", sys.stderr)
+        filtered_args = [arg for arg in args if arg is not stream]
+        super().__init__(*filtered_args, stream=SilentStream(stream), **kwargs)  # type: ignore[misc]
+        self.output_stream = stream
+        self.total_tests = total_tests
+        self.camera_result = camera_result
+        self.strict_camera = strict_camera
+
+    def _check_dependencies(self) -> list[str]:
+        missing = []
+        deps = {
+            "PySide6": "Giao dien (UI)",
+            "faster_whisper": "Voice Recognition",
+            "pygments": "Syntax Highlighting",
+        }
+        if sys.platform == "win32":
+            deps["pyaudio"] = "Audio Input"
+        import importlib.util
+        for lib, desc in deps.items():
+            if importlib.util.find_spec(lib.split(".")[0]) is None:
+                missing.append(f"{lib} ({desc})")
+        return missing
+
+    def _makeResult(self):
+        return self.resultclass(self.stream, self.descriptions, self.verbosity, total_tests=self.total_tests)
+
+    def _write_camera_section(self) -> None:
+        if self.camera_result is not None:
+            self.output_stream.write(section("KIỂM TRA THIẾT BỊ", YELLOW) + "\n")
+            self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
+            self.output_stream.write(color(pad(self.camera_result.detail), self.camera_result.style) + "\n")
+            self.output_stream.write(color(rule("-"), CYAN) + "\n")
+
+        missing_deps = self._check_dependencies()
+        if missing_deps:
+            self.output_stream.write(section("CANH BAO THU VIEN", RED) + "\n")
+            for dep in missing_deps:
+                self.output_stream.write(color(pad(f"Thieu: {dep}"), YELLOW) + "\n")
+            self.output_stream.write(color(rule("-"), CYAN) + "\n")
+
+    def run(self, test):
+        self.output_stream.write(color(rule("="), CYAN) + "\n")
+        self.output_stream.write(color(pad("YOLO PROJECT :: SYSTEM TEST DASHBOARD"), BOLD + CYAN) + "\n")
+        self.output_stream.write(color(rule("="), CYAN) + "\n")
+        self.output_stream.write(section("TONG QUAN", GREEN) + "\n")
+        self.output_stream.write(color(pad(f"Tong so test      {self.total_tests}"), GREEN) + "\n")
+        self.output_stream.write(color(pad("Chế độ            Chạy từng test, hiện kết quả theo thời gian thực"), GREEN) + "\n")
+        self.output_stream.write(color(pad(f"Tien do khoi dong  [{meter(0, self.total_tests)}] 0/{self.total_tests}"), YELLOW) + "\n")
+        self.output_stream.write(color(pad("Trang thai        Dang quet toan bo he thong..."), YELLOW) + "\n")
+        self.output_stream.write(color(rule("-"), CYAN) + "\n")
+        self._write_camera_section()
+        self.output_stream.flush()
+
+        start = time.perf_counter()
+        result = cast(PrettyTestResult, super().run(test))
+        duration = time.perf_counter() - start
+
+        pass_bar, pass_style = status_meter(result.passed_count, self.total_tests, GREEN)
+        fail_bar, fail_style = status_meter(result.failed_count, self.total_tests, GREEN, RED)
+        error_bar, error_style = status_meter(result.error_count, self.total_tests, GREEN, MAGENTA)
+        skip_bar, skip_style = status_meter(result.skipped_count, self.total_tests, GREEN, YELLOW)
+
+        self.output_stream.write("\n" + color(rule("="), CYAN) + "\n")
+        self.output_stream.write(color(pad("YOLO PROJECT :: TONG KET KIEM THU"), BOLD + CYAN) + "\n")
+        self.output_stream.write(color(rule("="), CYAN) + "\n")
+        self.output_stream.write(section("TONG KET", CYAN) + "\n")
+        self.output_stream.write(color(pad(f"Tien do tong      [{meter(result.current_test, self.total_tests)}] {result.current_test}/{self.total_tests}"), CYAN) + "\n")
+        self.output_stream.write(color(pad(f"PASS              [{pass_bar}] {result.passed_count}/{self.total_tests}"), pass_style) + "\n")
+        self.output_stream.write(color(pad(f"FAIL              [{fail_bar}] {result.failed_count}"), fail_style) + "\n")
+        self.output_stream.write(color(pad(f"ERROR             [{error_bar}] {result.error_count}"), error_style) + "\n")
+        self.output_stream.write(color(pad(f"SKIP              [{skip_bar}] {result.skipped_count}"), skip_style) + "\n")
+        self.output_stream.write(color(pad(f"Thời gian tổng    {duration:.3f}s"), CYAN) + "\n")
+        if self.camera_result is not None:
+            self.output_stream.write(color(pad(self.camera_result.summary), self.camera_result.style) + "\n")
+
+        if result.failures or result.errors:
+            self.output_stream.write("\n" + color(rule("-"), RED) + "\n")
+            self.output_stream.write(section("CHI TIET TEST LOI", RED) + "\n")
+            self.output_stream.write(color(rule("-"), RED) + "\n")
+            for case, traceback_text in result.failures + result.errors:
+                self.output_stream.write(color(f"{self.resultclass.getDescription(result, case)}\n", RED))
+                captured_output = result.test_outputs.get(case, "").strip()
+                if captured_output:
+                    self.output_stream.write(color("Output:\n", ORANGE))
+                    self.output_stream.write(captured_output + "\n")
+                self.output_stream.write(traceback_text + "\n")
+
+        self.output_stream.write(color(rule("-"), CYAN) + "\n")
+        suite_ok = result.wasSuccessful()
+        camera_ok = self.camera_result is None or self.camera_result.ok or not self.strict_camera
+        if suite_ok and camera_ok:
+            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      TOÀN BỘ TEST PASS"), BOLD + GREEN) + "\n")
+        elif suite_ok and not camera_ok:
+            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      UNIT TEST PASS, NHƯNG CAMERA THẬT KHÔNG ĐẠT"), BOLD + RED) + "\n")
+        else:
+            self.output_stream.write(color(pad("KẾT QUẢ CUỐI      CÓ TEST LỖI, CẦN KIỂM TRA LẠI"), BOLD + RED) + "\n")
+        self.output_stream.flush()
+        return result
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Chay test toan he thong cho du an YOLO.")
+    parser.add_argument("--camera-index", type=int, default=0, help="Camera index để kiểm tra camera thật.")
+    parser.add_argument(
+        "--skip-camera-check",
+        action="store_true",
+        help="Bỏ qua bước kiểm tra camera thật trước khi chạy unit test.",
+    )
+    parser.add_argument(
+        "--strict-camera",
+        action="store_true",
+        help="Nếu camera thật không đạt thì coi như bài test tổng thể fail.",
+    )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="Chi chay nhung test core nhe va bo qua nhung module lon/dep cam nang.",
+    )
+    return parser.parse_args()
+
+
+FAST_TEST_MODULES = (
+    "tests.test_boot_progress",
+    "tests.test_file_utils",
+    "tests.test_run_menu",
+    "tests.test_run_smoke",
+    "tests.test_run_tests_dashboard",
+)
+
+
+def discover_suite(*, fast: bool = False) -> unittest.TestSuite:
+    loader = unittest.defaultTestLoader
+    if fast:
+        suites = [loader.loadTestsFromName(module) for module in FAST_TEST_MODULES]
+        return unittest.TestSuite(suites)
+    return loader.discover("tests")
+
+
+def main() -> int:
+    args = parse_args()
+    ensure_project_directories()
+    suite = discover_suite(fast=args.fast)
+    camera_result = None if args.skip_camera_check else check_camera(index=args.camera_index)
+    runner = PrettyTestRunner(
+        verbosity=0,
+        total_tests=suite.countTestCases(),
+        stream=sys.stdout,
+        camera_result=camera_result,
+        strict_camera=args.strict_camera,
+    )
+    previous_disable_level = logging.root.manager.disable
+    logging.disable(logging.CRITICAL)
+    try:
+        result = runner.run(suite)
+    finally:
+        logging.disable(previous_disable_level)
+
+    suite_ok = result.wasSuccessful()
+    camera_ok = camera_result is None or camera_result.ok or not args.strict_camera
+    return 0 if suite_ok and camera_ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_entrypoint(main))

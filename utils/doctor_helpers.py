@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from medical.system_status import MedicalSystemStatus
+from utils.terminal_ui import (
+    CYAN,
+    GREEN,
+    RED,
+    YELLOW,
+    command_row,
+    line,
+    row,
+    rule,
+    section,
+)
+
+
+def medical_status_color(status: MedicalSystemStatus) -> str:
+    if not status.model_ready:
+        return RED
+    if (
+        status.using_fallback_model
+        or status.allow_fallback_model
+        or not getattr(status, "all_targets_ready", False)
+        or not getattr(status, "localization_ready", False)
+        or not getattr(status, "volume_ready", False)
+        or not getattr(status, "clinical_validation_ready", False)
+    ):
+        return YELLOW
+    return GREEN
+
+
+def print_medical_status(status: MedicalSystemStatus) -> None:
+    color = medical_status_color(status)
+    print(line(rule("-"), CYAN))
+    print(section("MEDICAL", color))
+    cfg = Path(status.configured_model_path)
+    suffix = "" if cfg.exists() else " (chưa có file)"
+    print(row("Model config", str(status.configured_model_path) + suffix, CYAN, bounded=False))
+    if status.resolved_model_path is not None:
+        print(row("Model runtime", str(status.resolved_model_path), color, bounded=False))
+    print(row("Fallback", "Bật" if status.allow_fallback_model else "Tắt", YELLOW if status.allow_fallback_model else GREEN, bounded=False))
+    print(
+        row(
+            "Năng lực",
+            " | ".join(
+                (
+                    f"phân loại: {'có' if getattr(status, 'classification_ready', status.model_ready) else 'thiếu'}",
+                    f"định vị: {'có' if getattr(status, 'localization_ready', False) else 'thiếu'}",
+                    f"volume 3D: {'có' if getattr(status, 'volume_ready', False) else 'thiếu'}",
+                    f"kiểm định lâm sàng: {'có' if getattr(status, 'clinical_validation_ready', False) else 'thiếu'}",
+                )
+            ),
+            color,
+            bounded=False,
+        )
+    )
+    print(row("Trạng thái", status.model_message, color, bounded=False))
+    print(
+        row(
+            "Cases / output",
+            f"{status.case_count} ca | reports {status.report_files} | normalized {status.normalized_files} | overlay {status.overlay_files} | exports {status.export_files}",
+            CYAN,
+            bounded=False,
+        )
+    )
+    if status.screening_targets:
+        ready_targets = ", ".join(label for label, ready in status.screening_targets if ready) or "không có"
+        missing_targets = ", ".join(label for label, ready in status.screening_targets if not ready) or "không có"
+        print(row("Target đã sẵn sàng", ready_targets, GREEN, bounded=False))
+        print(row("Target cần mở rộng", missing_targets, YELLOW, bounded=False))
+
+
+def print_recommended_commands(
+    *,
+    missing_models: list[str],
+    icon_count: int,
+    medical_commands: list[str],
+    icon_warning_threshold: int,
+) -> None:
+    print(line(rule("-"), CYAN))
+    print(section("LỆNH NÊN CHẠY", CYAN))
+    command_index = 1
+    commands: list[str] = []
+    if missing_models:
+        commands.append("copy model train san vao models/pretrained/")
+    if icon_count < icon_warning_threshold:
+        commands.append("python run_doctor.py --fix")
+    commands.append("python run_chat.py")
+    commands.extend(medical_commands)
+    for command in dict.fromkeys(commands):
+        print(command_row(command_index, command))
+        command_index += 1

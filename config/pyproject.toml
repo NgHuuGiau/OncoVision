@@ -1,0 +1,143 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "onkovision"
+version = "0.1.0"
+description = "OncoVision - Medical AI Screening System for 11 Cancer Groups"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "OncoVision Team", email = "team@onkovision.ai"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "ultralytics>=8.3",
+    "opencv-python>=4.9",
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "pydicom>=3.0",
+    "nibabel>=5.0",
+    "psutil>=5.9",
+    "GPUtil>=1.4",
+    "PyYAML>=6.0",
+    "torch>=2.1",
+    "torchvision>=0.16",
+    "pygments>=2.17",
+    "PySide6>=6.6",
+    "faster-whisper>=1.0",
+    "pyaudio>=0.2.14; platform_system == 'Windows'",
+    "ruff==0.16.3",
+    "mypy",
+    "simpleitk>=2.2.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "fastapi>=0.110.0",
+    "itsdangerous>=2.1.2",
+    "uvicorn>=0.27.0",
+    "python-multipart>=0.0.6",
+    "jinja2>=3.1.2",
+    "aiofiles>=23.2.0",
+    "reportlab>=4.0",
+    "faster-whisper>=1.0",
+    "pyaudio>=0.2.14; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.16.3",
+    "mypy",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio",
+    "pre-commit",
+]
+monai = [
+    "monai>=1.3.0",
+    "nnunetv2>=2.0",
+]
+full = [
+    "monai>=1.3.0",
+    "nnunetv2>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/onkovision/onkovision"
+Repository = "https://github.com/onkovision/onkovision"
+Documentation = "https://github.com/onkovision/onkovision/wiki"
+Issues = "https://github.com/onkovision/onkovision/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "core*", "medical*", "utils*", "config*", "scripts*", "tests*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json", "*.pt", "*.onnx", "*.svg", "*.png", "*.jpg", "*.html", "*.css", "*.js", "*.md", "*.txt", "*.yaml", "*.yml"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+select = ["E", "F", "I", "W", "UP", "B", "C4", "T20", "SIM", "N", "RET", "PTH", "PD", "PGH", "PL", "TRY", "NPY", "RSE", "RUF", "TID", "ARG", "FLY", "LOG", "PIE", "Q000", "TCH"]
+ignore = ["E501", "B008", "TRY003"]
+fixable = ["F", "I", "W", "C4", "UP", "B", "T20", "SIM", "N", "RET", "PTH", "PD", "PGH", "PL", "TRY", "NPY", "RSE", "RUF", "TID", "ARG", "FLY", "LOG", "PIE", "Q000", "TCH"]
+format.quote-style = "double"
+format.skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+implicit_optional = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["*Tests"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+    "camera: marks tests requiring camera",
+    "gpu: marks tests requiring GPU",
+]
+
+[tool.coverage.run]
+source = ["app", "core", "medical", "utils", "config", "scripts"]
+omit = ["tests/*", "*/__pycache__/*", ".venv/*"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

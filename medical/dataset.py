@@ -1,0 +1,699 @@
+from __future__ import annotations
+
+import logging
+import re
+import unicodedata
+from pathlib import Path
+from typing import Any
+
+import cv2
+import numpy as np
+from PIL import Image, ImageOps
+
+from medical.reporting import build_artifact_stamp
+
+logger = logging.getLogger(__name__)
+
+
+def _limit_volume_slices(volume: np.ndarray, max_slices: int = 256) -> np.ndarray:
+    if volume.ndim < 3:
+        return volume
+    slices = volume.shape[0]
+    if slices <= max_slices:
+        return volume
+    logger.warning("[Dataset] Volume co %s slices, gioi han ve %s slices", slices, max_slices)
+    step = max(1, slices / max_slices)
+    indices = [min(int(i * step), slices - 1) for i in range(max_slices)]
+    return volume[indices]
+
+
+MEDICAL_UPLOAD_EXTENSIONS = frozenset({
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".dcm",
+    ".nii",
+    ".nii.gz",
+    ".mha",
+    ".mhd",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".mkv",
+})
+
+_MODALITY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("CT ngực-bụng-chậu", ("ct nguc bung chau", "chest abdomen pelvis", "cap ct", "ct cap")),
+    ("CT ngực", ("ct nguc", "chest ct", "thoracic ct", "ct chest")),
+    ("CT gan", ("ct gan", "liver ct", "hepatic ct", "ct liver")),
+    ("CT đại trực tràng", ("ct đại trực tràng", "ct colon", "rectal ct", "ct rectal")),
+    ("CT dạ dày", ("ct dạ dày", "ct gastric", "stomach ct", "gastric ct")),
+    ("CT tuyến tiền liệt", ("ct tuyến tiền liệt", "prostate ct")),
+    ("CT cổ tử cung", ("ct cổ tử cung", "cervical ct", "pelvic ct")),
+    ("CT thận", ("ct than", "kidney ct", "renal ct")),
+    ("MRI thận", ("mri than", "kidney mri", "renal mri")),
+    ("Siêu âm thận", ("sieu am than", "kidney ultrasound", "renal ultrasound")),
+    ("PET/CT thận", ("pet ct than", "petct kidney", "pet ct kidney", "pet ct renal")),
+    ("CT tụy", ("ct tuy", "pancreas ct", "pancreatic ct")),
+    ("MRI tụy", ("mri tuy", "pancreas mri", "pancreatic mri")),
+    ("PET/CT tụy", ("pet ct tuy", "petct pancreas", "pet ct pancreas", "pet ct pancreatic")),
+    ("Siêu âm tuyến giáp", ("sieu am tuyen giap", "thyroid ultrasound", "thyroid sonography")),
+    ("CT tuyến giáp", ("ct tuyen giap", "thyroid ct")),
+    ("MRI tuyến giáp", ("mri tuyen giap", "thyroid mri")),
+    ("PET/CT tuyến giáp", ("pet ct tuyen giap", "petct thyroid", "pet ct thyroid")),
+    ("MRI tuyến tiền liệt", ("mri tuyến tiền liệt", "prostate mri")),
+    ("MRI trực tràng", ("mri truc trang", "rectal mri")),
+    ("MRI vú", ("mri vú", "breast mri")),
+    ("MRI gan", ("mri gan", "liver mri", "hepatic mri")),
+    ("MRI dạ dày", ("mri dạ dày", "mri gastric", "stomach mri")),
+    ("MRI cổ tử cung", ("mri cổ tử cung", "cervical mri", "pelvic mri")),
+    ("Siêu âm vú", ("sieu am vu", "breast ultrasound")),
+    ("Siêu âm gan", ("siêu âm gan", "liver ultrasound", "hepatic ultrasound", "fascio")),
+    ("Siêu âm tuyến tiền liệt", ("siêu âm tuyến tiền liệt", "prostate ultrasound", "trus")),
+    ("X-quang ngực", ("x quang nguc", "chest x ray", "cxr", "chest radiograph")),
+    ("Nội soi đại tràng", ("noi soi dai trang", "colonoscopy")),
+    ("Mammogram", ("mammogram", "mammo")),
+    ("EUS", ("eus", "endoscopic ultrasound")),
+    ("PET/CT", ("pet ct", "petct", "pet/ct")),
+    ("Ảnh soi cổ tử cung", ("colposcopy", "cervical photo", "soi co tu cung", "soi cổ tử cung")),
+    ("PET", (" pet ", " pet-", "pet scan", "pet whole body")),
+    ("Nội soi", ("noi soi", "endoscopy", "gastroscopy", "egd")),
+    ("Siêu âm", ("sieu am", "ultrasound", "sonography")),
+    ("CT", (" computed tomography ", " ct ", "ct scan", "ctscan")),
+    ("MRI", (" magnetic resonance ", " mri ", "mri scan")),
+    ("MRI não", ("mri nao", "brain mri", "mri brain", "head mri", "mri head", "neuro mri", "cranial mri")),
+    ("CT sọ não", ("ct so nao", "brain ct", "ct brain", "head ct", "ct head", "ct neuro", "cranial ct")),
+    ("PET/CT não", ("pet ct nao", "brain pet", "pet brain", "pet/ct brain")),
+)
+
+_TARGET_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("liver", ("gan", "liver", "hepatic", "hepat", "hcc", "liver cancer", "liver lesion", "liver tumor", "liver mass", "liver metastasis")),
+    ("lung", ("phổi", "lung", "thorax", "thoracic", "chest", "pulmonary", "lung cancer", "lung lesion", "lung tumor", "lung nodule", "lung mass", "pulmonary nodule", "pulmonary mass")),
+    ("breast", ("vú", "breast", "mammogram", "mammo", "breast cancer", "breast lesion", "breast mass", "breast tumor", "breast nodule")),
+    ("stomach", ("dạ dày", "stomach", "gastric", "gast", "egd", "endoscopy", "nội soi", "stomach cancer", "gastric cancer", "gastric lesion", "gastric tumor", "gastric mass")),
+    ("colorectal", ("đại trực tràng", "colorectal", "colon", "rectal", "trực tràng", "colonoscopy", "colorectal cancer", "colon cancer", "rectal cancer", "colon lesion", "rectal lesion", "colon tumor", "rectal tumor")),
+    ("prostate", ("tuyến tiền liệt", "prostate", "prostatic", "prostate cancer", "prostate lesion", "prostate tumor", "prostate mass")),
+    ("cervical", ("cổ tử cung", "cervical", "cervix", "pap", "hpv", "colposcopy", "cervical cancer", "cervix cancer", "cervical lesion", "cervical tumor")),
+    ("kidney", ("thận", "kidney", "renal", "nephro", "rcc", "renal cell carcinoma", "kidney cancer", "kidney lesion", "kidney tumor", "kidney mass")),
+    ("pancreas", ("tụy", "pancreas", "pancreatic", "pdac", "pancreatic ductal adenocarcinoma", "pancreas cancer", "pancreatic cancer", "pancreas lesion", "pancreatic lesion", "pancreas tumor", "pancreatic tumor")),
+    ("thyroid", ("tuyến giáp", "thyroid", "thyroid cancer", "thyroid carcinoma", "thyroid lesion", "thyroid nodule", "thyroid tumor")),
+    ("brain", ("não", "brain", "cranial", "skull", "neuro", "intracranial", "cerebral", "glioma", "meningioma", "pituitary", "brain tumor", "brain cancer", "brain lesion", "brain mass", "head tumor")),
+)
+
+_MODALITY_TO_TARGET_KEY: dict[str, str] = {
+    "Mammogram": "breast",
+    "Siêu âm vú": "breast",
+    "MRI vú": "breast",
+    "X-quang ngực": "lung",
+    "CT ngực": "lung",
+    "MRI trực tràng": "colorectal",
+    "Nội soi đại tràng": "colorectal",
+    "CT ngực-bụng-chậu": "colorectal",
+    "EUS": "stomach",
+    "Nội soi": "stomach",
+    "CT gan": "liver",
+    "MRI gan": "liver",
+    "Siêu âm gan": "liver",
+    "CT đại trực tràng": "colorectal",
+    "MRI đại trực tràng": "colorectal",
+    "CT dạ dày": "stomach",
+    "MRI dạ dày": "stomach",
+    "CT tuyến tiền liệt": "prostate",
+    "MRI tuyến tiền liệt": "prostate",
+    "CT cổ tử cung": "cervical",
+    "MRI cổ tử cung": "cervical",
+    "CT thận": "kidney",
+    "MRI thận": "kidney",
+    "Siêu âm thận": "kidney",
+    "PET/CT thận": "kidney",
+    "CT tụy": "pancreas",
+    "MRI tụy": "pancreas",
+    "PET/CT tụy": "pancreas",
+    "Siêu âm tuyến giáp": "thyroid",
+    "CT tuyến giáp": "thyroid",
+    "MRI tuyến giáp": "thyroid",
+    "PET/CT tuyến giáp": "thyroid",
+    "PET/CT gan": "liver",
+    "PET/CT phổi": "lung",
+    "PET/CT đại trực tràng": "colorectal",
+    "PET/CT dạ dày": "stomach",
+    "PET/CT tuyến tiền liệt": "prostate",
+    "PET/CT cổ tử cung": "cervical",
+    "Ảnh soi cổ tử cung": "cervical",
+    "PET gan": "liver",
+    "PET phổi": "lung",
+    "PET đại trực tràng": "colorectal",
+    "MRI não": "brain",
+    "CT sọ não": "brain",
+    "PET/CT não": "brain",
+}
+
+_DICOM_MODALITY_MAP: dict[str, str] = {
+    "CT": "CT",
+    "MR": "MRI",
+    "US": "Siêu âm",
+    "PT": "PET",
+    "MG": "Mammogram",
+    "CR": "X-quang ngực",
+    "DX": "X-quang ngực",
+    "XA": "X-quang ngực",
+}
+
+_DICOM_BODY_PART_TO_TARGET: dict[str, str] = {
+    "LIVER": "liver",
+    "HEPAT": "liver",
+    "CHEST": "lung",
+    "LUNG": "lung",
+    "BREAST": "breast",
+    "CHESTABDPELV": "colorectal",
+    "ABDOMEN": "stomach",
+    "STOMACH": "stomach",
+    "ABDOMENPELVIS": "colorectal",
+    "PELVIS": "prostate",
+    "PROSTATE": "prostate",
+    "RECTUM": "colorectal",
+    "COLON": "colorectal",
+    "CERVIX": "cervical",
+    "UTERUS": "cervical",
+    "PELVISNECK": "cervical",
+    "WHOLEBODY": "lung",
+    "BRAIN": "brain",
+    "HEAD": "brain",
+    "NEURO": "brain",
+    "SKULL": "brain",
+    "CSPINE": "brain",
+    "KIDNEY": "kidney",
+    "RENAL": "kidney",
+    "PANCREAS": "pancreas",
+    "THYROID": "thyroid",
+}
+
+SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
+    "liver": ("ct", "mri", "ultrasound", "pet_ct"),
+    "lung": ("xray", "ct", "pet_ct"),
+    "breast": ("mammogram", "ultrasound", "mri"),
+    "stomach": ("endoscopy", "ct", "mri", "pet_ct", "eus"),
+    "colorectal": ("colonoscopy", "ct", "mri", "pet_ct"),
+    "prostate": ("mri", "ultrasound", "pet_ct"),
+    "cervical": ("colposcopy", "ct", "mri", "pet_ct"),
+    "brain": ("mri", "ct", "pet_ct"),
+    "kidney": ("ct", "mri", "ultrasound", "pet_ct"),
+    "pancreas": ("ct", "mri", "pet_ct"),
+    "thyroid": ("ultrasound", "ct", "mri", "pet_ct"),
+}
+
+
+def is_supported_medical_upload_path(path: str | Path) -> bool:
+    source = Path(path)
+    if source.is_dir():
+        return any(candidate.is_file() and _medical_upload_suffix(candidate) in MEDICAL_UPLOAD_EXTENSIONS for candidate in source.rglob("*"))
+    return _medical_upload_suffix(source) in MEDICAL_UPLOAD_EXTENSIONS
+
+
+def _medical_upload_suffix(path: Path) -> str:
+    name = path.name.lower()
+    if name.endswith(".nii.gz"):
+        return ".nii.gz"
+    return path.suffix.lower()
+
+
+def _normalize_medical_text(text: str) -> str:
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", " ", ascii_text.lower()).strip()
+
+
+def _collect_medical_text(path: Path) -> str:
+    parts = [path.name, *path.parts[-3:]]
+    if path.is_dir():
+        try:
+            candidate = resolve_medical_upload_path(path)
+        except Exception:
+            candidate = None
+        if candidate is not None and candidate.is_file() and _medical_upload_suffix(candidate) == ".dcm":
+            parts.append(_collect_dicom_text(candidate))
+        return " ".join(parts)
+
+    if _medical_upload_suffix(path) == ".dcm":
+        parts.append(_collect_dicom_text(path))
+    return " ".join(parts)
+
+
+def _collect_dicom_text(path: Path) -> str:
+    try:
+        import pydicom
+    except ImportError:# pragma: no cover
+        return ""
+
+    try:
+        dataset = pydicom.dcmread(str(path), stop_before_pixels=True, force=True)
+    except Exception:
+        return ""
+
+    values: list[str] = []
+    for key in ("Modality", "SeriesDescription", "ProtocolName", "StudyDescription", "BodyPartExamined"):
+        value = getattr(dataset, key, "")
+        if value:
+            values.append(str(value))
+    return " ".join(values)
+
+
+def _find_first_matching_hint(text: str, hints: tuple[tuple[str, tuple[str, ...]], ...]) -> str | None:
+    normalized = f" { _normalize_medical_text(text) } "
+    for label, terms in hints:
+        if any(term in normalized for term in terms):
+            return label
+    return None
+
+
+def infer_medical_upload_context(path: str | Path) -> tuple[str | None, str | None]:
+    source = Path(path)
+    raw_text = _collect_medical_text(source)
+    normalized = _normalize_medical_text(raw_text)
+
+    modality = _infer_medical_modality(source, normalized)
+    target_key = _infer_medical_target_key(normalized, modality)
+    return target_key, modality
+
+
+def supported_medical_modalities_for_target(target_key: str | None) -> tuple[str, ...]:
+    if target_key is None:
+        return ()
+    return SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY.get(target_key, ())
+
+
+def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:
+    padded = f" {normalized_text} "
+    for label, terms in _MODALITY_HINTS:
+        if any(term in padded for term in terms):
+            return label
+
+    if source.is_file() and _medical_upload_suffix(source) == ".dcm":
+        pydicom_module: Any = None
+        try:
+            from importlib import import_module
+
+            pydicom_module = import_module("pydicom")
+        except ImportError:# pragma: no cover
+            pass
+        if pydicom_module is not None:
+            try:
+                dataset = pydicom_module.dcmread(str(source), stop_before_pixels=True, force=True)
+                dicom_modality = str(getattr(dataset, "Modality", "")).upper()
+                mapped = _DICOM_MODALITY_MAP.get(dicom_modality)
+                if mapped:
+                    return mapped
+            except Exception:
+                pass
+    return None
+
+
+def guess_modality_from_pixels(image_path: str | Path) -> str | None:
+    source = Path(image_path)
+    if not source.exists():
+        return None
+    try:
+        import numpy as np
+        from PIL import Image
+        img = Image.open(source).convert("L")
+        arr = np.array(img, dtype=np.float32)
+        mean, std = float(np.mean(arr)), float(np.std(arr))
+        hist, _ = np.histogram(arr, bins=256, range=(0, 255))
+        hist = hist.astype(float)
+        hist /= hist.sum() if hist.sum() > 0 else 1
+        peak_ratio = float(hist.max())
+        low_bin_ratio = float(hist[:32].sum())
+        high_bin_ratio = float(hist[224:].sum())
+        mid_bin_ratio = float(hist[64:192].sum())
+        if std > 60 and mid_bin_ratio > 0.6 and 30 < mean < 200:
+            if peak_ratio < 0.08:
+                return "CT"
+        if std < 30 and low_bin_ratio > 0.3 and high_bin_ratio > 0.3:
+            return "X-quang ngực"
+        if std > 50 and peak_ratio > 0.15 and mean > 80 and low_bin_ratio < 0.1:
+            return "MRI"
+        if std < 35 and mean > 80 and peak_ratio > 0.1:
+            return "Siêu âm"
+        if std > 40 and high_bin_ratio > 0.2 and low_bin_ratio > 0.15:
+            return "X-quang ngực"
+        if std < 20:
+            return "Siêu âm"
+    except Exception:
+        pass
+    return None
+
+
+def _infer_medical_target_key(normalized_text: str, modality: str | None) -> str | None:
+    if modality and modality in _MODALITY_TO_TARGET_KEY:
+        return _MODALITY_TO_TARGET_KEY[modality]
+    padded = f" {normalized_text} "
+    for target_key, terms in _TARGET_HINTS:
+        if any(term in padded for term in terms):
+            return target_key
+    return None
+
+
+def resolve_medical_upload_path(path: str | Path) -> Path:
+    source = Path(path)
+    if source.is_file():
+        if not is_supported_medical_upload_path(source):
+            raise ValueError(f"Không hỗ trợ file upload: {source}")
+        return source
+    if not source.is_dir():
+        raise FileNotFoundError(f"Không tìm thấy đường dẫn upload: {source}")
+
+    candidates = sorted(
+        candidate
+        for candidate in source.rglob("*")
+        if candidate.is_file() and _medical_upload_suffix(candidate) in MEDICAL_UPLOAD_EXTENSIONS
+    )
+    if not candidates:
+        raise FileNotFoundError(f"Thư mục không chứa ảnh hợp lệ: {source}")
+
+    dicom_candidates = [candidate for candidate in candidates if _medical_upload_suffix(candidate) == ".dcm"]
+    if dicom_candidates:
+        return dicom_candidates[len(dicom_candidates) // 2]
+    return candidates[0]
+
+
+def _normalize_array_to_rgb(array: np.ndarray) -> Image.Image:
+    data = np.asarray(array, dtype=np.float32)
+    if data.ndim == 0:
+        data = data.reshape(1, 1)
+    if data.ndim > 3:
+        data = np.squeeze(data)
+    if data.ndim == 2:
+        minimum = float(np.min(data))
+        maximum = float(np.max(data))
+        if maximum > minimum:
+            data = (data - minimum) / (maximum - minimum)
+        else:
+            data = np.zeros_like(data)
+        data = (data * 255.0).clip(0, 255).astype(np.uint8)
+        data = np.stack([data] * 3, axis=-1)
+        return Image.fromarray(data, mode="RGB")
+    if data.ndim == 3 and data.shape[-1] in {3, 4}:
+        if data.shape[-1] == 4:
+            data = data[..., :3]
+        minimum = float(np.min(data))
+        maximum = float(np.max(data))
+        if maximum > minimum:
+            data = (data - minimum) / (maximum - minimum)
+        data = (data * 255.0).clip(0, 255).astype(np.uint8)
+        return Image.fromarray(data, mode="RGB")
+    return Image.fromarray(np.zeros((1, 1, 3), dtype=np.uint8), mode="RGB")
+
+
+def _load_dicom_slice(source: Path) -> Image.Image:
+    try:
+        import pydicom
+        from pydicom.pixels import apply_voi_lut
+    except ImportError as exc:# pragma: no cover
+        raise RuntimeError("Không đọc được DICOM. Hãy cài đặt pydicom để mở file .dcm.") from exc
+
+    dataset = pydicom.dcmread(str(source), force=True)
+    array = dataset.pixel_array.astype(np.float32)
+    try:
+        array = apply_voi_lut(array, dataset)
+    except Exception:
+        pass
+
+    if getattr(dataset, "PhotometricInterpretation", "").upper() == "MONOCHROME1":
+        array = np.max(array) - array
+
+    slope = float(getattr(dataset, "RescaleSlope", 1.0))
+    intercept = float(getattr(dataset, "RescaleIntercept", 0.0))
+    array = array * slope + intercept
+    return _normalize_array_to_rgb(array)
+
+
+def _load_nifti_volume(source: Path) -> np.ndarray:
+    try:
+        import nibabel as nib
+    except ImportError as exc:# pragma: no cover
+        raise RuntimeError("Không đọc được NIfTI. Hãy cài đặt nibabel để mở file .nii/.nii.gz.") from exc
+
+    image = nib.load(str(source))
+    volume = np.asanyarray(image.dataobj)
+    if volume.ndim == 4:
+        volume = volume[..., 0]
+    return _limit_volume_slices(np.asarray(volume), max_slices=256)
+
+
+def _load_mha_volume(source: Path) -> np.ndarray:
+    try:
+        import SimpleITK as sitk
+    except ImportError as exc:# pragma: no cover
+        raise RuntimeError("Không đọc được MHA/MHD. Hãy cài đặt SimpleITK để mở file .mha/.mhd.") from exc
+
+    image = sitk.ReadImage(str(source))
+    volume = sitk.GetArrayFromImage(image)
+    return _limit_volume_slices(np.asarray(volume), max_slices=256)
+
+
+def _load_dicom_series_volume(source: Path) -> np.ndarray:
+    try:
+        import pydicom
+        from pydicom.pixels import apply_voi_lut
+    except ImportError as exc:# pragma: no cover
+        raise RuntimeError("Không đọc được DICOM. Hãy cài đặt pydicom để mở thư mục series .dcm.") from exc
+
+    slice_entries: list[tuple[float, np.ndarray]] = []
+    for candidate in sorted(source.rglob("*")):
+        if not candidate.is_file() or _medical_upload_suffix(candidate) != ".dcm":
+            continue
+        dataset = pydicom.dcmread(str(candidate), force=True)
+        array = dataset.pixel_array.astype(np.float32)
+        try:
+            array = apply_voi_lut(array, dataset)
+        except Exception:
+            pass
+        if getattr(dataset, "PhotometricInterpretation", "").upper() == "MONOCHROME1":
+            array = np.max(array) - array
+        slope = float(getattr(dataset, "RescaleSlope", 1.0))
+        intercept = float(getattr(dataset, "RescaleIntercept", 0.0))
+        array = array * slope + intercept
+        order = float(getattr(dataset, "InstanceNumber", len(slice_entries)))
+        slice_entries.append((order, array))
+
+    if not slice_entries:
+        raise FileNotFoundError(f"Thư mục không chứa ảnh DICOM hợp lệ: {source}")
+
+    slice_entries.sort(key=lambda item: item[0])
+    slices = []
+    for _, array in slice_entries:
+        if array.ndim > 2:
+            array = np.squeeze(array)
+            if array.ndim > 2:
+                array = array[..., 0]
+        slices.append(np.asarray(array, dtype=np.float32))
+    volume = np.stack(slices, axis=0)
+    return _limit_volume_slices(volume, max_slices=256)
+
+
+def _load_medical_volume_image(source: Path) -> Image.Image:
+    if source.is_dir():
+        volume = _load_dicom_series_volume(source)
+    else:
+        suffix = _medical_upload_suffix(source)
+        if suffix == ".nii.gz" or suffix == ".nii":
+            volume = _load_nifti_volume(source)
+        elif suffix in {".mha", ".mhd"}:
+            volume = _load_mha_volume(source)
+        elif suffix == ".dcm":
+            return _load_dicom_slice(source)
+        else:
+            raise ValueError(f"Không hỗ trợ định dạng volume: {source}")
+
+    volume = np.asarray(volume, dtype=np.float32)
+    if volume.ndim == 2:
+        return _normalize_array_to_rgb(volume)
+    if volume.ndim > 3:
+        volume = np.squeeze(volume)
+    if volume.ndim == 2:
+        return _normalize_array_to_rgb(volume)
+    if volume.ndim != 3:
+        return _normalize_array_to_rgb(volume)
+
+    tiles = _volume_to_rgb_slices(volume)
+    tile_width = max(tile.width for tile in tiles)
+    tile_height = max(tile.height for tile in tiles)
+    tile_count = len(tiles)
+    columns = 3 if tile_count > 4 else 2 if tile_count > 1 else 1
+    rows = (tile_count + columns - 1) // columns
+    montage = Image.new("RGB", (columns * tile_width, rows * tile_height), (0, 0, 0))
+    for index, tile in enumerate(tiles):
+        row = index // columns
+        column = index % columns
+        x = column * tile_width + (tile_width - tile.width) // 2
+        y = row * tile_height + (tile_height - tile.height) // 2
+        montage.paste(tile, (x, y))
+    return montage
+
+
+def _volume_to_rgb_slices(volume: np.ndarray) -> list[Image.Image]:
+    data = np.asarray(volume, dtype=np.float32)
+    if data.ndim > 3:
+        data = np.squeeze(data)
+    if data.ndim == 2:
+        return [_normalize_array_to_rgb(data)]
+    if data.ndim != 3:
+        return [_normalize_array_to_rgb(data)]
+    slice_axis = int(np.argmin(data.shape))
+    if slice_axis != 0:
+        data = np.moveaxis(data, slice_axis, 0)
+    return [_normalize_array_to_rgb(data[index]) for index in range(data.shape[0])]
+
+
+def _load_dicom_image(source: Path) -> Image.Image:
+    return _load_dicom_slice(source)
+
+
+def load_medical_volume_slices(source_path: str | Path) -> list[Image.Image]:
+    source = Path(source_path)
+    if source.is_dir():
+        volume = _load_dicom_series_volume(source)
+    else:
+        suffix = _medical_upload_suffix(source)
+        if suffix in {".nii", ".nii.gz"}:
+            volume = _load_nifti_volume(source)
+        elif suffix in {".mha", ".mhd"}:
+            volume = _load_mha_volume(source)
+        elif suffix == ".dcm":
+            return [_load_dicom_slice(source)]
+        else:
+            return []
+    return _volume_to_rgb_slices(volume)
+
+
+def is_medical_volume_source(path: str | Path) -> bool:
+    source = Path(path)
+    if source.is_dir():
+        return True
+    return _medical_upload_suffix(source) in {".dcm", ".nii", ".nii.gz", ".mha", ".mhd"}
+
+
+def _load_dicom_with_window(source: Path) -> Image.Image:
+    try:
+        import numpy as np
+        import pydicom
+        ds = pydicom.dcmread(str(source), force=True)
+        arr = ds.pixel_array.astype(np.float32)
+        intercept = float(getattr(ds, "RescaleIntercept", 0))
+        slope = float(getattr(ds, "RescaleSlope", 1))
+        arr = arr * slope + intercept
+        wc = getattr(ds, "WindowCenter", None)
+        ww = getattr(ds, "WindowWidth", None)
+        if wc is not None and ww is not None:
+            wc = float(wc) if isinstance(wc, (int, float)) else float(wc[0])
+            ww = float(ww) if isinstance(ww, (int, float)) else float(ww[0])
+            low = wc - ww / 2
+            high = wc + ww / 2
+            arr = np.clip((arr - low) / (high - low) * 255.0, 0, 255)
+        else:
+            arr_min, arr_max = float(arr.min()), float(arr.max())
+            if arr_max > arr_min:
+                arr = (arr - arr_min) / (arr_max - arr_min) * 255.0
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+        if arr.ndim == 2:
+            return Image.fromarray(arr, mode="L").convert("RGB")
+        return Image.fromarray(arr).convert("RGB")
+    except Exception:
+        with Image.open(source) as image:
+            return image.convert("RGB")
+
+
+def load_medical_source_image(source_path: str | Path) -> Image.Image:
+    source = Path(source_path)
+    if _medical_upload_suffix(source) in {".mp4", ".avi", ".mov", ".mkv"}:
+        capture = cv2.VideoCapture(str(source))
+        try:
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            if frame_count > 1:
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_count // 2)
+            ok, frame = capture.read()
+        finally:
+            capture.release()
+        if not ok or frame is None:
+            raise ValueError(f"Không đọc được khung hình từ video: {source}")
+        # Khung giữa chỉ dùng để tạo preview; pipeline suy luận lấy mẫu nhiều khung riêng.
+        return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    if is_medical_volume_source(source):
+        return _load_medical_volume_image(source)
+    if source.suffix.lower() == ".dcm":
+        return _load_dicom_with_window(source)
+    with Image.open(source) as image:
+        normalized = ImageOps.exif_transpose(image)
+        if normalized.mode not in {"RGB", "L"}:
+            if "A" in normalized.getbands():
+                canvas = Image.new("RGBA", normalized.size, (0, 0, 0, 0))
+                canvas.alpha_composite(normalized.convert("RGBA"))
+                normalized = canvas.convert("RGB")
+            else:
+                normalized = normalized.convert("RGB")
+        else:
+            normalized = normalized.convert("RGB")
+        return normalized.copy()
+
+
+def sample_medical_video_frames(
+    source_path: str | Path,
+    *,
+    max_frames: int = 12,
+) -> list[tuple[int, float, np.ndarray]]:
+    if max_frames <= 0:
+        raise ValueError("max_frames phải lớn hơn 0.")
+    source = Path(source_path)
+    capture = cv2.VideoCapture(str(source))
+    if not capture.isOpened():
+        raise ValueError(f"Không mở được video: {source}")
+    try:
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = float(capture.get(cv2.CAP_PROP_FPS))
+        if frame_count > 0:
+            indices = sorted(set(np.linspace(0, frame_count - 1, min(max_frames, frame_count), dtype=int).tolist()))
+            frames: list[tuple[int, float, np.ndarray]] = []
+            for index in indices:
+                capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+                ok, frame = capture.read()
+                if ok and frame is not None:
+                    frames.append((index, index / fps if fps > 0 else 0.0, frame))
+        else:
+            # shortcut: video không khai báo frame count chỉ lấy N frame đầu; nâng cấp nếu gặp stream dài.
+            frames = []
+            index = 0
+            while len(frames) < max_frames:
+                ok, frame = capture.read()
+                if not ok or frame is None:
+                    break
+                frames.append((index, index / fps if fps > 0 else 0.0, frame))
+                index += 1
+    finally:
+        capture.release()
+    if not frames:
+        raise ValueError(f"Không đọc được khung hình từ video: {source}")
+    return frames
+
+
+def normalize_uploaded_image(
+    source_path: str | Path,
+    target_dir: str | Path,
+    *,
+    image_size: int = 320,
+) -> Path:
+    source = Path(source_path)
+    if not is_supported_medical_upload_path(source):
+        raise ValueError(f"Không hỗ trợ file upload: {source}")
+    destination_dir = Path(target_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    normalized = load_medical_source_image(source)
+    normalized.thumbnail((image_size, image_size))
+    background = Image.new("RGB", (image_size, image_size), (0, 0, 0))
+    offset = ((image_size - normalized.width) // 2, (image_size - normalized.height) // 2)
+    background.paste(normalized, offset)
+    target_path = destination_dir / f"{source.stem}_{build_artifact_stamp()}.jpg"
+    background.save(target_path, format="JPEG", quality=95)
+    return target_path

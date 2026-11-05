@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from medical.reporting import (
+    _pdf_report_html,
+    update_case_report_case_id,
+    write_case_report,
+)
+
+
+class MedicalReportingTests(unittest.TestCase):
+    def test_write_case_report_uses_unique_filenames(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            payload = {
+                "case_id": None,
+                "risk_level": "low",
+                "suspected_malignant": False,
+                "model_name": "best.pt",
+                "source_image": "source.jpg",
+                "processed_image": "overlay.jpg",
+                "recommendation": "Theo doi",
+                "quality_warnings": [],
+                "detections": [],
+            }
+
+            first_json, first_md, _ = write_case_report(temp_dir, payload)
+            second_json, second_md, _ = write_case_report(temp_dir, payload)
+
+        self.assertNotEqual(first_json.name, second_json.name)
+        self.assertNotEqual(first_md.name, second_md.name)
+
+    def test_update_case_report_case_id_rewrites_json_and_markdown(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            payload = {
+                "case_id": None,
+                "risk_level": "medium",
+                "suspected_malignant": True,
+                "model_name": "best.pt",
+                "source_image": "source.jpg",
+                "processed_image": "overlay.jpg",
+                "recommendation": "Tai kham",
+                "quality_warnings": ["Anh mo"],
+                "detections": [{"label": "lesion", "confidence": 0.6, "bbox": [1, 2, 3, 4]}],
+            }
+            report_json, report_md, _ = write_case_report(Path(temp_dir), payload)
+
+            update_case_report_case_id(report_json, report_md, case_id=17)
+
+            synced_payload = json.loads(report_json.read_text(encoding="utf-8"))
+            markdown = report_md.read_text(encoding="utf-8")
+
+        self.assertEqual(synced_payload["case_id"], 17)
+        self.assertIn("Case ID: 17", markdown)
+
+    def test_write_case_report_creates_html_summary_with_overlay(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            payload = {
+                "case_id": 12,
+                "risk_level": "high",
+                "suspected_malignant": True,
+                "model_name": "best.pt",
+                "source_image": "source.jpg",
+                "processed_image": "overlay.jpg",
+                "recommendation": "Cần khám chuyên khoa",
+                "quality_warnings": ["Anh mo"],
+                "detections": [{"label": "lesion", "confidence": 0.92, "bbox": [1, 2, 3, 4]}],
+            }
+
+            report_json, _report_md, _ = write_case_report(Path(temp_dir), payload)
+            report_html = report_json.with_suffix(".html")
+
+            self.assertTrue(report_html.exists())
+            html_text = report_html.read_text(encoding="utf-8")
+            self.assertIn("OncoVision", html_text)
+            self.assertIn("Case Report", html_text)
+            self.assertIn("overlay.jpg", html_text)
+
+    def test_pdf_summary_is_vietnamese_and_marks_reviewed_results(self) -> None:
+        report = _pdf_report_html({
+            "case_id": 17,
+            "patient_code": "BN017",
+            "risk_level": "medium",
+            "suspected_malignant": False,
+            "clinical_assessment_available": True,
+            "model_name": "Kết quả đã được nhân viên y tế duyệt",
+            "recommendation": "Tiếp tục theo dõi.",
+            "review_status": "approved",
+            "reviewed_at": "2026-09-18 10:30",
+            "source_image": "",
+            "processed_image": "",
+            "quality_warnings": [],
+            "detections": [],
+        })
+        self.assertIn("Báo cáo kết quả phân tích hình ảnh y khoa", report)
+        self.assertIn("Đánh giá lâm sàng:</strong> Trung bình", report)
+        self.assertIn("Đã được nhân viên y tế duyệt", report)
+        self.assertIn("Tiếp tục theo dõi.", report)
+        self.assertNotIn("D:\\OncoVision", report)

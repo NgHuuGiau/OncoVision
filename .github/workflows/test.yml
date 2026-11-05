@@ -1,0 +1,137 @@
+name: Test Python Compatibility
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  test:
+    name: CI (windows-latest / Python ${{ matrix.python-version }})
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      QT_QPA_PLATFORM: offscreen
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Prepare log folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ci-logs | Out-Null
+          "CI started on $env:RUNNER_OS" | Set-Content -Path ci-logs/00-start.txt -Encoding utf8
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          $status = 0
+
+          python -m pip install --upgrade pip setuptools wheel --timeout 60 2>&1 | Tee-Object -FilePath ci-logs/01-install-pip.txt
+          if ($LASTEXITCODE -ne 0 -and $status -eq 0) { $status = $LASTEXITCODE }
+
+          python -c "from pathlib import Path; lines = Path('requirements.txt').read_text(encoding='utf-8').splitlines(); Path('ci-logs/requirements-windows.txt').write_text('\n'.join(line for line in lines if not line.lstrip().startswith('pyaudio')) + '\n', encoding='utf-8')"
+          python -m pip install --prefer-binary --timeout 60 -r ci-logs/requirements-windows.txt 2>&1 | Tee-Object -FilePath ci-logs/02-install-requirements.txt
+          if ($LASTEXITCODE -ne 0 -and $status -eq 0) { $status = $LASTEXITCODE }
+
+          python -m pip install coverage --timeout 60 2>&1 | Tee-Object -FilePath ci-logs/02b-install-coverage.txt
+          if ($LASTEXITCODE -ne 0 -and $status -eq 0) { $status = $LASTEXITCODE }
+
+          if ($status -ne 0) {
+            "Dependency installation failed with status=$status" | Tee-Object -FilePath ci-logs/02c-install-error.txt
+          }
+          exit $status
+
+      - name: Compile Python sources
+        shell: pwsh
+        run: |
+          python -m compileall . 2>&1 | Tee-Object -FilePath ci-logs/03-compileall.txt
+          exit $LASTEXITCODE
+
+      - name: Lint with Ruff
+        shell: pwsh
+        run: |
+          ruff check . --ignore E402 2>&1 | Tee-Object -FilePath ci-logs/04-ruff.txt
+          exit $LASTEXITCODE
+
+      - name: Type check with mypy
+        shell: pwsh
+        run: |
+          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py --exclude app/chat_ui --ignore-missing-imports --follow-imports=skip --allow-untyped-defs --allow-incomplete-defs --allow-untyped-calls --no-warn-return-any 2>&1 | Tee-Object -FilePath ci-logs/05-mypy-type-check.txt
+          exit $LASTEXITCODE
+
+      - name: Smoke check
+        shell: pwsh
+        run: |
+          if (Test-Path "run_smoke.py") {
+            python run_smoke.py --ci-safe --stop-on-fail 2>&1 | Tee-Object -FilePath ci-logs/07-smoke-check.txt
+            exit $LASTEXITCODE
+          } else {
+            "Skipped: run_smoke.py not found" | Tee-Object -FilePath ci-logs/07-smoke-check.txt
+            exit 0
+          }
+
+      - name: Run unit tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -p "test_*.py" -v 2>&1 | Tee-Object -FilePath ci-logs/08-unit-tests.txt
+          exit $LASTEXITCODE
+
+      - name: Create CI summary
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ci-logs | Out-Null
+          @"
+          # Windows CI Summary
+
+          Neu co step mau do, mo truc tiep step do trong tab Actions de xem log day du.
+          Ban sao log cung duoc upload thanh artifact ben duoi.
+          "@ | Set-Content -Path ci-logs/00-ci-summary.md -Encoding utf8
+          Get-Content ci-logs/00-ci-summary.md
+          Get-Content ci-logs/00-ci-summary.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-windows-${{ matrix.python-version }}-${{ github.sha }}
+          path: ci-logs
+          retention-days: 7
+          compression-level: 6
+          if-no-files-found: warn

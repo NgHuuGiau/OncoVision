@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <script>const savedTheme=localStorage.getItem('theme')||'system';document.documentElement.dataset.theme=savedTheme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):savedTheme;</script>
+  <link rel="stylesheet" href="/static/css/auth.css">
+  <script defer src="/static/js/auth-theme.js"></script>
+  <title>Quản lý tài khoản · OncoVision</title>
+</head>
+<body class="auth-page">
+<button class="theme-toggle" type="button" onclick="toggleAuthTheme()" aria-label="Chuyển đổi giao diện sáng/tối">◐ Giao diện</button>
+<main class="auth-shell admin-shell">
+  <header class="admin-header">
+    <div><h1>Quản lý tài khoản</h1><p class="muted">Đăng nhập: {{ current_user.username }} · admin</p></div>
+    <nav class="admin-nav"><a href="/">← Quay lại ứng dụng</a><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Đăng xuất</button></form></nav>
+  </header>
+  {% if notice == 'created' %}<div class="auth-notice" role="status">Đã tạo tài khoản.</div>
+  {% elif notice == 'updated' %}<div class="auth-notice" role="status">Đã cập nhật tài khoản.</div>{% endif %}
+  {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+  <section class="panel">
+    <h2>Tạo tài khoản</h2>
+    <form class="admin-grid" method="post" action="/admin/users/create" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Tên đăng nhập<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required></label>
+      <label>Email khôi phục<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+      <label>Mật khẩu<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
+      <label>Vai trò<select name="role"><option value="clinician">Nhân viên y tế</option><option value="viewer">Người dùng chỉ xem</option><option value="admin">Quản trị viên</option></select></label>
+      <button type="submit">Tạo tài khoản</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Tài khoản hiện có</h2>
+    <p class="admin-hint">Cập nhật email đã xác minh cho từng tài khoản. Mã khôi phục chỉ được gửi tới đúng email đã lưu và không hiển thị trong trang quản trị.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Tên đăng nhập</th><th>Email khôi phục</th><th>Vai trò / trạng thái</th><th>Ngày tạo</th><th>Cập nhật</th></tr></thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <td>{{ user.username }}{% if user.id == current_user.id %} <span class="muted">(bạn)</span>{% endif %}</td>
+          <td>{{ user.email or 'Chưa thiết lập' }}</td>
+          <td>
+            <form class="row-form" method="post" action="/admin/users/{{ user.id }}/update">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <select name="role" aria-label="Vai trò của {{ user.username }}">
+                <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                <option value="clinician" {% if user.role == 'clinician' %}selected{% endif %}>Nhân viên y tế</option>
+                <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>Người dùng chỉ xem</option>
+              </select>
+              <select name="is_active" aria-label="Trạng thái của {{ user.username }}">
+                <option value="1" {% if user.is_active %}selected{% endif %}>Đang hoạt động</option>
+                <option value="0" {% if not user.is_active %}selected{% endif %}>Đã khóa</option>
+              </select>
+              <input name="email" type="email" maxlength="254" value="{{ user.email or '' }}" placeholder="Email khôi phục" aria-label="Email khôi phục của {{ user.username }}">
+              <button type="submit">Lưu</button>
+            </form>
+          </td>
+          <td>{{ user.created_at }}</td><td><span class="status {% if not user.is_active %}off{% endif %}">{% if user.is_active %}Hoạt động{% else %}Đã khóa{% endif %}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5">Chưa có tài khoản.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+</main>
+</body>
+</html>

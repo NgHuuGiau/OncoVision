@@ -1,0 +1,253 @@
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, cast
+
+from app.chat_ui.paths import get_chat_capture_dir
+from core.hardware_info import detect_hardware
+from core.model_catalog import YOLO11_MODELS_ASC
+from core.runtime_advisor import optimized_runtime
+from medical.status_helpers import count_files
+from medical.system_status import (
+    get_medical_system_status,
+    recommended_medical_commands,
+)
+from utils.camera_probe import probe_camera
+from utils.camera_utils import open_camera_capture
+from utils.doctor_helpers import (
+    medical_status_color,
+    print_medical_status,
+    print_recommended_commands,
+)
+from utils.entrypoint_checks import medical_config_issues, runtime_config_issues
+from utils.entrypoint_common import run_entrypoint
+from utils.file_utils import ensure_project_directories
+from utils.terminal_ui import (
+    CYAN,
+    GREEN,
+    RED,
+    YELLOW,
+    header,
+    line,
+    row,
+    rule,
+    section,
+)
+
+YOLO11_MODELS = YOLO11_MODELS_ASC
+PRETRAINED_DIR = Path("models/pretrained")
+ICONS_DIR = Path("assets/icons")
+ICON_WARNING_THRESHOLD = 10
+ICON_AUTOFIX_THRESHOLD = 5
+RUNTIME_RECOMMENDATION_MODES = (
+    ("Cao nhất", "high"),
+    ("Trung bình", "medium"),
+    ("Yếu", "low"),
+)
+
+
+@dataclass
+class CameraProbeResult:
+    level: str
+    summary: str
+    detail: str
+
+    @property
+    def color(self) -> str:
+        return {"PASS": GREEN, "WARN": YELLOW, "ERROR": RED}.get(self.level, CYAN)
+def _present_and_missing_models(model_dir: Path = PRETRAINED_DIR) -> tuple[list[str], list[str]]:
+    present = [name for name in YOLO11_MODELS if (model_dir / name).exists()]
+    missing = [name for name in YOLO11_MODELS if name not in present]
+    return present, missing
+
+
+def _runtime_recommendations(hardware) -> dict[str, object]:
+    return {
+        label: optimized_runtime(mode, hardware)
+        for label, mode in RUNTIME_RECOMMENDATION_MODES
+    }
+
+
+_open_camera_capture = open_camera_capture
+
+
+def _probe_camera(index: int = 0) -> CameraProbeResult:
+    result = probe_camera(
+        index=index,
+        attempts=3,
+        unavailable_detail="Lý do không chạy  Webcam không sẵn sàng, đang bị app khác chiếm hoặc chưa cắm.",
+        open_camera_capture_fn=_open_camera_capture,
+    )
+    return CameraProbeResult(level=result.level, summary=result.summary, detail=result.detail)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Kiểm tra sức khỏe toàn hệ thống cho dự án OncoVision.")
+    parser.add_argument("--camera-index", type=int, default=0, help="Camera index để kiểm tra webcam thật.")
+    parser.add_argument(
+        "--skip-camera-check",
+        action="store_true",
+        help="Bỏ qua bước kiểm tra camera thật.",
+    )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Tự động sửa các lỗi cơ bản như thiếu icon.",
+    )
+    return parser.parse_args()
+
+
+def _run_autofix() -> None:
+    print(line(rule("-"), CYAN))
+    print(section("AUTO-FIX", YELLOW))
+    icon_ok = ICONS_DIR.is_dir() and sum(1 for _ in ICONS_DIR.iterdir()) >= ICON_AUTOFIX_THRESHOLD
+    if not icon_ok:
+        print(row("Icons", "Đang tạo bộ icon mặc định...", YELLOW))
+        from utils.icons import create_default_icons
+
+        ICONS_DIR.mkdir(parents=True, exist_ok=True)
+        create_default_icons()
+    print(row("Trạng thái", "Đã chạy xong Auto-fix!", GREEN))
+
+
+def _print_camera_probe(camera_probe: CameraProbeResult) -> None:
+    print(line(rule("-"), CYAN))
+    print(section("CAMERA THẬT", camera_probe.color))
+    print(row("Trạng thái", camera_probe.summary.split("|", 1)[-1].strip(), camera_probe.color, bounded=False))
+    print(
+        row(
+            "Chi tiết",
+            camera_probe.detail.replace("Chi tiết          ", "").replace("Lý do không chạy  ", ""),
+            camera_probe.color,
+            bounded=False,
+        )
+    )
+
+
+def _print_recommendations(recommendations: dict[str, object]) -> None:
+    print(line(rule("-"), CYAN))
+    print(section("GỢI Ý CHẠY THEO MÁY", GREEN))
+    for label, runtime in recommendations.items():
+        runtime_obj = cast(Any, runtime)
+        value = f"{runtime_obj.primary_model_name} / {runtime_obj.resolved_device} / imgsz {runtime_obj.imgsz}"
+        color = GREEN if runtime_obj.primary_model_name != "yolo11n.pt" else YELLOW
+        print(row(label, value, color, bounded=False))
+
+
+def _print_config_health() -> None:
+    issues = runtime_config_issues() + medical_config_issues()
+    print(line(rule("-"), CYAN))
+    print(section("CẤU HÌNH", GREEN if not issues else YELLOW))
+    if not issues:
+        print(row("Runtime config", "Hợp lệ", GREEN, bounded=False))
+    else:
+        print(row("Runtime config", "Cần kiểm tra", YELLOW, bounded=False))
+        for issue in issues:
+            print(row("Vấn đề", issue, RED, bounded=False))
+
+
+def main() -> int:
+    args = parse_args()
+    ensure_project_directories()
+    exit_code = 0
+
+    if args.fix:
+        _run_autofix()
+
+    hardware = detect_hardware()
+    present_models, missing_models = _present_and_missing_models()
+    chat_capture_dir = get_chat_capture_dir(ensure_exists=False)
+    icon_count = count_files(ICONS_DIR)
+    chat_capture_count = count_files(chat_capture_dir)
+    medical_status = get_medical_system_status()
+    camera_probe = None if args.skip_camera_check else _probe_camera(args.camera_index)
+    recommendations = _runtime_recommendations(hardware)
+
+    for item in header("OncoVision DOCTOR :: KIỂM TRA TOÀN HỆ THỐNG"):
+        print(item)
+
+    print(section("PHẦN CỨNG", GREEN if hardware.cuda_available else YELLOW))
+    print(row("CPU", hardware.cpu_name, GREEN))
+    print(row("RAM / OS", f"{hardware.ram_gb:.1f} GB / {hardware.os_name}", GREEN))
+    print(row("GPU", hardware.gpu_name, GREEN if hardware.gpu_hardware_available else YELLOW))
+    print(row("VRAM / GPU", f"{hardware.vram_gb:.1f} GB / {hardware.gpu_count}", GREEN if hardware.gpu_hardware_available else YELLOW))
+    print(row("PyTorch", hardware.torch_version, GREEN if hardware.torch_version != "Không có PyTorch" else RED, bounded=False))
+    print(row("CUDA", hardware.cuda_runtime_reason, GREEN if hardware.cuda_available else YELLOW, bounded=False))
+
+    if camera_probe is not None:
+        _print_camera_probe(camera_probe)
+
+    print(line(rule("-"), CYAN))
+    icons_ok = icon_count >= ICON_WARNING_THRESHOLD
+    print(section("GIAO DIỆN & ICONS", GREEN if icons_ok else YELLOW))
+    print(row("Icons (.svg)", f"{icon_count} file trong assets/icons", GREEN if icons_ok else RED, bounded=False))
+    if not icons_ok:
+        print(row("Cảnh báo", "Thiếu icon sẽ làm giao diện bị đen trắng.", RED, bounded=False))
+
+    print(line(rule("-"), CYAN))
+    print(section("MODEL YOLO11", GREEN if not missing_models else YELLOW))
+    print(row("Đã có", ", ".join(present_models) if present_models else "Chưa có model nào", GREEN if present_models else RED, bounded=False))
+    if missing_models:
+        print(row("Thiếu", ", ".join(missing_models), RED, bounded=False))
+    else:
+        print(row("Trạng thái", "Đã có đủ 5 model YOLO11.", GREEN, bounded=False))
+
+    _print_recommendations(recommendations)
+
+    print(line(rule("-"), CYAN))
+    print_medical_status(medical_status)
+    _print_config_health()
+
+    print(line(rule("-"), CYAN))
+    print(section("OUTPUT", GREEN))
+    print(row("Chat captures", f"{chat_capture_dir} ({chat_capture_count} file)", CYAN, bounded=False))
+
+    print(line(rule("-"), CYAN))
+    issues: list[str] = []
+    if not present_models:
+        issues.append("Chưa có model local")
+    if medical_status.model_ready is False:
+        issues.append("Model medical chưa sẵn sàng")
+    if icon_count < ICON_WARNING_THRESHOLD:
+        issues.append("Thiếu icon UI")
+    if camera_probe is not None and camera_probe.level != "PASS":
+        issues.append("Camera chưa sẵn sàng")
+    if issues:
+        exit_code = 1
+        print(section("KẾT LUẬN", YELLOW))
+        for issue in issues:
+            print(row("⚠", issue, RED, bounded=False))
+    else:
+        complete = (
+            getattr(medical_status, "all_targets_ready", False)
+            and medical_status.localization_ready
+            and medical_status.volume_ready
+            and medical_status.clinical_validation_ready
+        )
+        print(section("KẾT LUẬN", GREEN if complete else YELLOW))
+        summary = (
+            "Hệ thống đã sẵn sàng."
+            if complete
+            else "Hệ thống kỹ thuật sẵn sàng cho phân loại; còn thiếu định vị 2D, model 3D hoặc kiểm định lâm sàng."
+        )
+        print(row("", summary, GREEN if complete else YELLOW, bounded=False))
+
+    if camera_probe is not None and camera_probe.level != "PASS":
+        print(row("Camera", camera_probe.detail.replace("Lý do không chạy  ", ""), YELLOW, bounded=False))
+
+    print(row("Medical", medical_status.model_message, medical_status_color(medical_status), bounded=False))
+
+    print_recommended_commands(
+        missing_models=missing_models,
+        icon_count=icon_count,
+        medical_commands=recommended_medical_commands(medical_status),
+        icon_warning_threshold=ICON_WARNING_THRESHOLD,
+    )
+    print(line(rule("="), CYAN))
+    return exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_entrypoint(main))

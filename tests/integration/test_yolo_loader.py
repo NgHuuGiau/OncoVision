@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+import unittest
+from unittest.mock import patch
+
+from core.hardware_info import HardwareInfo
+from core.model_loader import _candidate_paths, load_yolo_model
+from core.model_selector import select_runtime_config
+
+
+class YoloLoaderTests(unittest.TestCase):
+    def _runtime(self):
+        hardware = HardwareInfo(
+            cpu_name="Intel Core i7-11800H",
+            ram_gb=16.0,
+            gpu_name="NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+            vram_gb=4.0,
+            cuda_available=True,
+            os_name="Windows 11",
+            gpu_count=1,
+        )
+        return select_runtime_config("medium", hardware)
+
+    @patch("core.model_loader._candidate_paths")
+    @patch("core.model_loader.YOLO")
+    def test_load_yolo_model_tries_candidates_until_success(self, yolo_mock, candidate_paths_mock) -> None:
+        runtime = self._runtime()
+        runtime.candidate_models = ["yolo11s.pt", "yolo11n.pt"]
+        candidate_paths_mock.side_effect = [["missing-a.pt", "missing-b.pt"], ["working.pt"]]
+        yolo_mock.side_effect = [RuntimeError("missing-a"), RuntimeError("missing-b"), object()]
+
+        loaded_model, resolved_device = load_yolo_model(runtime)
+
+        self.assertEqual(loaded_model.model_name, "yolo11n.pt")
+        self.assertEqual(loaded_model.source_path, "working.pt")
+        self.assertEqual(runtime.active_model_name, "yolo11n.pt")
+        self.assertEqual(resolved_device, "cuda:0")
+
+    @patch("core.model_loader._candidate_paths", return_value=["missing.pt"])
+    @patch("core.model_loader.YOLO", side_effect=RuntimeError("boom"))
+    def test_load_yolo_model_raises_aggregated_error(self, _yolo_mock, _candidate_paths_mock) -> None:
+        runtime = self._runtime()
+        runtime.candidate_models = ["yolo11s.pt"]
+
+        with self.assertRaises(RuntimeError) as context:
+            load_yolo_model(runtime)
+
+        self.assertIn("Không thể load bất kỳ model local nào", str(context.exception))
+        self.assertIn("missing.pt: boom", str(context.exception))
+
+    @patch("core.model_loader.load_yaml_cached")
+    @patch("pathlib.Path.exists", autospec=True)
+    def test_candidate_paths_prioritize_requested_pretrained_only_for_generic_model(
+        self,
+        exists_mock,
+        load_yaml_mock,
+    ) -> None:
+        load_yaml_mock.return_value = {
+            "priority_order": [
+                "models/pretrained/yolo11s.pt",
+                "yolo11s.pt",
+                "models/trained/best.pt",
+            ]
+        }
+
+        def fake_exists(path_obj):
+            return str(path_obj).replace("\\", "/") in {
+                "models/trained/best.pt",
+                "models/pretrained/yolo11s.pt",
+            }
+
+        exists_mock.side_effect = fake_exists
+
+        candidates = _candidate_paths("yolo11s.pt")
+
+        self.assertEqual(
+            [candidate.replace("\\", "/") for candidate in candidates],
+            ["models/pretrained/yolo11s.pt"],
+        )
+
+    @patch("core.model_loader.load_yaml_cached")
+    @patch("pathlib.Path.exists", autospec=True)
+    def test_candidate_paths_include_trained_best_only_when_explicitly_requested(
+        self,
+        exists_mock,
+        load_yaml_mock,
+    ) -> None:
+        load_yaml_mock.return_value = {
+            "priority_order": [
+                "models/trained/best.pt",
+            ]
+        }
+
+        def fake_exists(path_obj):
+            return str(path_obj).replace("\\", "/") == "models/trained/best.pt"
+
+        exists_mock.side_effect = fake_exists
+
+        candidates = _candidate_paths("models/trained/best.pt")
+
+        self.assertEqual(
+            [candidate.replace("\\", "/") for candidate in candidates],
+            ["models/trained/best.pt"],
+        )
+
+    def test_candidate_paths_rejects_unsupported_model_name(self) -> None:
+        self.assertEqual(_candidate_paths("unsupported-model.pt"), [])
+
+    @patch("core.model_loader._candidate_paths", return_value=[])
+    def test_load_yolo_model_reports_missing_local_model(self, _candidate_paths_mock) -> None:
+        runtime = self._runtime()
+        runtime.candidate_models = ["yolo11s.pt"]
+
+        with self.assertRaises(RuntimeError) as context:
+            load_yolo_model(runtime)
+
+        self.assertIn("tìm thấy", str(context.exception).lower())

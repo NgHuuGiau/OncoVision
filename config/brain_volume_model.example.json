@@ -1,0 +1,28 @@
+{
+  "task": "volume_multitask",
+  "target": "brain",
+  "class_labels": [
+    "glioma",
+    "meningioma",
+    "pituitary",
+    "no_tumor"
+  ],
+  "input_modalities": [
+    "t1",
+    "t1ce",
+    "t2",
+    "flair"
+  ],
+  "segmentation_labels": [
+    "tumor_core",
+    "whole_tumor",
+    "enhancing_tumor"
+  ],
+  "segmentation_activation": "sigmoid",
+  "input_shape": [
+    128,
+    128,
+    128
+  ],
+  "mask_threshold": 0.5
+}

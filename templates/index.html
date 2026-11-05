@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>OncoVision AI Workstation</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script>const savedTheme=localStorage.getItem('theme')||'system';document.documentElement.classList.toggle('light',savedTheme==='light'||(savedTheme==='system'&&matchMedia('(prefers-color-scheme: light)').matches));</script>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body data-role="{{ current_user.role }}">
+
+{% if current_user.role != 'admin' %}
+<header class="workflow-header">
+  <div><strong>OncoVision AI</strong><span>· {% if current_user.role == 'clinician' %}Khu vực nhân viên y tế{% else %}Tra cứu kết quả{% endif %}</span></div>
+  <div class="workflow-actions">
+    <button type="button" class="theme-btn" onclick="toggleAuthTheme()">◐ Giao diện sáng/tối</button>
+    <span>{{ current_user.username }}</span>
+    <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="workflow-secondary">Đăng xuất</button></form>
+  </div>
+</header>
+{% if current_user.role == 'clinician' %}
+<main class="workflow-page">
+  <h1>Duyệt kết quả phân tích</h1>
+  <p class="workflow-lead">Chỉ các ca được quản trị viên phân công cho bạn mới xuất hiện. Kiểm tra kết quả AI, chỉnh sửa nhận định và khuyến nghị, sau đó xác nhận duyệt.</p>
+  <div class="workflow-grid">
+    <section class="workflow-panel"><h2>Ca được giao</h2><div id="workflowCaseList" class="workflow-case-list"><p>Đang tải danh sách ca…</p></div></section>
+    <section class="workflow-panel" id="workflowDetail"><h2>Thông tin ca</h2><p class="workflow-muted">Chọn một ca để kiểm tra.</p></section>
+  </div>
+</main>
+{% else %}
+<main class="workflow-page public-reader">
+  <h1>Kết quả của tôi</h1>
+  <p class="workflow-lead">Các kết quả đã được admin duyệt và gán cho tài khoản của bạn. Xem khuyến nghị và tải PDF bên dưới.</p>
+  <section class="workflow-panel"><h2>Ca của tôi</h2><div id="myCaseList" class="workflow-case-list"><p>Đang tải danh sách…</p></div></section>
+  <h1>Tra cứu bằng mã</h1>
+  <p class="workflow-lead">Nhập mã tra cứu do nhân viên y tế cung cấp. Chỉ kết quả đã duyệt mới có thể xem hoặc tải xuống.</p>
+  <form id="publicCaseSearch" class="public-search-form">
+    <label for="publicCaseCode">Mã tra cứu</label>
+    <div><input id="publicCaseCode" name="code" maxlength="10" minlength="10" pattern="[A-Za-z0-9]{10}" autocomplete="off" required><button type="submit">Tra cứu</button></div>
+    <p id="publicCaseError" class="workflow-error" role="alert" hidden></p>
+  </form>
+  <section id="publicCaseResult" class="workflow-panel" hidden aria-live="polite"></section>
+  <p class="workflow-disclaimer">Kết quả AI chỉ mang tính hỗ trợ sàng lọc, không thay thế chẩn đoán hoặc tư vấn của bác sĩ.</p>
+</main>
+{% endif %}
+{% endif %}
+
+{% if current_user.role == 'admin' %}
+<header class="app-header">
+  <div class="header-left">
+    <div class="header-logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+    </div>
+    <div class="header-title-group">
+      <h1>OncoVision AI™</h1>
+      <p>Phân tích ảnh y khoa</p>
+    </div>
+  </div>
+  
+  <div class="header-center">
+    <div class="system-pulse">
+      <span class="pulse-dot"></span>
+      <span id="medicalStatus">Khởi tạo hệ thống...</span>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <button type="button" class="theme-btn-header" id="themeToggleBtn" onclick="toggleTheme()" title="Chuyển giao diện sáng/tối">◑ Giao diện</button>
+  </div>
+</header>
+
+<div class="app-container">
+  
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-action-bar">
+      <button class="new-chat-btn" onclick="newChat()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Ca chẩn đoán mới</span>
+      </button>
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Tìm ca bệnh/bệnh nhân..." oninput="filterHistory()">
+      </div>
+    </div>
+    <div class="history-section">
+      <div class="history-title">Hồ Sơ Ca Lâm Sàng</div>
+      <div class="history-panel" id="historyPanel"></div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="settings-btn" onclick="openCaseAssignment()" style="margin-bottom:8px"><span>Phân công ca bệnh</span></button>
+      <button class="settings-btn" onclick="openCompare()" style="margin-bottom:8px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="12" rx="1"/></svg>
+        <span>So sánh ca bệnh</span>
+      </button>
+      <button class="settings-btn" onclick="openSettings()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Cấu hình hệ thống</span>
+      </button>
+      {% if current_user.role == 'admin' %}
+      <a class="settings-btn" href="/admin/users" style="text-decoration:none;margin-top:8px">Quản lý tài khoản</a>
+      {% endif %}
+      <div style="padding:10px 8px;color:var(--text-muted);font-size:12px">{{ current_user.username }} · {% if current_user.role == 'admin' %}Quản trị viên{% elif current_user.role == 'clinician' %}Nhân viên y tế{% else %}Người dùng chỉ xem{% endif %}</div>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="settings-btn" type="submit">Đăng xuất</button>
+      </form>
+    </div>
+  </aside>
+
+  <main class="medical-viewer">
+    <div class="viewer-header">
+      <button class="toggle-sidebar-btn" onclick="toggleSidebar()" title="Thu gọn thanh bên" id="sidebarToggle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="viewer-controls">
+        <div class="control-group">
+          <label for="targetSelect">1. Nhóm phân tích</label>
+          <select id="targetSelect"></select>
+        </div>
+        <div class="control-group">
+          <label for="modalitySelect">Modality khai báo</label>
+          <select id="modalitySelect"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="pacs-screen" id="pacsScreen">
+      <div class="pacs-screen-overlay-topleft">
+        MÃ CA: <span id="pacsPatientCode">CHƯA CÓ</span>
+      </div>
+      <div class="pacs-screen-overlay-topright">
+        NGÀY TẢI: <span id="pacsDate">-</span>
+      </div>
+
+      <div class="empty-dropzone" id="emptyDropzone">
+        <div class="dropzone-radar">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--accent)">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+        </div>
+        <h3>2. Tải ảnh của ca bệnh</h3>
+        {% if current_user.role == 'viewer' %}
+        <p>Chọn một ca bệnh trong danh sách bên trái để xem ảnh và báo cáo.</p>
+        {% else %}
+        <p>Kéo thả ảnh vào đây hoặc chọn tệp để bắt đầu. Bạn có thể xem lại ảnh trước khi gửi phân tích.</p>
+        <button class="upload-trigger-btn" onclick="pickImage()">Chọn ảnh</button>
+        {% endif %}
+      </div>
+
+      <div class="pacs-active-image-container" id="pacsImageContainer" style="display:none">
+        <div class="pacs-crosshair"></div>
+        <img class="pacs-active-image" id="pacsActiveImage" src="" onclick="previewImage(this.src)" alt="Phim chụp y khoa">
+        <div class="pacs-action-overlay">
+          <button class="pacs-btn" onclick="triggerAIScreening()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Phân tích ảnh
+          </button>
+          <button class="pacs-btn" onclick="pickImage()">
+            Đổi phim chụp
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="viewer-footer">
+      <div class="hints-row">
+        <span id="targetHint"></span>
+        <span id="modalityHint"></span>
+      </div>
+      <div>AI hỗ trợ sàng lọc; kết quả cần được chuyên gia đánh giá.</div>
+    </div>
+  </main>
+
+  <section class="ai-assistant">
+    <div class="assistant-header">
+      <h2>Trợ Lý Lâm Sàng AI</h2>
+      <span class="status-indicator" id="modeBadge">Y Khoa</span>
+    </div>
+
+    <div class="messages-area" id="messagesArea">
+      <div class="greeting-card" id="greetingCard">
+        <h3>Hệ Thống Trợ Lý Chẩn Đoán</h3>
+        <p>Xin chào! Hãy tải phim chụp lên bảng điều khiển trung tâm hoặc đặt câu hỏi y khoa dưới đây để nhận hỗ trợ sàng lọc tự động.</p>
+      </div>
+
+      <div id="messagesContainer"></div>
+    </div>
+
+    <div class="recording-panel" id="recordingPanel">
+      <div class="wave"><span></span><span></span><span></span></div>
+      <span class="recording-label">Thiết bị ghi âm đang lắng nghe...</span>
+    </div>
+
+    <div class="viewer-readonly-notice">Tài khoản của bạn đang ở chế độ chỉ xem. Liên hệ quản trị viên nếu cần quyền phân tích ảnh.</div>
+    <div class="composer">
+      <div class="presets-container">
+        <span class="preset-badge" onclick="fillPrompt('Phân tích bất thường trong phim chụp y khoa này')">Phân tích bất thường</span>
+        <span class="preset-badge" onclick="fillPrompt('Hãy lập báo cáo y khoa chi tiết cho ca bệnh này')">Lập báo cáo ca bệnh</span>
+        <span class="preset-badge" onclick="fillPrompt('Đề xuất hướng chẩn đoán phân biệt dựa trên kết quả chụp')">Gợi ý chẩn đoán</span>
+      </div>
+
+      <div class="image-preview-area hidden" id="imagePreviewArea"></div>
+      
+      <div class="composer-row">
+        <button class="composer-btn plus-btn" onclick="togglePlusMenu(event)" title="Đính kèm tài liệu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <textarea class="composer-input" id="messageInput" placeholder="Nhập câu hỏi lâm sàng tại đây..." rows="1" oninput="autoResize(this)"></textarea>
+        <button class="composer-btn mic-btn" onclick="toggleVoice()" title="Nhập giọng nói">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button class="composer-btn send-btn" onclick="sendMessage()" title="Gửi yêu cầu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" color="#fff"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="disclaimer">Kết quả phân tích từ AI chỉ mang tính tham khảo hỗ trợ, vui lòng xác chẩn với bác sĩ chuyên khoa lâm sàng.</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeSettings()">✕</button>
+    <h2>Cấu hình hệ thống</h2>
+    <div class="modal-section">
+      <label>Ngôn ngữ (Language)</label>
+      <div class="desc">Chọn ngôn ngữ hiển thị giao diện chính.</div>
+      <select id="langSetting" onchange="applyLanguage(this.value)">
+        <option value="vi">Tiếng Việt</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="plus-menu" id="plusMenu" style="display:none"></div>
+
+<div class="modal-overlay" id="caseAssignmentModal">
+  <div class="modal" style="max-width:900px">
+    <button class="modal-close" onclick="closeCaseAssignment()" aria-label="Đóng">✕</button>
+    <h2>Phân công ca bệnh</h2>
+    <p class="workflow-muted">Chọn nhân viên y tế phụ trách. Chuyển người phụ trách sẽ đưa kết quả về trạng thái chờ duyệt và thu hồi mã tra cứu cũ.</p>
+    <div id="assignmentCaseList" class="workflow-case-list"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="imagePreviewModal" style="display:none">
+  <div class="modal" style="min-width:auto;max-width:90vw;text-align:center;padding:16px">
+    <button class="modal-close" onclick="closeImagePreview()">✕</button>
+    <img id="previewFullImg" style="max-width:100%;max-height:80vh;border-radius:8px;border:1px solid rgba(255,255,255,0.1)" src="" alt="Xem trước ảnh">
+  </div>
+</div>
+
+<div class="modal-overlay" id="compareModal">
+  <div class="modal" style="max-width:900px">
+    <button class="modal-close" onclick="document.getElementById('compareModal').classList.remove('active')">✕</button>
+    <h2>⇄ So sánh ca bệnh</h2>
+    <div id="comparePickView">
+      <p style="font-size:12px;color:var(--text-muted)">Chọn 2 ca bệnh để so sánh song song.</p>
+      <div class="case-pick-list" id="casePickList"></div>
+      <div style="margin-top:12px;text-align:center">
+        <button class="result-btn" id="compareGoBtn" onclick="renderCompare()" disabled style="display:inline-block;min-width:220px">So sánh 2 ca đã chọn</button>
+      </div>
+    </div>
+    <div id="compareResultView" style="display:none"></div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  const _nativeFetch = window.fetch.bind(window);
+  window.fetch = (url, options = {}) => {
+    const headers = new Headers(options.headers || {});
+    const method = (options.method || 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      headers.set('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]').content);
+    }
+    return _nativeFetch(url, { ...options, headers }).then(response => {
+      if (response.status === 401 && response.headers.get('X-Login-Required') === 'true') location.assign('/login');
+      return response;
+    });
+  };
+  window.CANCER_TARGETS = {{ cancer_targets|safe }};
+  window.USER_ROLE = "{{ current_user.role }}";
+</script>
+{% if current_user.role == 'admin' %}<script src="/static/js/app.js"></script>{% else %}<script src="/static/js/auth-theme.js"></script>{% endif %}
+<script src="/static/js/case-workflow.js"></script>
+</body>
+</html>

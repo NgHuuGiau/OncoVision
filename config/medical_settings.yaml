@@ -1,0 +1,112 @@
+﻿medical:
+  # Ưu tiên models/pretrained/cancers/<key>/<modality>/{classifier.pt,detector.pt,volume.pt2,volume.json}.
+  target_model_root: models/pretrained/cancers
+  # brain_model: models/pretrained/cancers/brain/brain_classifier_from_safetensors.pt  # Đã bỏ, dùng catalog models
+  # modality_model: models/pretrained/modality_classifier.pt  # Đã bỏ, dùng catalog models
+  # Model YOLO detect/segment y khoa; nếu bỏ dòng này, hệ thống tự tìm brain_detector.pt.
+  # yolo_model_path: models/pretrained/brain_detector.pt  # Đã bỏ, dùng catalog models
+  volume_model_path: models/pretrained/brain_volume_model.pt2
+  volume_manifest_path: models/pretrained/brain_volume_model.json
+  # Chỉ trỏ tới báo cáo đã được đơn vị lâm sàng độc lập phê duyệt và khớp hash model.
+  clinical_validation_report:
+  max_volume_voxels: 256000000
+  allow_fallback_model: false
+  # Demo mode: TẮT vì đã có model thực tế
+  demo_mode: false
+
+  output_root: output/medical
+  reports_dir: output/medical/reports
+  processed_dir: output/medical/normalized_images
+  overlay_dir: output/medical/processed_images
+
+  image_size: 640
+  video_sample_frames: 12
+  cnn_image_size: 224
+  cnn_tta: true
+  analyze_topk: 3
+  conf_threshold: 0.25
+  classify_high_risk_threshold: 0.35
+  classify_medium_risk_threshold: 0.25
+  certainty_threshold: 0.3
+  validation_min_confidence: 0.9
+  validation_allowed_extensions:
+    - .jpg
+    - .jpeg
+    - .png
+    - .bmp
+    - .webp
+    - .tif
+    - .tiff
+    - .dcm
+    - .nii
+    - .nii.gz
+    - .mha
+    - .mhd
+    - .mp4
+    - .avi
+    - .mov
+    - .mkv
+
+  modality_tuning:
+    default:
+      certainty_threshold: 0.55
+      medium_threshold: 0.45
+      quality_threshold: 0.45
+      contrast_boost: 1.0
+      normalize: default
+    ct:
+      certainty_threshold: 0.5
+      medium_threshold: 0.4
+      quality_threshold: 0.4
+      contrast_boost: 1.0
+      normalize: ct
+    mri:
+      certainty_threshold: 0.5
+      medium_threshold: 0.4
+      quality_threshold: 0.4
+      contrast_boost: 1.0
+      normalize: mri
+    xray:
+      certainty_threshold: 0.55
+      medium_threshold: 0.45
+      quality_threshold: 0.45
+      contrast_boost: 1.1
+      normalize: xray
+    mammogram:
+      certainty_threshold: 0.62
+      medium_threshold: 0.5
+      quality_threshold: 0.55
+      contrast_boost: 1.2
+      normalize: mammogram
+    endoscopy:
+      certainty_threshold: 0.58
+      medium_threshold: 0.46
+      quality_threshold: 0.48
+      contrast_boost: 1.1
+      normalize: endoscopy
+    eus:
+      certainty_threshold: 0.64
+      medium_threshold: 0.52
+      quality_threshold: 0.55
+      contrast_boost: 1.2
+      normalize: eus
+    pet_ct:
+      certainty_threshold: 0.6
+      medium_threshold: 0.48
+      quality_threshold: 0.5
+      contrast_boost: 1.1
+      normalize: pet_ct
+    ultrasound:
+      certainty_threshold: 0.68
+      medium_threshold: 0.55
+      quality_threshold: 0.6
+      contrast_boost: 1.3
+      normalize: ultrasound
+
+  advanced:
+    enable_segmentation_roi: false
+    segmentation_roi_margin: 12
+    enable_mc_dropout: false
+    mc_dropout_samples: 20
+    enable_advanced_preprocessing: false
+

@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QColor, QPalette
+
+from app.chat_ui.icons import themed_icon
+from app.chat_ui.theme_styles import DARK_STYLESHEET, LIGHT_STYLESHEET
+from app.chat_ui.widgets import ChatBubble
+
+
+def icon_color(window) -> str:
+    return "#ECECF1" if window.effective_theme == "dark" else "#111827"
+
+
+def subtle_icon_color(window) -> str:
+    return "#AAB0BC" if window.effective_theme == "dark" else "#6B7280"
+
+
+def apply_theme_assets(window) -> None:
+    strong = icon_color(window)
+    window.sidebar_toggle_button.setIcon(themed_icon("sidebar_app.svg", strong, 20))
+    window.sidebar_collapsed_button.setIcon(themed_icon("sidebar_app.svg", strong, 18))
+    window.new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 22))
+    window.settings_button.setIcon(themed_icon("settings.svg", strong, 22))
+    if hasattr(window, "compact_new_chat_button"):
+        window.compact_new_chat_button.setIcon(themed_icon("new_chat.svg", strong, 18))
+    if hasattr(window, "compact_search_button"):
+        window.compact_search_button.setIcon(themed_icon("search.svg", strong, 18))
+    if hasattr(window, "compact_settings_button"):
+        window.compact_settings_button.setIcon(themed_icon("settings.svg", strong, 18))
+    window.plus_button.setIcon(themed_icon("plus.svg", strong, 18))
+    window.plus_button.setIconSize(QSize(18, 18))
+    window.micro_button.setIcon(themed_icon("mic.svg", strong, 18))
+    window.micro_button.setIconSize(QSize(18, 18))
+    # Send button has #1a56db background in both modes; icon must always be high-contrast white
+    window.send_button.setIcon(themed_icon("send.svg", "#ffffff", 18))
+    window.send_button.setIconSize(QSize(18, 18))
+    window.message_input.apply_visual_style(dark_mode=window.effective_theme == "dark")
+    if hasattr(window, "search_input"):
+        dark = window.effective_theme == "dark"
+        text_c = "#e3e3e3" if dark else "#111827"
+        subtle_c = "#94a3b8" if dark else "#64748b"
+        palette = window.search_input.palette()
+        palette.setColor(QPalette.Text, QColor(text_c))
+        palette.setColor(QPalette.PlaceholderText, QColor(subtle_c))
+        window.search_input.setPalette(palette)
+    window.recording_panel.setup_styles()
+    refresh_topbar_buttons(window)
+    refresh_empty_state_theme(window)
+    for i in range(window.messages_layout.count()):
+        item = window.messages_layout.itemAt(i)
+        widget = item.widget()
+        if isinstance(widget, ChatBubble):
+            widget.refresh_theme(window.effective_theme)
+
+
+def refresh_topbar_buttons(window) -> None:
+    dark_mode = window.effective_theme == "dark"
+    active = window.theme_mode
+    palette = {
+        "base": "#0f172a" if dark_mode else "#ffffff",
+        "border": "rgba(255, 255, 255, 0.08)" if dark_mode else "#e2e8f0",
+        "text": "#f8fafc" if dark_mode else "#0f172a",
+        "selected_bg": "rgba(26, 86, 219, 0.22)" if dark_mode else "#e9edf7",
+        "selected_text": "#f8fbff" if dark_mode else "#1a56db",
+        "selected_border": "#1a56db",
+    }
+    for button, mode in ((window.light_mode_button, "light"), (window.dark_mode_button, "dark")):
+        is_active = active == mode
+        button.setStyleSheet(
+            f"background: {palette['selected_bg'] if is_active else palette['base']};"
+            f"color: {palette['selected_text'] if is_active else palette['text']};"
+            f"border: 1px solid {palette['selected_border'] if is_active else palette['border']};"
+            "border-radius: 14px; font-size: 14px; font-weight: 600; padding: 0 16px;"
+        )
+    window.desktop_button.setStyleSheet(
+        f"background: {palette['base']}; color: {palette['text']}; border: 1px solid {palette['border']};"
+        "border-radius: 14px; font-size: 14px; font-weight: 600; padding: 0 16px;"
+    )
+
+
+def refresh_empty_state_theme(window) -> None:
+    if hasattr(window, "robot_mark"):
+        window.robot_mark.setObjectName("EmptyRobot")
+        window.robot_mark.setStyleSheet("")
+        window.robot_mark.style().unpolish(window.robot_mark)
+        window.robot_mark.style().polish(window.robot_mark)
+    if hasattr(window, "empty_title"):
+        window.empty_title.setObjectName("EmptyTitle")
+        window.empty_title.setStyleSheet("")
+        window.empty_title.style().unpolish(window.empty_title)
+        window.empty_title.style().polish(window.empty_title)
+
+
+def apply_light_theme(window, app) -> None:
+    window.effective_theme = "light"
+    if app:
+        app.setStyleSheet(LIGHT_STYLESHEET)
+    apply_theme_assets(window)
+    window.refresh_history()
+
+
+def apply_dark_theme(window, app) -> None:
+    window.effective_theme = "dark"
+    if app:
+        app.setStyleSheet(DARK_STYLESHEET)
+    apply_theme_assets(window)
+    window.refresh_history()
+
+
+def runtime_badge_text(window) -> str:
+    parts = ["Hệ thống"]
+    mode_label = str(window.mode_label or "").strip()
+    if mode_label and mode_label.lower() not in {"desktop", "ui"}:
+        parts.append(mode_label)
+    model_label = Path(str(window.model_label)).name if window.model_label else ""
+    if model_label:
+        parts.append(model_label)
+    return "  ".join(parts)
+
+
+

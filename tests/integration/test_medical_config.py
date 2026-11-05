@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+import unittest
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
+
+from medical.pipeline import (
+    build_default_medical_analyzer_config,
+    validate_medical_analyzer_config,
+)
+
+
+class MedicalConfigTests(unittest.TestCase):
+    @patch(
+        "medical.pipeline.load_yaml",
+        return_value={
+            "medical": {
+                "model": "models/trained/best.pt",
+                "fallback_model": "yolo11n.pt",
+                "allow_fallback_model": False,
+                "image_size": 512,
+                "conf_threshold": 0.3,
+                "classify_high_risk_threshold": 0.8,
+                "classify_medium_risk_threshold": 0.5,
+                "certainty_threshold": 0.6,
+                "modality_tuning": {
+                    "default": {
+                        "certainty_threshold": 0.52,
+                        "medium_threshold": 0.44,
+                        "quality_threshold": 0.43,
+                    },
+                    "ultrasound": {
+                        "certainty_threshold": 0.76,
+                        "medium_threshold": 0.52,
+                        "quality_threshold": 0.58,
+                    },
+                },
+                "output_root": "output/medical-x",
+                "reports_dir": "output/medical-x/reports",
+                "processed_dir": "output/medical-x/normalized",
+                "overlay_dir": "output/medical-x/overlay",
+            }
+        },
+    )
+    def test_build_default_medical_analyzer_config_uses_yaml_settings(self, _load_yaml_mock) -> None:
+        config = build_default_medical_analyzer_config()
+
+        self.assertEqual(config.image_size, 512)
+        self.assertAlmostEqual(config.conf_threshold, 0.3)
+        self.assertAlmostEqual(config.classify_high_risk_threshold, 0.8)
+        self.assertAlmostEqual(config.classify_medium_risk_threshold, 0.5)
+        self.assertAlmostEqual(config.certainty_threshold, 0.6)
+        self.assertEqual(config.modality_tuning["default"]["certainty_threshold"], 0.52)
+        self.assertEqual(config.modality_tuning["ultrasound"]["quality_threshold"], 0.58)
+        self.assertEqual(config.working_dir, Path("output/medical-x"))
+        self.assertEqual(config.reports_dir, Path("output/medical-x/reports"))
+        self.assertEqual(config.fallback_model_path, Path("yolo11n.pt"))
+        self.assertFalse(config.allow_fallback_model)
+
+    @patch("medical.pipeline.load_yaml", return_value={"medical": {"volume_model_path": "models/pretrained/brain_volume_model.pt2"}})
+    def test_volume_config_falls_back_to_legacy_torchscript_file(self, _load_yaml_mock) -> None:
+        legacy_path = Path("models/pretrained/brain_volume_model.pt")
+        with patch.object(Path, "is_file", autospec=True, side_effect=lambda path: path == legacy_path):
+            config = build_default_medical_analyzer_config()
+
+        self.assertEqual(config.volume_model_path, legacy_path)
+
+    def test_validate_medical_analyzer_config_accepts_valid_config(self) -> None:
+        config = build_default_medical_analyzer_config()
+        self.assertEqual(validate_medical_analyzer_config(config), [])
+
+    def test_validate_medical_analyzer_config_reports_invalid_thresholds(self) -> None:
+        config = build_default_medical_analyzer_config()
+        broken = replace(
+            config,
+            image_size=0,
+            conf_threshold=1.2,
+            classify_medium_risk_threshold=0.9,
+            classify_high_risk_threshold=0.1,
+        )
+        issues = validate_medical_analyzer_config(broken)
+        self.assertTrue(any("image_size" in item for item in issues))
+        self.assertTrue(any("conf_threshold" in item for item in issues))
+        self.assertTrue(any("ngưỡng nguy cơ" in item for item in issues))

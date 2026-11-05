@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import argparse
+
+from app.camera_runtime.bootstrap import resolve_start_bundle
+from app.camera_runtime.cli import build_camera_arg_parser
+from app.camera_runtime.launching import run_camera_launch_flow
+from core.hardware_info import detect_hardware
+from core.runtime_advisor import build_recommendations
+from core.runtime_prompt import prompt_runtime_mode
+from utils.console_ui import BootProgress, print_runtime_dashboard
+from utils.entrypoint_common import run_entrypoint
+
+
+def parse_args() -> argparse.Namespace:
+    parser = build_camera_arg_parser("Chạy OncoVision thời gian thực với camera desktop.")
+    parser.add_argument(
+        "--advisor-only",
+        action="store_true",
+        help="Chỉ in khuyến nghị runtime, không mở camera.",
+    )
+    return parser.parse_args()
+def run_camera_session(*, runtime, camera_index: int) -> None:
+    from core.camera_runner import run_camera_session as _run_camera_session
+
+    _run_camera_session(runtime=runtime, camera_index=camera_index)
+
+
+def run_runtime_advisor(print_fn=print) -> int:
+    hardware = detect_hardware()
+    recommendations = build_recommendations(hardware)
+    print_fn("OncoVision runtime advisor")
+    for label, runtime in recommendations.items():
+        print_fn(
+            f"- {label}: model={runtime.primary_model_name}, device={runtime.resolved_device}, "
+            f"imgsz={runtime.imgsz}, max_det={runtime.max_det}"
+        )
+    return 0
+
+
+def main() -> int:
+    args = parse_args()
+    if getattr(args, "advisor_only", False):
+        return run_runtime_advisor()
+
+    try:
+        start_options = resolve_start_bundle(
+            requested_mode=args.mode,
+            requested_model=args.model,
+            requested_target="camera",
+            preferred_target="camera",
+            prompt_runtime_mode_fn=prompt_runtime_mode,
+        )
+    except Exception as exc:
+        print(f"Lỗi khởi tạo runtime: {exc}")
+        return 1
+    try:
+        return run_camera_launch_flow(
+            dashboard_title="OncoVision Camera Realtime",
+            runtime=start_options.runtime,
+            hardware=start_options.hardware,
+            camera_index=args.camera_index,
+            launch_target="camera",
+            print_runtime_dashboard_fn=print_runtime_dashboard,
+            run_camera_session_fn=run_camera_session,
+            boot_progress_cls=BootProgress,
+        )
+    except Exception as exc:
+        print(f"Lỗi khi chạy camera: {exc}")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_entrypoint(main))

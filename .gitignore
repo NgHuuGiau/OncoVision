@@ -1,0 +1,74 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE / editor
+.idea/
+.vscode/
+*.code-workspace
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Logs / temporary
+*.log
+*.tmp
+*.bak
+tmp*/
+tmp-ds/
+tmp*.db
+mydatabase.db
+data/*.db
+
+# Runtime output
+output/
+runs/
+
+# Cache files
+*.cache
+.cache/
+
+# Local model files (chỉ giữ .gitkeep)
+models/pretrained/**
+models/trained/**
+models/exported/**
+!models/**/.gitkeep
+
+# Model binaries và artifact training (không commit)
+*.pt
+*checkpoint*.pt
+*manifest.json
+output/medical/
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Large binary files (safety)
+*.bin
+*.safetensors
+
+# Nested repo (do not touch)
+HieraChain/
+
+# Dataset archive (large binary, không commit)
+medical_7_cancers.zip
