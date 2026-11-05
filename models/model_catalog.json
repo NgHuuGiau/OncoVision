@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "note": "Catalog chỉ nhận model đã khớp runtime và có test phù hợp. Hiện chưa có ứng viên đủ điều kiện; chạy --all sẽ không tải model nào.",
+  "entries": []
+}
