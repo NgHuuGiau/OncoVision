@@ -63,20 +63,22 @@ EXPECTED_MODELS = {
 }
 
 def check_yolo(path, label):
-    if not os.path.exists(path):
+    full_path = BASE / path
+    if not os.path.exists(full_path):
         return f"  [MISSING] {label}: NOT FOUND"
     try:
-        m = YOLO(path)
+        m = YOLO(full_path)
         return f"  [OK] {label}: {m.task} | {len(m.names)} classes: {list(m.names.values())}"
     except Exception as e:
         return f"  [FAIL] {label}: LOAD FAILED - {e}"
 
 def check_classifier(path, label):
-    if not os.path.exists(path):
+    full_path = BASE / path
+    if not os.path.exists(full_path):
         return f"  [MISSING] {label}: NOT FOUND"
     try:
         import torch
-        ckpt = torch.load(path, map_location='cpu', weights_only=False)
+        ckpt = torch.load(full_path, map_location='cpu', weights_only=False)
         if isinstance(ckpt, dict) and 'class_labels' in ckpt:
             return f"  [OK] {label}: {len(ckpt['class_labels'])} classes - {ckpt.get('backbone', 'unknown')}"
         else:
@@ -85,9 +87,10 @@ def check_classifier(path, label):
         return f"  [FAIL] {label}: LOAD FAILED - {e}"
 
 def check_volume(path, label):
-    if not os.path.exists(path):
+    full_path = BASE / path
+    if not os.path.exists(full_path):
         return f"  [MISSING] {label}: NOT FOUND"
-    json_path = Path(path).with_suffix('.json')
+    json_path = full_path.with_suffix('.json')
     if json_path.exists():
         return f"  [OK] {label}: volume.pt + volume.json"
     return f"  [WARN] {label}: volume.pt found but MISSING volume.json"

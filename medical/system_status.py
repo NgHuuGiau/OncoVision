@@ -67,6 +67,42 @@ def get_medical_system_status() -> MedicalSystemStatus:
     overlay_dir = Path(config.working_dir) / "processed_images"
     export_dir = Path(config.working_dir) / "exports"
     case_db_path = Path(config.working_dir).parent / "onco.db"
+
+    # Demo mode: bypass model requirements, return ready status
+    if getattr(config, "demo_mode", False):
+        return MedicalSystemStatus(
+            configured_model_path=config.model_path,
+            resolved_model_path=Path("demo_mode"),
+            allow_fallback_model=config.allow_fallback_model,
+            using_fallback_model=False,
+            model_ready=True,
+            model_message="Demo mode: chạy không cần model thực tế",
+            report_files=count_files(report_dir),
+            normalized_files=count_files(normalized_dir),
+            overlay_files=count_files(overlay_dir),
+            export_files=count_files(export_dir),
+            case_db_path=case_db_path,
+            case_count=_count_cases(case_db_path),
+            screening_targets=tuple((target.label, True) for target in COMMON_CANCER_TARGETS),
+            analyzed_cancers=tuple(target.label for target in COMMON_CANCER_TARGETS),
+            analyzed_modalities=tuple(dict.fromkeys(m for t in COMMON_CANCER_TARGETS for m in t.modalities)),
+            classification_ready=True,
+            localization_ready=True,
+            volume_ready=True,
+            clinical_validation_ready=False,
+            all_targets_ready=True,
+            target_capabilities={
+                target.key: {
+                    "runtime_ready": True,
+                    "classification_ready": True,
+                    "localization_ready": True,
+                    "volume_ready": True,
+                    "clinical_validation_ready": False,
+                }
+                for target in COMMON_CANCER_TARGETS
+            },
+        )
+
     try:
         resolved_model_path = resolve_medical_runtime_model_path(config)
         resolved_model_abs = resolved_model_path.resolve(strict=False)

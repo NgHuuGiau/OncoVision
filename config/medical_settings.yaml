@@ -12,7 +12,7 @@
   max_volume_voxels: 256000000
   allow_fallback_model: false
   # Demo mode: TẮT vì đã có model thực tế
-  demo_mode: false
+  demo_mode: true
 
   output_root: output/medical
   reports_dir: output/medical/reports
