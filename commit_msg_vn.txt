@@ -1,0 +1,11 @@
+feat: OncoVision - Medical AI Inference Platform
+
+- Web app (FastAPI) + Desktop chat (PySide6)
+- Medical pipeline: DICOM/NIfTI/JPG/PNG -> Validate -> CNN/YOLO/3D -> Reports
+- 11 nhom ung thu catalog voi modality routing
+- Demo mode support de test khong can model
+- 391 tests (unit + integration)
+- Role-based auth (admin/clinician/viewer) voi CSRF protection
+- Fixed: demo_mode duoc respect trong system_status
+
+Files cleaned: xoa 70+ debug/test temp files

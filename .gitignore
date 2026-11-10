@@ -72,3 +72,4 @@ HieraChain/
 
 # Dataset archive (large binary, không commit)
 medical_7_cancers.zip
+tests/manual/  
