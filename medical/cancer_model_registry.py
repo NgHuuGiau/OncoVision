@@ -138,7 +138,7 @@ def modality_key(value: str | None) -> str | None:
 def target_model_paths(key: str, base: Path = CANCERS_DIR, modality: str | None = None) -> dict[str, Path]:
     """Tra duong dan model, khoa theo modality khi modality da duoc biet.
     
-    Neu modality khong duoc chi dinh, se tim kiem trong tat ca modality subdirectories.
+    Neu modality khong duoc chi dinh, tra ve organ root directory.
     """
     normalized = key.strip().lower()
     target_directory = Path(base) / KEY_TO_DIR.get(normalized, normalized)
@@ -147,31 +147,23 @@ def target_model_paths(key: str, base: Path = CANCERS_DIR, modality: str | None 
     
     # Neu modality duoc chi dinh, chi tim trong modality subdirectory do
     if modality_dir_key:
-        directory = modality_directory
-        return _build_model_paths(directory, normalized, target_directory)
+        # Chi tra ve modality directory neu no ton tai, nguoc lai tra ve modality directory (khong ton tai)
+        if modality_directory.exists():
+            directory = modality_directory
+            return _build_model_paths(directory, normalized, target_directory, allow_fallback=False)
+        else:
+            # Modality khong ton tai - tra ve modality directory (khong ton tai), KHONG fallback ve root
+            return _build_model_paths(modality_directory, normalized, target_directory, allow_fallback=False)
     
-    # Neu modality khong chi dinh, tim kiem trong tat ca modality subdirectories
-    # uu tien modality subdirectory co model, fallback ve root
-    modality_dirs = [d for d in target_directory.iterdir() if d.is_dir() and not d.name.startswith('.')]
-    if modality_dirs:
-        # Tim modality dau tien co model classifier hoac detector
-        for mod_dir in modality_dirs:
-            classifier_path = mod_dir / "classifier.pt"
-            detector_path = mod_dir / "detector.pt"
-            if classifier_path.is_file() or detector_path.is_file():
-                return _build_model_paths(mod_dir, normalized, target_directory)
-        # Neu khong tim thay, dung modality dau tien
-        return _build_model_paths(modality_dirs[0], normalized, target_directory)
-    
-    # Fallback ve root directory
-    return _build_model_paths(target_directory, normalized, target_directory)
+    # Neu modality khong chi dinh, tra ve organ root directory
+    return _build_model_paths(target_directory, normalized, target_directory, allow_fallback=True)
 
 
-def _build_model_paths(directory: Path, normalized: str, target_directory: Path) -> dict[str, Path]:
+def _build_model_paths(directory: Path, normalized: str, target_directory: Path, allow_fallback: bool = False) -> dict[str, Path]:
     """Xay dung dict cac duong dan model tu mot directory cho truoc."""
     classifier_path = directory / "classifier.pt"
-    if not classifier_path.is_file():
-        # Check root target directory for fallback
+    if not classifier_path.is_file() and allow_fallback:
+        # Check root target directory for fallback (only when modality not explicitly specified)
         if (target_directory / "classifier.pt").is_file():
             classifier_path = target_directory / "classifier.pt"
         elif (target_directory / f"{normalized}_classifier.pt").is_file():
@@ -222,12 +214,8 @@ def find_cancer_model(key: str, base: Path = CANCERS_DIR) -> dict:
         return {"key": normalized, "dir": str(d), "kind": "missing", "files": [], "artifact_ready": False,
                 "runtime_ready": False, "classification_ready": False, "localization_ready": False,
                 "volume_ready": False, "clinical_validation_ready": False, "note": "Chưa có thư mục model cho nhóm này."}
-    # Collect all model files in target directory and modality subdirectories
+    # Collect all model files in the selected modality directory only
     files = [p for p in d.rglob("*") if p.is_file() and p.suffix.lower() in _KIND_BY_SUFFIX]
-    # Also include files in target_directory modality subdirectories
-    for mod_dir in target_directory.iterdir():
-        if mod_dir.is_dir():
-            files.extend(p for p in mod_dir.rglob("*") if p.is_file() and p.suffix.lower() in _KIND_BY_SUFFIX)
     # Classifier candidates: check root, modality subdirs, and target_directory
     classifier_candidates = [p for p in files if p.name in {"classifier.pt", f"{normalized}_classifier.pt"}]
     # Also check for wrapped models (any *_wrapped.pt)

@@ -365,6 +365,7 @@ class MedicalImageAnalyzer:
         self._detector_backend = detector_backend
         self._injected_detector_backend = detector_backend is not None
         self._detector_backend_path: Path | None = None
+        self._invalid_detector_paths: set[Path] = set()
         self._classifier_model: MedicalClassifierModel | None = None
         self._classifier_model_path: Path | None = None
         self._dicom_modality_cache: dict[Path, str | None] = {}
@@ -1316,11 +1317,17 @@ class MedicalImageAnalyzer:
             and self._detector_backend_path != detector_path
         ):
             self._detector_backend = None
-        if self._detector_backend is not None or (detector_path is not None and Path(detector_path).is_file()):
+        detector_file = detector_path is not None and Path(detector_path).is_file()
+        if detector_file and Path(detector_path) in self._invalid_detector_paths:
+            detector_file = False
+        if self._detector_backend is not None or detector_file:
             yolo_detections = self._detect_with_backend(image)
-            if cnn_wrapper is not None and yolo_detections:
-                return self._ensemble_detections(image, yolo_detections, body_region=body_region)
-            return yolo_detections
+            if yolo_detections:
+                if cnn_wrapper is not None:
+                    return self._ensemble_detections(image, yolo_detections, body_region=body_region)
+                return yolo_detections
+            if cnn_wrapper is None:
+                return yolo_detections
         if cnn_wrapper is not None:
             cnn_predictions = cnn_wrapper.predict(image, top_k=max(1, self.config.analyze_topk), tta=self.config.cnn_tta)
             return [
@@ -1342,10 +1349,15 @@ class MedicalImageAnalyzer:
             for item in classifier_predictions
         ]
 
-    def _detect_with_backend(self, image: np.ndarray) -> list[DetectionFinding]:
+    def _detect_with_backend(self, image: np.ndarray) -> list[DetectionFinding] | None:
         backend = self._detector_backend
         if backend is None:
             backend = self._load_default_backend()
+            if backend is None:
+                detector_path = self._active_detector_path()
+                if detector_path is not None:
+                    self._invalid_detector_paths.add(Path(detector_path))
+                return None
             self._detector_backend = backend
         results = backend.predict(
             source=image,
@@ -1693,7 +1705,7 @@ class MedicalImageAnalyzer:
             logger.warning("[ModalityCNN] Không dự đoán được modality", exc_info=True)
             return None
 
-    def _load_default_backend(self) -> DetectorBackend:
+    def _load_default_backend(self) -> DetectorBackend | None:
         detector_path = self._active_detector_path()
         if detector_path and detector_path.is_file():
             try:
@@ -1704,12 +1716,10 @@ class MedicalImageAnalyzer:
                 self._detector_backend_path = detector_path
                 return backend
             except Exception as exc:
-                raise RuntimeError(
-                    f"Không thể nạp model định vị {detector_path}: {exc}"
-                ) from exc
-        raise RuntimeError(
-            "Chưa có model định vị YOLO detect/segment cho nhóm ung thư đã chọn."
-        )
+                # Detector hỏng/sai loại không nên làm sập cả ca: bỏ định vị, dùng classifier.
+                logger.warning("Bỏ qua detector không dùng được %s: %s", detector_path, exc)
+                return None
+        return None
 
     def _active_detector_path(self) -> Path | None:
         if self._active_target_key is not None:

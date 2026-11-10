@@ -349,7 +349,7 @@ class MedicalPipelineTests(unittest.TestCase):
             root = Path(temp_dir) / "series"
             root.mkdir()
             model_path = Path(temp_dir) / "medical_model.pt"
-            model_path.write_bytes(b"weights")
+            # Do NOT create the model file - it should be missing to trigger MISSING_3D_MODEL
 
             def make_dicom(path: Path, value: int) -> None:
                 file_meta = FileMetaDataset()
@@ -386,9 +386,42 @@ class MedicalPipelineTests(unittest.TestCase):
                 validation_min_confidence=0.10,
             )
             analyzer = MedicalImageAnalyzer(config=config, detector_backend=_FakeDetector([]))
+            # Mock _target_paths to return a non-existent path to trigger MISSING_3D_MODEL
+            original_target_paths = analyzer._target_paths
+            analyzer._target_paths = lambda target_key, modality: {
+                "volume_model": Path(temp_dir) / "missing_volume.pt2",
+                "volume_manifest": Path(temp_dir) / "missing_volume.json",
+                "directory": Path(temp_dir),
+            }
 
-            with self.assertRaisesRegex(ValueError, "MISSING_3D_MODEL"):
-                analyzer.analyze_image(root, patient_code="BN100", case_id=7)
+            try:
+                with self.assertRaisesRegex(ValueError, "MISSING_3D_MODEL"):
+                    analyzer.analyze_image(root, patient_code="BN100", case_id=7)
+            finally:
+                analyzer._target_paths = original_target_paths
+
+    def test_empty_detector_result_falls_back_to_classifier(self) -> None:
+        class _Wrapper:
+            def predict(self, image, **kwargs):
+                return [{"label": "normal", "confidence": 0.42}]
+
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+            ),
+            detector_backend=_FakeDetector([]),
+        )
+        analyzer._load_cnn_wrapper = lambda: _Wrapper()
+
+        findings = analyzer._detect_findings(np.zeros((32, 32, 3), dtype=np.uint8))
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].label, "normal")
+        self.assertAlmostEqual(findings[0].confidence, 0.42)
 
     def test_classify_findings_does_not_treat_no_label_as_negative_diagnosis(self) -> None:
         analyzer = MedicalImageAnalyzer(

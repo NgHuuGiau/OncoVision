@@ -123,16 +123,23 @@ async def require_authenticated(request: Request) -> WebUser | None:
         if not expected_token or not secrets.compare_digest(str(provided_token or ""), str(expected_token)):
             raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")
 
-    allowed_viewer_write = request.url.path in {"/logout", "/api/settings"}
+    allowed_viewer_write = request.url.path == "/logout"
     if user.role == "viewer" and request.method not in {"GET", "HEAD", "OPTIONS"} and not allowed_viewer_write:
         raise HTTPException(status_code=403, detail="Tài khoản chỉ có quyền xem.")
     return user
 
 
+# Role hierarchy: admin > clinician > viewer
+_ROLE_HIERARCHY = {"admin": 3, "clinician": 2, "viewer": 1}
+
 def require_role(*roles: str):
     def dependency(request: Request) -> WebUser:
         user = getattr(request.state, "current_user", None)
-        if user is None or user.role not in roles:
+        if user is None:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền thực hiện thao tác này.")
+        user_level = _ROLE_HIERARCHY.get(user.role, 0)
+        required_level = min(_ROLE_HIERARCHY.get(r, 0) for r in roles)
+        if user_level < required_level:
             raise HTTPException(status_code=403, detail="Bạn không có quyền thực hiện thao tác này.")
         return user
 
@@ -245,9 +252,22 @@ def _safe_path(base: Path, path: str) -> Path | None:
     return resolved if resolved.exists() else None
 
 
+_MEDICAL_STATUS_CACHE_TTL_SECONDS = 60.0
+_medical_status_cache: tuple[float, object] | None = None
+
+
+def _cached_medical_status():
+    global _medical_status_cache
+    if _medical_status_cache is not None and time.monotonic() - _medical_status_cache[0] < _MEDICAL_STATUS_CACHE_TTL_SECONDS:
+        return _medical_status_cache[1]
+    status = get_medical_system_status()
+    _medical_status_cache = (time.monotonic(), status)
+    return status
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    medical = get_medical_system_status()
+    medical = _cached_medical_status()
     cancer_targets = [
         {
             "key": t.key,
@@ -563,12 +583,14 @@ def _has_allowed_magic(path: Path, filename: str) -> bool:
     # ponytail: sniff vài magic bytes, không thay thế validator y khoa đầy đủ
     try:
         with open(path, "rb") as f:
-            head = f.read(280)
+            head = f.read(600)
     except OSError:
         return False
     lower = filename.lower()
-    if lower.endswith((".nii", ".nii.gz")):
-        return head[:2] == b"\x1f\x8b" or len(head) > 0
+    if lower.endswith(".nii.gz"):
+        return head[:2] == b"\x1f\x8b"
+    if lower.endswith(".nii"):
+        return head[344:348] in (b"n+1\x00", b"ni1\x00")
     if lower.endswith(".dcm") or head[128:132] == b"DICM":
         return True
     img_magic = (b"\xff\xd8\xff", b"\x89PNG", b"BM", b"II*\x00", b"MM\x00*", b"RIFF", b"\x49\x49\x2b\x00")

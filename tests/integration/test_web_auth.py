@@ -10,6 +10,7 @@ from unittest.mock import patch
 from urllib.parse import unquote
 
 from fastapi.testclient import TestClient
+from unittest.mock import MagicMock
 
 import web_app
 from app.web_auth import (
@@ -19,6 +20,7 @@ from app.web_auth import (
     hash_recovery_code,
     verify_password,
 )
+from medical.chat_service import MedicalChatService
 
 
 class WebAuthTests(unittest.TestCase):
@@ -35,11 +37,21 @@ class WebAuthTests(unittest.TestCase):
             "viewer01", hash_password("ViewerPassword123!"), "viewer",
             hash_recovery_code("VIEW01"), "viewer@example.com",
         )
+        # Create mock medical service that doesn't load models
+        mock_medical_service = MagicMock(spec=MedicalChatService)
+        mock_medical_service.check_ready.return_value = Path("demo_mode")
+        mock_medical_service.analyze_attachment.return_value = MagicMock(
+            reply_text="Mock analysis result",
+            attachment_path=None,
+            attachment_kind=None,
+            metadata_json="{}"
+        )
+
         for name, value in (
             ("_auth_db", self.auth_db),
             ("_db", None),
             ("_case_db", None),
-            ("_medical_service", None),
+            ("_medical_service", mock_medical_service),
             ("CHAT_HISTORY_DB_PATH", self.db_path),
         ):
             patcher = patch.object(web_app, name, value)

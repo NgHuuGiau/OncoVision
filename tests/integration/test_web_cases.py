@@ -5,14 +5,14 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 
 from fastapi.testclient import TestClient
 
 import web_app
 from app.web_auth import WebAuthDatabase, hash_password
 from medical.case_payloads import case_detections, case_localization_available
-from medical.chat_service import MedicalChatResponse
+from medical.chat_service import MedicalChatResponse, MedicalChatService
 from medical.storage import MedicalCaseDatabase
 
 
@@ -46,8 +46,19 @@ class WebCaseRoutesTests(unittest.TestCase):
                 "quality_warnings": [],
             },
         )
+        # Create mock medical service that doesn't load models
+        mock_medical_service = MagicMock(spec=MedicalChatService)
+        mock_medical_service.check_ready.return_value = Path("demo_mode")
+        mock_medical_service.analyze_attachment.return_value = MagicMock(
+            reply_text="Mock analysis result",
+            attachment_path=None,
+            attachment_kind=None,
+            metadata_json="{}"
+        )
+
         patcher_db = patch.object(web_app, "_db", None)
         patcher_case = patch.object(web_app, "_case_db", case_db)
+        patcher_medical = patch.object(web_app, "_medical_service", mock_medical_service)
         auth_db = WebAuthDatabase(db_path)
         auth_db.create_user("testadmin", hash_password("ValidAdminPass123!"), "admin")
         auth_db.create_user("clinician01", hash_password("ValidClinicianPass123!"), "clinician")
@@ -55,7 +66,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         auth_db.create_user("viewer01", hash_password("ValidViewerPassword123!"), "viewer")
         patcher_auth = patch.object(web_app, "_auth_db", auth_db)
         patcher_path = patch.object(web_app, "CHAT_HISTORY_DB_PATH", db_path)
-        for p in (patcher_db, patcher_case, patcher_auth, patcher_path):
+        for p in (patcher_db, patcher_case, patcher_medical, patcher_auth, patcher_path):
             p.start()
             self.addCleanup(p.stop)
         self.client = TestClient(web_app.app)

@@ -197,6 +197,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
         if ready_2d is not None:
             paths = ready_2d
         volume = False
+        volume_errors: list[str] = []
         for item in candidate_paths:
             if not (item["volume_model"].is_file() and item["volume_manifest"].is_file()):
                 continue
@@ -207,7 +208,10 @@ def get_medical_system_status() -> MedicalSystemStatus:
                     paths = item
                     break
             except Exception as exc:
-                target_messages.append(f"{target.label}: model 3D không hợp lệ ({exc})")
+                volume_errors.append(f"{target.label}: model 3D không hợp lệ ({exc})")
+        # Only report volume errors if no valid volume model was found
+        if not volume and volume_errors:
+            target_messages.extend(volume_errors)
 
         clinical = False
         for item in candidate_paths:

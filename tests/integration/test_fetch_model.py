@@ -8,7 +8,7 @@ from unittest.mock import patch
 from medical.cancer_model_registry import KEY_TO_DIR
 from scripts.fetch_model import main, resolve_destination
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG = REPO_ROOT / "models" / "model_catalog.json"
 
 

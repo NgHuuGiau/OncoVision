@@ -963,10 +963,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.scroll_to_bottom()
 
         def _on_medical_analysis_progress(self, stage: str, pct: float) -> None:
-            "▓" * int(pct * 20) + "░" * (20 - int(pct * 20))
-            state = self.medical_controller.get_state()
-            if state and hasattr(state, 'placeholder'):
-                self.message_input.setPlaceholderText(f"⏳ {stage}")
+            self.message_input.setPlaceholderText(f"⏳ {stage}")
             self.scroll_to_bottom()
 
         def _on_medical_analysis_finished(self) -> None:
