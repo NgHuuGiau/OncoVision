@@ -54,6 +54,25 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[str, float], None] | None
 
 
+def _sanitize_filename_part(text: str, max_len: int = 50) -> str:
+    """Sanitize text for safe use in filenames: chỉ A-Z a-z 0-9 . _ -"""
+    import re
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", text)
+    return safe[:max_len]
+
+
+def _validate_output_path(base_dir: Path, target_path: Path) -> Path:
+    """Validate that target_path is within base_dir to prevent path traversal."""
+    try:
+        base_resolved = base_dir.resolve()
+        target_resolved = target_path.resolve()
+        if not target_resolved.is_relative_to(base_resolved):
+            raise ValueError(f"Path traversal detected: {target_path} outside {base_dir}")
+    except (ValueError, OSError):
+        raise ValueError(f"Invalid path: {target_path}")
+    return target_resolved
+
+
 def _canonical_body_region_key(target_key: str) -> str | None:
     """Chuyen target_key sang body_region (hiện chỉ 'brain')."""
     return _canonical_body_region(target_key)
@@ -1976,7 +1995,9 @@ class MedicalImageAnalyzer:
             except Exception:
                 pass
         self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
-        path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}.jpg"
+        safe_code = _sanitize_filename_part(patient_code)
+        path = self.config.overlay_dir / f"{safe_code}_{build_artifact_stamp()}.jpg"
+        path = _validate_output_path(self.config.overlay_dir, path)
         cv2.imwrite(str(path), overlay)
         return path
 
@@ -1994,7 +2015,9 @@ class MedicalImageAnalyzer:
         for polygon in polygons:
             cv2.fillPoly(mask, [np.asarray(polygon, dtype=np.int32)], 255)
         self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
-        path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}_mask.png"
+        safe_code = _sanitize_filename_part(patient_code)
+        path = self.config.overlay_dir / f"{safe_code}_{build_artifact_stamp()}_mask.png"
+        path = _validate_output_path(self.config.overlay_dir, path)
         if not cv2.imwrite(str(path), mask):
             raise OSError(f"Không thể ghi segmentation mask: {path}")
         return path
@@ -2009,7 +2032,9 @@ class MedicalImageAnalyzer:
         if mask is None:
             return None
         self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
-        path = self.config.overlay_dir / f"{patient_code}_{build_artifact_stamp()}_volume_mask.npz"
+        safe_code = _sanitize_filename_part(patient_code)
+        path = self.config.overlay_dir / f"{safe_code}_{build_artifact_stamp()}_volume_mask.npz"
+        path = _validate_output_path(self.config.overlay_dir, path)
         np.savez_compressed(
             path,
             mask=np.asarray(mask, dtype=np.uint8),
@@ -2068,8 +2093,10 @@ class MedicalImageAnalyzer:
                         cv2.putText(overlay, f"{det.label} {det.confidence:.0%}", 
                                    (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 self.config.overlay_dir.mkdir(parents=True, exist_ok=True)
+                safe_code = _sanitize_filename_part(patient_code)
                 stamp = build_artifact_stamp()
-                processed_path = self.config.overlay_dir / f"{patient_code}_{stamp}_demo.jpg"
+                processed_path = self.config.overlay_dir / f"{safe_code}_{stamp}_demo.jpg"
+                processed_path = _validate_output_path(self.config.overlay_dir, processed_path)
                 cv2.imwrite(str(processed_path), overlay)
             else:
                 processed_path = normalized_path

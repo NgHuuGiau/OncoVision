@@ -14,6 +14,7 @@ from medical.clinical_validation import clinical_validation_status
 from medical.model_policy import resolve_medical_runtime_model_path
 from medical.pipeline import build_default_medical_analyzer_config
 from medical.status_helpers import count_files
+from medical.validator import _canonical_modality
 from medical.volume_inference import TorchVolumeRuntime
 
 
@@ -40,6 +41,8 @@ class MedicalSystemStatus:
     clinical_validation_ready: bool = False
     all_targets_ready: bool = False
     target_capabilities: dict[str, dict[str, bool]] = field(default_factory=dict)
+    # Per-modality capabilities: {target_key: {modality_canonical: {capability: bool}}}
+    modality_capabilities: dict[str, dict[str, dict[str, bool]]] = field(default_factory=dict)
 
 
 def _count_cases(case_db_path: Path) -> int:
@@ -134,6 +137,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
 
     target_root = Path(getattr(config, "target_model_root", "models/pretrained/cancers"))
     target_capabilities: dict[str, dict[str, bool]] = {}
+    modality_capabilities: dict[str, dict[str, dict[str, bool]]] = {}
     resolved_target_paths: dict[str, dict[str, Path]] = {}
     target_messages: list[str] = []
     for target in COMMON_CANCER_TARGETS:
@@ -230,6 +234,71 @@ def get_medical_system_status() -> MedicalSystemStatus:
             "volume_ready": volume,
             "clinical_validation_ready": clinical,
         }
+        
+        # Compute per-modality capabilities
+        modality_caps = {}
+        for modality in target.modalities:
+            modality_canonical = _canonical_modality(modality)
+            if modality_canonical is None:
+                continue
+            paths = target_model_paths(target.key, target_root, modality)
+            
+            mod_classification = False
+            mod_localization = False
+            mod_volume = False
+            mod_clinical = False
+            
+            if paths["classifier"].is_file():
+                if paths["classifier"].is_relative_to(target_root):
+                    ok, _ = probe_runtime_capability(paths["classifier"], "classifier")
+                else:
+                    ok, _ = True, ""
+                if ok:
+                    mod_classification = True
+            
+            if paths["detector"].is_file():
+                if paths["detector"].is_relative_to(target_root):
+                    ok, _ = probe_runtime_capability(paths["detector"], "detector")
+                else:
+                    ok, _ = True, ""
+                if ok:
+                    mod_localization = True
+            
+            if paths["volume_model"].is_file() and paths["volume_manifest"].is_file():
+                try:
+                    runtime = TorchVolumeRuntime(paths["volume_model"], paths["volume_manifest"], device="cpu")
+                    if runtime.manifest.target == target.key:
+                        mod_volume = True
+                except Exception:
+                    pass
+            
+            mod_clinical = False
+            for validation_model in (paths["volume_model"], paths["classifier"], paths["detector"]):
+                if not validation_model.is_file():
+                    continue
+                clinical, _ = clinical_validation_status(paths["clinical_validation"], validation_model)
+                if clinical:
+                    mod_clinical = True
+                    break
+            
+            modality_canonical = _canonical_modality(modality)
+            if modality_canonical:
+                modality_caps[modality_canonical] = {
+                    "runtime_ready": mod_classification or mod_localization or mod_volume,
+                    "classification_ready": mod_classification,
+                    "localization_ready": mod_localization,
+                    "volume_ready": mod_volume,
+                    "clinical_validation_ready": mod_clinical,
+                }
+        
+        modality_capabilities[target.key] = modality_caps
+        target_capabilities[target.key] = {
+            "runtime_ready": classification or localization or volume,
+            "classification_ready": classification,
+            "localization_ready": localization,
+            "volume_ready": volume,
+            "clinical_validation_ready": clinical,
+        }
         resolved_target_paths[target.key] = paths
 
     ready_targets = [target for target in COMMON_CANCER_TARGETS if target_capabilities[target.key]["runtime_ready"]]
@@ -276,6 +345,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
         clinical_validation_ready=clinical_ready,
         all_targets_ready=len(ready_targets) == len(COMMON_CANCER_TARGETS),
         target_capabilities=target_capabilities,
+        modality_capabilities=modality_capabilities,
     )
 
 
