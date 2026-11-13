@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "cohort_id": "",
+  "dataset_provenance": "",
+  "ground_truth_method": "",
+  "sample_size_justification": "",
+  "site_count": 0,
+  "inclusion_criteria": [],
+  "exclusion_criteria": [],
+  "approved_by": null,
+  "approved_at": null,
+  "note": "Sao chép file này và điền thông tin trước khi chạy clinical validation. Xem docs/clinical_validation_guide.md để biết chi tiết."
+}

@@ -1,0 +1,23 @@
+# Development environment configuration
+# Override values from settings.yaml for local development
+
+system:
+  auto_detect_hardware: true
+  prefer_gpu: true
+
+# Development: enable experimental features
+experimental:
+  try_higher_model:
+    enabled: true
+    model: yolo11m.pt
+    imgsz: 416
+
+# Development: more lenient thresholds for testing
+inference:
+  confidence: 0.25
+  iou: 0.40
+  display_confidence: 0.40
+
+# Development: enable debug output
+output:
+  debug_mode: true

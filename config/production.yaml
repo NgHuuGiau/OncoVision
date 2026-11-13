@@ -1,0 +1,21 @@
+# Production environment configuration
+# Override values from settings.yaml for production deployment
+
+system:
+  auto_detect_hardware: true
+  prefer_gpu: true
+
+# Production: disable experimental features
+experimental:
+  try_higher_model:
+    enabled: false
+
+# Production: stricter inference thresholds
+inference:
+  confidence: 0.40
+  iou: 0.50
+  display_confidence: 0.60
+
+# Production: disable debug output
+output:
+  debug_mode: false
