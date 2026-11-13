@@ -1153,61 +1153,137 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def open_settings(self) -> None:
             SettingsDialog(parent_window=self).exec()
 
-    from app.web_auth import WebAuthDatabase, WebUser
 
-    def _run_desktop_login() -> WebUser | None:
+from app.web_auth import WebAuthDatabase, WebUser
+from app.chat_ui.desktop_auth import (
+    needs_bootstrap,
+    create_bootstrap_admin,
+    authenticate_desktop_user,
+    change_desktop_credentials,
+)
+
+
+def _run_desktop_login() -> WebUser | None:
         """Hộp thoại đăng nhập desktop dùng chung DB web. None = hủy/thất bại."""
         from app.chat_ui.paths import CHAT_HISTORY_DB_PATH as _DB_PATH
 
         auth_db = WebAuthDatabase(_DB_PATH)
-        dialog = QDialog()
-        dialog.setWindowTitle("Đăng nhập OncoVision")
-        dialog.setMinimumWidth(320)
-        layout = QVBoxLayout(dialog)
-        info = QLabel("Đăng nhập để dùng OncoVision desktop.")
-        layout.addWidget(info)
-        if needs_bootstrap(auth_db):
-            info.setText("Chưa có tài khoản nào. Hãy tạo tài khoản admin đầu tiên.")
-        layout.addWidget(QLabel("Tên đăng nhập:"))
-        username_edit = QLineEdit()
-        layout.addWidget(username_edit)
-        layout.addWidget(QLabel("Mật khẩu:"))
-        password_edit = QLineEdit()
-        password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addWidget(password_edit)
-        error_label = QLabel("")
-        layout.addWidget(error_label)
-        login_button = QPushButton("Tạo admin" if needs_bootstrap(auth_db) else "Đăng nhập")
-        layout.addWidget(login_button)
-        chosen: dict[str, object] = {}
 
-        def _submit() -> None:
-            username = username_edit.text().strip()
-            password = password_edit.text()
+        def _login_dialog() -> WebUser | None:
+            dialog = QDialog()
+            dialog.setWindowTitle("Đăng nhập OncoVision")
+            dialog.setMinimumWidth(320)
+            layout = QVBoxLayout(dialog)
+            info = QLabel("Đăng nhập để dùng OncoVision desktop.")
+            layout.addWidget(info)
             if needs_bootstrap(auth_db):
-                if len(password) < 12:
-                    error_label.setText("Mật khẩu phải từ 12 ký tự.")
+                info.setText("Chưa có tài khoản nào. Hãy tạo tài khoản admin đầu tiên.")
+            layout.addWidget(QLabel("Tên đăng nhập:"))
+            username_edit = QLineEdit()
+            layout.addWidget(username_edit)
+            layout.addWidget(QLabel("Mật khẩu:"))
+            password_edit = QLineEdit()
+            password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            layout.addWidget(password_edit)
+            error_label = QLabel("")
+            layout.addWidget(error_label)
+            login_button = QPushButton("Tạo admin" if needs_bootstrap(auth_db) else "Đăng nhập")
+            layout.addWidget(login_button)
+            chosen: dict[str, object] = {}
+
+            def _submit() -> None:
+                username = username_edit.text().strip()
+                password = password_edit.text()
+                if needs_bootstrap(auth_db):
+                    if len(password) < 12:
+                        error_label.setText("Mật khẩu phải từ 12 ký tự.")
+                        return
+                    user = create_bootstrap_admin(auth_db, username, password)
+                    if user is None:
+                        error_label.setText("Không tạo được (tên đã tồn tại hoặc sai quy tắc).")
+                        return
+                    chosen["user"] = user
+                    dialog.accept()
                     return
-                user = create_bootstrap_admin(auth_db, username, password)
+                user = authenticate_desktop_user(auth_db, username, password)
                 if user is None:
-                    error_label.setText("Không tạo được (tên đã tồn tại hoặc sai quy tắc).")
+                    error_label.setText("Sai tên/mật khẩu hoặc tài khoản tạm khóa.")
                     return
                 chosen["user"] = user
                 dialog.accept()
-                return
-            user = authenticate_desktop_user(auth_db, username, password)
+
+            login_button.clicked.connect(_submit)
+            password_edit.returnPressed.connect(_submit)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return None
+            return chosen.get("user")
+
+        def _change_credentials_dialog(user: WebUser) -> WebUser | None:
+            """Hộp thoại đổi tên đăng nhập/mật khẩu bắt buộc."""
+            dialog = QDialog()
+            dialog.setWindowTitle("Đổi tài khoản/mật khẩu (bắt buộc)")
+            dialog.setMinimumWidth(360)
+            layout = QVBoxLayout(dialog)
+            info = QLabel(f"Lần đầu đăng nhập với tài khoản <b>{user.username}</b>.<br>Hãy đặt tài khoản và mật khẩu mới.")
+            info.setWordWrap(True)
+            layout.addWidget(info)
+            layout.addWidget(QLabel("Tài khoản mới:"))
+            new_username_edit = QLineEdit()
+            new_username_edit.setText(user.username)
+            layout.addWidget(new_username_edit)
+            layout.addWidget(QLabel("Mật khẩu mới (ít nhất 12 ký tự):"))
+            new_password_edit = QLineEdit()
+            new_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            layout.addWidget(new_password_edit)
+            layout.addWidget(QLabel("Nhập lại mật khẩu mới:"))
+            confirm_password_edit = QLineEdit()
+            confirm_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            layout.addWidget(confirm_password_edit)
+            error_label = QLabel("")
+            layout.addWidget(error_label)
+            save_button = QPushButton("Lưu thay đổi")
+            layout.addWidget(save_button)
+
+            def _submit_change() -> None:
+                new_username = new_username_edit.text().strip()
+                new_password = new_password_edit.text()
+                confirm_password = confirm_password_edit.text()
+                if new_password != confirm_password:
+                    error_label.setText("Mật khẩu nhập lại không khớp.")
+                    return
+                if not new_username:
+                    error_label.setText("Tài khoản không được để trống.")
+                    return
+                if len(new_password) < 12:
+                    error_label.setText("Mật khẩu phải từ 12 ký tự.")
+                    return
+                updated_user = change_desktop_credentials(auth_db, user.id, new_username, new_password)
+                if updated_user is None:
+                    error_label.setText("Không lưu được (tên đã tồn tại hoặc sai quy tắc).")
+                    return
+                chosen["user"] = updated_user
+                dialog.accept()
+
+            save_button.clicked.connect(_submit_change)
+            confirm_password_edit.returnPressed.connect(_submit_change)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return None
+            return chosen.get("user")
+
+        # Vòng lặp: đăng nhập -> nếu phải đổi credentials thì mở dialog đổi -> lặp lại cho đến khi xong
+        while True:
+            user = _login_dialog()
             if user is None:
-                error_label.setText("Sai tên/mật khẩu hoặc tài khoản tạm khóa.")
-                return
-            chosen["user"] = user
-            dialog.accept()
+                return None
+            if user.must_change_credentials:
+                user = _change_credentials_dialog(user)
+                if user is None:
+                    return None
+                # Sau khi đổi xong, user.must_change_credentials == False, thoát vòng lặp
+            return user
 
-        login_button.clicked.connect(_submit)
-        password_edit.returnPressed.connect(_submit)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return None
-        return chosen.get("user")
 
+def main():
     app = QApplication.instance() or QApplication(sys.argv)
     login_user = _run_desktop_login()
     if login_user is None:
@@ -1217,5 +1293,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
     window.setWindowTitle(f"{window_title} — {login_user.username} ({login_user.role})")
     window.show()
     return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
 
 

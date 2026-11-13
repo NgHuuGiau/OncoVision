@@ -44,6 +44,7 @@ class WebUser:
     role: str
     is_active: bool
     created_at: str
+    must_change_credentials: bool = False
 
 
 def hash_password(password: str) -> str:
@@ -120,7 +121,8 @@ class WebAuthDatabase:
                     email TEXT,
                     role TEXT NOT NULL CHECK (role IN ('admin', 'clinician', 'viewer')),
                     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    must_change_credentials INTEGER NOT NULL DEFAULT 0 CHECK (must_change_credentials IN (0, 1))
                 )
                 """
             )
@@ -147,7 +149,9 @@ class WebAuthDatabase:
                 conn.execute("ALTER TABLE web_users ADD COLUMN recovery_code_hash TEXT")
             if "recovery_code_expires_at" not in columns:
                 conn.execute("ALTER TABLE web_users ADD COLUMN recovery_code_expires_at REAL")
-                # Old admin-issued codes had no expiry and are invalidated by the email-based flow.
+            if "must_change_credentials" not in columns:
+                conn.execute("ALTER TABLE web_users ADD COLUMN must_change_credentials INTEGER NOT NULL DEFAULT 0 CHECK (must_change_credentials IN (0, 1))")
+            # Old admin-issued codes had no expiry and are invalidated by the email-based flow.
                 conn.execute("UPDATE web_users SET recovery_code_hash = NULL")
             conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_web_users_email "
@@ -156,12 +160,12 @@ class WebAuthDatabase:
 
     @staticmethod
     def _user(row) -> WebUser | None:
-        return WebUser(int(row[0]), row[1], row[2], row[3], bool(row[4]), row[5]) if row else None
+        return WebUser(int(row[0]), row[1], row[2], row[3], bool(row[4]), row[5], bool(row[6])) if row else None
 
     def get_user(self, user_id: int) -> WebUser | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, username, email, role, is_active, created_at FROM web_users WHERE id = ?",
+                "SELECT id, username, email, role, is_active, created_at, must_change_credentials FROM web_users WHERE id = ?",
                 (user_id,),
             ).fetchone()
         return self._user(row)
@@ -169,7 +173,7 @@ class WebAuthDatabase:
     def list_users(self) -> list[WebUser]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT id, username, email, role, is_active, created_at "
+                "SELECT id, username, email, role, is_active, created_at, must_change_credentials "
                 "FROM web_users ORDER BY username COLLATE NOCASE"
             ).fetchall()
         return [user for row in rows if (user := self._user(row)) is not None]
@@ -212,6 +216,67 @@ class WebAuthDatabase:
             if "email" in str(exc).lower():
                 raise ValueError("Email đã được dùng cho tài khoản khác.") from exc
             raise ValueError("Tên đăng nhập đã tồn tại.") from exc
+
+    def ensure_default_admin(self, *, force: bool = False) -> int | None:
+        """Tạo tài khoản admin mặc định nếu chưa có tài khoản nào.
+
+        Args:
+            force: Nếu True, tạo admin mặc định dù có rủi ro security.
+                   Nếu False (mặc định), chỉ tạo khi môi trường cho phép
+                   (development mode hoặc biến môi trường ONCOVISION_ALLOW_DEFAULT_ADMIN=1).
+
+        Mật khẩu 'adminadminad' (12 ký tự) sẽ bị ép đổi khi đăng nhập đầu tiên.
+        """
+        import os
+
+        with self._connect() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM web_users").fetchone()[0]
+            if count > 0:
+                return None
+
+        # Kiểm tra an toàn: chỉ tạo default admin trong development hoặc khi force
+        allow_default = os.environ.get("ONCOVISION_ALLOW_DEFAULT_ADMIN", "").lower() == "1"
+        is_dev = os.environ.get("ONCOVISION_ENV", "").lower() not in {"prod", "production"}
+
+        if not force and not allow_default and not is_dev:
+            logger.warning(
+                "Không tạo default admin trong production. "
+                "Hãy dùng 'python -m app.web_auth init-admin' hoặc đặt ONCOVISION_ALLOW_DEFAULT_ADMIN=1."
+            )
+            return None
+
+        if not is_dev:
+            logger.warning(
+                "Tạo default admin trong production — không an toàn. "
+                "Hãy đổi mật khẩu ngay sau khi đăng nhập lần đầu."
+            )
+
+        admin_hash = hash_password("adminadminad")  # Mật khẩu mặc định 12 ký tự
+        try:
+            with self._connect() as conn:
+                cur = conn.execute(
+                    "INSERT INTO web_users (username, password_hash, role, must_change_credentials) "
+                    "VALUES (?, ?, 'admin', 1)",
+                    ("admin", admin_hash),
+                )
+                return int(cur.lastrowid)
+        except sqlite3.IntegrityError:
+            return None
+
+    def update_credentials(self, user_id: int, new_username: str, new_password_hash: str) -> bool:
+        """Cập nhật tên đăng nhập và mật khẩu, tắt cờ must_change_credentials."""
+        new_username = new_username.strip()
+        if not _USERNAME_RE.fullmatch(new_username):
+            raise ValueError("Tên đăng nhập phải dài 3–32 ký tự, chỉ gồm chữ, số, dấu chấm, gạch ngang hoặc gạch dưới.")
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE web_users SET username = ?, password_hash = ?, must_change_credentials = 0 WHERE id = ?",
+                    (new_username, new_password_hash, user_id),
+                )
+                return True
+        except sqlite3.IntegrityError:
+            raise ValueError("Tên đăng nhập đã tồn tại.")
 
     def allow_recovery_request(
         self,
@@ -339,14 +404,14 @@ class WebAuthDatabase:
     def authenticate(self, username: str, password: str) -> WebUser | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, username, password_hash, email, role, is_active, created_at "
+                "SELECT id, username, password_hash, email, role, is_active, created_at, must_change_credentials "
                 "FROM web_users WHERE username = ? COLLATE NOCASE",
                 (username.strip(),),
             ).fetchone()
         password_ok = verify_password(password, row[2] if row else _DUMMY_PASSWORD_HASH)
         if row is None or not bool(row[5]) or not password_ok:
             return None
-        return WebUser(int(row[0]), row[1], row[3], row[4], True, row[6])
+        return WebUser(int(row[0]), row[1], row[3], row[4], True, row[6], bool(row[7]))
 
     def login_locked(self, username: str, remote_addr: str, now: float | None = None) -> bool:
         now = time.time() if now is None else now

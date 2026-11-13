@@ -41,3 +41,18 @@ def authenticate_desktop_user(
         return None
     auth_db.clear_login_failures(username, remote_addr)
     return user
+
+
+def change_desktop_credentials(
+    auth_db: WebAuthDatabase, user_id: int, new_username: str, new_password: str
+) -> WebUser | None:
+    """Đổi tên đăng nhập và mật khẩu cho desktop, tắt cờ must_change_credentials."""
+    new_username = new_username.strip()
+    if not new_username or not new_password:
+        return None
+    new_password_hash = hash_password(new_password)
+    try:
+        auth_db.update_credentials(user_id, new_username, new_password_hash)
+    except ValueError:
+        return None
+    return auth_db.get_user(user_id)

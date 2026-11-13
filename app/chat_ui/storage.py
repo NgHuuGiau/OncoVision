@@ -312,3 +312,62 @@ class ChatDatabase:
         except sqlite3.Error:
             logger.exception("Failed to search conversations for query '%s'", query)
             return []
+
+    def export_conversation(self, conv_id: int) -> dict:
+        """Export a single conversation as a dict (ready for JSON serialization).
+
+        Returns:
+            Dict with conversation metadata and messages list.
+        """
+        conv = self.get_conversation(conv_id)
+        if conv is None:
+            return {"error": f"Conversation {conv_id} not found"}
+
+        return {
+            "conversation_id": conv.id,
+            "title": conv.title,
+            "subtitle": conv.subtitle,
+            "messages": [
+                {
+                    "id": msg.id,
+                    "sender": msg.sender,
+                    "text": msg.text,
+                    "attachment_path": msg.attachment_path,
+                    "attachment_kind": msg.attachment_kind,
+                }
+                for msg in conv.messages
+            ],
+        }
+
+    def export_all_conversations(self) -> dict:
+        """Export all conversations as a dict (ready for JSON serialization).
+
+        Returns:
+            Dict with export metadata and all conversations.
+        """
+        from datetime import datetime, timezone
+
+        conversations = self.get_all_conversations(limit=200, offset=0)
+        return {
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "total_conversations": len(conversations),
+            "conversations": [
+                {
+                    "conversation_id": conv.id,
+                    "title": conv.title,
+                    "subtitle": conv.subtitle,
+                    "message_count": len(conv.messages),
+                    "messages": [
+                        {
+                            "id": msg.id,
+                            "sender": msg.sender,
+                            "text": msg.text,
+                            "attachment_path": msg.attachment_path,
+                            "attachment_kind": msg.attachment_kind,
+                        }
+                        for msg in conv.messages
+                    ],
+                }
+                for conv in conversations
+            ],
+        }

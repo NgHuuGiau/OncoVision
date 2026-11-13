@@ -1,10 +1,28 @@
 from __future__ import annotations
 
+import os
+import sys
 import time
 import uuid
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+def _get_project_root() -> Path:
+    """Lay duong dan project root, hoat dong dung ca khi chay tu exe (cx_Freeze)."""
+    if getattr(sys, "frozen", False):
+        # Chay tu compiled executable: base_dir la thu muc chua exe
+        base_dir = Path(os.path.dirname(sys.executable))
+        # Models va modules nam trong _internal/
+        internal_dir = base_dir / "_internal"
+        if internal_dir.is_dir():
+            return internal_dir
+        return base_dir
+    else:
+        # Chay tu script: __file__ la app/chat_ui/paths.py
+        return Path(__file__).resolve().parents[2]
+
+
+PROJECT_ROOT = _get_project_root()
 OUTPUT_DIR = PROJECT_ROOT / "output"
 ONCO_DB_PATH = OUTPUT_DIR / "onco.db"
 CHAT_HISTORY_DB_PATH = ONCO_DB_PATH
