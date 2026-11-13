@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,42 @@ def load_yaml(path: str | Path) -> Any:
     resolved_path = Path(path)
     with resolved_path.open("r", encoding="utf-8") as file:
         return yaml.safe_load(file)
+
+
+def load_environment_config() -> dict[str, Any]:
+    """Load config với environment-specific override.
+
+    Thứ tự ưu tiên:
+    1. config/settings.yaml (base)
+    2. config/{environment}.yaml (override theo môi trường)
+
+    Environment được xác định bởi biến môi trường ONCOVISION_ENV
+    (mặc định: 'development').
+
+    Returns:
+        Merged config dict.
+    """
+    base = load_yaml("config/settings.yaml") or {}
+    env = os.environ.get("ONCOVISION_ENV", "development").lower()
+
+    env_file = Path(f"config/{env}.yaml")
+    if env_file.exists():
+        override = load_yaml(env_file) or {}
+        # Deep merge override vào base
+        base = _deep_merge(base, override)
+
+    return base
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Deep merge hai dict, override ưu tiên hơn base."""
+    merged = base.copy()
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def yaml_mapping_issues(data: Any, *, required_keys: tuple[str, ...] = (), label: str = "yaml") -> list[str]:

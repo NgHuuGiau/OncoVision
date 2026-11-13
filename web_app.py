@@ -41,14 +41,15 @@ from medical.case_payloads import (
     case_localization_available,
 )
 from medical.chat_service import MedicalChatResponse, MedicalChatService
-from medical.compliance import MEDICAL_DISCLAIMER
+from medical.compliance import MEDICAL_DISCLAIMER, get_audit_trail
 from medical.dataset import infer_medical_upload_context
 from medical.reporting import export_case_pdf
 from medical.storage import MedicalCaseDatabase
 from medical.system_status import get_medical_system_status
-from utils.logger import get_logger
+from utils.logger import get_logger, setup_production_logging
 
 logger = get_logger(__name__)
+audit = get_audit_trail()
 
 WEB_UPLOADS_DIR = OUTPUT_DIR / "web_uploads"
 WEB_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -76,8 +77,11 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Setup production logging nếu cần
+    setup_production_logging()
     logger.info("OncoVision Web Chat khoi dong...")
-    get_auth_db()
+    auth_db = get_auth_db()
+    auth_db.ensure_default_admin()  # Tạo admin/admin mặc định nếu chưa có user
     try:
         service = get_medical_service()
         service.check_ready()
@@ -96,7 +100,7 @@ def _request_csrf_token(request: Request) -> str:
 
 
 async def require_authenticated(request: Request) -> WebUser | None:
-    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/favicon.svg", "/healthz"}:
+    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/change-credentials", "/favicon.svg", "/healthz"}:
         return None
 
     user_id = request.session.get("user_id")
@@ -106,6 +110,11 @@ async def require_authenticated(request: Request) -> WebUser | None:
         if request.url.path.startswith("/api/"):
             raise HTTPException(status_code=401, detail="Vui lòng đăng nhập.", headers={"X-Login-Required": "true"})
         raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+    # Ép đổi tên đăng nhập/mật khẩu nếu là lần đầu (admin/admin)
+    if user.must_change_credentials and request.url.path != "/change-credentials":
+        raise HTTPException(status_code=303, headers={"Location": "/change-credentials"})
+
     request.state.current_user = user
 
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
@@ -164,11 +173,14 @@ if IS_PRODUCTION and not COOKIE_SECURE:
 
 app = FastAPI(
     title="OncoVision Web Chat",
+    description="AI y khoa chuyên về phân tích ảnh y tế — sàng lọc ung thư từ 12 nhóm.",
+    version="2.0.0",
     lifespan=lifespan,
     dependencies=[Depends(require_authenticated)],
-    docs_url=None,
-    redoc_url=None,
-    openapi_url=None,
+    # Bật API docs trong development, tắt trong production
+    docs_url="/docs" if not IS_PRODUCTION else None,
+    redoc_url="/redoc" if not IS_PRODUCTION else None,
+    openapi_url="/openapi.json" if not IS_PRODUCTION else None,
 )
 app.add_middleware(
     SessionMiddleware,
@@ -314,6 +326,7 @@ async def login(request: Request, username: str = Form(""), password: str = Form
     user = auth_db.authenticate(username, password)
     if user is None:
         auth_db.record_login_failure(username, remote_addr)
+        audit.log_login(user=username, success=False, ip_address=remote_addr)
         return templates.TemplateResponse(request, "login.html", {
             "request": request,
             "csrf_token": _request_csrf_token(request),
@@ -324,6 +337,7 @@ async def login(request: Request, username: str = Form(""), password: str = Form
     request.session.clear()
     request.session["user_id"] = user.id
     _request_csrf_token(request)
+    audit.log_login(user=username, success=True, ip_address=remote_addr)
     return RedirectResponse("/", status_code=303)
 
 
@@ -432,6 +446,80 @@ async def reset_forgotten_password(
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/change-credentials", response_class=HTMLResponse)
+async def change_credentials_page(request: Request, error: str = ""):
+    user_id = request.session.get("user_id")
+    user = get_auth_db().get_user(user_id) if isinstance(user_id, int) else None
+    if user is None or not user.is_active:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=303)
+    if not user.must_change_credentials:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "change_credentials.html", {
+        "request": request,
+        "csrf_token": _request_csrf_token(request),
+        "error": error,
+        "current_username": user.username,
+    })
+
+
+@app.post("/change-credentials", response_class=HTMLResponse)
+async def change_credentials(
+    request: Request,
+    new_username: str = Form(""),
+    new_password: str = Form(""),
+    confirm_password: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    expected_token = request.session.get("csrf_token", "")
+    if not expected_token or not secrets.compare_digest(csrf_token, expected_token):
+        raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")
+
+    user_id = request.session.get("user_id")
+    user = get_auth_db().get_user(user_id) if isinstance(user_id, int) else None
+    if user is None or not user.is_active or not user.must_change_credentials:
+        return RedirectResponse("/login", status_code=303)
+
+    new_username = new_username.strip()
+    if new_password != confirm_password:
+        return templates.TemplateResponse(request, "change_credentials.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": "Mật khẩu nhập lại không khớp.",
+            "current_username": user.username,
+        }, status_code=400)
+    if not new_username:
+        return templates.TemplateResponse(request, "change_credentials.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": "Tên đăng nhập không được để trống.",
+            "current_username": user.username,
+        }, status_code=400)
+    try:
+        new_password_hash = hash_password(new_password)
+    except ValueError as exc:
+        return templates.TemplateResponse(request, "change_credentials.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": str(exc),
+            "current_username": user.username,
+        }, status_code=400)
+
+    auth_db = get_auth_db()
+    try:
+        auth_db.update_credentials(user.id, new_username, new_password_hash)
+    except ValueError as exc:
+        return templates.TemplateResponse(request, "change_credentials.html", {
+            "request": request,
+            "csrf_token": _request_csrf_token(request),
+            "error": str(exc),
+            "current_username": user.username,
+        }, status_code=400)
+
+    request.session.clear()
+    return RedirectResponse("/login?reset=1", status_code=303)
 
 
 def _admin_users_response(

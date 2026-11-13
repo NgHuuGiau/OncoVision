@@ -72,4 +72,37 @@ HieraChain/
 
 # Dataset archive (large binary, không commit)
 medical_7_cancers.zip
-tests/manual/  
+tests/manual/
+
+# Junie agent session artifacts (keep .junie/plans only)
+.junie/sessions/
+.junie/agents/
+.junie/logs/
+
+# HTML coverage reports
+htmlcov/
+
+# PyInstaller / cx_Freeze artifacts
+*.exe
+*.dll
+*.spec.bak
+
+# Temporary files from development
+*.txt.bak
+commit_msg_*.txt
+collect_out.txt
+
+# Docker compose logs
+docker-compose*.log
+
+# Alembic migration lock
+alembic/versions/.lock
+
+# Build scripts archive
+scripts/archive/
+
+# Dataset test images (generated, not committed)
+data/datasets/
+
+# Coverage XML reports
+coverage.xml

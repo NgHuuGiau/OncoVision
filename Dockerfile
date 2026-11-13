@@ -1,16 +1,20 @@
 # OncoVision Dockerfile
 # Build: docker build -t onkovision:latest .
-# Run: docker run -d --name onkovision -p 8000:8000 -v $(PWD)/models:/app/models -v $(PWD)/output:/app/output -v $(PWD)/data:/app/data onkovision:latest
+# Run: docker run -d --name onkovision -p 8000:8000 \
+#   -v $(PWD)/models:/app/models \
+#   -v $(PWD)/output:/app/output \
+#   -v $(PWD)/data:/app/data \
+#   --gpus all onkovision:latest
 
-# Base image with CUDA support for NVIDIA GPUs (tag phải có 3 phần: 12.1.1, không phải 12.1)
-FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 AS base
+# Base image with CUDA 12.6 for NVIDIA GPUs (updated from 12.1.1)
+FROM nvidia/cuda:12.6.0-runtime-ubuntu22.04 AS base
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies (deduplicated packages)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3.10-venv python3.10-dev \
-    libglib2.0-0 libsm6 libxext6 libxrender-dev libglib2.0-0 \
-    libgl1-mesa-glx libglib2.0-0 \
-    ffmpeg libsm6 libxext6 \
+    libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libgl1-mesa-glx \
+    ffmpeg \
     git curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -36,11 +40,12 @@ COPY requirements-web.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements-web.txt
 
-# Copy source code
+# Copy source code (after pip for better layer caching)
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p models/pretrained/cancers \
+RUN mkdir -p \
+    models/pretrained/cancers \
     models/trained \
     models/exported \
     output/medical/reports \
@@ -52,11 +57,11 @@ RUN mkdir -p models/pretrained/cancers \
     output/chat_captures \
     data \
     assets/icons \
-    output/chat_captures \
     runs
 
 # Create .gitkeep files for empty directories
-RUN touch models/pretrained/cancers/.gitkeep \
+RUN touch \
+    models/pretrained/cancers/.gitkeep \
     models/trained/.gitkeep \
     models/exported/.gitkeep \
     output/medical/reports/.gitkeep \

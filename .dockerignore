@@ -24,6 +24,7 @@ runs/
 data/
 *.db
 *.log
+*.tmp
 
 # Model lớn: mount qua volume ./models:/app/models
 models/pretrained/
@@ -35,3 +36,53 @@ models/exported/
 .vscode/
 Thumbs.db
 .DS_Store
+
+# Session và cache của Junie AI
+.ua/
+.understand-anything/
+.junie/
+
+# File nhạy cảm
+.env
+.env.*
+*.pem
+*.key
+
+# Scripts build Windows không cần trong Docker
+*.bat
+*.ps1
+*.spec
+
+# Documentation không cần trong runtime image
+docs/
+README.md
+LICENSE
+MANUAL_DOWNLOAD_GUIDE.txt
+MONAI_MODELS_SUMMARY.md
+DOWNLOAD_GUIDE.md
+
+# Test và training scripts không cần trong production image
+conftest.py
+pytest.ini
+tests/
+
+# Scripts dev không cần trong production
+scripts/train_*
+scripts/probe_*
+scripts/check_*
+scripts/generate_*
+
+# Executable build artifacts
+OncoVision*.spec
+setup_cxfreeze.py
+launcher.spec
+launcher.py
+
+# Commit messages và temp files
+commit_msg_*.txt
+cleanup_main.ps1
+collect_out.txt
+cleanup_main.ps1
+deploy_production.ps1
+create_admin_auto.py
+check_admin.py

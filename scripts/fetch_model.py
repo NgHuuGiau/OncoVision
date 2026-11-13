@@ -6,6 +6,9 @@ Ví dụ:
     # Lấy toàn bộ model có sẵn cho các nhóm ung thư (1 lệnh cho máy mới)
     python scripts/fetch_model.py --all
 
+    # Xem trước mà không tải
+    python scripts/fetch_model.py --all --dry-run
+
     # Thêm 1 model lẻ
     python scripts/fetch_model.py amcm/brain-tumor-yolo11n --file brain_tumor_yolo11n_ft.pt ^
         --target brain --kind detector --modality mri
@@ -60,45 +63,53 @@ def _pick_file(repo: str, repo_type: str) -> str:
     return files[0]
 
 
-def _download_github(repo: str, file: str) -> tuple[Path, str]:
-    """Tải file thô từ GitHub; ưu tiên media (giải LFS) rồi raw."""
+def _download_github(repo: str, file: str, max_retries: int = 3) -> tuple[Path, str]:
+    """Tải file thô từ GitHub; ưu tiên media (giải LFS) rồi raw, có retry."""
     attempts = []
-    for base in (
-        "https://media.githubusercontent.com/media",
-        "https://raw.githubusercontent.com",
-    ):
-        url = f"{base}/{repo}/HEAD/{file}"
-        try:
-            request = urllib.request.Request(url, headers={"User-Agent": "oncovision-dev"})
-            with urllib.request.urlopen(request, timeout=180) as response:
-                data = response.read()
-        except Exception as exc:  # gom mọi lỗi mạng để thử base kế tiếp
-            attempts.append(f"{base}: {exc}")
-            continue
-        if data[:128].startswith(b"version https://git-lfs"):
-            attempts.append(f"{base}: còn LFS pointer")
-            continue
-        target = Path(tempfile.gettempdir()) / f"oncovision_fetch_{Path(file).name}"
-        target.write_bytes(data)
-        return target, "github"
-    raise SystemExit("Tải GitHub thất bại:\n  " + "\n  ".join(attempts))
+    for attempt in range(max_retries):
+        for base in (
+            "https://media.githubusercontent.com/media",
+            "https://raw.githubusercontent.com",
+        ):
+            url = f"{base}/{repo}/HEAD/{file}"
+            try:
+                request = urllib.request.Request(url, headers={"User-Agent": "oncovision-dev"})
+                with urllib.request.urlopen(request, timeout=180) as response:
+                    data = response.read()
+            except Exception as exc:  # gom mọi lỗi mạng để thử base kế tiếp
+                attempts.append(f"{base} (thử {attempt + 1}): {exc}")
+                continue
+            if data[:128].startswith(b"version https://git-lfs"):
+                attempts.append(f"{base}: còn LFS pointer")
+                continue
+            target = Path(tempfile.gettempdir()) / f"oncovision_fetch_{Path(file).name}"
+            target.write_bytes(data)
+            return target, "github"
+        # Retry nếu tất cả base fail
+        if attempt < max_retries - 1:
+            print(f"  ⏳  Thử lại tải GitHub... (lần {attempt + 2}/{max_retries})")
+    raise SystemExit("Tải GitHub thất bại sau " + str(max_retries) + " lần thử:\n  " + "\n  ".join(attempts))
 
 
-def download(repo: str, file: str | None, repo_type: str | None) -> tuple[Path, str]:
+def download(repo: str, file: str | None, repo_type: str | None, max_retries: int = 3) -> tuple[Path, str]:
     if repo_type == "github" or repo_type == "gh":
         if not file:
             raise SystemExit("Nguồn GitHub cần chỉ rõ --file (không liệt kê được thư mục).")
-        return _download_github(repo, file)
+        return _download_github(repo, file, max_retries)
 
     from huggingface_hub import hf_hub_download
 
     attempts = []
-    for kind in ((repo_type,) if repo_type else ("model", "dataset")):
-        try:
-            return Path(hf_hub_download(repo, file or _pick_file(repo, kind), repo_type=kind)), kind
-        except Exception as exc:
-            attempts.append(f"{kind}: {exc}")
-    raise SystemExit("Tải thất bại:\n  " + "\n  ".join(attempts))
+    for attempt in range(max_retries):
+        for kind in ((repo_type,) if repo_type else ("model", "dataset")):
+            try:
+                return Path(hf_hub_download(repo, file or _pick_file(repo, kind), repo_type=kind)), kind
+            except Exception as exc:
+                attempts.append(f"{kind} (thử {attempt + 1}): {exc}")
+                continue
+        if attempt < max_retries - 1:
+            print(f"  ⏳  Thử lại tải HuggingFace... (lần {attempt + 2}/{max_retries})")
+    raise SystemExit("Tải HuggingFace thất bại sau " + str(max_retries) + " lần thử:\n  " + "\n  ".join(attempts))
 
 
 def _install(
@@ -155,14 +166,16 @@ def _catalog_destination(base: Path, entry: dict) -> Path:
     return destination.with_suffix(suffix) if destination.suffix.lower() != suffix else destination
 
 
-def fetch_all(catalog_path: Path, base: Path, force: bool) -> int:
+def fetch_all(catalog_path: Path, base: Path, force: bool, dry_run: bool = False) -> int:
     if not catalog_path.is_file():
         raise SystemExit(f"Không thấy catalog: {catalog_path}")
     entries = json.loads(catalog_path.read_text(encoding="utf-8")).get("entries", [])
     if not entries:
         print(f"No qualified models in catalog: {catalog_path}; nothing downloaded.")
         return 0
-    print(f"Catalog: {catalog_path} — {len(entries)} model\n")
+
+    mode_label = "[XEM TRƯỚC — không tải]" if dry_run else ""
+    print(f"Catalog: {catalog_path} — {len(entries)} model {mode_label}\n")
 
     placed, skipped, failed = 0, 0, 0
     for entry in entries:
@@ -174,6 +187,10 @@ def fetch_all(catalog_path: Path, base: Path, force: bool) -> int:
                 skipped += 1
                 continue
             print(f"  tải lại {name}: sha cũ khác catalog")
+        if dry_run:
+            print(f"  sẽ tải  {name}: {entry['repo']} -> {destination.name}")
+            placed += 1
+            continue
         try:
             source, repo_type = download(entry["repo"], entry["file"], entry.get("repo_type"))
             installed = _install(
@@ -195,10 +212,11 @@ def fetch_all(catalog_path: Path, base: Path, force: bool) -> int:
         print(f"  OK      {name}: -> {installed}")
         placed += 1
 
-    print(f"\nXong: {placed} tải mới, {skipped} bỏ qua, {failed} lỗi.")
+    print(f"\nXong: {placed} {'sẽ tải' if dry_run else 'tải mới'}, {skipped} bỏ qua, {failed} lỗi.")
     if failed:
         return 1
-    print("Chạy: python run_medical.py status")
+    if not dry_run:
+        print("Chạy: python run_medical.py status")
     return 0
 
 
@@ -216,15 +234,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="ghi đè file đích nếu đã có")
     parser.add_argument("--all", action="store_true", help="tải mọi model trong catalog (máy mới)")
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG, help="đường dẫn catalog JSON")
+    parser.add_argument("--dry-run", action="store_true", help="xem trước model sẽ tải mà không thực sự tải")
+    parser.add_argument("--retries", type=int, default=3, help="số lần thử lại khi tải lỗi (mặc định: 3)")
     args = parser.parse_args(argv)
 
     if args.all:
-        return fetch_all(args.catalog, args.base, args.force)
+        return fetch_all(args.catalog, args.base, args.force, args.dry_run)
 
     if not args.repo or not args.target or not args.kind:
         parser.error("cần <repo> --target --kind, hoặc dùng --all")
 
-    source, source_repo_type = download(args.repo, args.file, args.repo_type)
+    if args.dry_run:
+        destination = resolve_destination(args.base, args.target, args.kind, args.modality)
+        print(f"[XEM TRƯỚC] Sẽ tải: {args.repo} -> {destination}")
+        return 0
+
+    source, source_repo_type = download(args.repo, args.file, args.repo_type, max_retries=args.retries)
     destination = _install(
         source,
         repo=args.repo,

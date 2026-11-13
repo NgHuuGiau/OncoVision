@@ -1,5 +1,331 @@
 {
-  "version": 1,
-  "note": "Catalog chỉ nhận model đã khớp runtime và có test phù hợp. Hiện chưa có ứng viên đủ điều kiện; chạy --all sẽ không tải model nào.",
-  "entries": []
+  "version": 2,
+  "description": "Catalog model OncoVision — chỉ chứa model suy luận đã kiểm định. Chạy python scripts/fetch_model.py --all để tải.",
+  "updated": "2026-11-13",
+  "entries": [
+    {
+      "key": "brain",
+      "type": "classifier",
+      "modality": "mri",
+      "path": "cancers/brain/classifier.pt",
+      "size_bytes": 110398202,
+      "framework": "torch-state",
+      "labels": ["glioma", "meningioma", "no_tumor", "pituitary"],
+      "input_size": 512,
+      "backbone": "convnext_tiny",
+      "status": "ready",
+      "notes": "ConvNeXt-Tiny, 4 loại u não, FP16 trên GPU, TTA"
+    },
+    {
+      "key": "brain",
+      "type": "classifier",
+      "modality": "mri",
+      "path": "cancers/brain/mri/classifier.pt",
+      "size_bytes": 28409512,
+      "framework": "torch-state",
+      "labels": ["glioma", "meningioma", "no_tumor", "pituitary"],
+      "input_size": 512,
+      "backbone": "convnext_tiny",
+      "status": "ready",
+      "notes": "Classifier MRI chuyên biệt, nhỏ hơn classifier tổng quát"
+    },
+    {
+      "key": "brain",
+      "type": "detector",
+      "modality": "mri",
+      "path": "cancers/brain/detector.pt",
+      "size_bytes": 22511715,
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "YOLO detector u não"
+    },
+    {
+      "key": "brain",
+      "type": "detector",
+      "modality": "mri",
+      "path": "cancers/brain/mri/detector.pt",
+      "size_bytes": 5474074,
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "YOLO detector u não MRI, nhẹ hơn"
+    },
+    {
+      "key": "brain",
+      "type": "volume",
+      "modality": "mri",
+      "path": "cancers/brain/mri/brain_volume_model.pt2",
+      "manifest": "cancers/brain/mri/volume.json",
+      "size_bytes": 17322052,
+      "framework": "torch-export",
+      "status": "needs_reexport",
+      "notes": "Cần re-export với PyTorch 2.7.1 tương thích"
+    },
+    {
+      "key": "brain",
+      "type": "volume",
+      "modality": "mri",
+      "path": "cancers/brain/volume.json",
+      "size_bytes": 3866,
+      "framework": "manifest",
+      "status": "ready",
+      "notes": "Manifest volume 3D cho não"
+    },
+    {
+      "key": "breast",
+      "type": "classifier",
+      "modality": "mammogram",
+      "path": "cancers/breast/mammogram/classifier.pt",
+      "size_bytes": 94371473,
+      "framework": "torch-state",
+      "labels": ["normal", "benign", "malignant"],
+      "input_size": 320,
+      "backbone": "resnet50",
+      "status": "ready",
+      "notes": "ResNet50 cho mammogram"
+    },
+    {
+      "key": "breast",
+      "type": "classifier",
+      "modality": "ultrasound",
+      "path": "cancers/breast/ultrasound/classifier.pt",
+      "size_bytes": 94371473,
+      "framework": "torch-state",
+      "labels": ["normal", "benign", "malignant"],
+      "input_size": 320,
+      "backbone": "resnet50",
+      "status": "ready",
+      "notes": "ResNet50 cho siêu âm vú"
+    },
+    {
+      "key": "breast",
+      "type": "detector",
+      "modality": "mammogram",
+      "path": "cancers/breast/mammogram/detector.pt",
+      "size_bytes": 67202531,
+      "framework": "ultralytics-yolo",
+      "status": "warning",
+      "notes": "Chỉ 1 lớp 'item' — cần kiểm tra chất lượng"
+    },
+    {
+      "key": "breast",
+      "type": "detector",
+      "modality": "mammogram",
+      "path": "cancers/breast/mammogram/detector_mass.pt",
+      "size_bytes": 92776341,
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector chuyên biệt cho mass vú"
+    },
+    {
+      "key": "breast",
+      "type": "detector",
+      "modality": "ultrasound",
+      "path": "cancers/breast/mammogram/detector_ultrasound.pt",
+      "size_bytes": 6250154,
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector siêu âm vú"
+    },
+    {
+      "key": "breast",
+      "type": "volume",
+      "modality": "mammogram",
+      "path": "cancers/breast/mammogram/volume.pt2",
+      "size_bytes": 98956590,
+      "framework": "torch-export",
+      "status": "needs_reexport",
+      "notes": "Cần re-export với PyTorch tương thích"
+    },
+    {
+      "key": "breast",
+      "type": "volume",
+      "modality": "mri",
+      "path": "cancers/breast/breast_volume_model.pt2",
+      "manifest": "cancers/breast/breast_volume_model.json",
+      "size_bytes": 2185487,
+      "framework": "torch-export",
+      "status": "needs_reexport",
+      "notes": "Cần re-export với PyTorch tương thích"
+    },
+    {
+      "key": "cervical",
+      "type": "classifier",
+      "modality": "colposcopy",
+      "path": "cancers/cervical/colposcopy/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["normal", "dysplastic", "squamous_cell_carcinoma"],
+      "status": "ready",
+      "notes": "Classifier cho ảnh soi cổ tử cung"
+    },
+    {
+      "key": "cervical",
+      "type": "detector",
+      "modality": "colposcopy",
+      "path": "cancers/cervical/colposcopy/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector cho ảnh soi cổ tử cung"
+    },
+    {
+      "key": "colorectal",
+      "type": "classifier",
+      "modality": "endoscopy",
+      "path": "cancers/colorectal/endoscopy/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["normal", "epithelium", "dysplasia", "neoplasia", "polyp", "hyperplastic_polyp", "sessile_serrated", "adenoma", "other"],
+      "status": "ready",
+      "notes": "9 lớp mô bệnh học cho nội soi đại tràng"
+    },
+    {
+      "key": "colorectal",
+      "type": "detector",
+      "modality": "endoscopy",
+      "path": "cancers/colorectal/endoscopy/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector cho nội soi đại tràng"
+    },
+    {
+      "key": "kidney",
+      "type": "classifier",
+      "modality": "ct",
+      "path": "cancers/kidney/ct/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["benign", "malignant", "cyst"],
+      "status": "ready",
+      "notes": "Classifier CT thận"
+    },
+    {
+      "key": "kidney",
+      "type": "detector",
+      "modality": "ct",
+      "path": "cancers/kidney/ct/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector CT thận"
+    },
+    {
+      "key": "liver",
+      "type": "classifier",
+      "modality": "ct",
+      "path": "cancers/liver/ct/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["benign", "malignant"],
+      "status": "ready",
+      "notes": "Classifier CT gan"
+    },
+    {
+      "key": "liver",
+      "type": "detector",
+      "modality": "ct",
+      "path": "cancers/liver/ct/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector CT gan"
+    },
+    {
+      "key": "lung",
+      "type": "classifier",
+      "modality": "ct",
+      "path": "cancers/lung/ct/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["benign", "malignant", "normal"],
+      "status": "ready",
+      "notes": "Classifier CT phổi"
+    },
+    {
+      "key": "lung",
+      "type": "detector",
+      "modality": "ct",
+      "path": "cancers/lung/ct/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector CT phổi"
+    },
+    {
+      "key": "pancreas",
+      "type": "classifier",
+      "modality": "ct",
+      "path": "cancers/pancreas/ct/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["normal", "pdac", "neuroendocrine"],
+      "status": "ready",
+      "notes": "Classifier CT tụy"
+    },
+    {
+      "key": "pancreas",
+      "type": "detector",
+      "modality": "ct",
+      "path": "cancers/pancreas/ct/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector CT tụy"
+    },
+    {
+      "key": "prostate",
+      "type": "classifier",
+      "modality": "mri",
+      "path": "cancers/prostate/mri/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["benign", "malignant"],
+      "status": "ready",
+      "notes": "Classifier MRI tuyến tiền liệt"
+    },
+    {
+      "key": "prostate",
+      "type": "detector",
+      "modality": "mri",
+      "path": "cancers/prostate/mri/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector MRI tuyến tiền liệt"
+    },
+    {
+      "key": "stomach",
+      "type": "classifier",
+      "modality": "endoscopy",
+      "path": "cancers/stomach/endoscopy/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["normal", "ulcer", "erosion", "carcinoma"],
+      "status": "ready",
+      "notes": "Classifier nội soi dạ dày"
+    },
+    {
+      "key": "stomach",
+      "type": "detector",
+      "modality": "endoscopy",
+      "path": "cancers/stomach/endoscopy/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "ready",
+      "notes": "Detector nội soi dạ dày"
+    },
+    {
+      "key": "thyroid",
+      "type": "classifier",
+      "modality": "ultrasound",
+      "path": "cancers/thyroid/ultrasound/classifier.pt",
+      "framework": "torch-state",
+      "labels": ["benign", "malignant"],
+      "status": "ready",
+      "notes": "Classifier siêu âm tuyến giáp"
+    },
+    {
+      "key": "thyroid",
+      "type": "detector",
+      "modality": "ultrasound",
+      "path": "cancers/thyroid/ultrasound/detector.pt",
+      "framework": "ultralytics-yolo",
+      "status": "invalid",
+      "notes": "Dùng COCO generic (80 lớp) — không phải detector y khoa tuyến giáp. Sẽ bị tự động phát hiện bởi _is_medical_detector()."
+    },
+    {
+      "key": "spleen",
+      "type": "volume",
+      "modality": "ct",
+      "path": "cancers/spleen/volume.json",
+      "framework": "manifest",
+      "status": "incomplete",
+      "notes": "Chỉ có manifest, chưa có model classifier/detector"
+    }
+  ]
 }

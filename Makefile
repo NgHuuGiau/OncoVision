@@ -1,6 +1,11 @@
-.PHONY: help install install-dev install-monai test test-fast test-cov lint fmt type-check clean smoke smoke-ci doctor chat medical run-app run-chat run-menu doctor smoke test test-fast test-cov lint fmt type-check clean docker-build docker-run docker-stop docker-logs docker-shell install-monai docker-run-monai
-
-.PHONY: help install install-dev install-monai test test-fast test-cov lint fmt type-check clean smoke smoke-ci doctor chat medical run-app run-chat run-menu
+.PHONY: help install install-dev install-monai install-dev-full \
+    test test-fast test-cov test-unit test-integration test-medical test-web \
+    lint fmt type-check \
+    clean smoke smoke-ci doctor \
+    chat medical run-app run-chat run-menu \
+    docker-build docker-run docker-stop docker-logs docker-shell docker-run-monai \
+    db-init db-migrate db-current db-shell \
+    quality
 
 # Default target
 .DEFAULT_GOAL := help
@@ -24,13 +29,14 @@ help: ## Show this help message
 	@echo "  fmt            Format code with ruff"
 	@echo "  lint           Lint code with ruff"
 	@echo "  type-check     Run mypy type checking"
+	@echo "  quality        Run all quality checks (lint + type-check)"
 	@echo ""
 	@echo "$(GREEN)Testing:$(NC)"
 	@echo "  test           Run all tests"
 	@echo "  test-fast      Run tests excluding slow/integration tests"
 	@echo "  test-cov       Run tests with coverage"
-	@echo "  lint           Run ruff linting"
-	@echo "  type-check     Run mypy type checking"
+	@echo "  test-unit      Run unit tests only"
+	@echo "  test-integration Run integration tests"
 	@echo ""
 	@echo "$(GREEN)Runtime Commands:$(NC)"
 	@echo "  run-app        Run camera application (run_app.py)"
@@ -41,17 +47,9 @@ help: ## Show this help message
 	@echo "  chat           Run chat web app"
 	@echo "  chat-desktop   Run desktop chat UI"
 	@echo ""
-	@echo "$(GREEN)Testing:$(NC)"
-	@echo "  test           Run all tests"
-	@echo "  test-fast      Run fast tests (exclude slow/integration)"
-	@echo "  test-cov       Run tests with coverage"
-	@echo "  lint           Run ruff linting"
-	@echo "  type-check     Run mypy type checking"
-	@echo ""
 	@echo "$(GREEN)Quality Gates:$(NC)"
 	@echo "  smoke          Run smoke test (run_smoke.py)"
 	@echo "  smoke-ci       Run smoke test for CI"
-	@echo "  doctor         Run system check (run_doctor.py)"
 	@echo ""
 	@echo "$(GREEN)Docker:$(NC)"
 	@echo "  docker-build   Build Docker image"
@@ -59,20 +57,19 @@ help: ## Show this help message
 	@echo "  docker-stop    Stop container"
 	@echo "  docker-logs    View container logs"
 	@echo "  docker-shell   Open shell in container"
-	@echo "  install-monai  Install MONAI/nnUNet deps"
 	@echo "  docker-run-monai Run with MONAI support"
+	@echo ""
+	@echo "$(GREEN)Database:$(NC)"
+	@echo "  db-init        Initialize database"
+	@echo "  db-migrate     Run Alembic migrations"
+	@echo "  db-current     Show current migration"
+	@echo "  db-shell       Open SQLite shell"
 	@echo ""
 	@echo "$(GREEN)Cleanup:$(NC)"
 	@echo "  clean          Clean cache, build artifacts, temp files"
 	@echo ""
-	@echo "$(GREEN)Database:$(NC)"
-	@echo "  db-init        Initialize database"
-	@echo "  db-migrate     Run migrations"
-	@echo "  db-shell       Open SQLite shell"
-	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
-	@echo "  make install-dev"
-	@echo "  make test"
+	@echo "  make install-dev && make test"
 	@echo "  make run-chat"
 	@echo "  make smoke"
 
@@ -105,10 +102,10 @@ test-integration: ## Run integration tests
 	pytest tests/ -q -m "integration" --tb=short
 
 test-medical: ## Run medical tests only
-	pytest tests/test_medical_pipeline.py tests/test_cancer_registry.py tests/test_volume_inference.py tests/test_fetch_model.py -v
+	pytest tests/integration/test_medical_pipeline.py tests/integration/test_cancer_registry.py tests/unit/test_volume_inference.py tests/integration/test_fetch_model.py -v --ignore=tests/test_medical_pipeline.py --ignore=tests/test_cancer_registry.py 2>/dev/null || pytest tests/ -k "medical or cancer_registry or volume_inference or fetch_model" -v
 
 test-web: ## Run web tests only
-	pytest tests/test_web_cases.py tests/test_web_auth.py -v
+	pytest tests/integration/test_web_cases.py tests/integration/test_web_auth.py -v --ignore=tests/test_web_cases.py --ignore=tests/test_web_auth.py 2>/dev/null || pytest tests/ -k "web" -v
 
 test-model: ## Run model selector tests
 	pytest tests/test_model_selector.py -v
@@ -118,19 +115,19 @@ test-hardware: ## Run hardware detector tests
 
 # Linting & Formatting
 lint: ## Run ruff linting
-	ruff check .
+	ruff check --config config/ruff.toml .
 
 fmt: ## Format code with ruff
-	ruff check . --fix
+	ruff check --config config/ruff.toml . --fix
 
 fmt-check: ## Check formatting without fixing
-	ruff format --check .
+	ruff format --config config/ruff.toml --check .
 
 type-check: ## Run mypy type checking
 	mypy .
 
 # Linting combined
-quality: fmt lint type-check ## Run all quality checks
+quality: lint type-check ## Run all quality checks (lint + type-check)
 
 # Runtime commands
 run-app: ## Run camera application
@@ -173,10 +170,13 @@ run-menu: ## Run menu system
 
 # Database
 db-init: ## Initialize database
-	python -m app.web_auth create-admin --username admin --email admin@hospital.com
+	python -c "from medical.storage import MedicalCaseDatabase; MedicalCaseDatabase(); print('Database initialized')"
 
-db-migrate: ## Run migrations
-	@echo "No migrations needed (SQLite auto-migration)"
+db-migrate: ## Run Alembic migrations
+	alembic -c config/alembic.ini upgrade head
+
+db-current: ## Show current migration revision
+	alembic -c config/alembic.ini current
 
 db-shell: ## Open SQLite shell
 	sqlite3 output/onco.db

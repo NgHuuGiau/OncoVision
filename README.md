@@ -214,8 +214,12 @@ Hệ thống phân tích ảnh y khoa với CNN classifier (convnext_tiny pretra
 | [docs/project_overview.md](docs/project_overview.md) | Tổng quan kiến trúc và cây thư mục |
 | [docs/install_guide.md](docs/install_guide.md) | Hướng dẫn cài đặt chi tiết |
 | [docs/medical_imaging_guide.md](docs/medical_imaging_guide.md) | Luồng suy luận y khoa và cách bổ sung model |
+| [docs/model_download.md](docs/model_download.md) | Hướng dẫn tải và cài đặt model |
+| [docs/clinical_validation_guide.md](docs/clinical_validation_guide.md) | Hướng dẫn kiểm định lâm sàng |
 | [docs/runtime_tool_guide.md](docs/runtime_tool_guide.md) | Runtime advisor và camera realtime |
 | [docs/quick_commands.md](docs/quick_commands.md) | Lệnh nhanh hàng ngày |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Lỗi thường gặp và cách xử lý |
 | [docs/ci_and_quality.md](docs/ci_and_quality.md) | CI pipeline và quality gate |
 | [docs/web_auth.md](docs/web_auth.md) | Đăng nhập, phân quyền và cấu hình email khôi phục |
+| [docs/solution_plan.md](docs/solution_plan.md) | Giải pháp xử lý các vấn đề dự án |
+| [scripts/README.md](scripts/README.md) | Danh sách và mô tả scripts |
