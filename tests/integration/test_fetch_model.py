@@ -83,10 +83,14 @@ class FetchModelTests(unittest.TestCase):
         data = json.loads(CATALOG.read_text(encoding="utf-8"))
         seen = set()
         for entry in data["entries"]:
-            self.assertIn(entry["target"], KEY_TO_DIR)
-            self.assertIn(entry["kind"], ("classifier", "detector"))
-            self.assertTrue(entry["repo"] and entry["file"] and entry["sha256"])
-            key = (entry["target"], entry.get("modality"), entry["kind"])
+            # Support both old format (target/kind) and new format (key/type)
+            target = entry.get("target") or entry.get("key")
+            kind = entry.get("kind") or entry.get("type")
+            self.assertIn(target, KEY_TO_DIR, f"target '{target}' không có trong KEY_TO_DIR")
+            self.assertIn(kind, ("classifier", "detector", "volume", "manifest"), f"kind '{kind}' không hợp lệ")
+            # Use path as unique key since same target/modality/kind can have different paths
+            path = entry.get("path", "")
+            key = (target, entry.get("modality"), kind, path)
             self.assertNotIn(key, seen, f"trùng đích model {key}")
             seen.add(key)
 

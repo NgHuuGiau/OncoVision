@@ -36,13 +36,13 @@ class CancerRegistryTests(unittest.TestCase):
     def tearDown(self):
         registry._PROBE_CACHE.clear()
 
-    def test_lists_all_eleven_cancer_groups(self):
+    def test_lists_all_cancer_groups(self):
         with TemporaryDirectory() as temp_dir:
             models = list_cancer_models(base=Path(temp_dir))
-        self.assertEqual(len(models), 11)
+        self.assertEqual(len(models), 12)
         self.assertEqual({model["key"] for model in models}, {
             "liver", "lung", "breast", "stomach", "colorectal", "prostate",
-            "cervical", "kidney", "pancreas", "thyroid", "brain",
+            "cervical", "kidney", "pancreas", "thyroid", "brain", "spleen",
         })
 
     def test_brain_artifact_detected_when_present(self):
