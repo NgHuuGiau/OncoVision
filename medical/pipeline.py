@@ -1,3 +1,14 @@
+# =============================================================================
+# Medical Image Analysis Pipeline
+# =============================================================================
+# Core pipeline for medical image inference: validate → preprocess → detect →
+# classify → report. Supports 2D images, videos, and 3D volumes (NIfTI/DICOM).
+#
+# Architecture:
+#   - Data classes: Config, DetectionFinding, PipelineStageResult, MedicalAnalysisResult
+#   - Helpers: filename sanitization, path validation, detection coercion
+#   - MedicalImageAnalyzer: main class with ~50 methods organized by section
+# =============================================================================
 from __future__ import annotations
 
 import logging
@@ -54,6 +65,10 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[str, float], None] | None
 
 
+# ---------------------------------------------------------------------------
+# Section 1: Helper Functions
+# ---------------------------------------------------------------------------
+
 def _sanitize_filename_part(text: str, max_len: int = 50) -> str:
     """Sanitize text for safe use in filenames: chỉ A-Z a-z 0-9 . _ -"""
     import re
@@ -77,6 +92,10 @@ def _canonical_body_region_key(target_key: str) -> str | None:
     """Chuyen target_key sang body_region (hiện chỉ 'brain')."""
     return _canonical_body_region(target_key)
 
+
+# ---------------------------------------------------------------------------
+# Section 2: Data Classes & Protocols
+# ---------------------------------------------------------------------------
 
 class DetectorBackend(Protocol):
     def predict(self, source: Any, **kwargs) -> list[Any]:
@@ -116,7 +135,7 @@ class MedicalImageAnalyzerConfig:
     volume_manifest_path: Path | None = None
     max_volume_voxels: int = 256_000_000
     clinical_validation_report_path: Path | None = None
-    target_model_root: Path = Path("models/pretrained/cancers")
+    target_model_root: Path | None = None  # None = auto-detect (works with exe)
     ensemble_yolo_weight: float = 0.4
     ensemble_cnn_weight: float = 0.6
     detection_consistency_threshold: float = 0.5
@@ -189,6 +208,10 @@ class MedicalAnalysisResult:
     representative_frame_index: int | None = None
     volume_mask_path: Path | None = None
 
+
+# ---------------------------------------------------------------------------
+# Section 3: Detection Helpers
+# ---------------------------------------------------------------------------
 
 def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
     detections: list[DetectionFinding] = []
@@ -271,6 +294,10 @@ def _map_detections_to_canvas(
     return mapped
 
 
+# ---------------------------------------------------------------------------
+# Section 4: Configuration Builders
+# ---------------------------------------------------------------------------
+
 def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     try:
         settings = load_yaml("config/medical_settings.yaml").get("medical", {})
@@ -325,7 +352,11 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
             if settings.get("clinical_validation_report")
             else None
         ),
-        target_model_root=Path(settings.get("target_model_root", "models/pretrained/cancers")),
+        target_model_root=(
+            None
+            if not settings.get("target_model_root")
+            else Path(settings["target_model_root"])
+        ),
         ensemble_yolo_weight=float(settings.get("ensemble_yolo_weight", 0.4)),
         ensemble_cnn_weight=float(settings.get("ensemble_cnn_weight", 0.6)),
         detection_consistency_threshold=float(settings.get("detection_consistency_threshold", 0.5)),
@@ -339,6 +370,10 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         demo_mode=bool(settings.get("demo_mode", False)),
     )
 
+
+# ---------------------------------------------------------------------------
+# Section 5: Config Validation
+# ---------------------------------------------------------------------------
 
 def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list[str]:
     issues: list[str] = []
@@ -378,6 +413,24 @@ def validate_medical_analyzer_config(config: MedicalImageAnalyzerConfig) -> list
     return issues
 
 
+# ---------------------------------------------------------------------------
+# Section 6: MedicalImageAnalyzer — Main Class
+# ---------------------------------------------------------------------------
+# Organized into subsections:
+#   6.1: Initialization & Progress
+#   6.2: Model Path Resolution
+#   6.3: Image Analysis Entry Point
+#   6.4: Volume 3D Analysis
+#   6.5: Pipeline Stages
+#   6.6: Video Analysis
+#   6.7: Modality & Preprocessing
+#   6.8: Detection & Classification
+#   6.9: CNN & Brain Model
+#   6.10: Grad-CAM & Explainability
+#   6.11: Reporting & Output
+#   6.12: Demo Mode
+#   6.13: Utility Methods
+
 class MedicalImageAnalyzer:
     def __init__(self, config: MedicalImageAnalyzerConfig | None = None, detector_backend: DetectorBackend | None = None) -> None:
         self.config = config or build_default_medical_analyzer_config()
@@ -402,6 +455,8 @@ class MedicalImageAnalyzer:
         self._active_modality: str | None = None
         self._brain_fallback_active = False
 
+        # --- 6.1: Initialization & Progress ---
+
     @staticmethod
     def _call_progress(cb: ProgressCallback, stage: str, pct: float) -> None:
         if cb is not None:
@@ -409,6 +464,8 @@ class MedicalImageAnalyzer:
                 cb(stage, pct)
             except Exception:
                 pass
+
+        # --- 6.2: Model Path Resolution ---
 
     def _active_model_path(self, body_region: str | None = None) -> Path:
         if self._runtime_model_path is not None:
@@ -448,6 +505,8 @@ class MedicalImageAnalyzer:
                 paths[name] = Path(candidate)
         return paths
 
+        # --- 6.3: Image Analysis Entry Point ---
+
     def cleanup_cached_images(self) -> int:
         """Xoa normalized image cu neu vuot qua max_cached_images."""
         processed = self.config.processed_dir
@@ -463,6 +522,8 @@ class MedicalImageAnalyzer:
             except Exception:
                 pass
         return removed
+
+        # --- 6.3: Image Analysis Entry Point ---
 
     def analyze_image(
         self,
@@ -758,6 +819,8 @@ class MedicalImageAnalyzer:
             representative_frame_index=representative_frame_index,
         )
 
+        # --- 6.4: Volume 3D Analysis ---
+
     def _analyze_volume(
         self,
         source: Path,
@@ -920,6 +983,8 @@ class MedicalImageAnalyzer:
             volume_mask_path=volume_mask_path,
         )
 
+        # --- 6.5: Pipeline Stages ---
+
     def _run_pipeline_stages(
         self,
         image: np.ndarray,
@@ -1055,6 +1120,8 @@ class MedicalImageAnalyzer:
                 )
             )
         return sorted(aggregated, key=lambda item: item.confidence, reverse=True)
+
+        # --- 6.6: Video Analysis ---
 
     def _run_video_samples(
         self,
@@ -1325,6 +1392,8 @@ class MedicalImageAnalyzer:
             return False
         return self._brain_fallback_active or body_region == "brain"
 
+        # --- 6.8: Detection & Classification ---
+
     def _detect_findings(
         self, image: np.ndarray, *, body_region: str | None = None
     ) -> list[DetectionFinding]:
@@ -1447,6 +1516,8 @@ class MedicalImageAnalyzer:
         x1, x2 = sorted((max(0, min(width, x1)), max(0, min(width, x2))))
         y1, y2 = sorted((max(0, min(height, y1)), max(0, min(height, y2))))
         return (x1, y1, x2, y2) if x2 > x1 and y2 > y1 else None
+
+        # --- 6.9: Model Loading & Readiness ---
 
     def ensure_ready(self, target_key: str | None = None, modality: str | None = None) -> Path:
         issues = validate_medical_analyzer_config(self.config)
@@ -1656,6 +1727,8 @@ class MedicalImageAnalyzer:
 
         self._dicom_modality_cache[source] = modality
         return modality
+
+        # --- 6.10: Input Validation ---
 
     def validate_input(self, image_path: str | Path) -> ValidationResult:
         source = Path(image_path)
@@ -1902,6 +1975,8 @@ class MedicalImageAnalyzer:
             )
         return payloads
 
+        # --- 6.11: Risk Classification ---
+
     def _classify_findings(self, detections: list[DetectionFinding]) -> tuple[str, bool, str, float]:
         average_confidence = sum(item.confidence for item in detections) / len(detections) if detections else 0.0
         return (
@@ -1942,6 +2017,8 @@ class MedicalImageAnalyzer:
         except Exception:
             logger.warning("[Compliance] De-identification failed", exc_info=True)
             return None
+
+        # --- 6.12: Grad-CAM & Explainability ---
 
     def _run_gradcam_if_possible(
         self, prepared_image: np.ndarray, detections: list[DetectionFinding], validation: ValidationResult
@@ -2043,6 +2120,8 @@ class MedicalImageAnalyzer:
             coordinate_system=np.asarray(volume.coordinate_system),
         )
         return path
+
+        # --- 6.13: Demo Mode ---
 
     def _analyze_demo(
         self,

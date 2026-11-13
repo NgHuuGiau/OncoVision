@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import dedent
+
+logger = logging.getLogger(__name__)
 
 MEDICAL_DISCLAIMER = dedent(
     """
@@ -11,6 +16,117 @@ MEDICAL_DISCLAIMER = dedent(
     Mọi trường hợp nghi ngờ ung thư cần được đánh giá bởi bác sĩ chuyên khoa và xét nghiệm bổ sung.
     """
 ).strip()
+
+
+# Audit trail cho inference requests
+AUDIT_LOG_FILE = Path("output/logs/audit.json.log")
+
+
+class AuditTrail:
+    """Audit trail cho mọi inference request — phục vụ compliance và debugging.
+
+    Mỗi entry bao gồm:
+    - timestamp: Thời gian request
+    - user: Người dùng (nếu có auth)
+    - action: Hành động (inference, export, login, v.v.)
+    - target_key: Nhóm ung thư được phân tích
+    - model_version: Version của model dùng
+    - result_summary: Tóm tắt kết quả
+    - metadata: Thông tin bổ sung
+    """
+
+    def __init__(self, log_file: Path | None = None) -> None:
+        self._log_file = log_file or AUDIT_LOG_FILE
+        self._log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def log(
+        self,
+        *,
+        action: str,
+        user: str | None = None,
+        target_key: str | None = None,
+        model_version: str | None = None,
+        result_summary: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        """Ghi một entry vào audit trail."""
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "user": user or "anonymous",
+            "action": action,
+        }
+        if target_key:
+            entry["target_key"] = target_key
+        if model_version:
+            entry["model_version"] = model_version
+        if result_summary:
+            entry["result_summary"] = result_summary
+        if metadata:
+            entry["metadata"] = metadata
+
+        try:
+            with self._log_file.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+        except OSError as e:
+            logger.warning("Không thể ghi audit log: %s", e)
+
+    def log_inference(
+        self,
+        *,
+        user: str | None = None,
+        target_key: str,
+        model_path: str,
+        classification: str | None = None,
+        confidence: float | None = None,
+        detections_count: int | None = None,
+        image_path: str | None = None,
+    ) -> None:
+        """Ghi audit log cho inference request."""
+        summary_parts = []
+        if classification:
+            summary_parts.append(f"classified={classification}")
+        if confidence is not None:
+            summary_parts.append(f"confidence={confidence:.3f}")
+        if detections_count is not None:
+            summary_parts.append(f"detections={detections_count}")
+
+        self.log(
+            action="inference",
+            user=user,
+            target_key=target_key,
+            model_version=Path(model_path).name,
+            result_summary=", ".join(summary_parts) if summary_parts else None,
+            metadata={"image_path": image_path, "model_path": model_path},
+        )
+
+    def log_login(self, *, user: str, success: bool, ip_address: str | None = None) -> None:
+        """Ghi audit log cho login attempt."""
+        self.log(
+            action="login",
+            user=user,
+            result_summary="success" if success else "failed",
+            metadata={"ip_address": ip_address} if ip_address else None,
+        )
+
+    def log_export(self, *, user: str | None = None, case_id: int | None = None, format: str = "pdf") -> None:
+        """Ghi audit log cho export action."""
+        self.log(
+            action="export",
+            user=user,
+            metadata={"case_id": case_id, "format": format},
+        )
+
+
+# Global audit trail instance
+_audit_trail: AuditTrail | None = None
+
+
+def get_audit_trail() -> AuditTrail:
+    """Lấy global audit trail instance (singleton)."""
+    global _audit_trail
+    if _audit_trail is None:
+        _audit_trail = AuditTrail()
+    return _audit_trail
 
 
 _DICOM_PII_TAGS = [

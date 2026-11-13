@@ -227,6 +227,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
                     break
             if clinical:
                 break
+        resolved_paths = paths
         target_capabilities[target.key] = {
             "runtime_ready": classification or localization or volume,
             "classification_ready": classification,
@@ -299,7 +300,7 @@ def get_medical_system_status() -> MedicalSystemStatus:
             "volume_ready": volume,
             "clinical_validation_ready": clinical,
         }
-        resolved_target_paths[target.key] = paths
+        resolved_target_paths[target.key] = resolved_paths
 
     ready_targets = [target for target in COMMON_CANCER_TARGETS if target_capabilities[target.key]["runtime_ready"]]
     classification_ready = any(item["classification_ready"] for item in target_capabilities.values())
@@ -310,8 +311,9 @@ def get_medical_system_status() -> MedicalSystemStatus:
     if resolved_model_path is None and ready_targets:
         first_paths = resolved_target_paths[ready_targets[0].key]
         resolved_model_path = next(
-            path for path in (first_paths["classifier"], first_paths["detector"], first_paths["volume_model"])
-            if path.is_file()
+            (path for path in (first_paths["classifier"], first_paths["detector"], first_paths["volume_model"])
+            if path.is_file()),
+            None,
         )
     model_message = (
         f"{model_message}; {len(ready_targets)}/{len(COMMON_CANCER_TARGETS)} nhóm có model runtime; "

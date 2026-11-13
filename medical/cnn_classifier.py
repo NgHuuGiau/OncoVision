@@ -381,8 +381,59 @@ class MedicalCNNClassifierWrapper:
         return "resnet50"
 
 
-def load_cnn_classifier(path: str | Path, device: str | None = None) -> MedicalCNNClassifierWrapper:
-    return MedicalCNNClassifierWrapper.load(path, device=device)
+# Global model cache: path -> (wrapper, device)
+_model_cache: dict[str, tuple[MedicalCNNClassifierWrapper, str]] = {}
+
+
+def get_model_cache_info() -> dict[str, str]:
+    """Trả về thông tin model đang được cache.
+
+    Returns:
+        Dict mapping model path -> device.
+    """
+    return {path: device for path, (_, device) in _model_cache.items()}
+
+
+def clear_model_cache() -> None:
+    """Xóa toàn bộ model cache. Dùng khi cần giải phóng GPU memory."""
+    _model_cache.clear()
+    logger.info("Đã xóa toàn bộ model cache")
+
+
+def load_cnn_classifier(
+    path: str | Path, device: str | None = None, *, use_cache: bool = True
+) -> MedicalCNNClassifierWrapper:
+    """Load CNN classifier với optional caching.
+
+    Args:
+        path: Đường dẫn đến model file.
+        device: Device để load model (cpu/cuda).
+        use_cache: Nếu True, tái sử dụng model đã load từ cùng path.
+
+    Returns:
+        MedicalCNNClassifierWrapper instance.
+    """
+    cache_key = str(Path(path).resolve())
+    target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+    if use_cache and cache_key in _model_cache:
+        cached_wrapper, cached_device = _model_cache[cache_key]
+        if cached_device == target_device:
+            logger.debug("Sử dụng model cache: %s (@%s)", cache_key, target_device)
+            return cached_wrapper
+        else:
+            logger.info(
+                "Model cache device mismatch (%s vs %s), load lại", cached_device, target_device
+            )
+
+    logger.info("Đang load CNN classifier từ %s (@%s)", cache_key, target_device)
+    wrapper = MedicalCNNClassifierWrapper.load(path, device=target_device)
+
+    if use_cache:
+        _model_cache[cache_key] = (wrapper, target_device)
+        logger.info("Đã cache model: %s (@%s)", cache_key, target_device)
+
+    return wrapper
 
 
 def is_cnn_classifier_path(path: str | Path) -> bool:

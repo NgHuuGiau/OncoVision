@@ -102,6 +102,14 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
         model_ready=True,
         notes="Model hiện có: ConvNeXt-Tiny, 4 loại u não (glioma/meningioma/pituitary/no_tumor).",
     ),
+    CancerScreeningTarget(
+        key="spleen",
+        label="Ung thư lách",
+        description="Phân tích tổn thương lách trên CT, MRI hoặc PET/CT.",
+        modalities=("CT lách", "MRI lách", "PET/CT"),
+        model_ready=False,
+        notes="Chưa có classifier/detector; chỉ có volume manifest.",
+    ),
 )
 
 

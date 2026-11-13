@@ -2,11 +2,83 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import sys
 from pathlib import Path
 
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
 
-CANCERS_DIR = Path("models/pretrained/cancers")
+logger = logging.getLogger(__name__)
+
+
+def _get_cancers_dir() -> Path:
+    """Lay duong den models/pretrained/cancers/, hoat dong dung ca khi chay tu exe."""
+    if getattr(sys, "frozen", False):
+        base_dir = Path(os.path.dirname(sys.executable))
+        internal_dir = base_dir / "_internal"
+        if (internal_dir / "models" / "pretrained" / "cancers").is_dir():
+            return internal_dir / "models" / "pretrained" / "cancers"
+        if (base_dir / "models" / "pretrained" / "cancers").is_dir():
+            return base_dir / "models" / "pretrained" / "cancers"
+    return Path("models/pretrained/cancers")
+
+
+CANCERS_DIR = _get_cancers_dir()
+
+# Labels COCO generic — nếu detector có >= 5 labels này, đánh dấu là không hợp lệ
+_COCO_GENERIC_LABELS = {
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+    "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
+    "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
+    "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
+    "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
+    "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
+    "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+    "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator",
+    "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
+}
+
+# Các labels y khoa hợp lệ (minimal set)
+_MEDICAL_LABEL_PATTERNS = {
+    "tumor", "lesion", "mass", "nodule", "cyst", "calcification", "malignant", "benign",
+    "carcinoma", "glioma", "meningioma", "pituitary", "abnormal", "dysplasia", "ulcer",
+    "polyp", "adenoma", "fibroadenoma", "thyroid", "nodule_thyroid", "thyroid_nodule",
+}
+
+
+def _is_medical_detector(model_labels: list[str]) -> tuple[bool, str]:
+    """Kiểm tra detector có labels y khoa hợp lệ hay không.
+
+    Trả về (is_medical, reason).
+    """
+    if not model_labels:
+        return False, "không có labels"
+
+    # YOLO names có thể trả về dict {int: str} — chuyển sang list[str]
+    if model_labels and isinstance(next(iter(model_labels), None), int):
+        # model_labels là dict-like với keys là int
+        model_labels = [str(label) for label in model_labels]
+    labels_lower = [str(label).lower().strip() for label in model_labels]
+
+    # Đếm số labels COCO generic
+    coco_count = sum(1 for label in labels_lower if label in _COCO_GENERIC_LABELS)
+    if coco_count >= 5:
+        return False, f"dùng COCO generic ({coco_count}/{len(labels_lower)} labels không liên quan y khoa)"
+
+    # Kiểm tra có ít nhất 1 label y khoa
+    medical_count = 0
+    for label in labels_lower:
+        for pattern in _MEDICAL_LABEL_PATTERNS:
+            if pattern in label:
+                medical_count += 1
+                break
+    # Nếu không có label y khoa nào và có nhiều label (>10), có thể là generic
+    if medical_count == 0 and len(labels_lower) > 10:
+        return False, f"không có labels y khoa ({len(labels_lower)} labels tổng quát)"
+
+    return True, ""
 
 KEY_TO_DIR = {target.key: target.key for target in COMMON_CANCER_TARGETS}
 
@@ -80,6 +152,16 @@ def probe_runtime_capability(path: str | Path, kind: str) -> tuple[bool, str]:
             if task not in {"detect", "segment"}:
                 result = (False, f"task={task!r}, cần detect hoặc segment")
             else:
+                # Kiểm tra labels có phải y khoa không
+                model_labels = getattr(getattr(model, "names", None), "names", list(getattr(model, "names", {}) or {}))
+                if isinstance(model_labels, dict):
+                    model_labels = list(model_labels.values())
+                is_medical, medical_reason = _is_medical_detector(model_labels)
+                if not is_medical:
+                    result = (False, f"detector không phải y khoa ({medical_reason})")
+                    logger.warning("Detector %s không hợp lệ: %s", source, medical_reason)
+                    _PROBE_CACHE[key] = result
+                    return result
                 # Nạp được chưa đủ: state_dict lạ vẫn load được nhưng predict mới vỡ
                 try:
                     import numpy as np
@@ -135,11 +217,14 @@ def modality_key(value: str | None) -> str | None:
     return normalized
 
 
-def target_model_paths(key: str, base: Path = CANCERS_DIR, modality: str | None = None) -> dict[str, Path]:
+def target_model_paths(key: str, base: Path | None = None, modality: str | None = None) -> dict[str, Path]:
     """Tra duong dan model, khoa theo modality khi modality da duoc biet.
-    
+
     Neu modality khong duoc chi dinh, tra ve organ root directory.
+    Neu base la None, tu dong phat hien (hoat dong dung khi chay tu exe).
     """
+    if base is None:
+        base = CANCERS_DIR
     normalized = key.strip().lower()
     target_directory = Path(base) / KEY_TO_DIR.get(normalized, normalized)
     modality_dir_key = modality_key(modality)

@@ -308,48 +308,83 @@ def _bbox_mm(volume: VolumeData, bbox: tuple[int, int, int, int, int, int]) -> t
 
 
 def load_volume_model(path: str | Path, device: str | torch.device = "cpu") -> torch.nn.Module:
+    """Load volume 3D model với fallback cho nhiều format.
+
+    Hỗ trợ các format:
+    - .pt2: torch.export format (ưu tiên), fallback sang TorchScript nếu version mismatch
+    - .pt/.pth: TorchScript (ưu tiên), fallback sang regular checkpoint
+    - Các format khác: regular PyTorch checkpoint
+    """
     source = Path(path)
     target = torch.device(device)
-    if source.suffix.lower() == ".pt2":
-        model = torch.export.load(str(source)).module()
-        return model.to(target)
     logger.info("Đang nạp model 3D từ %s", source)
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
-        # Try TorchScript first
-        try:
-            return torch.jit.load(str(source), map_location=target).eval()
-        except Exception:
-            # Fallback: load as regular PyTorch model
-            logger.info("Không phải TorchScript, thử nạp sebagai model PyTorch thường")
-            checkpoint = torch.load(str(source), map_location=target, weights_only=False)
-            if isinstance(checkpoint, dict):
-                if "model_state_dict" in checkpoint:
-                    # Wrapped model format
-                    from medical.cnn_classifier import _build_backbone
-                    backbone_name = checkpoint.get("backbone", "resnet50")
-                    num_classes = checkpoint.get("num_classes", 2)
-                    model = torch.nn.Sequential(
-                        _build_backbone(backbone_name, pretrained=False)[0],
-                        torch.nn.Linear(512, checkpoint.get("num_classes", 2))
+
+        if source.suffix.lower() == ".pt2":
+            # Try torch.export.load first (native format)
+            try:
+                model = torch.export.load(str(source)).module()
+                logger.info("Nạp model 3D thành công qua torch.export.load")
+                return model.to(target)
+            except Exception as export_err:
+                logger.warning(
+                    "torch.export.load thất bại (%s), thử TorchScript fallback cho .pt2",
+                    type(export_err).__name__
+                )
+                # Fallback: .pt2 có thể là TorchScript archive
+                try:
+                    model = torch.jit.load(str(source), map_location=target)
+                    logger.info("Nạp model 3D thành công qua TorchScript fallback (.pt2)")
+                    return model.eval()
+                except Exception as jit_err:
+                    logger.warning(
+                        "TorchScript fallback thất bại (%s), thử regular checkpoint",
+                        type(jit_err).__name__
                     )
-                    model.load_state_dict(checkpoint["model_state_dict"])
-                elif "state_dict" in checkpoint:
-                    # Regular checkpoint with state_dict
-                    import torchvision.models as models
-                    model = models.resnet50(weights=None)
-                    model.fc = torch.nn.Linear(2048, 2)
-                    model.load_state_dict(checkpoint["state_dict"])
-                else:
-                    # Assume it's a raw state_dict
-                    import torchvision.models as models
-                    model = models.resnet50(weights=None)
-                    model.fc = torch.nn.Linear(2048, 2)
-                    model.load_state_dict(checkpoint)
-            else:
-                # Raw model
-                model = checkpoint
-            return model.to(target).eval()
+                    # Last resort: try as regular checkpoint
+                    return _load_regular_checkpoint(str(source), target)
+
+        # For .pt/.pth and other formats: try TorchScript first, then regular checkpoint
+        try:
+            model = torch.jit.load(str(source), map_location=target)
+            logger.info("Nạp model 3D thành công qua TorchScript")
+            return model.eval()
+        except Exception:
+            logger.info("Không phải TorchScript, thử nạp sebagai model PyTorch thường")
+            return _load_regular_checkpoint(str(source), target)
+
+
+def _load_regular_checkpoint(path: str, device: torch.device) -> torch.nn.Module:
+    """Load regular PyTorch checkpoint với nhiều format hỗ trợ."""
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    if isinstance(checkpoint, dict):
+        if "model_state_dict" in checkpoint:
+            # Wrapped model format
+            from medical.cnn_classifier import _build_backbone
+            backbone_name = checkpoint.get("backbone", "resnet50")
+            model = torch.nn.Sequential(
+                _build_backbone(backbone_name, pretrained=False)[0],
+                torch.nn.Linear(512, checkpoint.get("num_classes", 2))
+            )
+            model.load_state_dict(checkpoint["model_state_dict"])
+        elif "state_dict" in checkpoint:
+            # Regular checkpoint with state_dict
+            import torchvision.models as models
+            model = models.resnet50(weights=None)
+            model.fc = torch.nn.Linear(2048, 2)
+            model.load_state_dict(checkpoint["state_dict"])
+        else:
+            # Assume it's a raw state_dict
+            import torchvision.models as models
+            model = models.resnet50(weights=None)
+            model.fc = torch.nn.Linear(2048, 2)
+            model.load_state_dict(checkpoint)
+    else:
+        # Raw model
+        model = checkpoint
+    return model.to(device).eval()
 
 
 class TorchVolumeRuntime:
