@@ -94,9 +94,152 @@ function translateUI() {
   }
 }
 
-function toggleSidebar() {
+let currentChatWidthMode = localStorage.getItem('chatWidthMode') || 'normal';
+let isChatPanelCollapsed = localStorage.getItem('chatCollapsed') === '1';
+
+function toggleSidebar(forceOpen) {
   const sb = document.getElementById('sidebar');
-  if (sb) sb.classList.toggle('collapsed');
+  const appContainer = document.querySelector('.app-container');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  if (!sb) return;
+
+  const willCollapse = forceOpen !== undefined ? !forceOpen : !sb.classList.contains('collapsed');
+  sb.classList.toggle('collapsed', willCollapse);
+  if (appContainer) {
+    appContainer.classList.toggle('sidebar-collapsed', willCollapse);
+  }
+  if (toggleBtn) {
+    toggleBtn.title = willCollapse ? 'Mở thanh bên (Ctrl+B)' : 'Thu gọn thanh bên (Ctrl+B)';
+  }
+  localStorage.setItem('sidebarCollapsed', willCollapse ? '1' : '0');
+}
+
+function setChatWidth(mode, customPx) {
+  const appContainer = document.querySelector('.app-container');
+  const label = document.getElementById('chatSizeLabel');
+  const btn = document.getElementById('chatSizeBtn');
+  if (!appContainer) return;
+
+  appContainer.classList.remove('chat-narrow', 'chat-normal', 'chat-wide');
+
+  if (mode === 'custom' && customPx) {
+    appContainer.style.setProperty('--chat-width', `${customPx}px`);
+    currentChatWidthMode = 'custom';
+    if (label) label.textContent = `${customPx}px`;
+    if (btn) btn.title = `Độ rộng tùy chỉnh (${customPx}px). Nhấn để chuyển Hẹp/Vừa/Rộng (Alt+W)`;
+  } else if (mode === 'narrow') {
+    appContainer.style.removeProperty('--chat-width');
+    appContainer.classList.add('chat-narrow');
+    currentChatWidthMode = 'narrow';
+    if (label) label.textContent = 'Hẹp';
+    if (btn) btn.title = 'Đang ở chế độ Hẹp (320px). Nhấn để đổi sang Vừa (Alt+W)';
+  } else if (mode === 'wide') {
+    appContainer.style.removeProperty('--chat-width');
+    appContainer.classList.add('chat-wide');
+    currentChatWidthMode = 'wide';
+    if (label) label.textContent = 'Rộng';
+    if (btn) btn.title = 'Đang ở chế độ Rộng (580px). Nhấn để đổi sang Hẹp (Alt+W)';
+  } else {
+    appContainer.style.removeProperty('--chat-width');
+    appContainer.classList.add('chat-normal');
+    currentChatWidthMode = 'normal';
+    if (label) label.textContent = 'Vừa';
+    if (btn) btn.title = 'Đang ở chế độ Vừa (410px). Nhấn để đổi sang Rộng (Alt+W)';
+  }
+  localStorage.setItem('chatWidthMode', currentChatWidthMode);
+}
+
+function cycleChatWidth() {
+  if (isChatPanelCollapsed) {
+    toggleChatCollapse(false);
+  }
+  if (currentChatWidthMode === 'narrow') {
+    setChatWidth('normal');
+  } else if (currentChatWidthMode === 'normal') {
+    setChatWidth('wide');
+  } else {
+    setChatWidth('narrow');
+  }
+}
+
+function toggleChatCollapse(collapseState) {
+  const appContainer = document.querySelector('.app-container');
+  const assistant = document.getElementById('aiAssistant') || document.querySelector('.ai-assistant');
+  const chatOpenBtn = document.getElementById('chatOpenBtn');
+  const chatCollapseBtn = document.getElementById('chatCollapseBtn');
+  if (!appContainer || !assistant) return;
+
+  const willCollapse = collapseState !== undefined ? collapseState : !isChatPanelCollapsed;
+  isChatPanelCollapsed = willCollapse;
+
+  appContainer.classList.toggle('chat-collapsed', willCollapse);
+  assistant.classList.toggle('collapsed', willCollapse);
+
+  if (chatOpenBtn) {
+    chatOpenBtn.style.display = willCollapse ? 'inline-flex' : 'none';
+  }
+  if (chatCollapseBtn) {
+    chatCollapseBtn.title = willCollapse ? 'Mở lại khung chat (Ctrl+J)' : 'Thu gọn khung chat (Ctrl+J)';
+  }
+  localStorage.setItem('chatCollapsed', willCollapse ? '1' : '0');
+}
+
+function initChatResizer() {
+  const resizer = document.getElementById('chatResizer');
+  const appContainer = document.querySelector('.app-container');
+  if (!resizer || !appContainer) return;
+
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  resizer.addEventListener('mousedown', (e) => {
+    if (isChatPanelCollapsed) return;
+    isDragging = true;
+    startX = e.clientX;
+    const assistant = document.getElementById('aiAssistant') || document.querySelector('.ai-assistant');
+    startWidth = assistant ? assistant.getBoundingClientRect().width : 410;
+    document.body.classList.add('is-resizing-chat');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const diff = startX - e.clientX;
+    let newWidth = Math.round(startWidth + diff);
+    if (newWidth < 280) newWidth = 280;
+    const maxW = Math.round(window.innerWidth * 0.65);
+    if (newWidth > maxW) newWidth = maxW;
+    setChatWidth('custom', newWidth);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      document.body.classList.remove('is-resizing-chat');
+      const assistant = document.getElementById('aiAssistant') || document.querySelector('.ai-assistant');
+      if (assistant) {
+        const finalW = Math.round(assistant.getBoundingClientRect().width);
+        localStorage.setItem('chatCustomWidth', String(finalW));
+      }
+    }
+  });
+}
+
+function initKeyboardShortcuts() {
+  window.addEventListener('keydown', (e) => {
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+    if (isCtrlOrCmd && (e.key === 'b' || e.key === 'B')) {
+      e.preventDefault();
+      toggleSidebar();
+    } else if (isCtrlOrCmd && (e.key === 'j' || e.key === 'J')) {
+      e.preventDefault();
+      toggleChatCollapse();
+    } else if (e.altKey && (e.key === 'w' || e.key === 'W')) {
+      e.preventDefault();
+      cycleChatWidth();
+    }
+  });
 }
 
 function initTargets() {
@@ -1056,10 +1199,28 @@ document.addEventListener('keydown', e => {
 
   initTargets();
   applyLanguage(currentLang);
-  if (window.innerWidth <= 900) {
-    const sb = document.getElementById('sidebar');
-    if (sb) sb.classList.add('collapsed');
+
+  // Khởi tạo trạng thái thanh bên & khung chat từ lưu trữ
+  const savedSidebar = localStorage.getItem('sidebarCollapsed');
+  if (savedSidebar === '1' || (savedSidebar === null && window.innerWidth <= 900)) {
+    toggleSidebar(false);
   }
+
+  const savedCustomWidth = localStorage.getItem('chatCustomWidth');
+  const savedWidthMode = localStorage.getItem('chatWidthMode') || 'normal';
+  if (savedWidthMode === 'custom' && savedCustomWidth) {
+    setChatWidth('custom', parseInt(savedCustomWidth, 10));
+  } else {
+    setChatWidth(savedWidthMode);
+  }
+
+  if (localStorage.getItem('chatCollapsed') === '1') {
+    toggleChatCollapse(true);
+  }
+
+  initChatResizer();
+  initKeyboardShortcuts();
+
   await loadConversations();
 
   try {

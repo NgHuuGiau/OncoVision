@@ -4,7 +4,7 @@ import io
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-import run_tests
+import entrypoints.run_tests as run_tests
 
 
 class DummyPassingTest(unittest.TestCase):
@@ -34,7 +34,7 @@ class RunTestsDashboardTests(unittest.TestCase):
         self.assertIn("SYSTEM TEST DASHBOARD", output)
         self.assertIn("TEST PASS", output)
 
-    @patch("run_tests._open_camera_capture")
+    @patch("entrypoints.run_tests._open_camera_capture")
     def test_check_camera_reports_warn_when_camera_cannot_open(self, open_camera_mock) -> None:
         capture = Mock()
         capture.isOpened.return_value = False
@@ -46,7 +46,7 @@ class RunTestsDashboardTests(unittest.TestCase):
         self.assertIn("camera index 1", result.summary)
         capture.release.assert_called_once()
 
-    @patch("run_tests._open_camera_capture")
+    @patch("entrypoints.run_tests._open_camera_capture")
     def test_check_camera_reports_pass_when_frame_is_read(self, open_camera_mock) -> None:
         frame = Mock()
         frame.shape = (480, 640, 3)
@@ -62,11 +62,11 @@ class RunTestsDashboardTests(unittest.TestCase):
         self.assertIn("640x480", result.detail)
         capture.release.assert_called_once()
 
-    @patch("run_tests.PrettyTestRunner")
-    @patch("run_tests.unittest.defaultTestLoader.discover")
-    @patch("run_tests.ensure_project_directories")
-    @patch("run_tests.parse_args")
-    @patch("run_tests.check_camera")
+    @patch("entrypoints.run_tests.PrettyTestRunner")
+    @patch("entrypoints.run_tests.unittest.defaultTestLoader.discover")
+    @patch("entrypoints.run_tests.ensure_project_directories")
+    @patch("entrypoints.run_tests.parse_args")
+    @patch("entrypoints.run_tests.check_camera")
     def test_main_skips_camera_probe_when_requested(
         self,
         check_camera_mock,
@@ -91,11 +91,11 @@ class RunTestsDashboardTests(unittest.TestCase):
         check_camera_mock.assert_not_called()
         self.assertIsNone(runner_cls_mock.call_args.kwargs["camera_result"])
 
-    @patch("run_tests.PrettyTestRunner")
-    @patch("run_tests.unittest.defaultTestLoader.discover")
-    @patch("run_tests.ensure_project_directories")
-    @patch("run_tests.parse_args")
-    @patch("run_tests.check_camera")
+    @patch("entrypoints.run_tests.PrettyTestRunner")
+    @patch("entrypoints.run_tests.unittest.defaultTestLoader.discover")
+    @patch("entrypoints.run_tests.ensure_project_directories")
+    @patch("entrypoints.run_tests.parse_args")
+    @patch("entrypoints.run_tests.check_camera")
     def test_main_returns_failure_when_strict_camera_check_warns(
         self,
         check_camera_mock,
@@ -123,11 +123,11 @@ class RunTestsDashboardTests(unittest.TestCase):
         self.assertIs(runner_cls_mock.call_args.kwargs["camera_result"], camera_result)
         self.assertTrue(runner_cls_mock.call_args.kwargs["strict_camera"])
 
-    @patch("run_tests.PrettyTestRunner")
-    @patch("run_tests.unittest.defaultTestLoader.discover")
-    @patch("run_tests.ensure_project_directories")
-    @patch("run_tests.parse_args")
-    @patch("run_tests.check_camera")
+    @patch("entrypoints.run_tests.PrettyTestRunner")
+    @patch("entrypoints.run_tests.unittest.defaultTestLoader.discover")
+    @patch("entrypoints.run_tests.ensure_project_directories")
+    @patch("entrypoints.run_tests.parse_args")
+    @patch("entrypoints.run_tests.check_camera")
     def test_main_returns_failure_when_test_suite_fails(
         self,
         check_camera_mock,

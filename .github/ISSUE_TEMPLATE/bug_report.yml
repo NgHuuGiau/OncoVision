@@ -41,6 +41,6 @@ body:
     attributes:
       label: Môi trường
       description: Hệ điều hành, Python, GPU (nếu có), phiên bản commit.
-      placeholder: Windows 11, Python 3.10, RTX 3050 Ti, commit abc123
+      placeholder: Windows 11, Python 3.12, RTX 3050 Ti, commit abc123
     validations:
       required: false

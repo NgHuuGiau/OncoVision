@@ -102,6 +102,10 @@ def update_sidebar_ui(window) -> None:
             window.sidebar_shadow.setColor(QColor(0, 0, 0, 18))
     if hasattr(window, "sidebar_stack"):
         window.sidebar_stack.setCurrentWidget(window.sidebar_open_page if expanded else window.sidebar_compact_page)
+    if hasattr(window, "sidebar_toggle_button"):
+        window.sidebar_toggle_button.setToolTip(tr(window.language, "collapse_sidebar") if hasattr(window, "tr") else "Thu gọn thanh bên (Ctrl+B)")
+    if hasattr(window, "sidebar_collapsed_button"):
+        window.sidebar_collapsed_button.setToolTip(tr(window.language, "expand_sidebar") if hasattr(window, "tr") else "Mở rộng thanh bên (Ctrl+B)")
     window.search_icon.setPixmap(themed_pixmap("search.svg", window.subtle_icon_color(), 18))
 
     if expanded:

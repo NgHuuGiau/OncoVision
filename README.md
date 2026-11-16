@@ -1,6 +1,6 @@
 # OncoVision
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10-3.12-3776AB)](https://www.python.org/)
 [![Windows](https://img.shields.io/badge/Windows-11%2B-0078D6)](https://www.microsoft.com/windows)
 [![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C)](https://pytorch.org/)
 [![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO11-111111)](https://www.ultralytics.com/)
@@ -46,7 +46,7 @@
 ### Yêu cầu hệ thống
 
 - Windows 10/11
-- Python 3.10+
+- Python 3.10–3.12 (khuyến nghị 3.12; **không hỗ trợ Python 3.13**)
 - GPU NVIDIA khuyến nghị để suy luận nhanh hơn; CPU vẫn dùng được
 
 Với GPU NVIDIA, sau khi cài `requirements.txt`, cài wheel CUDA chính thức phù hợp với driver (lệnh dưới dùng CUDA 13.0):

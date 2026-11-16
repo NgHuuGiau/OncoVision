@@ -5,7 +5,7 @@ import sys
 
 from app.chat_ui.cli import build_chat_arg_parser
 from app.chat_ui.paths import get_chat_capture_dir
-from app.chat_ui.window import main as launch_chat_app
+from app.chat_ui.window import launch_chat_app
 from medical.output_management import _medical_output_directories
 from utils.cleanup_utils import cleanup_directories
 from utils.entrypoint_checks import chat_preflight_status

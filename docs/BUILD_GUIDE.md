@@ -1,7 +1,7 @@
 # Hướng dẫn Build OncoVision thành EXE
 
 ## Yêu cầu
-- Python 3.10+ đã cài dependencies (`pip install -r requirements.txt`)
+- Python 3.12 (khuyến nghị) hoặc 3.10/3.11 — **không dùng Python 3.13** (chưa hỗ trợ cx_Freeze/PyInstaller đầy đủ)
 - cx_Freeze 8.x: `pip install cx-Freeze`
 - Disk space: ~15GB (models 6.95GB + build process)
 
@@ -18,7 +18,7 @@ python scripts/setup_build.py build_exe
 ```
 
 ## Kết quả
-- Output: `build/exe.win-amd64-3.13/`
+- Output: `build/exe.win-amd64-3.12/`
   - `OncoVision.exe` — file chạy chính (~1.36 MB)
   - `lib/` — dependencies Python (~5 GB)
     - `torch/`, `cv2/`, `ultralytics/` — AI libraries
@@ -32,7 +32,7 @@ python scripts/setup_build.py build_exe
 
 ## Chạy EXE
 ```powershell
-.\build\exe.win-amd64-3.13\OncoVision.exe
+.\build\exe.win-amd64-3.12\OncoVision.exe
 ```
 
 ## Lưu ý quan trọng
@@ -51,7 +51,7 @@ python scripts/setup_build.py build_exe
 - Build lại: ~10-20 phút (nếu build/ còn cache)
 
 ### 4. Kích thước cuối cùng
-- `build/exe.win-amd64-3.13/`: ~11.92 GB total
+- `build/exe.win-amd64-3.12/`: ~11.92 GB total
   - `OncoVision.exe`: 1.36 MB
   - `lib/`: ~5 GB (PyTorch, PySide6, ultralytics, v.v.)
   - `models/`: 6.95 GB (266 model files)
@@ -119,6 +119,11 @@ Remove-Item -Path build -Recurse -Force
 ### cx_Freeze 8.x không dùng spec file
 - cx_Freeze 8.x không còn hỗ trợ spec file như cũ
 - **Giải pháp**: Dùng `scripts/setup_build.py` thay thế
+
+### Python 3.13 không hỗ trợ
+- **Nguyên nhân**: cx_Freeze, PyInstaller, PyAudio, PySide6 chưa hỗ trợ đầy đủ Python 3.13
+- **Giải pháp**: Dùng Python 3.12 để build EXE. Web app (Docker) cũng dùng Python 3.12.
+- **Nếu bắt buộc dùng 3.13**: Build PyInstaller từ source hoặc chờ phiên bản 6.10+; compile PyAudio từ source (cần Visual Studio Build Tools)
 
 ## Build Web App (Docker)
 ```bash

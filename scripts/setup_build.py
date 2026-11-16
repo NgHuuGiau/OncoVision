@@ -12,14 +12,18 @@ import os
 from pathlib import Path
 sys.setrecursionlimit(5000)  # Increase recursion limit for PyTorch
 
-from cx_Freeze import setup, Executable
+# Project root directory (parent of scripts/)
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
-# Project root directory
-PROJECT_ROOT = Path(__file__).parent.resolve()
+# Add project root to sys.path so cx_Freeze can find app/, medical/, core/, utils/
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from cx_Freeze import setup, Executable
 
 # Build options
 build_exe_options = {
     "includes": [
+        "entrypoints.run_chat",
         "app.chat_ui.window",
         "app.chat_ui.desktop_auth",
         "app.chat_ui.models",
@@ -55,6 +59,7 @@ build_exe_options = {
         "torch.cuda",
         "torch.distributed",
         "torch.fx",
+        "torch._dynamo.polyfills.fx",  # import động trong torch._dynamo.polyfills.loader
         "torch.multiprocessing",
         "torchvision",
         "cv2",
@@ -98,14 +103,15 @@ build_exe_options = {
         "aiofiles",
         "doctest",
         # Exclude heavy/unnecessary torch modules to avoid recursion
+        # (khong exclude torch.onnx: torchvision import torch.onnx ngay khi nap)
         "torch.elastic",
-        "torch.onnx",
         "torch.testing",
         "torch.utils.tensorboard",
     ],
     "packages": [],
     "include_files": [
         (str(PROJECT_ROOT / "app" / "chat_ui"), "app/chat_ui"),
+        (str(PROJECT_ROOT / "entrypoints"), "entrypoints"),
         (str(PROJECT_ROOT / "medical"), "medical"),
         (str(PROJECT_ROOT / "core"), "core"),
         (str(PROJECT_ROOT / "utils"), "utils"),
@@ -120,7 +126,7 @@ build_exe_options = {
 
 # Executable
 exe = Executable(
-    script="run_chat.py",
+    script="entrypoints/run_chat.py",
     base="gui",  # No console window (cx_Freeze 8.x uses "gui" instead of "Win32GUI")
     target_name="OncoVision.exe",
     copyright="Copyright © 2025 OncoVision",

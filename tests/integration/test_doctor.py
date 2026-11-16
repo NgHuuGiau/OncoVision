@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-import run_doctor
+import entrypoints.run_doctor as run_doctor
 from medical.system_status import MedicalSystemStatus
 
 
@@ -22,7 +22,7 @@ class DoctorTests(unittest.TestCase):
     def test_count_files_ignores_missing_directory(self) -> None:
         self.assertEqual(run_doctor.count_files(Path("missing-dir-for-doctor-test")), 0)
 
-    @patch("run_doctor._open_camera_capture")
+    @patch("entrypoints.run_doctor._open_camera_capture")
     def test_probe_camera_reports_warn_when_camera_cannot_open(self, open_camera_mock) -> None:
         capture = Mock()
         capture.isOpened.return_value = False
@@ -33,7 +33,7 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result.level, "WARN")
         self.assertIn("camera index 0", result.summary)
 
-    @patch("run_doctor._open_camera_capture")
+    @patch("entrypoints.run_doctor._open_camera_capture")
     def test_probe_camera_reports_pass_when_frame_is_read(self, open_camera_mock) -> None:
         capture = Mock()
         capture.isOpened.return_value = True
@@ -47,12 +47,12 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("1280x720", result.detail)
 
     @patch("builtins.print")
-    @patch("run_doctor.recommended_medical_commands", return_value=["Bổ sung model suy luận"])
-    @patch("run_doctor.get_medical_system_status")
-    @patch("run_doctor.optimized_runtime")
-    @patch("run_doctor.detect_hardware")
-    @patch("run_doctor.ensure_project_directories")
-    @patch("run_doctor.parse_args")
+    @patch("entrypoints.run_doctor.recommended_medical_commands", return_value=["Bổ sung model suy luận"])
+    @patch("entrypoints.run_doctor.get_medical_system_status")
+    @patch("entrypoints.run_doctor.optimized_runtime")
+    @patch("entrypoints.run_doctor.detect_hardware")
+    @patch("entrypoints.run_doctor.ensure_project_directories")
+    @patch("entrypoints.run_doctor.parse_args")
     def test_main_reports_missing_models_without_dataset_training_guidance(
         self,
         parse_args_mock,
@@ -99,8 +99,8 @@ class DoctorTests(unittest.TestCase):
             analyzed_modalities=("CT", "MRI"),
         )
 
-        with patch("run_doctor._present_and_missing_models", return_value=([], ["yolo11n.pt"])), patch(
-            "run_doctor.count_files",
+        with patch("entrypoints.run_doctor._present_and_missing_models", return_value=([], ["yolo11n.pt"])), patch(
+            "entrypoints.run_doctor.count_files",
             side_effect=[0] * 20,
         ):
             run_doctor.main()
@@ -108,18 +108,18 @@ class DoctorTests(unittest.TestCase):
         output = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
         self.assertIn("models/pretrained", output)
         self.assertIn("model local", output)
-        self.assertIn("run_doctor.py --fix", output)
+        self.assertIn("entrypoints/run_doctor.py --fix", output)
         self.assertNotIn("train-all", output.lower())
         self.assertNotIn("split train", output.lower())
 
     @patch("builtins.print")
-    @patch("run_doctor.medical_config_issues", return_value=["conf_threshold phai nam trong khoang (0, 1)."])
-    @patch("run_doctor.runtime_config_issues", return_value=["config/settings.yaml thieu hoac sai muc `models`."])
-    @patch("run_doctor.recommended_medical_commands", return_value=["python run_medical.py analyze"])
-    @patch("run_doctor.get_medical_system_status")
-    @patch("run_doctor.detect_hardware")
-    @patch("run_doctor.ensure_project_directories")
-    @patch("run_doctor.parse_args")
+    @patch("entrypoints.run_doctor.medical_config_issues", return_value=["conf_threshold phai nam trong khoang (0, 1)."])
+    @patch("entrypoints.run_doctor.runtime_config_issues", return_value=["config/settings.yaml thieu hoac sai muc `models`."])
+    @patch("entrypoints.run_doctor.recommended_medical_commands", return_value=["python run_medical.py analyze"])
+    @patch("entrypoints.run_doctor.get_medical_system_status")
+    @patch("entrypoints.run_doctor.detect_hardware")
+    @patch("entrypoints.run_doctor.ensure_project_directories")
+    @patch("entrypoints.run_doctor.parse_args")
     def test_main_reports_medical_config_issues(
         self,
         parse_args_mock,

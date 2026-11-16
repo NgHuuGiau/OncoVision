@@ -36,7 +36,7 @@ Write-Host "Thoi gian uoc tinh: 30-60 phut" -ForegroundColor Yellow
 python scripts/setup_build.py build_exe
 
 if ($LASTEXITCODE -eq 0) {
-    $buildDir = "build\exe.win-amd64-3.13"
+    $buildDir = (Get-ChildItem -Path "build" -Directory -Filter "exe.*" | Select-Object -First 1).FullName
     $exePath = Join-Path $buildDir "OncoVision.exe"
     if (Test-Path $exePath) {
         $size = [math]::Round((Get-Item $exePath).Length / 1MB, 2)

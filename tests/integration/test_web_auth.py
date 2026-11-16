@@ -12,7 +12,7 @@ from urllib.parse import unquote
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
-import web_app
+import entrypoints.web_app as web_app
 from app.web_auth import (
     WebAuthDatabase,
     generate_recovery_code,

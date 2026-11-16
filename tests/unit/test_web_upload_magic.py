@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from web_app import _has_allowed_magic
+from entrypoints.web_app import _has_allowed_magic
 
 
 class UploadMagicTests(unittest.TestCase):

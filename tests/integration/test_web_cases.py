@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 from fastapi.testclient import TestClient
 
-import web_app
+import entrypoints.web_app as web_app
 from app.web_auth import WebAuthDatabase, hash_password
 from medical.case_payloads import case_detections, case_localization_available
 from medical.chat_service import MedicalChatResponse, MedicalChatService

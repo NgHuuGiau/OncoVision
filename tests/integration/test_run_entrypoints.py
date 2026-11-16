@@ -6,13 +6,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import run_app
-import run_chat
+import entrypoints.run_app as run_app
+import entrypoints.run_chat as run_chat
 from utils.console_ui import mode_to_ui_defaults
 
 
 class RunEntrypointsTests(unittest.TestCase):
-    @patch("run_app.resolve_start_bundle")
+    @patch("entrypoints.run_app.resolve_start_bundle")
     def test_run_app_start_bundle_uses_runtime_tool_prompt(self, resolve_start_bundle_mock) -> None:
         run_app.resolve_start_bundle(
             requested_mode="high",
@@ -30,8 +30,8 @@ class RunEntrypointsTests(unittest.TestCase):
             prompt_runtime_mode_fn=run_app.prompt_runtime_mode,
         )
 
-    @patch("run_app.run_runtime_advisor", return_value=0)
-    @patch("run_app.parse_args")
+    @patch("entrypoints.run_app.run_runtime_advisor", return_value=0)
+    @patch("entrypoints.run_app.parse_args")
     def test_run_app_advisor_only_short_circuits_before_camera_flow(self, parse_args_mock, advisor_mock) -> None:
         parse_args_mock.return_value = SimpleNamespace(advisor_only=True, mode=None, model=None, camera_index=0)
 
@@ -40,11 +40,11 @@ class RunEntrypointsTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         advisor_mock.assert_called_once_with()
 
-    @patch("run_app.BootProgress")
-    @patch("run_app.run_camera_session")
-    @patch("run_app.print_runtime_dashboard")
-    @patch("run_app.resolve_start_bundle")
-    @patch("run_app.parse_args")
+    @patch("entrypoints.run_app.BootProgress")
+    @patch("entrypoints.run_app.run_camera_session")
+    @patch("entrypoints.run_app.print_runtime_dashboard")
+    @patch("entrypoints.run_app.resolve_start_bundle")
+    @patch("entrypoints.run_app.parse_args")
     def test_run_app_main_runs_camera_only_flow(
         self,
         parse_args_mock,
@@ -91,8 +91,8 @@ class RunEntrypointsTests(unittest.TestCase):
         )
         run_camera_session_mock.assert_called_once_with(runtime=runtime, camera_index=2)
 
-    @patch("run_chat.launch_chat_app")
-    @patch("run_chat.build_chat_arg_parser")
+    @patch("entrypoints.run_chat.launch_chat_app")
+    @patch("entrypoints.run_chat.build_chat_arg_parser")
     def test_run_chat_main_forces_medium_mode(
         self,
         build_parser_mock,
@@ -112,10 +112,10 @@ class RunEntrypointsTests(unittest.TestCase):
             selected_model="skin.pt",
         )
 
-    @patch("run_chat._medical_output_directories")
-    @patch("run_chat.cleanup_directories")
-    @patch("run_chat.get_chat_capture_dir")
-    @patch("run_chat.build_chat_arg_parser")
+    @patch("entrypoints.run_chat._medical_output_directories")
+    @patch("entrypoints.run_chat.cleanup_directories")
+    @patch("entrypoints.run_chat.get_chat_capture_dir")
+    @patch("entrypoints.run_chat.build_chat_arg_parser")
     def test_run_chat_cleanup_output_reports_summary(
         self,
         build_parser_mock,
@@ -148,10 +148,10 @@ class RunEntrypointsTests(unittest.TestCase):
         self.assertIn("Đã xóa file chat: 4", stdout.getvalue())
         self.assertIn("Đã xóa file medical: 2", stdout.getvalue())
 
-    @patch("run_chat._medical_output_directories")
-    @patch("run_chat.cleanup_directories")
-    @patch("run_chat.get_chat_capture_dir")
-    @patch("run_chat.build_chat_arg_parser")
+    @patch("entrypoints.run_chat._medical_output_directories")
+    @patch("entrypoints.run_chat.cleanup_directories")
+    @patch("entrypoints.run_chat.get_chat_capture_dir")
+    @patch("entrypoints.run_chat.build_chat_arg_parser")
     def test_run_chat_cleanup_output_uses_same_retention_for_both_outputs(
         self,
         build_parser_mock,

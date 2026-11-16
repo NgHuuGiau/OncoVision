@@ -20,10 +20,10 @@ def main():
     
     # Import and run the main module
     try:
-        import run_chat
+        from entrypoints import run_chat
         return run_chat.main()
     except ImportError as e:
-        print(f"Error importing run_chat: {e}")
+        print(f"Error importing entrypoints.run_chat: {e}")
         print(f"sys.path: {sys.path}")
         print(f"base_dir: {base_dir}")
         return 1

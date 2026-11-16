@@ -86,8 +86,8 @@ def print_recommended_commands(
     if missing_models:
         commands.append("copy model train san vao models/pretrained/")
     if icon_count < icon_warning_threshold:
-        commands.append("python run_doctor.py --fix")
-    commands.append("python run_chat.py")
+        commands.append("python entrypoints/run_doctor.py --fix")
+    commands.append("python entrypoints/run_chat.py")
     commands.extend(medical_commands)
     for command in dict.fromkeys(commands):
         print(command_row(command_index, command))

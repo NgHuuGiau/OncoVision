@@ -40,11 +40,11 @@ class MenuOption:
 
 
 MENU_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_app.py", "Camera realtime", "Mở camera, chạy model và xem kết quả ngay.", "CHẠY NHANH", GREEN, "📷"),
-    "2": MenuOption("run_chat.py", "Chat y dược", "Mở chat UI và luồng phân tích ảnh y khoa.", "CHẠY NHANH", GREEN, "💬"),
-    "3": MenuOption("run_medical.py", "Phân tích y khoa", "Phân tích ảnh, quản lý ca bệnh và xem báo cáo.", "Y DƯỢC", CYAN, "🏥"),
+    "1": MenuOption("entrypoints/run_app.py", "Camera realtime", "Mở camera, chạy model và xem kết quả ngay.", "CHẠY NHANH", GREEN, "📷"),
+    "2": MenuOption("entrypoints/run_chat.py", "Chat y dược", "Mở chat UI và luồng phân tích ảnh y khoa.", "CHẠY NHANH", GREEN, "💬"),
+    "3": MenuOption("entrypoints/run_medical.py", "Phân tích y khoa", "Phân tích ảnh, quản lý ca bệnh và xem báo cáo.", "Y DƯỢC", CYAN, "🏥"),
     "4": MenuOption("", "Kiểm tra", "Mở menu kiểm tra (Doctor, Test, Smoke).", "KIỂM TRA", YELLOW, "🔍"),
-    "5": MenuOption("run_chat.py", "Dọn cache", "Xóa output chat và medical cũ cho repo gọn hơn.", "BẢO TRÌ", YELLOW, "🧹", ("--cleanup-output",)),
+    "5": MenuOption("entrypoints/run_chat.py", "Dọn cache", "Xóa output chat và medical cũ cho repo gọn hơn.", "BẢO TRÌ", YELLOW, "🧹", ("--cleanup-output",)),
     "0": MenuOption("", "Thoát", "Đóng menu terminal.", "HỆ THỐNG", RED, "🚪"),
 }
 
@@ -52,9 +52,9 @@ PRIMARY_KEYS = tuple(key for key in MENU_OPTIONS if key != "0")
 MENU_PROMPT = f"  Nhập lựa chọn [{'/'.join(('0', *PRIMARY_KEYS))}]: "
 
 MEDICAL_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_medical.py", "Phân tích ảnh", "Nhập ảnh y khoa để phân tích và nhận báo cáo.", "PHÂN TÍCH", CYAN, "🔬", ("analyze",)),
-    "2": MenuOption("run_medical.py", "Lịch sử ca bệnh", "Xem danh sách các ca đã phân tích", "KẾT QUẢ", YELLOW, "📋", ("history",)),
-    "3": MenuOption("run_medical.py", "Kiểm tra & Báo cáo", "Xem tóm tắt dữ liệu / Kiểm tra tính hợp lệ ảnh", "KIỂM TRA", GREEN, "✅", ("report",)),
+    "1": MenuOption("entrypoints/run_medical.py", "Phân tích ảnh", "Nhập ảnh y khoa để phân tích và nhận báo cáo.", "PHÂN TÍCH", CYAN, "🔬", ("analyze",)),
+    "2": MenuOption("entrypoints/run_medical.py", "Lịch sử ca bệnh", "Xem danh sách các ca đã phân tích", "KẾT QUẢ", YELLOW, "📋", ("history",)),
+    "3": MenuOption("entrypoints/run_medical.py", "Kiểm tra & Báo cáo", "Xem tóm tắt dữ liệu / Kiểm tra tính hợp lệ ảnh", "KIỂM TRA", GREEN, "✅", ("report",)),
     "0": MenuOption("", "Quay lại menu chính", "Trở về menu chính.", "HỆ THỐNG", RED, "↩"),
 }
 MEDICAL_PRIMARY_KEYS = tuple(key for key in MEDICAL_OPTIONS if key != "0")
@@ -62,11 +62,11 @@ MEDICAL_PROMPT = f"  Nhập lựa chọn [{'/'.join(('0', *MEDICAL_PRIMARY_KEYS)
 MEDICAL_BACK_TEXT = "Quay lại menu chính."
 
 CHECK_OPTIONS: dict[str, MenuOption] = {
-    "1": MenuOption("run_doctor.py", "Doctor", "Rà soát môi trường, model và output.", "KIỂM TRA", YELLOW, "🩺", ("--skip-camera-check",)),
-    "2": MenuOption("run_tests.py", "Test", "Chạy unit test và regression.", "KIỂM TRA", YELLOW, "🧪", ("--skip-camera-check",)),
-    "3": MenuOption("run_smoke.py", "Smoke", "Kiểm tra nhanh các entrypoint chính.", "KIỂM TRA", YELLOW, "💨", ()),
-    "4": MenuOption("run_smoke.py", "Smoke + tests", "Smoke check và nối thêm test suite.", "KIỂM TRA", YELLOW, "🔬", ("--include-tests",)),
-    "5": MenuOption("run_medical.py", "Kiểm tra ảnh y khoa", "Nhập đường dẫn ảnh để kiểm tra hợp lệ.", "KIỂM TRA", YELLOW, "🖼️", ("validate-image",)),
+    "1": MenuOption("entrypoints/run_doctor.py", "Doctor", "Rà soát môi trường, model và output.", "KIỂM TRA", YELLOW, "🩺", ("--skip-camera-check",)),
+    "2": MenuOption("entrypoints/run_tests.py", "Test", "Chạy unit test và regression.", "KIỂM TRA", YELLOW, "🧪", ("--skip-camera-check",)),
+    "3": MenuOption("entrypoints/run_smoke.py", "Smoke", "Kiểm tra nhanh các entrypoint chính.", "KIỂM TRA", YELLOW, "💨", ()),
+    "4": MenuOption("entrypoints/run_smoke.py", "Smoke + tests", "Smoke check và nối thêm test suite.", "KIỂM TRA", YELLOW, "🔬", ("--include-tests",)),
+    "5": MenuOption("entrypoints/run_medical.py", "Kiểm tra ảnh y khoa", "Nhập đường dẫn ảnh để kiểm tra hợp lệ.", "KIỂM TRA", YELLOW, "🖼️", ("validate-image",)),
     "6": MenuOption("", "Kiểm tra toàn bộ", "Chạy doctor → test → smoke → medical status.", "KIỂM TRA", YELLOW, "🚀"),
     "0": MenuOption("", "Quay lại", "Trở về menu chính.", "HỆ THỐNG", RED, "↩"),
 }
@@ -156,7 +156,7 @@ def _run_script(script_name: str, *script_args: str, env: dict[str, str] | None 
 
 
 def _resolve_medical_args(option: MenuOption, input_fn=input, print_fn=print) -> tuple[str, ...] | None:
-    if option.script != "run_medical.py":
+    if option.script != "entrypoints/run_medical.py":
         return option.args
     if option.args and option.args[0] != "analyze":
         return option.args

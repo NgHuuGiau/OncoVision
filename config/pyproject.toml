@@ -22,10 +22,11 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.12 :: Only",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "ultralytics>=8.3",
     "opencv-python>=4.9",
@@ -91,7 +92,7 @@ include = ["app*", "core*", "medical*", "utils*", "config*", "scripts*", "tests*
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py312"
 select = ["E", "F", "I", "W", "UP", "B", "C4", "T20", "SIM", "N", "RET", "PTH", "PD", "PGH", "PL", "TRY", "NPY", "RSE", "RUF", "TID", "ARG", "FLY", "LOG", "PIE", "Q000", "TCH"]
 ignore = ["E501", "B008", "TRY003"]
 fixable = ["F", "I", "W", "C4", "UP", "B", "T20", "SIM", "N", "RET", "PTH", "PD", "PGH", "PL", "TRY", "NPY", "RSE", "RUF", "TID", "ARG", "FLY", "LOG", "PIE", "Q000", "TCH"]
@@ -99,7 +100,7 @@ format.quote-style = "double"
 format.skip-magic-trailing-comma = false
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

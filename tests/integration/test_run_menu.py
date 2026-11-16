@@ -4,7 +4,7 @@ import re
 import unittest
 from unittest.mock import MagicMock, patch
 
-import run_menu
+import entrypoints.run_menu as run_menu
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -31,7 +31,7 @@ class RunMenuTests(unittest.TestCase):
             clear_terminal_fn=MagicMock(),
         )
         self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_medical.py", "analyze", "--image", "sample.jpg", "--patient-code", "BN009")
+        run_script.assert_called_once_with("entrypoints/run_medical.py", "analyze", "--image", "sample.jpg", "--patient-code", "BN009")
 
     def test_medical_menu_does_not_offer_training(self) -> None:
         outputs: list[str] = []
@@ -51,7 +51,7 @@ class RunMenuTests(unittest.TestCase):
             clear_terminal_fn=MagicMock(),
         )
         self.assertEqual(result, 0)
-        run_script.assert_called_once_with("run_medical.py", "report")
+        run_script.assert_called_once_with("entrypoints/run_medical.py", "report")
 
     def test_invalid_main_menu_choice_is_rejected(self) -> None:
         outputs: list[str] = []
@@ -67,7 +67,7 @@ class RunMenuTests(unittest.TestCase):
 
     def test_render_menu_wraps_long_descriptions(self) -> None:
         outputs: list[str] = []
-        with patch("run_menu.os.get_terminal_size", return_value=type("Size", (), {"columns": 60})()):
+        with patch("entrypoints.run_menu.os.get_terminal_size", return_value=type("Size", (), {"columns": 60})()):
             run_menu._render_main_menu(print_fn=outputs.append)
         lines = [ANSI_RE.sub("", item) for item in outputs if ANSI_RE.sub("", item).strip()]
         self.assertGreater(len(lines), len(run_menu.MENU_OPTIONS))

@@ -268,6 +268,10 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                     if conv.id is not None:
                         self.db.update_conversation_title(conv.id, conv.title)
             self.retranslate_ui()
+            self.sidebar_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+            self.sidebar_shortcut.activated.connect(self.toggle_sidebar)
+            self.new_chat_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+            self.new_chat_shortcut.activated.connect(self.start_new_chat)
             QTimer.singleShot(0, self.message_input.setFocus)
 
         def _build_empty_conversation(self) -> Conversation:
@@ -1154,16 +1158,15 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             SettingsDialog(parent_window=self).exec()
 
 
-from app.web_auth import WebAuthDatabase, WebUser
-from app.chat_ui.desktop_auth import (
-    needs_bootstrap,
-    create_bootstrap_admin,
-    authenticate_desktop_user,
-    change_desktop_credentials,
-)
+    from app.web_auth import WebAuthDatabase, WebUser
+    from app.chat_ui.desktop_auth import (
+        needs_bootstrap,
+        create_bootstrap_admin,
+        authenticate_desktop_user,
+        change_desktop_credentials,
+    )
 
-
-def _run_desktop_login() -> WebUser | None:
+    def _run_desktop_login() -> WebUser | None:
         """Hộp thoại đăng nhập desktop dùng chung DB web. None = hủy/thất bại."""
         from app.chat_ui.paths import CHAT_HISTORY_DB_PATH as _DB_PATH
 
@@ -1282,20 +1285,19 @@ def _run_desktop_login() -> WebUser | None:
                 # Sau khi đổi xong, user.must_change_credentials == False, thoát vòng lặp
             return user
 
-
-def main():
     app = QApplication.instance() or QApplication(sys.argv)
     login_user = _run_desktop_login()
     if login_user is None:
         return 1
-    window = ChatWindow(title=window_title, initial_camera_index=camera_index, mode_label=app_mode, model_label=selected_model)
+    window = ChatWindow(
+        title=window_title,
+        initial_camera_index=camera_index,
+        mode_label=app_mode,
+        model_label=selected_model,
+    )
     window.current_user = login_user
     window.setWindowTitle(f"{window_title} — {login_user.username} ({login_user.role})")
     window.show()
     return app.exec()
-
-
-if __name__ == "__main__":
-    sys.exit(main())
 
 

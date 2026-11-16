@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import run_medical
+import entrypoints.run_medical as run_medical
 
 
 class RunMedicalTests(unittest.TestCase):
@@ -31,7 +31,7 @@ class RunMedicalTests(unittest.TestCase):
             with patch(
                 "sys.argv",
                 [
-                    "run_medical.py",
+                    "entrypoints.run_medical.py",
                     "validate-cohort",
                     "--csv",
                     str(cohort),
@@ -75,7 +75,7 @@ class RunMedicalTests(unittest.TestCase):
             (root / "a" / "x1.jpg").write_bytes(b"x")
             (root / "b" / "y1.jpg").write_bytes(b"x")
             with patch("medical.cnn_classifier.load_cnn_classifier", return_value=wrapper), patch(
-                "sys.argv", ["run_medical.py", "evaluate", "--model", "m.pt", "--data", str(root)]
+                "sys.argv", ["entrypoints.run_medical.py", "evaluate", "--model", "m.pt", "--data", str(root)]
             ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
                 code = run_medical.main()
         self.assertEqual(code, 0)
@@ -84,24 +84,24 @@ class RunMedicalTests(unittest.TestCase):
     def test_evaluate_detector_command_prints_map(self) -> None:
         report = {"map50": 0.8, "map": 0.5, "image_count": 10, "note": "n"}
         with patch("medical.detector_evaluation.evaluate_detector", return_value=report), patch(
-            "sys.argv", ["run_medical.py", "evaluate-detector", "--model", "d.pt", "--data", "data"]
+            "sys.argv", ["entrypoints.run_medical.py", "evaluate-detector", "--model", "d.pt", "--data", "data"]
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
             code = run_medical.main()
         self.assertEqual(code, 0)
         self.assertIn("mAP@0.5: 0.800", stdout.getvalue())
 
-    @patch("run_medical._medical_output_directories", return_value=[Path("output/medical/reports")])
-    @patch("run_medical.cleanup_directories")
+    @patch("entrypoints.run_medical._medical_output_directories", return_value=[Path("output/medical/reports")])
+    @patch("entrypoints.run_medical.cleanup_directories")
     def test_cleanup_output_command_reports_summary(self, cleanup_mock, _medical_dirs_mock) -> None:
         cleanup_mock.return_value = type("CleanupSummary", (), {"removed_files": 5, "removed_dirs": 2, "freed_bytes": 4096})()
-        with patch("sys.argv", ["run_medical.py", "cleanup-output", "--older-than-days", "7"]), patch(
+        with patch("sys.argv", ["entrypoints.run_medical.py", "cleanup-output", "--older-than-days", "7"]), patch(
             "sys.stdout", new_callable=io.StringIO
         ) as stdout:
             code = run_medical.main()
         self.assertEqual(code, 0)
         self.assertIn("5 tệp", stdout.getvalue())
 
-    @patch("run_medical.get_medical_system_status")
+    @patch("entrypoints.run_medical.get_medical_system_status")
     def test_status_command_prints_inference_and_case_summary(self, status_mock) -> None:
         status_mock.return_value = type(
             "MedicalStatus",
@@ -124,16 +124,16 @@ class RunMedicalTests(unittest.TestCase):
                 "analyzed_modalities": ("MRI",),
             },
         )()
-        with patch("sys.argv", ["run_medical.py", "status"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+        with patch("sys.argv", ["entrypoints.run_medical.py", "status"]), patch("sys.stdout", new_callable=io.StringIO) as stdout:
             self.assertEqual(run_medical.main(), 0)
         self.assertIn("Thiếu model suy luận", stdout.getvalue())
         self.assertIn("Ung thư não", stdout.getvalue())
         self.assertNotIn("train-all", stdout.getvalue().lower())
         self.assertNotIn("sẵn sàng train", stdout.getvalue().lower())
 
-    @patch("run_medical.update_case_report_case_id")
-    @patch("run_medical.MedicalCaseDatabase")
-    @patch("run_medical.MedicalImageAnalyzer")
+    @patch("entrypoints.run_medical.update_case_report_case_id")
+    @patch("entrypoints.run_medical.MedicalCaseDatabase")
+    @patch("entrypoints.run_medical.MedicalImageAnalyzer")
     def test_analyze_saves_case_and_syncs_case_id(self, analyzer_cls, case_db_cls, update_report) -> None:
         analyzer_cls.return_value.analyze_image.return_value = type(
             "MedicalResult",
@@ -155,7 +155,7 @@ class RunMedicalTests(unittest.TestCase):
             },
         )()
         case_db_cls.return_value.save_case.return_value = 42
-        with patch("sys.argv", ["run_medical.py", "analyze", "--image", "sample.jpg", "--patient-code", "BN555"]), patch(
+        with patch("sys.argv", ["entrypoints.run_medical.py", "analyze", "--image", "sample.jpg", "--patient-code", "BN555"]), patch(
             "sys.stdout", new_callable=io.StringIO
         ) as stdout:
             self.assertEqual(run_medical.main(), 0)
@@ -179,16 +179,16 @@ class RunMedicalTests(unittest.TestCase):
             },
         )()
         fake_db = type("CaseDB", (), {"get_case": lambda self, _case_id: record})()
-        with patch("run_medical.MedicalCaseDatabase", return_value=fake_db), patch(
-            "sys.argv", ["run_medical.py", "show-case", "--case-id", "100"]
+        with patch("entrypoints.run_medical.MedicalCaseDatabase", return_value=fake_db), patch(
+            "sys.argv", ["entrypoints.run_medical.py", "show-case", "--case-id", "100"]
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
             self.assertEqual(run_medical.main(), 0)
         self.assertIn("BN100", stdout.getvalue())
 
     def test_delete_case_command_removes_record(self) -> None:
         fake_db = type("CaseDB", (), {"delete_case": lambda self, _case_id: True})()
-        with patch("run_medical.MedicalCaseDatabase", return_value=fake_db), patch(
-            "sys.argv", ["run_medical.py", "delete-case", "--case-id", "200"]
+        with patch("entrypoints.run_medical.MedicalCaseDatabase", return_value=fake_db), patch(
+            "sys.argv", ["entrypoints.run_medical.py", "delete-case", "--case-id", "200"]
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
             self.assertEqual(run_medical.main(), 0)
         self.assertIn("Đã xóa ca bệnh", stdout.getvalue())
@@ -208,7 +208,7 @@ class RunMedicalTests(unittest.TestCase):
             os.chdir(temp_dir)
             try:
                 with patch("app.chat_ui.paths.CHAT_HISTORY_DB_PATH", source), patch(
-                    "sys.argv", ["run_medical.py", "backup-db", "--keep", "2"]
+                    "sys.argv", ["entrypoints.run_medical.py", "backup-db", "--keep", "2"]
                 ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
                     self.assertEqual(run_medical.main(), 0)
                 backups = sorted(Path(temp_dir, "output", "backups").glob("onco_*.db"))

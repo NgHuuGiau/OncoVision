@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import run_smoke
+import entrypoints.run_smoke as run_smoke
 
 
 class RunSmokeTests(unittest.TestCase):
@@ -42,9 +42,9 @@ class RunSmokeTests(unittest.TestCase):
 
     def test_execute_checks_stops_on_first_failure_when_requested(self) -> None:
         checks = (
-            run_smoke.SmokeCheck("one", "One", "test", ("run_app.py", "--advisor-only")),
+            run_smoke.SmokeCheck("one", "One", "test", ("entrypoints/run_app.py", "--advisor-only")),
             run_smoke.SmokeCheck("two", "Two", "test", ("run_train.py", "--check-only")),
-            run_smoke.SmokeCheck("three", "Three", "test", ("run_medical.py", "status")),
+            run_smoke.SmokeCheck("three", "Three", "test", ("entrypoints/run_medical.py", "status")),
         )
         run_command = MagicMock(side_effect=[0, 1, 0])
 
@@ -67,8 +67,8 @@ class RunSmokeTests(unittest.TestCase):
         self.assertIn("DRY-RUN", stdout.getvalue())
         run_command.assert_not_called()
 
-    @patch("run_smoke.execute_checks")
-    @patch("run_smoke.parse_args")
+    @patch("entrypoints.run_smoke.execute_checks")
+    @patch("entrypoints.run_smoke.parse_args")
     def test_main_passes_selected_checks_to_executor(
         self,
         parse_args_mock,
@@ -84,8 +84,8 @@ class RunSmokeTests(unittest.TestCase):
         self.assertEqual(checks[-1].key, "test-suite")
         self.assertTrue(execute_checks_mock.call_args.kwargs["stop_on_fail"])
 
-    @patch("run_smoke.execute_checks")
-    @patch("run_smoke.parse_args")
+    @patch("entrypoints.run_smoke.execute_checks")
+    @patch("entrypoints.run_smoke.parse_args")
     def test_main_passes_ci_safe_to_check_selector(
         self,
         parse_args_mock,
