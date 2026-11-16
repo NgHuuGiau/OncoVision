@@ -390,20 +390,8 @@
   window.USER_ROLE = "{{ current_user.role }}";
 </script>
 {% if current_user.role == 'admin' %}
-<script type="importmap">
-{
-  "imports": {
-    "three": "/static/js/vendor/three.module.min.js",
-    "three/addons/": "/static/js/vendor/three/addons/"
-  }
-}
-</script>
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-window.THREE = THREE;
-window.THREE.OrbitControls = OrbitControls;
-</script>
+<script src="/static/js/vendor/three.min.js"></script>
+<script src="/static/js/vendor/OrbitControls.js"></script>
 {% endif %}
 {% if current_user.role == 'admin' %}<script src="/static/js/app.js"></script>{% else %}<script src="/static/js/auth-theme.js"></script>{% endif %}
 <script src="/static/js/case-workflow.js"></script>
