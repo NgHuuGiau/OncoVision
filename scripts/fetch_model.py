@@ -216,7 +216,7 @@ def fetch_all(catalog_path: Path, base: Path, force: bool, dry_run: bool = False
     if failed:
         return 1
     if not dry_run:
-        print("Chạy: python run_medical.py status")
+        print("Chạy: python entrypoints/run_medical.py status")
     return 0
 
 
@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
             "Lưu ý: ảnh có modality xác định sẽ bắt model trong thư mục modality "
             "(vd <target>/mri/). Nếu status báo định vị thiếu, chạy lại với --modality."
         )
-    print("Chạy: python run_medical.py status")
+    print("Chạy: python entrypoints/run_medical.py status")
     return 0
 
 

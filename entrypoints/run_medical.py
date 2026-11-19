@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from medical.case_manifest import load_case_manifest
 from medical.case_payloads import build_case_export_payload, build_detection_metadata
@@ -255,9 +261,9 @@ def main() -> int:
         import sqlite3
         import time
 
-        from app.chat_ui.paths import CHAT_HISTORY_DB_PATH
+        from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, PROJECT_ROOT
 
-        backup_dir = Path("output/backups")
+        backup_dir = PROJECT_ROOT / "output/backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
         dest = backup_dir / f"onco_{time.strftime('%Y%m%d_%H%M%S')}.db"
         try:

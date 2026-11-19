@@ -8,11 +8,16 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from utils.entrypoint_common import run_entrypoint
 from utils.file_utils import ensure_project_directories
 from utils.terminal_encoding import ensure_utf8_console
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = _project_root
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -286,10 +291,10 @@ def _run_all_checks(
     clear_terminal_fn()
     width = _get_terminal_width()
     steps = [
-        ("run_doctor.py", ("--skip-camera-check",), "Bác sĩ kiểm tra"),
-        ("run_tests.py", ("--skip-camera-check",), "Bộ test hệ thống"),
-        ("run_smoke.py", (), "Kiểm tra khói"),
-        ("run_medical.py", ("status",), "Trạng thái y dược"),
+        ("entrypoints/run_doctor.py", ("--skip-camera-check",), "Bác sĩ kiểm tra"),
+        ("entrypoints/run_tests.py", ("--skip-camera-check",), "Bộ test hệ thống"),
+        ("entrypoints/run_smoke.py", (), "Kiểm tra khói"),
+        ("entrypoints/run_medical.py", ("status",), "Trạng thái y dược"),
     ]
     overall_results: list[tuple[str, str, float]] = []
     start_time = __import__("time").time()

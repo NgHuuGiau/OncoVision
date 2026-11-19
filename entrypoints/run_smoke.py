@@ -7,9 +7,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from utils.entrypoint_common import run_entrypoint
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = _project_root
 
 
 @dataclass(frozen=True)
@@ -27,20 +32,20 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
         key="runtime-advisor",
         title="Runtime advisor",
         description="Kiểm tra entrypoint tư vấn runtime mà không mở camera.",
-        command=("run_app.py", "--advisor-only"),
+        command=("entrypoints/run_app.py", "--advisor-only"),
     ),
     SmokeCheck(
         key="doctor",
         title="Doctor scan",
         description="Rà soát tổng thể phần cứng, model và dữ liệu mà không cần webcam thật.",
-        command=("run_doctor.py", "--skip-camera-check"),
+        command=("entrypoints/run_doctor.py", "--skip-camera-check"),
         ci_safe=False,
     ),
     SmokeCheck(
         key="chat-preflight",
         title="Chat preflight",
         description="Kiểm tra dependency bắt buộc, icon và độ sẵn sàng của luồng chat/medical.",
-        command=("run_chat.py", "--check-only", "--auto-fix-icons"),
+        command=("entrypoints/run_chat.py", "--check-only", "--auto-fix-icons"),
         warning_exit_codes=(2,),
         ci_safe=False,
     ),
@@ -48,7 +53,7 @@ BASE_SMOKE_CHECKS: tuple[SmokeCheck, ...] = (
         key="medical-status",
         title="Medical status",
         description="Kiểm tra nhanh model suy luận và output của nhánh medical.",
-        command=("run_medical.py", "status"),
+        command=("entrypoints/run_medical.py", "status"),
         ci_safe=False,
     ),
 )
@@ -57,7 +62,7 @@ TEST_SUITE_CHECK = SmokeCheck(
     key="test-suite",
     title="Test suite",
     description="Chạy unit test và hồi quy mà không yêu cầu camera thật.",
-    command=("run_tests.py", "--skip-camera-check"),
+    command=("entrypoints/run_tests.py", "--skip-camera-check"),
 )
 
 

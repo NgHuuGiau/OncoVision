@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from app.chat_ui.paths import get_chat_capture_dir
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+from app.chat_ui.paths import PROJECT_ROOT, get_chat_capture_dir
 from core.hardware_info import detect_hardware
 from core.model_catalog import YOLO11_MODELS_ASC
 from core.runtime_advisor import optimized_runtime
@@ -37,8 +43,8 @@ from utils.terminal_ui import (
 )
 
 YOLO11_MODELS = YOLO11_MODELS_ASC
-PRETRAINED_DIR = Path("models/pretrained")
-ICONS_DIR = Path("assets/icons")
+PRETRAINED_DIR = PROJECT_ROOT / "models/pretrained"
+ICONS_DIR = PROJECT_ROOT / "assets/icons"
 ICON_WARNING_THRESHOLD = 10
 ICON_AUTOFIX_THRESHOLD = 5
 RUNTIME_RECOMMENDATION_MODES = (

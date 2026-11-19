@@ -1,5 +1,6 @@
 import sys
 import os
+from pathlib import Path
 
 def main():
     """Launcher that runs the actual application in-process"""
@@ -12,8 +13,12 @@ def main():
         if internal_dir not in sys.path:
             sys.path.insert(0, internal_dir)
     else:
-        # Running as script
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        # Running as script — project root is parent of entrypoints/
+        base_dir = str(Path(__file__).resolve().parent.parent)
+    
+    # Add project root to sys.path
+    if base_dir not in sys.path:
+        sys.path.insert(0, base_dir)
     
     # Change to the base directory
     os.chdir(base_dir)

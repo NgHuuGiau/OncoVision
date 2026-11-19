@@ -8,7 +8,13 @@ import sys
 import time
 import unittest
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, cast
+
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from utils.camera_probe import probe_camera
 from utils.camera_utils import open_camera_capture
@@ -321,7 +327,7 @@ def discover_suite(*, fast: bool = False) -> unittest.TestSuite:
     if fast:
         suites = [loader.loadTestsFromName(module) for module in FAST_TEST_MODULES]
         return unittest.TestSuite(suites)
-    return loader.discover("tests")
+    return loader.discover("tests", pattern="test_*.py")
 
 
 def main() -> int:
