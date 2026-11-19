@@ -74,11 +74,11 @@ help: ## Show this help message
 	@echo "  make smoke"
 
 install: ## Install production dependencies
-	pip install -r requirements.txt
+	pip install -r requirements/requirements.txt
 
 install-dev: ## Install development dependencies
-	pip install -r requirements.txt
-	pip install ruff==0.16.3 mypy pytest pytest-cov pytest-asyncio pre-commit
+	pip install -r requirements/requirements.txt
+	pip install -r requirements/requirements-dev.txt
 
 install-monai: ## Install MONAI/nnUNet for pancreas/stomach segmentation
 	pip install monai>=1.3.0 nnunetv2>=2.0
@@ -131,42 +131,39 @@ quality: lint type-check ## Run all quality checks (lint + type-check)
 
 # Runtime commands
 run-app: ## Run camera application
-	python run_app.py
+	python entrypoints/run_app.py
 
 run-chat: ## Run desktop chat UI
-	python run_chat.py
+	python entrypoints/run_chat.py
 
 run-chat-web: ## Run web chat app
-	python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
+	python -m uvicorn entrypoints.web_app:app --host 127.0.0.1 --port 8000
 
 run-chat-desktop: ## Run desktop chat UI
-	python run_chat.py
+	python entrypoints/run_chat.py
 
 run-menu: ## Run menu system
-	python run_menu.py
+	python entrypoints/run_menu.py
 
 run-doctor: ## Run system check
-	python run_doctor.py --skip-camera-check
+	python entrypoints/run_doctor.py --skip-camera-check
 
 run-medical: ## Run medical CLI
-	python run_medical.py
+	python entrypoints/run_medical.py
 
 run-smoke: ## Run smoke test
-	python run_smoke.py --ci-safe --stop-on-fail
+	python entrypoints/run_smoke.py --ci-safe --stop-on-fail
 
 doctor: run-doctor ## Alias for run-doctor
 
 smoke: run-smoke ## Alias for run-smoke
 
 smoke-ci: ## Run smoke test for CI
-	python run_smoke.py --ci-safe --stop-on-fail
+	python entrypoints/run_smoke.py --ci-safe --stop-on-fail
 
 chat: run-chat-web ## Alias for run-chat-web
 
 chat-desktop: run-chat-desktop ## Alias for run-chat-desktop
-
-run-menu: ## Run menu system
-	python run_menu.py
 
 # Database
 db-init: ## Initialize database
@@ -182,11 +179,11 @@ db-shell: ## Open SQLite shell
 	sqlite3 output/onco.db
 
 db-backup: ## Backup database
-	python run_medical.py backup-db
+	python entrypoints/run_medical.py backup-db
 
 # Docker
 docker-build: ## Build Docker image
-	docker build -t onkovision:latest .
+	docker build -f deploy/Dockerfile -t onkovision:latest .
 
 docker-run: ## Run container
 	docker run -d --name onkovision \
@@ -216,7 +213,16 @@ docker-shell: ## Open shell in container
 	docker exec -it onkovision bash
 
 docker-build-monai: ## Build MONAI-enabled image
-	docker build -f Dockerfile.monai -t onkovision:latest-monai .
+	docker build -f deploy/Dockerfile.monai -t onkovision:latest-monai .
+
+docker-compose-up: ## Start with docker compose
+	docker compose -f deploy/docker-compose.yml up -d
+
+docker-compose-down: ## Stop docker compose
+	docker compose -f deploy/docker-compose.yml down
+
+docker-compose-logs: ## View compose logs
+	docker compose -f deploy/docker-compose.yml logs -f
 
 # Cleanup
 clean: ## Clean cache, build artifacts, temp files

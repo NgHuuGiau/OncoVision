@@ -16,11 +16,7 @@ faster-whisper>=1.0
 pyaudio>=0.2.14; platform_system == "Windows"
 sounddevice>=0.4.6; platform_system != "Windows"
 soundfile>=0.12.1; platform_system != "Windows"
-ruff==0.16.3
-mypy
 simpleitk>=2.2.0
-pytest>=7.4.0
-pytest-cov>=4.1.0
 fastapi>=0.110.0
 itsdangerous>=2.1.2
 uvicorn>=0.27.0

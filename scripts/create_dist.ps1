@@ -27,10 +27,19 @@ foreach ($dir in $appDirs) {
 
 # Copy entry point scripts
 Write-Host "Copying entry point scripts..." -ForegroundColor Yellow
-$scripts = @("run_chat.py", "run_doctor.py", "run_medical.py", "run_app.py", "run_menu.py", "run_smoke.py", "run_tests.py", "web_app.py", "requirements.txt")
+$scripts = @("run_chat.py", "run_doctor.py", "run_medical.py", "run_app.py", "run_menu.py", "run_smoke.py", "run_tests.py", "web_app.py")
+$reqFiles = @("requirements/requirements.txt", "requirements/requirements-web.txt", "requirements/requirements-dev.txt")
 foreach ($script in $scripts) {
     if (Test-Path "$sourceDir\$script") {
         Copy-Item -Path "$sourceDir\$script" -Destination "$distDir\$script" -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Copy requirements files
+Write-Host "Copying requirements files..." -ForegroundColor Yellow
+foreach ($req in $reqFiles) {
+    if (Test-Path "$sourceDir\$req") {
+        Copy-Item -Path "$sourceDir\$req" -Destination "$distDir\$req" -Force -ErrorAction SilentlyContinue
     }
 }
 

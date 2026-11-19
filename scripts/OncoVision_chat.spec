@@ -3,7 +3,7 @@
 # Excludes: fastapi, uvicorn, starlette, pydantic, jinja2, reportlab, pytest, etc.
 
 a = Analysis(
-    ['run_chat.py'],
+    ['entrypoints/run_chat.py'],
     pathex=[],
     binaries=[],
     datas=[

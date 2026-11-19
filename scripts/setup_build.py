@@ -20,11 +20,47 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from cx_Freeze import setup, Executable
 
+# Find PySide6 Qt plugins directory for native desktop
+pyside6_path = Path(__import__("PySide6").__file__).parent
+qt_plugins_dir = pyside6_path / "plugins"
+
+# Collect Qt plugins needed for native desktop
+qt_plugin_files = []
+if qt_plugins_dir.exists():
+    # platforms plugin (required for display)
+    platforms_dir = qt_plugins_dir / "platforms"
+    if platforms_dir.exists():
+        qt_plugin_files.append((str(platforms_dir), "lib/plugins/platforms"))
+    # imageformats plugin
+    imageformats_dir = qt_plugins_dir / "imageformats"
+    if imageformats_dir.exists():
+        qt_plugin_files.append((str(imageformats_dir), "lib/plugins/imageformats"))
+    # styles plugin
+    styles_dir = qt_plugins_dir / "styles"
+    if styles_dir.exists():
+        qt_plugin_files.append((str(styles_dir), "lib/plugins/styles"))
+    # iconengines plugin
+    iconengines_dir = qt_plugins_dir / "iconengines"
+    if iconengines_dir.exists():
+        qt_plugin_files.append((str(iconengines_dir), "lib/plugins/iconengines"))
+
+
 # Build options
 build_exe_options = {
     "includes": [
         "entrypoints.run_chat",
-        "app.chat_ui.window",
+        # Desktop hiển thị đúng giao diện web: nhúng web server (FastAPI) trong QtWebEngine
+        "entrypoints.web_app",
+        "app.chat_ui.web_desktop_window",
+        "fastapi",
+        "starlette",
+        "uvicorn",
+        "jinja2",
+        "aiofiles",
+        "multipart",
+        "itsdangerous",
+        "websockets",
+        # app.chat_ui.window là code chết (native UI cũ), không đóng gói để giảm bloat
         "app.chat_ui.desktop_auth",
         "app.chat_ui.models",
         "app.chat_ui.paths",
@@ -45,6 +81,7 @@ build_exe_options = {
         "medical.case_payloads",
         "medical.chat_service",
         "medical.compliance",
+        "medical.anatomy_mapping",
         "medical.clinical_validation",
         "medical.volume_inference",
         "medical.status_helpers",
@@ -63,6 +100,11 @@ build_exe_options = {
         "torch.multiprocessing",
         "torchvision",
         "cv2",
+        "PySide6.QtWidgets",
+        "PySide6.QtCore",
+        "PySide6.QtGui",
+        "PySide6.QtWebEngineCore",
+        "PySide6.QtWebEngineWidgets",
         "numpy",
         "ultralytics",
         "pydicom",
@@ -93,14 +135,7 @@ build_exe_options = {
     ],
     "excludes": [
         "matplotlib",
-        "fastapi",
-        "uvicorn",
-        "starlette",
-        "pydantic",
-        "jinja2",
-        "reportlab",
         "pytest",
-        "aiofiles",
         "doctest",
         # Exclude heavy/unnecessary torch modules to avoid recursion
         # (khong exclude torch.onnx: torchvision import torch.onnx ngay khi nap)
@@ -119,9 +154,11 @@ build_exe_options = {
         (str(PROJECT_ROOT / "assets"), "assets"),
         (str(PROJECT_ROOT / "models"), "models"),
         (str(PROJECT_ROOT / "templates"), "templates"),
-    ],
+        (str(PROJECT_ROOT / "static"), "static"),
+    ] + qt_plugin_files,
     "optimize": 1,
     "zip_include_packages": ["PySide6", "shiboken6"],
+    "include_msvcr": True,
 }
 
 # Executable

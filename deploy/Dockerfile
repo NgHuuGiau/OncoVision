@@ -35,7 +35,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copy requirements first for better caching (web-only: lighter, no PySide6/whisper)
-COPY requirements-web.txt .
+COPY requirements/requirements-web.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements-web.txt

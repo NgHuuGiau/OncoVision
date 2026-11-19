@@ -67,6 +67,9 @@ output/medical/
 *.bin
 *.safetensors
 
+# Blender 3D model assets (large, not committed)
+model_blender/
+
 # Nested repo (do not touch)
 HieraChain/
 

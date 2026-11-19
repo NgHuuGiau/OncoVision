@@ -1,0 +1,8 @@
+# Development dependencies — install alongside requirements.txt for local development.
+# These are NOT needed for production/runtime.
+ruff==0.16.3
+mypy
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio
+pre-commit

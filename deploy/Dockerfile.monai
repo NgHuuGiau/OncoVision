@@ -2,14 +2,14 @@
 # Build: docker build -f Dockerfile.monai -t onkovision:latest-monai .
 # Run: docker run -d --name onkovision-monai --gpus all -p 8000:8000 -v $(PWD)/models:/app/models -v $(PWD)/output:/app/output -v $(PWD)/data:/app/data onkovision:latest-monai
 
-FROM nvidia/cuda:12.1-devel-ubuntu22.04 AS base
+FROM nvidia/cuda:12.6.0-devel-ubuntu22.04 AS base
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies (deduplicated packages)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3.10-venv python3.10-dev \
-    libglib2.0-0 libsm6 libxext6 libxrender-dev libglib2.0-0 \
-    libgl1-mesa-glx libglib2.0-0 \
-    ffmpeg libsm6 libxext6 \
+    libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libgl1-mesa-glx \
+    ffmpeg \
     git curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,7 +30,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY requirements/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -45,7 +45,8 @@ RUN pip install --no-cache-dir \
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p models/pretrained/cancers \
+RUN mkdir -p \
+    models/pretrained/cancers \
     models/trained \
     models/exported \
     output/medical/reports \
@@ -57,7 +58,6 @@ RUN mkdir -p models/pretrained/cancers \
     output/chat_captures \
     data \
     assets/icons \
-    output/chat_captures \
     runs
 
 # Create .gitkeep files for empty directories

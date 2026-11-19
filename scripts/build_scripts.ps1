@@ -103,8 +103,7 @@ Write-Host ""
 Write-Host "=== FILES KEPT AT ROOT ===" -ForegroundColor Cyan
 $keepFiles = @(
     "web_app.py", "run_chat.py", "run_doctor.py", "run_recovery.ps1",
-    "OncoVisionChat.spec", "requirements.txt", "requirements-web.txt",
-    "pytest.ini", "ruff.toml", "Makefile", "LICENSE", "README.md",
+    "OncoVisionChat.spec", "pytest.ini", "ruff.toml", "Makefile", "LICENSE", "README.md",
     "docker-compose.yml", "Dockerfile", "Dockerfile.monai",
     ".gitignore", ".gitattributes", ".dockerignore", ".env.example",
     "DOWNLOAD_GUIDE.md", "MONAI_MODELS_SUMMARY.md", "MANUAL_DOWNLOAD_GUIDE.txt",

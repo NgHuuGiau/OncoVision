@@ -6,16 +6,18 @@
 #   docker compose run --gpus all onkovision
 services:
   onkovision:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: onkovision
     ports:
       - "8000:8000"
     volumes:
-      - ./models:/app/models
-      - ./output:/app/output
-      - ./data:/app/data
-      - ./assets:/app/assets
-      - ./config:/app/config
+      - ../models:/app/models
+      - ../output:/app/output
+      - ../data:/app/data
+      - ../assets:/app/assets
+      - ../config:/app/config
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -30,17 +32,17 @@ services:
 
   onkovision-monai:
     build:
-      context: .
-      dockerfile: Dockerfile.monai
+      context: ..
+      dockerfile: deploy/Dockerfile.monai
     container_name: onkovision-monai
     ports:
       - "8001:8000"
     volumes:
-      - ./models:/app/models
-      - ./output:/app/output
-      - ./data:/app/data
-      - ./assets:/app/assets
-      - ./config:/app/config
+      - ../models:/app/models
+      - ../output:/app/output
+      - ../data:/app/data
+      - ../assets:/app/assets
+      - ../config:/app/config
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
