@@ -46,10 +46,13 @@ class ChatDatabase:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT,
                     subtitle TEXT,
+                    owner TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            # Backwards compatibility: add owner column if it doesn't exist
+            self._ensure_column(conn, "conversations", "owner", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS messages (
@@ -83,6 +86,12 @@ class ChatDatabase:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _ensure_indexes(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_conversations_owner
+            ON conversations (owner)
+            """
+        )
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id
@@ -183,15 +192,21 @@ class ChatDatabase:
         with self._connect() as conn:
             conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
 
-    def get_all_conversations(self, *, limit: int = 50, offset: int = 0) -> list[Conversation]:
+    def get_all_conversations(self, *, owner: str | None = None, limit: int = 50, offset: int = 0) -> list[Conversation]:
         limit = max(1, min(int(limit), 200))
         offset = max(0, int(offset))
         try:
             with self._connect() as conn:
-                conversation_rows = conn.execute(
-                    "SELECT id, title, subtitle FROM conversations ORDER BY id DESC LIMIT ? OFFSET ?",
-                    (limit, offset),
-                ).fetchall()
+                if owner:
+                    conversation_rows = conn.execute(
+                        "SELECT id, title, subtitle FROM conversations WHERE owner = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+                        (owner, limit, offset),
+                    ).fetchall()
+                else:
+                    conversation_rows = conn.execute(
+                        "SELECT id, title, subtitle FROM conversations ORDER BY id DESC LIMIT ? OFFSET ?",
+                        (limit, offset),
+                    ).fetchall()
                 conversation_ids = [row[0] for row in conversation_rows]
                 if conversation_ids:
                     placeholders = ", ".join("?" for _ in conversation_ids)
@@ -277,9 +292,12 @@ class ChatDatabase:
         ]
         return Conversation(title=row[1], subtitle=row[2], messages=messages, id=row[0])
 
-    def create_conversation(self, title: str, subtitle: str) -> int:
+    def create_conversation(self, title: str, subtitle: str, *, owner: str | None = None) -> int:
         with self._connect() as conn:
-            cursor = conn.execute("INSERT INTO conversations (title, subtitle) VALUES (?, ?)", (title, subtitle))
+            cursor = conn.execute(
+                "INSERT INTO conversations (title, subtitle, owner) VALUES (?, ?, ?)",
+                (title, subtitle, owner),
+            )
             return cursor.lastrowid
 
     def update_conversation_title(self, conv_id: int, title: str):
@@ -302,12 +320,20 @@ class ChatDatabase:
         with self._connect() as conn:
             conn.execute("DELETE FROM conversations")
 
-    def search_conversations_by_message(self, query: str) -> list[int]:
+    def search_conversations_by_message(self, query: str, *, owner: str | None = None) -> list[int]:
         if not query:
             return []
         try:
             with self._connect() as conn:
-                cursor = conn.execute("SELECT DISTINCT conversation_id FROM messages WHERE text LIKE ?", (f"%{query}%",))
+                if owner:
+                    cursor = conn.execute(
+                        "SELECT DISTINCT c.id FROM conversations c "
+                        "INNER JOIN messages m ON m.conversation_id = c.id "
+                        "WHERE c.owner = ? AND m.text LIKE ?",
+                        (owner, f"%{query}%"),
+                    )
+                else:
+                    cursor = conn.execute("SELECT DISTINCT conversation_id FROM messages WHERE text LIKE ?", (f"%{query}%",))
                 return [row[0] for row in cursor]
         except sqlite3.Error:
             logger.exception("Failed to search conversations for query '%s'", query)

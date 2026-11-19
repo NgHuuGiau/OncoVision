@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import threading
 import time
 import uuid
@@ -12,6 +13,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal, cast
 from urllib.parse import quote
+
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 import aiofiles
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
@@ -100,7 +106,7 @@ def _request_csrf_token(request: Request) -> str:
 
 
 async def require_authenticated(request: Request) -> WebUser | None:
-    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/change-credentials", "/favicon.svg", "/healthz"}:
+    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/change-credentials", "/favicon.svg", "/favicon.ico", "/healthz", "/health", "/v1/models"}:
         return None
 
     user_id = request.session.get("user_id")
@@ -173,7 +179,7 @@ if IS_PRODUCTION and not COOKIE_SECURE:
 
 app = FastAPI(
     title="OncoVision Web Chat",
-    description="AI y khoa chuyên về phân tích ảnh y tế — sàng lọc ung thư từ 12 nhóm.",
+    description="AI y khoa chuyên về phân tích ảnh y tế — sàng lọc ung thư từ 11 nhóm.",
     version="2.0.0",
     lifespan=lifespan,
     dependencies=[Depends(require_authenticated)],
@@ -211,7 +217,7 @@ async def limit_request_size(request: Request, call_next):
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers.setdefault("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
+    response.headers.setdefault("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net blob:; worker-src 'self' blob:")
     response.headers.setdefault("Referrer-Policy", "same-origin")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -280,11 +286,13 @@ def _cached_medical_status():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     medical = _cached_medical_status()
+    from medical.dataset import available_medical_modalities_for_target
     cancer_targets = [
         {
             "key": t.key,
             "label": t.label,
             "modalities": list(t.modalities),
+            "available_modalities": list(available_medical_modalities_for_target(t.key)),
             "model_ready": medical.target_capabilities.get(t.key, {}).get("runtime_ready", False),
             "capabilities": medical.target_capabilities.get(t.key, {}),
         }
@@ -583,7 +591,7 @@ async def admin_update_user(
     return RedirectResponse("/admin/users?notice=updated", status_code=303)
 
 
-_STATUS_CACHE_TTL_SECONDS = 60.0
+_STATUS_CACHE_TTL_SECONDS = 300.0
 _status_cache: tuple[float, dict] | None = None
 
 
@@ -591,6 +599,32 @@ _status_cache: tuple[float, dict] | None = None
 def healthz():
     """Healthcheck công khai cho Docker/compose (không qua auth)."""
     return {"status": "ok"}
+
+
+@app.get("/health", include_in_schema=False)
+def health():
+    """Alias cho /healthz — một số client dùng /health thay vì /healthz."""
+    return {"status": "ok"}
+
+
+
+
+@app.get("/v1/models", include_in_schema=False)
+def v1_models():
+    """Trả về danh sách model đang hoạt động cho client AI probe (ví dụ: Ollama/LiteLLM)."""
+    medical = _cached_medical_status()
+    models = []
+    for target_key, caps in medical.target_capabilities.items():
+        if caps.get("runtime_ready"):
+            models.append({
+                "id": f"oncovision-{target_key}",
+                "name": target_key,
+                "ready": True,
+            })
+    return {
+        "models": models,
+        "total": len(models),
+    }
 
 
 @app.get("/api/status")
@@ -718,14 +752,32 @@ def _validate_target_input(target_key: str, modality: str):
 
 
 def _require_ready_capability(target) -> None:
-    """Kiểm tra model đã sẵn sàng — thiếu model thì 503 (trừ khi demo_mode bật)."""
+    """Kiểm tra model đã sẵn sàng — thiếu model thì 503 (trừ khi demo_mode bật).
+
+    Error message sẽ chỉ ra các modality có sẵn model để người dùng biết chọn gì.
+    """
     from medical.pipeline import build_default_medical_analyzer_config
     config = build_default_medical_analyzer_config()
     if config.demo_mode:
         return  # Demo mode: allow analysis without real models
+
     capabilities = get_medical_system_status().target_capabilities.get(target.key, {})
     if not capabilities.get("runtime_ready", False):
-        raise HTTPException(status_code=503, detail=f"Chưa có model suy luận cho {target.label}. Bật demo_mode trong config để chạy thử.")
+        # Tìm các modality có sẵn model cho target này
+        mod_caps = capabilities.get("modality_capabilities", {})
+        ready_modalities = [m for m, info in mod_caps.items() if info.get("runtime_ready", False)]
+        if ready_modalities:
+            detail = (
+                f"Chưa có model suy luận cho {target.label}. "
+                f"Modality có sẵn: {', '.join(ready_modalities)}. "
+                f"Hãy chọn modality khác hoặc bật demo_mode trong config để chạy thử."
+            )
+        else:
+            detail = (
+                f"Chưa có model suy luận cho {target.label}. "
+                f"Hãy bổ sung model vào models/pretrained/cancers/{target.key}/ hoặc bật demo_mode trong config để chạy thử."
+            )
+        raise HTTPException(status_code=503, detail=detail)
 
 
 @app.post("/api/upload", dependencies=[STAFF_REQUIRED])
@@ -788,6 +840,9 @@ def analyze_image(
     conversation_id: int = Form(0),
     target_key: str = Form("brain"),
     modality: str = Form(""),
+    patient_age: str = Form(""),
+    patient_sex: str = Form(""),
+    clinical_note: str = Form(""),
 ):
     # Input không hợp lệ luôn là 400, kể cả khi server thiếu model;
     # chỉ request hợp lệ mới gặp 503 ở bước kiểm tra capability.
@@ -809,6 +864,9 @@ def analyze_image(
             user_prompt=user_prompt,
             target_key=target.key,
             modality=modality or None,
+            patient_age=patient_age or None,
+            patient_sex=patient_sex or None,
+            clinical_note=clinical_note or None,
         )
     except ValueError as exc:
         # Lỗi đầu vào do pipeline báo (TARGET_MISMATCH, UNKNOWN_TARGET, mã validator...)
@@ -846,7 +904,7 @@ def analyze_image(
     fname = Path(image_path).name
     title = f"Phân tích {fname}"
     db = get_db()
-    conv_id = db.create_conversation(title=title, subtitle=pc)
+    conv_id = db.create_conversation(title=title, subtitle=pc, owner=actor.username)
     user_msg = ChatMessage(sender="user", text=user_prompt or f"Phân tích ảnh: {fname}")
     db.add_message(conv_id, user_msg)
     assistant_msg = ChatMessage(
@@ -869,9 +927,10 @@ def analyze_image(
 
 
 @app.post("/api/conversations", dependencies=[ADMIN_REQUIRED])
-async def create_conversation():
+async def create_conversation(request: Request):
     db = get_db()
-    conv_id = db.create_conversation(title="Cuoc tro chuyen moi", subtitle="Hom nay")
+    actor = request.state.current_user
+    conv_id = db.create_conversation(title="Cuoc tro chuyen moi", subtitle="Hom nay", owner=actor.username)
     return {"ok": True, "conversation_id": conv_id}
 
 
@@ -1243,6 +1302,92 @@ async def save_settings(request: Request, language: str = Form("vi"), theme: str
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+@app.get("/api/crop")
+async def crop_image(image_path: str, bbox: str):
+    """
+    Crop an image by bounding box and return as PNG.
+
+    Query params:
+        image_path: path relative to OUTPUT_DIR or absolute path
+        bbox: "x1,y1,x2,y2" coordinates
+
+    Returns:
+        Cropped image as PNG
+    """
+    try:
+        coords = [int(c.strip()) for c in bbox.split(",")]
+        if len(coords) != 4:
+            raise HTTPException(status_code=400, detail="bbox phải có 4 số: x1,y1,x2,y2")
+        x1, y1, x2, y2 = coords
+    except ValueError:
+        raise HTTPException(status_code=400, detail="bbox không hợp lệ")
+
+    # Xử lý cả đường dẫn tuyệt đối, tương đối, và path có prefix "/output/"
+    # Frontend có thể gửi path dưới dạng:
+    # - "medical/processed_images/file.jpg" (relative từ OUTPUT_DIR)
+    # - "/output/medical/processed_images/file.jpg" (có prefix /output/)
+    # - "D:\\Project\\OncoVision\\output\\medical\\processed_images\\file.jpg" (absolute Windows)
+    clean_path = image_path
+    if clean_path.startswith('/output/'):
+        # Bỏ prefix "/output/" để lấy relative path từ OUTPUT_DIR
+        clean_path = clean_path[8:]
+
+    image_file = Path(clean_path)
+    if image_file.is_absolute():
+        # Đường dẫn tuyệt đối: kiểm tra nằm trong OUTPUT_DIR
+        try:
+            resolved = image_file.resolve()
+            if not resolved.is_relative_to(OUTPUT_DIR.resolve()):
+                raise HTTPException(status_code=403, detail="Đường dẫn ảnh không hợp lệ")
+            stored = resolved
+        except (ValueError, OSError):
+            raise HTTPException(status_code=404, detail="Không tìm thấy ảnh")
+    else:
+        # Đường dẫn tương đối: dùng _safe_path
+        stored = _safe_path(OUTPUT_DIR, clean_path)
+
+    if stored is None or not stored.is_file():
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh")
+
+    try:
+        from PIL import Image
+        import io
+        import numpy as np
+
+        with Image.open(stored) as img:
+            arr = np.array(img)
+            h, w = arr.shape[:2]
+            # Clamp coordinates
+            x1 = max(0, min(x1, w - 1))
+            y1 = max(0, min(y1, h - 1))
+            x2 = max(x1 + 1, min(x2, w))
+            y2 = max(y1 + 1, min(y2, h))
+            # Crop with small margin
+            margin_x = max(0, (x2 - x1) // 20)
+            margin_y = max(0, (y2 - y1) // 20)
+            cx1 = max(0, x1 - margin_x)
+            cy1 = max(0, y1 - margin_y)
+            cx2 = min(w, x2 + margin_x)
+            cy2 = min(h, y2 + margin_y)
+            cropped = arr[cy1:cy2, cx1:cx2]
+
+            # Convert to PIL and save as PNG
+            if cropped.ndim == 2 or cropped.shape[2] == 1:
+                pil_img = Image.fromarray(cropped if cropped.ndim == 2 else cropped[:, :, 0], mode="L")
+            else:
+                pil_img = Image.fromarray(cropped[:, :, :3], mode="RGB")
+
+            buf = io.BytesIO()
+            pil_img.save(buf, format="PNG")
+            buf.seek(0)
+
+            from fastapi.responses import Response
+            return Response(content=buf.read(), media_type="image/png")
+    except Exception as exc:
+        logger.exception("Không thể crop ảnh: %s", exc)
+        raise HTTPException(status_code=500, detail="Không thể xử lý ảnh")
+
+
 @app.get("/output/{file_path:path}", dependencies=[ADMIN_REQUIRED])
 async def serve_output_file(file_path: str):
     path = _safe_path(OUTPUT_DIR, file_path)
@@ -1251,9 +1396,14 @@ async def serve_output_file(file_path: str):
     return FileResponse(path)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-
 @app.get("/favicon.svg", include_in_schema=False)
 def favicon():
+    return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon_ico():
+    """Alias cho favicon.ico — trình duyệt mặc định yêu cầu file này."""
     return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
 
 

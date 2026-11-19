@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
+
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from app.camera_runtime.bootstrap import resolve_start_bundle
 from app.camera_runtime.cli import build_camera_arg_parser

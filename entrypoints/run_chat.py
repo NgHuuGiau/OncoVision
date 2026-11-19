@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import io
 import sys
+from pathlib import Path
+
+# Add project root to sys.path when running from entrypoints/
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from app.chat_ui.cli import build_chat_arg_parser
 from app.chat_ui.paths import get_chat_capture_dir
-from app.chat_ui.window import launch_chat_app
+from app.chat_ui.web_desktop_window import launch_web_desktop
 from medical.output_management import _medical_output_directories
 from utils.cleanup_utils import cleanup_directories
 from utils.entrypoint_checks import chat_preflight_status
@@ -92,12 +98,7 @@ def main() -> int:
         sys.stdout.write(output.getvalue())
         return 0
 
-    return launch_chat_app(
-        window_title="OncoVision Chat AI",
-        camera_index=args.camera_index,
-        app_mode="medium",
-        selected_model=args.model,
-    )
+    return launch_web_desktop(window_title="OncoVision Chat AI")
 
 
 if __name__ == "__main__":

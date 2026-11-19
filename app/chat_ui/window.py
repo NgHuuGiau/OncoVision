@@ -258,7 +258,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.setAcceptDrops(True)
             self.build_ui()
             self._initialize_medical_status()
-            self.conversations = self.db.get_all_conversations()
+            owner = getattr(self, "current_user", None)
+            owner_name = owner.username if owner else None
+            self.conversations = self.db.get_all_conversations(owner=owner_name)
             if not self.conversations:
                 self.conversations = [self._build_empty_conversation()]
             for conv in self.conversations:
@@ -848,7 +850,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def add_message(self, message: ChatMessage) -> None:
             conversation = self.active_conversation()
             if conversation.id is None:
-                conversation.id = self.db.create_conversation(conversation.title, conversation.subtitle)
+                owner = getattr(self, "current_user", None)
+                owner_name = owner.username if owner else None
+                conversation.id = self.db.create_conversation(conversation.title, conversation.subtitle, owner=owner_name)
             message.id = self.db.add_message(conversation.id, message)
             conversation.messages.append(message)
             if conversation.title == tr(self.language, "new_chat") and message.sender == "user":
@@ -1296,6 +1300,12 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         model_label=selected_model,
     )
     window.current_user = login_user
+    # Reload conversations with correct owner after setting current_user
+    owner_name = login_user.username
+    window.conversations = window.db.get_all_conversations(owner=owner_name)
+    if not window.conversations:
+        window.conversations = [window._build_empty_conversation()]
+    window.refresh_history()
     window.setWindowTitle(f"{window_title} — {login_user.username} ({login_user.role})")
     window.show()
     return app.exec()

@@ -163,7 +163,9 @@ def update_sidebar_ui(window) -> None:
 
 def refresh_history(window) -> None:
     query = window.search_input.text().strip().lower() if hasattr(window, "search_input") else ""
-    matching_conv_ids = set(window.db.search_conversations_by_message(query)) if query else set()
+    owner = getattr(window, "current_user", None)
+    owner_name = owner.username if owner else None
+    matching_conv_ids = set(window.db.search_conversations_by_message(query, owner=owner_name)) if query else set()
     window.is_refreshing_history = True
     window.history_list.blockSignals(True)
     window.history_list.clear()
@@ -252,7 +254,13 @@ def delete_conversation(window, index_to_delete: int) -> None:
 
 
 def clear_all_history(window) -> None:
-    window.db.clear_all_conversations()
+    owner = getattr(window, "current_user", None)
+    owner_name = owner.username if owner else None
+    if owner_name:
+        with window.db._connect() as conn:
+            conn.execute("DELETE FROM conversations WHERE owner = ?", (owner_name,))
+    else:
+        window.db.clear_all_conversations()
     window.conversations = [window._build_empty_conversation()]
     window.active_conversation_index = 0
     window.refresh_history()

@@ -242,6 +242,231 @@ function initKeyboardShortcuts() {
   });
 }
 
+// -----------------------------------------------------------------------------
+// ĐIỀU KHIỂN PACS TƯƠNG TÁC (ZOOM, PAN, KÉO DI CHUYỂN, ÂM BẢN)
+// -----------------------------------------------------------------------------
+let pacsZoom = 1.0;
+let pacsPanX = 0;
+let pacsPanY = 0;
+let pacsIsDragging = false;
+let pacsStartX = 0;
+let pacsStartY = 0;
+let pacsIsInverted = false;
+
+function pacsApplyTransform() {
+  const wrapper = document.getElementById('pacsImageWrapper');
+  const badge = document.getElementById('pacsZoomBadge');
+  if (wrapper) {
+    wrapper.style.transform = `translate(${pacsPanX}px, ${pacsPanY}px) scale(${pacsZoom})`;
+  }
+  if (badge) {
+    badge.textContent = `${Math.round(pacsZoom * 100)}%`;
+  }
+}
+
+function pacsZoomIn() {
+  pacsZoom = Math.min(4.0, Math.round((pacsZoom + 0.25) * 100) / 100);
+  pacsApplyTransform();
+}
+
+function pacsZoomOut() {
+  pacsZoom = Math.max(0.5, Math.round((pacsZoom - 0.25) * 100) / 100);
+  pacsApplyTransform();
+}
+
+function pacsResetView() {
+  pacsZoom = 1.0;
+  pacsPanX = 0;
+  pacsPanY = 0;
+  pacsApplyTransform();
+}
+
+function pacsToggleInvert() {
+  const img = document.getElementById('pacsActiveImage');
+  const btn = document.getElementById('pacsInvertBtn');
+  pacsIsInverted = !pacsIsInverted;
+  if (img) img.classList.toggle('inverted', pacsIsInverted);
+  if (btn) btn.classList.toggle('active', pacsIsInverted);
+}
+
+function initPacsInteractions() {
+  const container = document.getElementById('pacsScreen');
+  const wrapper = document.getElementById('pacsImageWrapper');
+  if (!container || !wrapper) return;
+
+  // Lăn chuột để zoom ảnh
+  container.addEventListener('wheel', (e) => {
+    const activeImg = document.getElementById('pacsActiveImage');
+    if (!activeImg || !activeImg.src || activeImg.src.endsWith('/')) return;
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      pacsZoomIn();
+    } else {
+      pacsZoomOut();
+    }
+  }, { passive: false });
+
+  // Kéo chuột trái để di chuyển ảnh (Pan)
+  wrapper.addEventListener('mousedown', (e) => {
+    const activeImg = document.getElementById('pacsActiveImage');
+    if (!activeImg || !activeImg.src || activeImg.src.endsWith('/')) return;
+    pacsIsDragging = true;
+    pacsStartX = e.clientX - pacsPanX;
+    pacsStartY = e.clientY - pacsPanY;
+    wrapper.classList.add('is-dragging');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!pacsIsDragging) return;
+    pacsPanX = e.clientX - pacsStartX;
+    pacsPanY = e.clientY - pacsStartY;
+    pacsApplyTransform();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (pacsIsDragging) {
+      pacsIsDragging = false;
+      if (wrapper) wrapper.classList.remove('is-dragging');
+    }
+  });
+
+  // Nhấp đúp chuột vào ảnh để đổi nhanh giữa 100% và 175%
+  wrapper.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    if (pacsZoom > 1.0) {
+      pacsResetView();
+    } else {
+      pacsZoom = 1.75;
+      pacsApplyTransform();
+    }
+  });
+
+  // Nhấp đúp vào thanh kéo resizer để đặt lại độ rộng chuẩn (410px)
+  const resizer = document.getElementById('chatResizer');
+  if (resizer) {
+    resizer.addEventListener('dblclick', () => {
+      setChatWidth('normal');
+    });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// ĐỊNH DẠNG BÁO CÁO Y KHOA GỌN GÀNG, ĐẸP MẮT TRONG CHAT
+// -----------------------------------------------------------------------------
+function formatMedicalAnalysisContent(txt, meta) {
+  if (!txt.includes('Kết quả phân tích') && !txt.includes('📋') && !(meta && meta.medical_case_id)) {
+    return formatGenericMarkdown(txt);
+  }
+
+  const bnMatch = txt.match(/Mã BN:\s*([^\n\r]+)/i);
+  const patientCode = bnMatch ? bnMatch[1].trim() : (meta ? meta.patient_code : '');
+
+  const regionMatch = txt.match(/Vùng chọn:\s*([^|\n\r]+)/i);
+  const modalityMatch = txt.match(/Modality:\s*([^\n\r]+)/i);
+  const region = regionMatch ? regionMatch[1].trim() : (meta ? meta.body_region : '');
+  const modality = modalityMatch ? modalityMatch[1].trim() : (meta ? meta.modality : '');
+
+  const clinicalMatch = txt.match(/Đánh giá lâm sàng:\s*([^\n\r]+)/i);
+  const clinicalStatus = clinicalMatch ? clinicalMatch[1].trim() : 'chưa thực hiện';
+
+  const timeMatch = txt.match(/⏱\s*([0-9.]+s)/);
+  const elapsed = timeMatch ? timeMatch[1] : '';
+
+  let warnings = [];
+  const warnMatch = txt.match(/⚠️\s*Cảnh báo:\s*([\s\S]+?)(?=\n\n|\n💡|\n⏱|\n\*|$)/);
+  if (warnMatch) {
+    const rawWarn = warnMatch[1].trim();
+    warnings = rawWarn.split(';').map(w => w.trim()).filter(Boolean);
+  }
+
+  let recommendation = '';
+  const recMatch = txt.match(/💡\s*([\s\S]+?)(?=\n⏱|\n\*|$)/);
+  if (recMatch) {
+    recommendation = recMatch[1].trim();
+  }
+
+  let disclaimer = '';
+  const discMatch = txt.match(/\*Cảnh báo y khoa:[\s\S]*?\*/);
+  if (discMatch) {
+    disclaimer = discMatch[0].replace(/\*/g, '').trim();
+  }
+
+  let html = `<div class="medical-report-block">`;
+
+  // Header Banner
+  html += `
+    <div class="report-header-banner">
+      <div class="title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+        <span>Kết quả phân tích y khoa</span>
+      </div>
+      ${patientCode ? `<span class="badge">Mã BN: ${escHtml(patientCode)}</span>` : ''}
+    </div>
+  `;
+
+  // Metadata Chips
+  html += `<div class="report-meta-chips">`;
+  if (region) html += `<span class="report-chip chip-target">🎯 Vùng: <strong>${escHtml(region)}</strong></span>`;
+  if (modality) html += `<span class="report-chip">📷 Modality: <strong>${escHtml(modality)}</strong></span>`;
+  html += `<span class="report-chip">⚪ Lâm sàng: <strong>${escHtml(clinicalStatus)}</strong></span>`;
+  if (elapsed) html += `<span class="report-chip chip-time">⏱ ${escHtml(elapsed)}</span>`;
+  html += `</div>`;
+
+  // Warnings Alert Box
+  if (warnings.length > 0) {
+    html += `
+      <div class="warning-alert-card">
+        <div class="alert-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <span>Cảnh báo chất lượng ảnh & kiểm định:</span>
+        </div>
+        <ul>
+          ${warnings.map(w => `<li>${escHtml(w)}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  // Recommendation Callout
+  if (recommendation) {
+    html += `
+      <div class="recommendation-callout">
+        <strong>💡 Đề xuất hỗ trợ:</strong> ${escHtml(recommendation)}
+      </div>
+    `;
+  }
+
+  // Disclaimer Box
+  if (disclaimer) {
+    html += `
+      <div class="medical-disclaimer-box">
+        <strong>* Cảnh báo y khoa:</strong> ${escHtml(disclaimer.replace(/\n+/g, ' '))}
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function formatGenericMarkdown(txt) {
+  let safe = escHtml(txt);
+  safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  safe = safe.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  safe = safe.replace(/\n/g, '<br>');
+  return safe;
+}
+
 function initTargets() {
   const s = document.getElementById('targetSelect');
   if (!s || !CANCER_TARGETS.length) return;
@@ -456,6 +681,7 @@ function syncPACSView() {
   const pacsActiveImage = document.getElementById('pacsActiveImage');
   const pacsPatientCodeEl = document.getElementById('pacsPatientCode');
   const pacsDateEl = document.getElementById('pacsDate');
+  const pacsToolsOverlay = document.getElementById('pacsToolsOverlay');
 
   if (pacsPatientCodeEl) pacsPatientCodeEl.textContent = patientCode;
 
@@ -463,11 +689,14 @@ function syncPACSView() {
     if (pacsActiveImage) pacsActiveImage.src = attachmentUrl(lastImage);
     if (emptyDropzone) emptyDropzone.style.display = 'none';
     if (pacsImageContainer) pacsImageContainer.style.display = 'flex';
+    if (pacsToolsOverlay) pacsToolsOverlay.style.display = 'flex';
     if (pacsDateEl) pacsDateEl.textContent = new Date().toLocaleDateString('vi-VN');
+    pacsResetView();
   } else {
     if (pacsActiveImage) pacsActiveImage.src = '';
     if (emptyDropzone) emptyDropzone.style.display = 'flex';
     if (pacsImageContainer) pacsImageContainer.style.display = 'none';
+    if (pacsToolsOverlay) pacsToolsOverlay.style.display = 'none';
     if (pacsDateEl) pacsDateEl.textContent = '-';
   }
 }
@@ -489,8 +718,31 @@ function renderMessages() {
 function attachmentUrl(p) {
   if (!p) return '';
   const norm = String(p).replace(/\\/g, '/');
+  // Luôn dùng /output/ prefix để đi qua endpoint serve_output_file
   const i = norm.toLowerCase().lastIndexOf('/output/');
   if (i >= 0) return norm.slice(i);
+  // Nếu đường dẫn không chứa /output/, tìm output_dir từ tên file
+  // và wrap vào /output/ prefix
+  const lower = norm.toLowerCase();
+  if (lower.includes('web_uploads') || lower.includes('processed_images') ||
+      lower.includes('gradcam') || lower.includes('overlay') ||
+      lower.includes('reports') || lower.includes('medical')) {
+    // Tìm phần tương đối từ output dir
+    const outputIdx = lower.lastIndexOf('output');
+    if (outputIdx >= 0) {
+      return '/output/' + norm.slice(outputIdx + 6).replace(/^\/+/, '');
+    }
+    // Legacy: web_uploads/... relative path (no output/ prefix)
+    if (lower.startsWith('web_uploads/') || lower.startsWith('processed_images/') ||
+        lower.startsWith('gradcam_') || lower.startsWith('overlay_')) {
+      return '/output/' + norm.replace(/^\/+/, '');
+    }
+  }
+  // Desktop attachments: absolute paths outside output/ (e.g. D:\...\data\datasets\...)
+  // These cannot be served by web server — return empty to avoid 404
+  if (/^[a-zA-Z]:\//.test(norm)) {
+    return '';
+  }
   return '/' + norm.replace(/^\/+/, '');
 }
 
@@ -518,10 +770,20 @@ function addBubble(msg, animate = true) {
   } else if (txt.startsWith('Phân tích lỗi:') || txt.startsWith('Error:')) {
     html += `<div class="error-text">${escHtml(txt)}</div>`;
   } else {
-    html += escHtml(txt);
+    html += formatMedicalAnalysisContent(txt, meta);
   }
   if (meta && meta.medical_case_id) {
-    html += buildResultCard(meta);
+    // Tách mỗi detection thành 1 thẻ riêng để dễ nhìn
+    const dets = meta.detections || [];
+    if (dets.length > 1) {
+      // Nhiều tọa độ → mỗi tọa độ 1 thẻ riêng
+      dets.forEach((det, idx) => {
+        html += buildSingleDetectionCard(meta, det, msg.image_name, idx, dets.length);
+      });
+    } else {
+      // 1 tọa độ hoặc không có → dùng thẻ tổng hợp như cũ
+      html += buildResultCard(meta, msg.image_name);
+    }
   }
   html += '</div>';
   row.innerHTML = html;
@@ -561,28 +823,304 @@ function hideAILoadingIndicator() {
   }
 }
 
-function buildResultCard(m) {
+// ── Build a single detection card (1 tọa độ = 1 thẻ) ──
+function buildSingleDetectionCard(m, det, imageName, detIndex, totalDets) {
+  const risk = (m.risk_level || 'uncertain').toLowerCase();
+  const bodyRegion = m.body_region || m.requested_target || null;
+  const modality = m.modality || m.requested_modality || null;
+  const modelName = m.model_name || null;
+
+  // ── Cancer label mapping ──
+  const cancerLabels = {
+    brain: 'Não', thyroid: 'Tuyến giáp', lung: 'Phổi', breast: 'Vú',
+    stomach: 'Dạ dày', liver: 'Gan', pancreas: 'Tụy',
+    kidney: 'Thận', colorectal: 'Đại trực tràng', prostate: 'Tuyến tiền liệt',
+    cervical: 'Cổ tử cung'
+  };
+  const cancerLabel = bodyRegion ? (cancerLabels[bodyRegion] || escHtml(bodyRegion)) : null;
+
+  // ── Risk level label ──
+  const riskLabels = { high: 'Cao', medium: 'Trung bình', low: 'Thấp', uncertain: 'Chưa rõ' };
+  const riskLabel = riskLabels[risk] || risk;
+
+  // ── Image name ──
+  const displayName = imageName || (m.image_path ? m.image_path.split('/').pop().split('\\').pop() : null);
+
+  // ── Context info ──
+  let contextHtml = '';
+  const contextItems = [];
+  if (cancerLabel) contextItems.push({ icon: '🎯', label: 'Vùng', value: cancerLabel });
+  if (modality) contextItems.push({ icon: '📷', label: 'Modality', value: escHtml(modality) });
+  if (modelName) contextItems.push({ icon: '🤖', label: 'Model', value: escHtml(modelName) });
+  if (contextItems.length > 0) {
+    contextHtml = `<div class="result-context"><div class="context-grid">${contextItems.map(item => `<div class="context-item"><span class="context-icon">${item.icon}</span><div class="context-text"><span class="context-label">${item.label}</span><span class="context-value">${item.value}</span></div></div>`).join('')}</div></div>`;
+  }
+
+  // ── Position string ──
+  let position = '-';
+  const bboxCoords = det.bbox || det.bbox_source || null;
+  if (det.bbox) {
+    const [x1, y1, x2, y2] = det.bbox;
+    position = `(${x1}, ${y1}) → (${x2}, ${y2})`;
+    if (det.bbox_image_size) {
+      position += ` [${det.bbox_image_size[0]}×${det.bbox_image_size[1]}]`;
+    }
+  } else if (det.bbox_source) {
+    const [x1, y1, x2, y2] = det.bbox_source;
+    position = `gốc(${x1}, ${y1}) → (${x2}, ${y2})`;
+    if (det.bbox_source_image_size) {
+      position += ` [${det.bbox_source_image_size[0]}×${det.bbox_source_image_size[1]}]`;
+    }
+  }
+  if (!det.bbox_reliable) position += ' ⚠️ vị trí không đáng tin';
+  const confPct = (det.confidence * 100).toFixed(1);
+
+  // ── Crop image URL ──
+  // Dùng processed_image_path (ảnh canvas có vẽ bbox) thay vì source_image
+  // vì tọa độ bbox nằm trong hệ canvas (640x640)
+  // Dùng attachmentUrl() để chuyển đổi path đúng cách, giống như các ảnh khác
+  let cropImageHtml = '';
+  const rawImgPath = m.processed_image_path || m.image_path || '';
+  const isReliable = det.bbox_reliable !== false;  // Mặc định true nếu không có
+  if (rawImgPath && bboxCoords && isReliable) {
+    // Dùng attachmentUrl() để chuyển absolute path thành relative path từ /output/
+    const imgUrl = attachmentUrl(rawImgPath);
+    if (imgUrl) {
+      // attachmentUrl() trả về "/output/medical/processed_images/..."
+      // Bỏ "/output/" prefix để lấy relative path từ OUTPUT_DIR
+      const relPath = imgUrl.startsWith('/output/') ? imgUrl.slice(8) : imgUrl.replace(/^\/+/, '');
+      const [x1, y1, x2, y2] = bboxCoords;
+      const cropUrl = `/api/crop?image_path=${encodeURIComponent(relPath)}&bbox=${x1},${y1},${x2},${y2}`;
+      cropImageHtml = `<div class="detection-crop-image"><img src="${cropUrl}" onclick="previewImage(this.src)" loading="lazy" alt="Vùng phát hiện"></div>`;
+    }
+  }
+
+  // ── Case info tags ──
+  let caseInfoHtml = '';
+  const caseFields = [];
+  if (m.patient_code) caseFields.push({ label: 'Mã BN', value: escHtml(m.patient_code) });
+  if (m.patient_age) caseFields.push({ label: 'Tuổi', value: m.patient_age + ' tuổi' });
+  if (m.patient_sex) caseFields.push({ label: 'Giới tính', value: escHtml(m.patient_sex) });
+  if (caseFields.length > 0) {
+    caseInfoHtml = `<div class="result-case-info"><b>Thông tin ca</b><div class="case-info-tags">${caseFields.map(f => `<span class="case-info-tag"><span class="case-info-label">${f.label}:</span><span class="case-info-value">${f.value}</span></span>`).join('')}</div></div>`;
+  }
+
+  // ── Recommendation (only on first detection card) ──
+  let recommendationHtml = '';
+  if (detIndex === 0 && m.recommendation) {
+    recommendationHtml = `<div class="result-recommendation"><b>💡 Đề xuất hỗ trợ</b><p>${escHtml(m.recommendation)}</p></div>`;
+  }
+
+  // ── Quality warnings (only on first detection card) ──
+  let warningsHtml = '';
+  const qualityWarnings = m.quality_warnings || [];
+  if (detIndex === 0 && qualityWarnings.length > 0) {
+    warningsHtml = `<div class="result-warnings"><b>⚠️ Cảnh báo chất lượng</b><ul class="warnings-list">${qualityWarnings.map(w => `<li>${escHtml(w)}</li>`).join('')}</ul></div>`;
+  }
+
+  // ── Malignancy (only on first detection card) ──
+  let malignancyHtml = '';
+  if (detIndex === 0 && m.clinical_assessment_available) {
+    if (m.suspected_malignant) {
+      malignancyHtml = `<div class="result-malignancy malignant"><span class="malignancy-icon">⚠️</span><div class="malignancy-text"><b>Nghi ngờ ác tính</b><span>Cần hội chẩn và xét nghiệm bổ sung ngay</span></div></div>`;
+    } else {
+      malignancyHtml = `<div class="result-malignancy benign"><span class="malignancy-icon">✅</span><div class="malignancy-text"><b>Không nghi ngờ ác tính</b><span>Tiếp tục theo dõi định kỳ</span></div></div>`;
+    }
+  }
+
+  // ── Actions (only on last detection card) ──
+  let actionsHtml = '';
+  if (detIndex === totalDets - 1) {
+    actionsHtml = `<div class="result-actions">
+        <a class="result-btn" href="/api/cases/${m.medical_case_id}/pdf" download>⬇ Xuất PDF</a>
+        <button class="result-btn" onclick="openCompare(${m.medical_case_id})">⇄ So sánh</button>
+      </div>`;
+  }
+
+  // ── Grad-CAM (only on first detection card) ──
+  let gradcamHtml = '';
+  const gradcams = (m.gradcam_overlays || []).filter(Boolean);
+  if (detIndex === 0 && gradcams.length) {
+    gradcamHtml = `<p class="workflow-muted">Grad-CAM chỉ minh họa vùng ảnh ảnh hưởng đến dự đoán, không phải ranh giới tổn thương đã xác nhận.</p><div class="gradcam-strip">${gradcams.map(p => `<img src="${attachmentUrl(p)}" onclick="previewImage(this.src)" title="Grad-CAM heatmap" loading="lazy">`).join('')}</div>`;
+  }
+
+  return `
+    <div class="result-card detection-card">
+      <div class="result-card-head">
+        <div class="result-card-title">
+          <span class="result-card-icon">🔍</span>
+          <b>Tọa độ ${detIndex + 1}/${totalDets}</b>
+          ${displayName ? `<span class="result-image-name">📷 ${escHtml(displayName)}</span>` : ''}
+        </div>
+        <span class="risk-badge risk-${risk}">${m.clinical_assessment_available ? escHtml(riskLabel) : 'Chưa đánh giá lâm sàng'}</span>
+      </div>
+      ${contextHtml}
+      ${caseInfoHtml}
+      <div class="result-stats">
+        <div class="result-stat"><b>${escHtml(det.label)}</b><span>Nhãn dự đoán</span></div>
+        <div class="result-stat"><b>${confPct}%</b><span>Điểm tin cậy</span></div>
+        <div class="result-stat"><span class="conf-bar-wrap"><span class="conf-bar-fill" style="width:${Math.round(det.confidence * 100)}%"></span></span></div>
+      </div>
+      ${cropImageHtml}
+      <div class="result-section">
+        <b class="result-section-title">📐 Vị trí phát hiện</b>
+        <div class="detection-position" style="font-size:14px;font-family:monospace;padding:12px;background:var(--bg-secondary);border-radius:8px;text-align:center;">${position}</div>
+      </div>
+      ${malignancyHtml}
+      ${warningsHtml}
+      ${recommendationHtml}
+      ${gradcamHtml}
+      ${actionsHtml}
+    </div>
+  `;
+}
+
+function buildResultCard(m, imageName) {
   const risk = (m.risk_level || 'uncertain').toLowerCase();
   const dets = m.detections || [];
   const gradcams = (m.gradcam_overlays || []).filter(Boolean);
-  let detRows = dets.slice(0, 5).map(d =>
-    `<tr><td>${escHtml(d.label)}</td><td><span class="conf-bar-wrap"><span class="conf-bar-fill" style="width:${Math.round(d.confidence * 100)}%"></span></span>${(d.confidence * 100).toFixed(1)}%</td></tr>`
-  ).join('');
-  if (!detRows) detRows = '<tr><td>Model không trả về nhãn dự đoán.</td></tr>';
+  const avgConf = m.average_confidence != null ? (m.average_confidence * 100).toFixed(1) : null;
+  const bodyRegion = m.body_region || m.requested_target || null;
+  const modality = m.modality || m.requested_modality || null;
+  const modelName = m.model_name || null;
+  const qualityWarnings = m.quality_warnings || [];
+  const recommendation = m.recommendation || '';
+  const inputDim = m.input_dimension || '2d';
+
+  // ── Cancer label mapping (tiếng Việt) ──
+  const cancerLabels = {
+    brain: 'Não', thyroid: 'Tuyến giáp', lung: 'Phổi', breast: 'Vú',
+    stomach: 'Dạ dày', liver: 'Gan', pancreas: 'Tụy',
+    kidney: 'Thận', colorectal: 'Đại trực tràng', prostate: 'Tuyến tiền liệt',
+    cervical: 'Cổ tử cung'
+  };
+  const cancerLabel = bodyRegion ? (cancerLabels[bodyRegion] || escHtml(bodyRegion)) : null;
+
+  // ── Risk level label ──
+  const riskLabels = {
+    high: 'Cao', medium: 'Trung bình', low: 'Thấp', uncertain: 'Chưa rõ'
+  };
+  const riskLabel = riskLabels[risk] || risk;
+
+  // ── Confidence level indicator ──
+  let confLevel = '';
+  let confLevelClass = '';
+  if (avgConf != null) {
+    const conf = parseFloat(avgConf);
+    if (conf >= 80) { confLevel = '🟢 Cao'; confLevelClass = 'conf-high'; }
+    else if (conf >= 50) { confLevel = '🟡 Trung bình'; confLevelClass = 'conf-medium'; }
+    else { confLevel = '🔴 Thấp'; confLevelClass = 'conf-low'; }
+  }
+
+  // ── Malignancy indicator ──
+  let malignancyHtml = '';
+  if (m.clinical_assessment_available) {
+    if (m.suspected_malignant) {
+      malignancyHtml = `<div class="result-malignancy malignant"><span class="malignancy-icon">⚠️</span><div class="malignancy-text"><b>Nghi ngờ ác tính</b><span>Cần hội chẩn và xét nghiệm bổ sung ngay</span></div></div>`;
+    } else {
+      malignancyHtml = `<div class="result-malignancy benign"><span class="malignancy-icon">✅</span><div class="malignancy-text"><b>Không nghi ngờ ác tính</b><span>Tiếp tục theo dõi định kỳ</span></div></div>`;
+    }
+  }
+
+  // ── Quality warnings ──
+  let warningsHtml = '';
+  if (qualityWarnings.length > 0) {
+    warningsHtml = `<div class="result-warnings"><b>⚠️ Cảnh báo chất lượng</b><ul class="warnings-list">${qualityWarnings.map(w => `<li>${escHtml(w)}</li>`).join('')}</ul></div>`;
+  }
+
+  // ── Recommendation ──
+  let recommendationHtml = '';
+  if (recommendation) {
+    recommendationHtml = `<div class="result-recommendation"><b>💡 Đề xuất hỗ trợ</b><p>${escHtml(recommendation)}</p></div>`;
+  }
+
+  // ── Detections table ──
+  let detRows = dets.slice(0, 10).map((d, idx) => {
+    let position = '-';
+    if (d.bbox) {
+      const [x1, y1, x2, y2] = d.bbox;
+      position = `(${x1},${y1})-(${x2},${y2})`;
+      if (d.bbox_image_size) {
+        position += ` [${d.bbox_image_size[0]}x${d.bbox_image_size[1]}]`;
+      }
+    } else if (d.bbox_source) {
+      const [x1, y1, x2, y2] = d.bbox_source;
+      position = `gốc(${x1},${y1})-(${x2},${y2})`;
+      if (d.bbox_source_image_size) {
+        position += ` [${d.bbox_source_image_size[0]}x${d.bbox_source_image_size[1]}]`;
+      }
+    }
+    if (!d.bbox_reliable) position += ' ⚠️';
+    const confPct = (d.confidence * 100).toFixed(1);
+    return `<tr><td>#${idx + 1}</td><td>${escHtml(d.label)}</td><td><span class="conf-bar-wrap"><span class="conf-bar-fill" style="width:${Math.round(d.confidence * 100)}%"></span></span>${confPct}%</td><td style="font-size:11px;font-family:monospace">${position}</td></tr>`;
+  }).join('');
+  if (!detRows) detRows = '<tr><td colspan="4">Model không trả về nhãn dự đoán.</td></tr>';
+
+  // ── Grad-CAM ──
   const gradcamHtml = gradcams.length
     ? `<p class="workflow-muted">Grad-CAM chỉ minh họa vùng ảnh ảnh hưởng đến dự đoán, không phải ranh giới tổn thương đã xác nhận.</p><div class="gradcam-strip">${gradcams.map(p => `<img src="${attachmentUrl(p)}" onclick="previewImage(this.src)" title="Grad-CAM heatmap" loading="lazy">`).join('')}</div>`
     : '';
+
+  // ── Case info tags ──
+  let caseInfoHtml = '';
+  const caseFields = [];
+  if (m.patient_code) caseFields.push({ label: 'Mã BN', value: escHtml(m.patient_code) });
+  if (m.patient_age) caseFields.push({ label: 'Tuổi', value: m.patient_age + ' tuổi' });
+  if (m.patient_sex) caseFields.push({ label: 'Giới tính', value: escHtml(m.patient_sex) });
+  if (m.image_path) {
+    const imgName = m.image_path.split('/').pop();
+    caseFields.push({ label: 'Ảnh', value: escHtml(imgName) });
+  }
+  if (caseFields.length > 0) {
+    caseInfoHtml = `<div class="result-case-info"><b>Thông tin ca</b><div class="case-info-tags">${caseFields.map(f => `<span class="case-info-tag"><span class="case-info-label">${f.label}:</span><span class="case-info-value">${f.value}</span></span>`).join('')}</div></div>`;
+  }
+
+  // ── Context info (vùng, modality, model, dimension) ──
+  let contextHtml = '';
+  const contextItems = [];
+  if (cancerLabel) contextItems.push({ icon: '🎯', label: 'Vùng', value: cancerLabel });
+  if (modality) contextItems.push({ icon: '📷', label: 'Modality', value: escHtml(modality) });
+  if (modelName) contextItems.push({ icon: '🤖', label: 'Model', value: escHtml(modelName) });
+  if (inputDim === '3d') contextItems.push({ icon: '📊', label: 'Chiều', value: '3D Volume' });
+  if (contextItems.length > 0) {
+    contextHtml = `<div class="result-context"><div class="context-grid">${contextItems.map(item => `<div class="context-item"><span class="context-icon">${item.icon}</span><div class="context-text"><span class="context-label">${item.label}</span><span class="context-value">${item.value}</span></div></div>`).join('')}</div></div>`;
+  }
+
+  // ── Stats row ──
+  const statsItems = [];
+  statsItems.push({ value: dets.length, label: 'Nhãn dự đoán' });
+  if (avgConf != null) statsItems.push({ value: avgConf + '%', label: 'Độ tin cậy TB' });
+  if (confLevel) statsItems.push({ value: confLevel, label: 'Mức độ tin cậy', class: confLevelClass });
+  if (m.clinical_assessment_available) {
+    statsItems.push({ value: m.suspected_malignant ? 'Có' : 'Không', label: 'Nghi ngờ ác tính' });
+  }
+  statsItems.push({ value: riskLabel, label: 'Mức độ rủi ro', class: 'risk-' + risk });
+
+  // ── Image name in header ──
+  const displayName = imageName || (m.image_path ? m.image_path.split('/').pop().split('\\').pop() : null);
+
   return `
     <div class="result-card">
       <div class="result-card-head">
-        <b>Nhãn phân loại do AI dự đoán</b>
-        <span class="risk-badge risk-${risk}">${m.clinical_assessment_available ? escHtml(risk) : 'Chưa đánh giá'}</span>
+        <div class="result-card-title">
+          <span class="result-card-icon">📋</span>
+          <b>Kết quả phân tích AI</b>
+          ${displayName ? `<span class="result-image-name">📷 ${escHtml(displayName)}</span>` : ''}
+        </div>
+        <span class="risk-badge risk-${risk}">${m.clinical_assessment_available ? escHtml(riskLabel) : 'Chưa đánh giá lâm sàng'}</span>
       </div>
+      ${contextHtml}
+      ${caseInfoHtml}
       <div class="result-stats">
-        <div class="result-stat"><b>${dets.length}</b><span>Nhãn dự đoán</span></div>
-        <div class="result-stat"><b>${m.clinical_assessment_available ? (m.suspected_malignant ? 'Có' : 'Không') : 'Chưa đánh giá'}</b><span>Nhận định ác tính</span></div>
+        ${statsItems.map(s => `<div class="result-stat ${s.class || ''}"><b>${s.value}</b><span>${s.label}</span></div>`).join('')}
       </div>
-      <table class="result-detections">${detRows}</table>
+      ${malignancyHtml}
+      ${warningsHtml}
+      ${recommendationHtml}
+      <div class="result-section">
+        <b class="result-section-title">🔬 Chi tiết phát hiện</b>
+        <table class="result-detections"><thead><tr><th>#</th><th>Nhãn</th><th>Điểm tin cậy</th><th>Vị trí</th></tr></thead><tbody>${detRows}</tbody></table>
+      </div>
       ${gradcamHtml}
       <div class="result-actions">
         <a class="result-btn" href="/api/cases/${m.medical_case_id}/pdf" download>⬇ Xuất PDF</a>
@@ -646,7 +1184,52 @@ function pickImage() {
   inp.accept = 'image/*,video/mp4,video/quicktime,.avi,.mkv,.dcm,.nii,.nii.gz,.mha,.mhd';
   inp.onchange = async () => {
     if (!inp.files[0]) return;
-    const f = inp.files[0];
+    uploadSingleImage(inp.files[0]);
+  };
+  inp.click();
+}
+
+function pickMultipleImages() {
+  const m = document.getElementById('plusMenu');
+  if (m) m.style.display = 'none';
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.multiple = true;
+  inp.accept = 'image/*,video/mp4,video/quicktime,.avi,.mkv,.dcm,.nii,.nii.gz,.mha,.mhd';
+  inp.onchange = async () => {
+    if (!inp.files || inp.files.length === 0) return;
+    uploadMultipleImages(Array.from(inp.files));
+  };
+  inp.click();
+}
+
+async function uploadSingleImage(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.ok) {
+      addAttachment(d.stored_path, 'image', file.name);
+      applyDetectedMetadata(d);
+      showPacsImage(d.stored_path, 'WEB_UPLOAD');
+    }
+  } catch (e) {
+    alert('Không thể tải file lên: ' + e);
+  }
+}
+
+async function uploadMultipleImages(files) {
+  const ed = document.getElementById('emptyDropzone');
+  if (ed) ed.style.display = 'none';
+  const pic = document.getElementById('pacsImageContainer');
+  if (pic) pic.style.display = 'flex';
+  const pd = document.getElementById('pacsDate');
+  if (pd) pd.textContent = new Date().toLocaleDateString('vi-VN');
+
+  let firstImage = null;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
     const fd = new FormData();
     fd.append('file', f);
     try {
@@ -654,29 +1237,72 @@ function pickImage() {
       const d = await r.json();
       if (d.ok) {
         addAttachment(d.stored_path, 'image', f.name);
-        if (d.detected_target) {
-          const ts = document.getElementById('targetSelect');
-          if (ts) {
-            ts.value = d.detected_target;
-            ts.dispatchEvent(new Event('change'));
-          }
+        if (i === 0) {
+          applyDetectedMetadata(d);
+          firstImage = d.stored_path;
         }
-        const ed = document.getElementById('emptyDropzone');
-        if (ed) ed.style.display = 'none';
-        const pacsActiveImage = document.getElementById('pacsActiveImage');
-        if (pacsActiveImage) pacsActiveImage.src = attachmentUrl(d.stored_path);
-        const pic = document.getElementById('pacsImageContainer');
-        if (pic) pic.style.display = 'flex';
-        const ppc = document.getElementById('pacsPatientCode');
-        if (ppc) ppc.textContent = "WEB_UPLOAD";
-        const pd = document.getElementById('pacsDate');
-        if (pd) pd.textContent = new Date().toLocaleDateString('vi-VN');
       }
     } catch (e) {
-      alert('Không thể tải file lên: ' + e);
+      console.error('Lỗi tải file ' + f.name + ':', e);
     }
-  };
-  inp.click();
+  }
+  if (firstImage) {
+    showPacsImage(firstImage, 'MULTI_UPLOAD');
+  }
+}
+
+function applyDetectedMetadata(d) {
+  if (d.detected_target) {
+    const ts = document.getElementById('targetSelect');
+    if (ts) {
+      ts.value = d.detected_target;
+      ts.dispatchEvent(new Event('change'));
+    }
+  }
+  if (d.detected_modality) {
+    setTimeout(() => {
+      const ms = document.getElementById('modalitySelect');
+      if (ms) {
+        const detected = d.detected_modality.toLowerCase();
+        const options = Array.from(ms.options);
+        const modalityMap = {
+          'ct': 'ct',
+          'mri': 'mri',
+          'x-quang': 'x-quang',
+          'x-quang ngực': 'x-quang',
+          'siêu âm': 'siêu âm',
+          'nội soi': 'nội soi',
+        };
+        let keyword = null;
+        for (const [key, val] of Object.entries(modalityMap)) {
+          if (detected.includes(key)) {
+            keyword = val;
+            break;
+          }
+        }
+        if (keyword) {
+          const match = options.find(o => o.value.toLowerCase().includes(keyword));
+          if (match) {
+            ms.value = match.value;
+            ms.dispatchEvent(new Event('change'));
+          }
+        }
+      }
+    }, 100);
+  }
+}
+
+function showPacsImage(storedPath, sourceCode) {
+  const ed = document.getElementById('emptyDropzone');
+  if (ed) ed.style.display = 'none';
+  const pacsActiveImage = document.getElementById('pacsActiveImage');
+  if (pacsActiveImage) pacsActiveImage.src = attachmentUrl(storedPath);
+  const pic = document.getElementById('pacsImageContainer');
+  if (pic) pic.style.display = 'flex';
+  const ppc = document.getElementById('pacsPatientCode');
+  if (ppc) ppc.textContent = sourceCode;
+  const pd = document.getElementById('pacsDate');
+  if (pd) pd.textContent = new Date().toLocaleDateString('vi-VN');
 }
 
 function addAttachment(path, kind, name) {
@@ -815,79 +1441,123 @@ async function sendMessage() {
 
   try {
     if (atts.length > 0) {
-      const att = atts[0];
-      const prompt = text || `Phân tích ảnh: ${att.name}`;
-      const fd = new URLSearchParams();
-      fd.append('image_path', att.path);
-      fd.append('user_prompt', prompt);
       const target = selectedTarget();
       if (!target) throw new Error('Chưa chọn nhóm bệnh.');
-      fd.append('target_key', target.key);
-      fd.append('modality', document.getElementById('modalitySelect')?.value || '');
-      if (c.id) fd.append('conversation_id', c.id);
+      const modality = document.getElementById('modalitySelect')?.value || '';
 
-      try {
-        const r = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: fd
-        });
-        let d;
-        try {
-          d = await r.json();
-        } catch (e) {
-          d = {};
-        }
-        if (!r.ok || !d.ok) throw new Error(d.detail || `Lỗi máy chủ (${r.status}).`);
+      // Thu thập thông tin ca bệnh từ form
+      const patientCode = (document.getElementById('patientCodeInput')?.value || '').trim();
+      const clinicalNote = (document.getElementById('clinicalNoteInput')?.value || '').trim();
+      const patientAge = (document.getElementById('patientAgeInput')?.value || '').trim();
+      const patientSex = (document.getElementById('patientSexInput')?.value || '').trim();
 
-        const metaJson = d.metadata ? JSON.stringify(d.metadata) : null;
-        addBubble({
-          sender: 'assistant',
-          text: d.reply_text,
-          attachment_path: d.attachment_path,
-          attachment_kind: d.attachment_kind,
-          metadata_json: metaJson
-        }, true);
-
-        if (c.id) {
-          const fd2 = new URLSearchParams();
-          fd2.append('sender', 'assistant');
-          fd2.append('text', d.reply_text);
-          fd2.append('attachment_path', d.attachment_path || '');
-          fd2.append('attachment_kind', d.attachment_kind || '');
-          fd2.append('metadata_json', metaJson || '');
-          await fetch(`/api/conversations/${c.id}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: fd2
-          }).catch(() => {});
-        }
-
-        c.messages.push({
-          sender: 'assistant',
-          text: d.reply_text,
-          attachment_path: d.attachment_path,
-          attachment_kind: d.attachment_kind,
-          metadata_json: metaJson
-        });
-      } catch (e) {
+      // Phân tích từng ảnh riêng biệt, mỗi ảnh có kết quả và tọa độ riêng
+      for (let i = 0; i < atts.length; i++) {
+        const att = atts[i];
         hideAILoadingIndicator();
-        const errorText = `Phân tích lỗi: ${e.message || 'Không thể kết nối tới máy chủ.'}`;
-        addBubble({ sender: 'assistant', text: errorText, attachment_path: att.path, attachment_kind: att.kind }, true);
-        if (c.id) {
-          const fd2 = new URLSearchParams();
-          fd2.append('sender', 'assistant');
-          fd2.append('text', errorText);
-          fd2.append('attachment_path', att.path);
-          fd2.append('attachment_kind', att.kind);
-          await fetch(`/api/conversations/${c.id}/messages`, {
+        showAILoadingIndicator();
+        let prompt = text || `Phân tích ảnh: ${att.name}`;
+        // Thêm thông tin lâm sàng vào prompt nếu có
+        if (clinicalNote) {
+          prompt = prompt + ' | Lâm sàng: ' + clinicalNote;
+        }
+        const fd = new URLSearchParams();
+        fd.append('image_path', att.path);
+        fd.append('user_prompt', prompt);
+        fd.append('target_key', target.key);
+        fd.append('modality', modality);
+        if (patientCode) fd.append('patient_code', patientCode);
+        if (patientAge) fd.append('patient_age', patientAge);
+        if (patientSex) fd.append('patient_sex', patientSex);
+        if (clinicalNote) fd.append('clinical_note', clinicalNote);
+        if (c.id) fd.append('conversation_id', c.id);
+
+        try {
+          const r = await fetch('/api/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: fd2
-          }).catch(() => {});
+            body: fd
+          });
+          let d;
+          try {
+            d = await r.json();
+          } catch (e) {
+            d = {};
+          }
+          if (!r.ok || !d.ok) throw new Error(d.detail || `Lỗi máy chủ (${r.status}).`);
+
+          // Cập nhật model 3D đúng loại ung thư AI phát hiện (để tab 3D hiển thị đúng ung thư, không phải dropdown)
+          const suspected = d.metadata && d.metadata.suspected_cancer;
+          if (suspected && Array.isArray(window.CANCER_TARGETS)) {
+            const match = window.CANCER_TARGETS.find(t => t.key === suspected);
+            if (match) {
+              last3DTargetKey = suspected;
+              const sel = document.getElementById('targetSelect');
+              if (sel) sel.value = suspected;
+            }
+          }
+
+          // Thêm nhãn ảnh nếu có nhiều ảnh để phân biệt
+          let replyText = d.reply_text;
+          if (atts.length > 1) {
+            replyText = `📷 **Ảnh ${i + 1}/${atts.length}: ${att.name}**\n\n${replyText}`;
+          }
+          const metaJson = d.metadata ? JSON.stringify(d.metadata) : null;
+          addBubble({
+            sender: 'assistant',
+            text: replyText,
+            attachment_path: d.attachment_path,
+            attachment_kind: d.attachment_kind,
+            metadata_json: metaJson,
+            image_name: att.name
+          }, true);
+
+          if (c.id) {
+            const fd2 = new URLSearchParams();
+            fd2.append('sender', 'assistant');
+            fd2.append('text', replyText);
+            fd2.append('attachment_path', d.attachment_path || '');
+            fd2.append('attachment_kind', d.attachment_kind || '');
+            fd2.append('metadata_json', metaJson || '');
+            fd2.append('image_name', att.name || '');
+            await fetch(`/api/conversations/${c.id}/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: fd2
+            }).catch(() => {});
+          }
+
+          c.messages.push({
+            sender: 'assistant',
+            text: replyText,
+            attachment_path: d.attachment_path,
+            attachment_kind: d.attachment_kind,
+            metadata_json: metaJson,
+            image_name: att.name
+          });
+        } catch (e) {
+          hideAILoadingIndicator();
+          const errorText = `❌ Phân tích ảnh "${att.name}" lỗi: ${e.message || 'Không thể kết nối tới máy chủ.'}`;
+          addBubble({ sender: 'assistant', text: errorText, attachment_path: att.path, attachment_kind: att.kind }, true);
+          if (c.id) {
+            const fd2 = new URLSearchParams();
+            fd2.append('sender', 'assistant');
+            fd2.append('text', errorText);
+            fd2.append('attachment_path', att.path);
+            fd2.append('attachment_kind', att.kind);
+            await fetch(`/api/conversations/${c.id}/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: fd2
+            }).catch(() => {});
+          }
+          c.messages.push({ sender: 'assistant', text: errorText, attachment_path: att.path, attachment_kind: att.kind });
         }
-        c.messages.push({ sender: 'assistant', text: errorText, attachment_path: att.path, attachment_kind: att.kind });
       }
+
+      // Show 2D/3D tabs and init 3D viewer if target is available
+      showViewerTabs();
+      init3DViewerForTarget(last3DTargetKey || target.key);
     } else {
       hideAILoadingIndicator();
       addBubble({ sender: 'assistant', text: t('system_reply_text') }, true);
@@ -1042,6 +1712,38 @@ if (pacsScreen) {
               ts.value = d.detected_target;
               ts.dispatchEvent(new Event('change'));
             }
+          }
+          // Tự động điền modality nếu backend trả về detected_modality
+          if (d.detected_modality) {
+            setTimeout(() => {
+              const ms = document.getElementById('modalitySelect');
+              if (ms) {
+                const detected = d.detected_modality.toLowerCase();
+                const options = Array.from(ms.options);
+                const modalityMap = {
+                  'ct': 'ct',
+                  'mri': 'mri',
+                  'x-quang': 'x-quang',
+                  'x-quang ngực': 'x-quang',
+                  'siêu âm': 'siêu âm',
+                  'nội soi': 'nội soi',
+                };
+                let keyword = null;
+                for (const [key, val] of Object.entries(modalityMap)) {
+                  if (detected.includes(key)) {
+                    keyword = val;
+                    break;
+                  }
+                }
+                if (keyword) {
+                  const match = options.find(o => o.value.toLowerCase().includes(keyword));
+                  if (match) {
+                    ms.value = match.value;
+                    ms.dispatchEvent(new Event('change'));
+                  }
+                }
+              }
+            }, 100);
           }
           const ed = document.getElementById('emptyDropzone');
           if (ed) ed.style.display = 'none';
@@ -1220,6 +1922,7 @@ document.addEventListener('keydown', e => {
 
   initChatResizer();
   initKeyboardShortcuts();
+  initPacsInteractions();
 
   await loadConversations();
 
@@ -1266,4 +1969,78 @@ document.addEventListener('keydown', e => {
       }
     }
   } catch (e) {}
+})();
+
+// ── 3D Anatomy Viewer Integration ─────────────────────────────────────────
+
+let last3DTargetKey = null;
+
+function showViewerTabs() {
+  const tabs = document.getElementById('viewerTabs');
+  if (tabs) tabs.style.display = 'flex';
+}
+
+function switchViewerTab(tab) {
+  const tab2D = document.getElementById('tab2D');
+  const tab3D = document.getElementById('tab3D');
+  const panel2D = document.getElementById('panel2D');
+  const panel3D = document.getElementById('panel3D');
+  const fpsControl = document.getElementById('fpsControl');
+
+  if (tab === '3d') {
+    if (tab2D) tab2D.classList.remove('active');
+    if (tab3D) tab3D.classList.add('active');
+    if (panel2D) panel2D.classList.remove('active');
+    if (panel3D) panel3D.classList.add('active');
+    // Show FPS control
+    if (fpsControl) fpsControl.style.display = 'flex';
+    // Init 3D viewer (Three.js đã load sẵn từ HTML)
+    const targetKey = last3DTargetKey
+      || (document.getElementById('targetSelect') && document.getElementById('targetSelect').value)
+      || 'brain';
+    if (typeof init3DViewer === 'function' && targetKey) {
+      init3DViewer('anatomy3dContainer', targetKey);
+      last3DTargetKey = targetKey;
+    }
+  } else {
+    if (tab3D) tab3D.classList.remove('active');
+    if (tab2D) tab2D.classList.add('active');
+    if (panel3D) panel3D.classList.remove('active');
+    if (panel2D) panel2D.classList.add('active');
+    // Hide FPS control
+    if (fpsControl) fpsControl.style.display = 'none';
+  }
+}
+
+function init3DViewerForTarget(targetKey) {
+  last3DTargetKey = targetKey;
+  // Don't auto-init 3D viewer; wait for user to click the 3D tab
+  // The switchViewerTab function will init it when needed
+}
+
+// ── FPS Control UI ──────────────────────────────────────────────────
+function set3DFPSUI(fps) {
+  if (typeof set3DFPS === 'function') {
+    set3DFPS(fps);
+  }
+  // Update UI buttons
+  const btn30 = document.getElementById('fps30');
+  const btn60 = document.getElementById('fps60');
+  if (fps === 30) {
+    if (btn30) btn30.classList.add('active');
+    if (btn60) btn60.classList.remove('active');
+  } else {
+    if (btn30) btn30.classList.remove('active');
+    if (btn60) btn60.classList.add('active');
+  }
+  // Save preference
+  localStorage.setItem('3dViewerFPS', String(fps));
+}
+
+// Load saved FPS preference on startup
+(function () {
+  const saved = localStorage.getItem('3dViewerFPS');
+  if (saved === '60' && typeof set3DFPS === 'function') {
+    set3DFPS(60);
+  }
 })();

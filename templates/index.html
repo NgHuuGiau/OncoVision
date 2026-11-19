@@ -8,7 +8,6 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <script>const savedTheme=localStorage.getItem('theme')||'system';document.documentElement.classList.toggle('light',savedTheme==='light'||(savedTheme==='system'&&matchMedia('(prefers-color-scheme: light)').matches));</script>
   <link rel="stylesheet" href="/static/css/styles.css">
-  <link rel="stylesheet" href="/static/css/3d-viewer.css">
 </head>
 <body data-role="{{ current_user.role }}">
 
@@ -159,18 +158,6 @@
       </div>
     </div>
 
-    <!-- Tabs: 2D Image / 3D Anatomy -->
-    <div class="viewer-tabs" id="viewerTabs" style="display:none">
-      <button type="button" class="viewer-tab active" id="tab2D" onclick="switchViewerTab('2d')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        Ảnh 2D
-      </button>
-      <button type="button" class="viewer-tab" id="tab3D" onclick="switchViewerTab('3d')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        3D Giải phẫu
-      </button>
-    </div>
-
     <div class="viewer-tab-panels" id="viewerTabPanels">
       <!-- 2D Panel (existing PACS screen) -->
       <div class="viewer-tab-panel active" id="panel2D">
@@ -228,24 +215,6 @@
               <button class="pacs-btn" onclick="pickImage()">
                 Đổi phim chụp
               </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 3D Panel -->
-      <div class="viewer-tab-panel" id="panel3D">
-        <div class="anatomy-3d-fps-control" id="fpsControl" style="display:none;">
-          <span class="fps-label">FPS:</span>
-          <button type="button" class="fps-btn active" id="fps30" onclick="set3DFPSUI(30)">30</button>
-          <button type="button" class="fps-btn" id="fps60" onclick="set3DFPSUI(60)">60</button>
-        </div>
-        <div id="anatomy3dContainer">
-          <div class="anatomy-3d-loading" id="anatomy3dLoading">
-            <div class="spinner"></div>
-            <span id="anatomy3dLoadingText">Đang tải model 3D giải phẫu…</span>
-            <div class="anatomy-3d-progress" id="anatomy3dProgress">
-              <div class="anatomy-3d-progress-bar" id="anatomy3dProgressBar"></div>
             </div>
           </div>
         </div>
@@ -389,12 +358,7 @@
   window.CANCER_TARGETS = {{ cancer_targets|safe }};
   window.USER_ROLE = "{{ current_user.role }}";
 </script>
-{% if current_user.role == 'admin' %}
-<script src="/static/js/vendor/three.min.js"></script>
-<script src="/static/js/vendor/OrbitControls.js"></script>
-{% endif %}
-{% if current_user.role == 'admin' %}<script src="/static/js/app.js"></script>{% else %}<script src="/static/js/auth-theme.js"></script>{% endif %}
-<script src="/static/js/case-workflow.js"></script>
-{% if current_user.role == 'admin' %}<script src="/static/js/3d-viewer.js"></script>{% endif %}
+{% if current_user.role == 'admin' %}<script src="/static/js/app.js" defer></script>{% else %}<script src="/static/js/auth-theme.js" defer></script>{% endif %}
+<script src="/static/js/case-workflow.js" defer></script>
 </body>
 </html>
