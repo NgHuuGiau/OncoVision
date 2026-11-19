@@ -5,10 +5,18 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from app.chat_ui.paths import ONCO_DB_PATH
 from medical.storage import MedicalCaseDatabase
 
 
 class MedicalStorageTests(unittest.TestCase):
+    def test_default_db_path_is_absolute_project_db(self) -> None:
+        """DB mặc định phải trỏ đúng file của project, không phụ thuộc CWD."""
+        db = MedicalCaseDatabase()
+
+        self.assertEqual(db.db_path, ONCO_DB_PATH)
+        self.assertTrue(db.db_path.is_absolute())
+
     def test_save_case_and_list_cases_roundtrip(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db = MedicalCaseDatabase(Path(temp_dir) / "medical.db")

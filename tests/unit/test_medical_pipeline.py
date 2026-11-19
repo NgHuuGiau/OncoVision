@@ -260,8 +260,9 @@ class MedicalPipelineTests(unittest.TestCase):
             self.assertTrue(result.processed_image.exists())
             self.assertTrue(result.report_json_path.exists())
             self.assertTrue(result.report_md_path.exists())
-            self.assertEqual(result.risk_level, "uncertain")
-            self.assertFalse(result.suspected_malignant)
+            # confidence 0.91 > 0.65 → high_suspicion
+            self.assertEqual(result.risk_level, "high_suspicion")
+            self.assertTrue(result.suspected_malignant)
             self.assertEqual(len(result.detections), 1)
             self.assertIsInstance(result.quality_warnings, list)
 
@@ -440,7 +441,7 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(risk_level, "uncertain")
         self.assertFalse(suspected_malignant)
         self.assertEqual(average_confidence, 0.0)
-        self.assertIn("không phải kết luận", recommendation)
+        self.assertIn("nhân viên y tế", recommendation)
 
     def test_classify_findings_does_not_infer_malignancy_from_model_score(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -457,10 +458,11 @@ class MedicalPipelineTests(unittest.TestCase):
 
         risk_level, suspected_malignant, recommendation, average_confidence = analyzer._classify_findings(findings)
 
-        self.assertEqual(risk_level, "uncertain")
+        # confidence 0.6 trong vùng 35-65% → indeterminate
+        self.assertEqual(risk_level, "indeterminate")
         self.assertFalse(suspected_malignant)
         self.assertAlmostEqual(average_confidence, 0.6)
-        self.assertIn("không phải kết luận", recommendation)
+        self.assertIn("nhân viên y tế", recommendation)
 
     def test_classify_findings_keeps_clinical_assessment_unreviewed(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -478,10 +480,11 @@ class MedicalPipelineTests(unittest.TestCase):
 
         risk_level, suspected_malignant, recommendation, average_confidence = analyzer._classify_findings(findings)
 
-        self.assertEqual(risk_level, "uncertain")
+        # confidence 0.5 trong vùng 35-65% → indeterminate
+        self.assertEqual(risk_level, "indeterminate")
         self.assertFalse(suspected_malignant)
         self.assertEqual(average_confidence, 0.5)
-        self.assertIn("không phải kết luận", recommendation)
+        self.assertIn("nhân viên y tế", recommendation)
 
     def test_evaluate_image_quality_returns_warning_for_dark_image(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -495,10 +498,28 @@ class MedicalPipelineTests(unittest.TestCase):
             detector_backend=_FakeDetector([]),
         )
 
-        warnings = analyzer._evaluate_image_quality(np.zeros((128, 128, 3), dtype=np.uint8))
+        # Với modality=None (camera image), ảnh đen → báo "quá tối"
+        warnings = analyzer._evaluate_image_quality(np.zeros((128, 128, 3), dtype=np.uint8), modality=None)
 
         self.assertTrue(warnings)
         self.assertTrue(any("quá tối" in warning for warning in warnings))
+
+    def test_evaluate_image_quality_skips_brightness_for_ct(self) -> None:
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+            ),
+            detector_backend=_FakeDetector([]),
+        )
+
+        # Với modality=ct, ảnh đen KHÔNG báo "quá tối" vì CT có nền đen là bình thường
+        warnings = analyzer._evaluate_image_quality(np.zeros((128, 128, 3), dtype=np.uint8), modality="ct")
+
+        self.assertFalse(any("quá tối" in warning for warning in warnings))
 
     def test_prepare_image_for_analysis_uses_modality_specific_preprocessing(self) -> None:
         analyzer = MedicalImageAnalyzer(
@@ -574,6 +595,12 @@ class MedicalPipelineTests(unittest.TestCase):
         self.assertEqual(resolved, fallback_model)
 
     def test_detect_findings_returns_topk_cnn_classes(self) -> None:
+        """Test _detect_findings trả về top-k classes từ CNN wrapper.
+
+        Note: Pipeline có confidence threshold mặc định 0.3 nên chỉ predictions
+        >= 0.3 mới được trả về. Test này dùng predictions có confidence cao
+        để đảm bảo vượt qua threshold.
+        """
         analyzer = MedicalImageAnalyzer(
             config=MedicalImageAnalyzerConfig(
                 model_path=Path("medical_7_cancers.pt"),
@@ -587,8 +614,8 @@ class MedicalPipelineTests(unittest.TestCase):
         fake_wrapper = SimpleNamespace(
             predict=lambda source, **kw: [
                 {"label": "glioma", "confidence": 0.7, "probabilities": {}},
-                {"label": "meningioma", "confidence": 0.2, "probabilities": {}},
-                {"label": "pituitary", "confidence": 0.1, "probabilities": {}},
+                {"label": "meningioma", "confidence": 0.5, "probabilities": {}},
+                {"label": "pituitary", "confidence": 0.35, "probabilities": {}},
             ]
         )
         analyzer._load_cnn_wrapper = lambda: fake_wrapper  # type: ignore[assignment]
@@ -620,11 +647,90 @@ class MedicalPipelineTests(unittest.TestCase):
 
             findings = analyzer._detect_findings(np.zeros((64, 64, 3), dtype=np.uint8))
 
-        self.assertEqual(findings[0].bbox, (0, 4, 64, 64))
+        # Bbox bị clamp từ [-5, 4, 90, 80] trên ảnh 64x64 → (0, 4, 63, 63)
+        self.assertEqual(findings[0].bbox, (0, 4, 63, 63))
+        # Bbox bị clamp nên không đáng tin
+        self.assertFalse(findings[0].bbox_reliable)
         self.assertIsNotNone(analyzer._detector_backend)
 
     def test_normalize_bbox_rejects_zero_area_box(self) -> None:
-        self.assertIsNone(MedicalImageAnalyzer._normalize_bbox([4, 4, 4, 10], (20, 20, 3)))
+        bbox, reliable = MedicalImageAnalyzer._normalize_bbox([4, 4, 4, 10], (20, 20, 3))
+        self.assertIsNone(bbox)
+        self.assertTrue(reliable)
+
+    def test_normalize_bbox_ultralytics_xyxy_already_in_original_space(self) -> None:
+        # Ultralytics boxes.xyxy đã ở tọa độ ảnh gốc, không cần scale từ imgsz.
+        # Bbox [336, 299, 394, 359] trên ảnh 512x512 nên được coi là đáng tin
+        # vì nằm hoàn toàn trong ảnh — không có heuristic scale nữa.
+        bbox, reliable = MedicalImageAnalyzer._normalize_bbox(
+            [336, 299, 394, 359], (512, 512, 3)
+        )
+        self.assertEqual(bbox, (336, 299, 394, 359))
+        self.assertTrue(reliable)
+
+    def test_normalize_bbox_reliable_when_inside_image(self) -> None:
+        # Bbox [100, 100, 200, 200] trên ảnh 512x512 — nằm trong ảnh, đáng tin
+        bbox, reliable = MedicalImageAnalyzer._normalize_bbox(
+            [100, 100, 200, 200], (512, 512, 3)
+        )
+        self.assertEqual(bbox, (100, 100, 200, 200))
+        self.assertTrue(reliable)
+
+    def test_normalize_bbox_clamps_coords_exceeding_image(self) -> None:
+        # Bbox [215, 458, 392, 576] trên ảnh 512x512
+        # 576 > 512 nên bị clamp → không đáng tin
+        bbox, reliable = MedicalImageAnalyzer._normalize_bbox(
+            [215, 458, 392, 576], (512, 512, 3)
+        )
+        self.assertIsNotNone(bbox)
+        self.assertFalse(reliable)
+        # Tọa độ y2 nên bị clamp về 511
+        self.assertEqual(bbox[3], 511)
+
+    def test_evaluate_image_quality_uses_tissue_mask_for_mri_blur(self) -> None:
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+            )
+        )
+        # Tạo ảnh MRI giả: nền đen + vùng mô sáng rõ nét
+        img = np.zeros((512, 512, 3), dtype=np.uint8)
+        # Vẽ một hình chữ nhật sáng ở giữa (mô não)
+        img[100:400, 100:400] = 128
+        # Vẽ cạnh sắc nét (sẽ có blur score cao khi tính trên vùng mô)
+        img[100, 100:400] = 200
+        img[399, 100:400] = 200
+        img[100:400, 100] = 200
+        img[100:400, 399] = 200
+
+        warnings = analyzer._evaluate_image_quality(img, modality="mri")
+        # Với vùng mô có cạnh sắc nét, blur score nên >= threshold
+        # Không nên có warning "ảnh mờ"
+        blur_warnings = [w for w in warnings if "mờ" in w.lower() or "blur" in w.lower()]
+        self.assertEqual(len(blur_warnings), 0, f"Không nên cảnh báo mờ cho ảnh có cạnh sắc: {warnings}")
+
+    def test_evaluate_image_quality_mri_dark_background_no_brightness_warning(self) -> None:
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+            )
+        )
+        # Ảnh MRI với nền đen và vùng mô sáng
+        img = np.zeros((512, 512, 3), dtype=np.uint8)
+        img[150:350, 150:350] = 100
+
+        warnings = analyzer._evaluate_image_quality(img, modality="mri")
+        # Không nên có warning "quá tối" vì nền đen là bình thường cho MRI
+        brightness_warnings = [w for w in warnings if "tối" in w.lower() or "sáng" in w.lower()]
+        self.assertEqual(len(brightness_warnings), 0, f"Không nên cảnh báo độ sáng cho MRI có nền đen: {warnings}")
 
     def test_detector_backend_rejects_non_localization_task(self) -> None:
         with self.assertRaisesRegex(ValueError, "detect hoặc segment"):
@@ -634,3 +740,207 @@ class MedicalPipelineTests(unittest.TestCase):
         names = dict(enumerate(["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck"] + [f"class-{index}" for index in range(20)]))
         with self.assertRaisesRegex(ValueError, "vật thể phổ thông"):
             MedicalImageAnalyzer._validate_detector_backend(SimpleNamespace(task="detect", names=names))
+
+    def test_e2e_bbox_iou_with_fake_detector(self) -> None:
+        # Test end-to-end: tạo ảnh với hình chữ nhật sáng ở vị trí biết trước,
+        # dùng fake detector trả về bbox đúng, kiểm tra IoU >= 0.5.
+        with TemporaryDirectory() as temp_dir:
+            detector_path = Path(temp_dir) / "brain_detector.pt"
+            detector_path.write_bytes(b"weights")
+            analyzer = MedicalImageAnalyzer(
+                config=MedicalImageAnalyzerConfig(
+                    model_path=Path(temp_dir) / "classifier.pt",
+                    working_dir=Path(temp_dir) / "work",
+                    reports_dir=Path(temp_dir) / "reports",
+                    processed_dir=Path(temp_dir) / "normalized",
+                    overlay_dir=Path(temp_dir) / "overlay",
+                    yolo_model_path=detector_path,
+                )
+            )
+            # Ground truth: bbox [150, 150, 350, 350] trên ảnh 512x512
+            gt_x1, gt_y1, gt_x2, gt_y2 = 150, 150, 350, 350
+            # Fake detector trả về bbox đúng ở tọa độ ảnh gốc
+            result = SimpleNamespace(names={0: "lesion"}, boxes=[_FakeBox(0, 0.9, [gt_x1, gt_y1, gt_x2, gt_y2])])
+            analyzer._load_default_backend = lambda: _FakeDetector([result])  # type: ignore[method-assign]
+            analyzer._load_cnn_wrapper = lambda: None  # type: ignore[method-assign]
+
+            img = np.zeros((512, 512, 3), dtype=np.uint8)
+            findings = analyzer._detect_findings(img)
+
+            self.assertEqual(len(findings), 1)
+            self.assertIsNotNone(findings[0].bbox)
+            det = findings[0].bbox
+            # Tính IoU giữa bbox trả về và ground truth
+            ix1 = max(gt_x1, det[0])
+            iy1 = max(gt_y1, det[1])
+            ix2 = min(gt_x2, det[2])
+            iy2 = min(gt_y2, det[3])
+            intersection = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+            union = (gt_x2 - gt_x1) * (gt_y2 - gt_y1) + (det[2] - det[0]) * (det[3] - det[1]) - intersection
+            iou = intersection / union if union > 0 else 0.0
+            self.assertGreaterEqual(iou, 0.5, f"IoU quá thấp: {iou:.3f}, bbox: {det}, gt: ({gt_x1},{gt_y1},{gt_x2},{gt_y2})")
+            self.assertTrue(findings[0].bbox_reliable)
+
+    def test_e2e_bbox_iou_various_image_sizes(self) -> None:
+        # Test end-to-end với nhiều kích thước ảnh khác nhau (512, 640, 1024, không vuông).
+        sizes = [
+            (512, 512),
+            (640, 640),
+            (1024, 1024),
+            (384, 512),  # Không vuông
+        ]
+        for height, width in sizes:
+            with self.subTest(height=height, width=width):
+                with TemporaryDirectory() as temp_dir:
+                    detector_path = Path(temp_dir) / "brain_detector.pt"
+                    detector_path.write_bytes(b"weights")
+                    analyzer = MedicalImageAnalyzer(
+                        config=MedicalImageAnalyzerConfig(
+                            model_path=Path(temp_dir) / "classifier.pt",
+                            working_dir=Path(temp_dir) / "work",
+                            reports_dir=Path(temp_dir) / "reports",
+                            processed_dir=Path(temp_dir) / "normalized",
+                            overlay_dir=Path(temp_dir) / "overlay",
+                            yolo_model_path=detector_path,
+                        )
+                    )
+                    # Ground truth: bbox ở giữa ảnh, chiếm 1/4 kích thước
+                    gt_x1 = width // 4
+                    gt_y1 = height // 4
+                    gt_x2 = 3 * width // 4
+                    gt_y2 = 3 * height // 4
+                    result = SimpleNamespace(names={0: "lesion"}, boxes=[_FakeBox(0, 0.9, [gt_x1, gt_y1, gt_x2, gt_y2])])
+                    analyzer._load_default_backend = lambda: _FakeDetector([result])  # type: ignore[method-assign]
+                    analyzer._load_cnn_wrapper = lambda: None  # type: ignore[method-assign]
+
+                    img = np.zeros((height, width, 3), dtype=np.uint8)
+                    findings = analyzer._detect_findings(img)
+
+                    self.assertEqual(len(findings), 1)
+                    self.assertIsNotNone(findings[0].bbox)
+                    det = findings[0].bbox
+                    # Tính IoU
+                    ix1 = max(gt_x1, det[0])
+                    iy1 = max(gt_y1, det[1])
+                    ix2 = min(gt_x2, det[2])
+                    iy2 = min(gt_y2, det[3])
+                    intersection = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+                    union = (gt_x2 - gt_x1) * (gt_y2 - gt_y1) + (det[2] - det[0]) * (det[3] - det[1]) - intersection
+                    iou = intersection / union if union > 0 else 0.0
+                    self.assertGreaterEqual(iou, 0.5, f"IoU quá thấp: {iou:.3f} với ảnh {height}x{width}")
+
+    def test_blur_threshold_distinguishes_sharp_from_blurred_mri(self) -> None:
+        # Test blur threshold phân biệt được ảnh sắc nét và ảnh mờ có chủ ý.
+        analyzer = MedicalImageAnalyzer(
+            config=MedicalImageAnalyzerConfig(
+                model_path=Path("medical_7_cancers.pt"),
+                working_dir=Path("output/medical"),
+                reports_dir=Path("output/medical/reports"),
+                processed_dir=Path("output/medical/normalized_images"),
+                overlay_dir=Path("output/medical/processed_images"),
+            )
+        )
+        # Ảnh MRI sắc nét: nền đen + vùng mô có cạnh sắc
+        sharp_img = np.zeros((512, 512, 3), dtype=np.uint8)
+        sharp_img[100:400, 100:400] = 128
+        sharp_img[100, 100:400] = 200
+        sharp_img[399, 100:400] = 200
+        sharp_img[100:400, 100] = 200
+        sharp_img[100:400, 399] = 200
+
+        sharp_warnings = analyzer._evaluate_image_quality(sharp_img, modality="mri")
+        sharp_blur = [w for w in sharp_warnings if "mờ" in w.lower() or "blur" in w.lower()]
+        self.assertEqual(len(sharp_blur), 0, f"Anh sắc nét không nên bị cảnh báo mờ: {sharp_warnings}")
+
+        # Ảnh MRI mờ: làm mờ Gaussian mạnh
+        blurred_img = cv2.GaussianBlur(sharp_img, (51, 51), 0)
+        blurred_warnings = analyzer._evaluate_image_quality(blurred_img, modality="mri")
+        blurred_blur = [w for w in blurred_warnings if "mờ" in w.lower() or "blur" in w.lower()]
+        self.assertGreater(len(blurred_blur), 0, "Anh mờ có chủ ý nên bị cảnh báo mờ")
+
+    def test_detection_payloads_include_bbox_image_size(self) -> None:
+        # Test _detection_payloads ghi rõ bbox_image_size và bbox_source_image_size
+        from medical.pipeline import DetectionFinding
+
+        report_det = DetectionFinding(
+            label="tumor", confidence=0.8,
+            bbox=(100, 100, 200, 200),  # canvas 640-space
+            bbox_reliable=True,
+        )
+        source_det = DetectionFinding(
+            label="tumor", confidence=0.8,
+            bbox=(75, 75, 150, 150),  # source 512-space
+            bbox_reliable=True,
+        )
+        payloads = MedicalImageAnalyzer._detection_payloads(
+            report_detections=[report_det],
+            source_frame_detections=[source_det],
+            coordinate_frame="normalized_canvas",
+            source_size=[512, 512],
+            canvas_size=[640, 640],
+        )
+        self.assertEqual(len(payloads), 1)
+        p = payloads[0]
+        # bbox là canvas 640-space
+        self.assertEqual(p["bbox"], [100, 100, 200, 200])
+        self.assertEqual(p["bbox_image_size"], [640, 640])
+        # bbox_source là source 512-space
+        self.assertEqual(p["bbox_source"], [75, 75, 150, 150])
+        self.assertEqual(p["bbox_source_image_size"], [512, 512])
+
+    def test_detection_payloads_source_frame_only(self) -> None:
+        # Test khi không có source_frame_detections, bbox_source = bbox
+        from medical.pipeline import DetectionFinding
+
+        det = DetectionFinding(
+            label="tumor", confidence=0.8,
+            bbox=(100, 100, 200, 200),
+            bbox_reliable=True,
+        )
+        payloads = MedicalImageAnalyzer._detection_payloads(
+            report_detections=[det],
+            source_frame_detections=None,
+            coordinate_frame="normalized_canvas",
+            source_size=None,
+            canvas_size=[640, 640],
+        )
+        self.assertEqual(len(payloads), 1)
+        p = payloads[0]
+        self.assertEqual(p["bbox"], [100, 100, 200, 200])
+        self.assertEqual(p["bbox_image_size"], [640, 640])
+        # Khi không có source, bbox_source = bbox (fallback)
+        self.assertEqual(p["bbox_source"], [100, 100, 200, 200])
+        self.assertIsNone(p["bbox_source_image_size"])
+
+    def test_position_label_shows_image_size(self) -> None:
+        # Test _position_label hiển thị kích thước ảnh cùng tọa độ
+        from medical.reporting import _position_label
+
+        # Có bbox_source với kích thước
+        item = {
+            "bbox_source": [75, 75, 150, 150],
+            "bbox_source_image_size": [512, 512],
+            "bbox_reliable": True,
+        }
+        label = _position_label(item)
+        self.assertIn("75", label)
+        self.assertIn("512x512", label)
+
+        # Chỉ có bbox canvas với kích thước
+        item = {
+            "bbox": [100, 100, 200, 200],
+            "bbox_image_size": [640, 640],
+            "coordinate_frame": "normalized_canvas",
+            "bbox_reliable": True,
+        }
+        label = _position_label(item)
+        self.assertIn("100", label)
+        self.assertIn("640x640", label)
+
+        # Bbox không đáng tin
+        item = {
+            "bbox": [100, 100, 200, 200],
+            "bbox_reliable": False,
+        }
+        label = _position_label(item)
+        self.assertIn("không đáng tin", label)

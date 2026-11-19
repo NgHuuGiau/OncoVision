@@ -91,25 +91,22 @@ class RunEntrypointsTests(unittest.TestCase):
         )
         run_camera_session_mock.assert_called_once_with(runtime=runtime, camera_index=2)
 
-    @patch("entrypoints.run_chat.launch_chat_app")
+    @patch("entrypoints.run_chat.launch_web_desktop")
     @patch("entrypoints.run_chat.build_chat_arg_parser")
-    def test_run_chat_main_forces_medium_mode(
+    def test_run_chat_main_launches_web_desktop(
         self,
         build_parser_mock,
-        launch_chat_app_mock,
+        launch_web_desktop_mock,
     ) -> None:
         parser = build_parser_mock.return_value
         parser.parse_args.return_value = SimpleNamespace(camera_index=3, cleanup_output=False, older_than_days=None, model="skin.pt")
-        launch_chat_app_mock.return_value = 5
+        launch_web_desktop_mock.return_value = 5
 
         result = run_chat.main()
 
         self.assertEqual(result, 5)
-        launch_chat_app_mock.assert_called_once_with(
-            window_title="OncoVision Chat AI",
-            camera_index=3,
-            app_mode="medium",
-            selected_model="skin.pt",
+        launch_web_desktop_mock.assert_called_once_with(
+            window_title="OncoVision Chat AI"
         )
 
     @patch("entrypoints.run_chat._medical_output_directories")

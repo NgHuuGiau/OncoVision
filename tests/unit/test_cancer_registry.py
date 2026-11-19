@@ -39,10 +39,10 @@ class CancerRegistryTests(unittest.TestCase):
     def test_lists_all_cancer_groups(self):
         with TemporaryDirectory() as temp_dir:
             models = list_cancer_models(base=Path(temp_dir))
-        self.assertEqual(len(models), 12)
+        self.assertEqual(len(models), 11)
         self.assertEqual({model["key"] for model in models}, {
             "liver", "lung", "breast", "stomach", "colorectal", "prostate",
-            "cervical", "kidney", "pancreas", "thyroid", "brain", "spleen",
+            "cervical", "kidney", "pancreas", "thyroid", "brain",
         })
 
     def test_brain_artifact_detected_when_present(self):

@@ -11,22 +11,20 @@ from medical.cancer_catalog import (
 
 
 class CancerCatalogTests(unittest.TestCase):
-    def test_catalog_has_twelve_supported_targets(self) -> None:
+    def test_catalog_has_eleven_supported_targets(self) -> None:
         targets = list(COMMON_CANCER_TARGETS)
-        self.assertEqual(len(targets), 12)
+        self.assertEqual(len(targets), 11)
         keys = {t.key for t in targets}
         self.assertIn("brain", keys)
-        self.assertIn("spleen", keys)
-        # Most targets should have model_ready; spleen may not yet
-        ready_count = sum(1 for t in targets if t.model_ready)
-        self.assertGreaterEqual(ready_count, 11)
+        self.assertNotIn("spleen", keys)
+        self.assertTrue(all(t.model_ready for t in targets))
 
     def test_supported_cancer_labels_lists_all_targets(self) -> None:
         labels = supported_cancer_labels()
-        self.assertEqual(len(labels), 12)
+        self.assertEqual(len(labels), 11)
         self.assertIn("Ung thư não", labels)
         self.assertIn("Ung thư tuyến giáp", labels)
-        self.assertIn("Ung thư lách", labels)
+        self.assertNotIn("Ung thư lách", labels)
 
     def test_catalog_includes_brain_modalities(self) -> None:
         modalities = supported_cancer_modalities()

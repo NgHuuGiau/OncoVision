@@ -41,6 +41,8 @@ class CameraOutputTests(unittest.TestCase):
         writer.release.assert_called()
 
     def test_load_camera_session_output_config_reads_new_settings_blocks(self) -> None:
+        from app.chat_ui.paths import PROJECT_ROOT
+
         payload = {
             "output": {
                 "captures_dir": "output/custom_caps",
@@ -55,8 +57,8 @@ class CameraOutputTests(unittest.TestCase):
         with patch("core.camera_runner.load_yaml_cached", return_value=payload):
             config = _load_camera_session_output_config()
 
-        self.assertEqual(config.capture_dir, Path("output/custom_caps"))
-        self.assertEqual(config.recording_dir, Path("output/custom_recs"))
+        self.assertEqual(config.capture_dir, PROJECT_ROOT / "output/custom_caps")
+        self.assertEqual(config.recording_dir, PROJECT_ROOT / "output/custom_recs")
         self.assertEqual(config.recording_codec, "XVID")
         self.assertEqual(config.recording_fps, 15.0)
 

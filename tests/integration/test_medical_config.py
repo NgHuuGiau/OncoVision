@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+from app.chat_ui.paths import PROJECT_ROOT
 from medical.pipeline import (
     build_default_medical_analyzer_config,
     validate_medical_analyzer_config,
@@ -53,14 +54,14 @@ class MedicalConfigTests(unittest.TestCase):
         self.assertAlmostEqual(config.certainty_threshold, 0.6)
         self.assertEqual(config.modality_tuning["default"]["certainty_threshold"], 0.52)
         self.assertEqual(config.modality_tuning["ultrasound"]["quality_threshold"], 0.58)
-        self.assertEqual(config.working_dir, Path("output/medical-x"))
-        self.assertEqual(config.reports_dir, Path("output/medical-x/reports"))
-        self.assertEqual(config.fallback_model_path, Path("yolo11n.pt"))
+        self.assertEqual(config.working_dir, PROJECT_ROOT / "output/medical-x")
+        self.assertEqual(config.reports_dir, PROJECT_ROOT / "output/medical-x/reports")
+        self.assertEqual(config.fallback_model_path, PROJECT_ROOT / "yolo11n.pt")
         self.assertFalse(config.allow_fallback_model)
 
     @patch("medical.pipeline.load_yaml", return_value={"medical": {"volume_model_path": "models/pretrained/brain_volume_model.pt2"}})
     def test_volume_config_falls_back_to_legacy_torchscript_file(self, _load_yaml_mock) -> None:
-        legacy_path = Path("models/pretrained/brain_volume_model.pt")
+        legacy_path = PROJECT_ROOT / "models/pretrained/brain_volume_model.pt"
         with patch.object(Path, "is_file", autospec=True, side_effect=lambda path: path == legacy_path):
             config = build_default_medical_analyzer_config()
 

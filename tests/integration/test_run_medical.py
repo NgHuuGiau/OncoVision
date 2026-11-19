@@ -204,24 +204,22 @@ class RunMedicalTests(unittest.TestCase):
             conn.execute("CREATE TABLE t (id INTEGER)")
             conn.commit()
             conn.close()
-            previous_cwd = os.getcwd()
-            os.chdir(temp_dir)
+            # backup_dir giờ dùng PROJECT_ROOT tuyệt đối từ app.chat_ui.paths
+            with patch("app.chat_ui.paths.CHAT_HISTORY_DB_PATH", source), patch(
+                "app.chat_ui.paths.PROJECT_ROOT", Path(temp_dir)
+            ), patch(
+                "sys.argv", ["entrypoints.run_medical.py", "backup-db", "--keep", "2"]
+            ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                self.assertEqual(run_medical.main(), 0)
+            backups = sorted(Path(temp_dir, "output", "backups").glob("onco_*.db"))
+            self.assertEqual(len(backups), 1)
+            check = sqlite3.connect(str(backups[0]))
             try:
-                with patch("app.chat_ui.paths.CHAT_HISTORY_DB_PATH", source), patch(
-                    "sys.argv", ["entrypoints.run_medical.py", "backup-db", "--keep", "2"]
-                ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                    self.assertEqual(run_medical.main(), 0)
-                backups = sorted(Path(temp_dir, "output", "backups").glob("onco_*.db"))
-                self.assertEqual(len(backups), 1)
-                check = sqlite3.connect(str(backups[0]))
-                try:
-                    tables = [row[0] for row in check.execute("SELECT name FROM sqlite_master WHERE type='table'")]
-                finally:
-                    check.close()
-                self.assertIn("t", tables)
-                self.assertIn("Đã sao lưu", stdout.getvalue())
+                tables = [row[0] for row in check.execute("SELECT name FROM sqlite_master WHERE type='table'")]
             finally:
-                os.chdir(previous_cwd)
+                check.close()
+            self.assertIn("t", tables)
+            self.assertIn("Đã sao lưu", stdout.getvalue())
 
 
 if __name__ == "__main__":
