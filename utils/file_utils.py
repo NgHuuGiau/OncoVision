@@ -7,8 +7,10 @@ from typing import Any
 
 import yaml
 
+from app.chat_ui.paths import PROJECT_ROOT
+
 PROJECT_DIRS = tuple(
-    Path(directory)
+    PROJECT_ROOT / directory
     for directory in (
         "models/pretrained",
         "models/trained",
@@ -50,10 +52,10 @@ def load_environment_config() -> dict[str, Any]:
     Returns:
         Merged config dict.
     """
-    base = load_yaml("config/settings.yaml") or {}
+    base = load_yaml(PROJECT_ROOT / "config/settings.yaml") or {}
     env = os.environ.get("ONCOVISION_ENV", "development").lower()
 
-    env_file = Path(f"config/{env}.yaml")
+    env_file = PROJECT_ROOT / f"config/{env}.yaml"
     if env_file.exists():
         override = load_yaml(env_file) or {}
         # Deep merge override vào base

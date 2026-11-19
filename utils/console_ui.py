@@ -418,7 +418,7 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
                 "Thử đổi camera index sang 1 hoặc 2.",
                 "Nếu đang mở app camera khác, hãy tắt trước khi chạy lại.",
             ],
-            [r".\.venv\Scripts\python run_app.py --camera-index 1"],
+            [r".\.venv\Scripts\python entrypoints/run_app.py --camera-index 1"],
         )
     if "khong khoi tao duoc ultralytics" in lower_message or "khong khoi tao duoc detector" in lower_message:
         return (
@@ -428,7 +428,7 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
                 "Kiểm tra model local trong models/pretrained hoặc models/trained.",
                 "Nếu máy yếu hoặc lỗi CUDA, thử mode low.",
             ],
-            [r".\.venv\Scripts\python run_app.py --mode low"],
+            [r".\.venv\Scripts\python entrypoints/run_app.py --mode low"],
         )
     if "cuda" in lower_message or "pytorch" in lower_message or "torch" in lower_message:
         return (
@@ -440,7 +440,7 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
             ],
             [
                 r'.\.venv\Scripts\python -c "import torch; print(torch.cuda.is_available())"',
-                r".\.venv\Scripts\python run_app.py --mode low",
+                r".\.venv\Scripts\python entrypoints/run_app.py --mode low",
             ],
         )
     return (
@@ -449,7 +449,7 @@ def explain_runtime_failure(error: Exception) -> tuple[str, list[str], list[str]
             "Kiểm tra webcam, model local, PyTorch / CUDA và quyền truy cập camera.",
             "Thử chạy lại bằng mode low để giảm tải runtime.",
         ],
-        [r".\.venv\Scripts\python run_app.py --mode low"],
+        [r".\.venv\Scripts\python entrypoints/run_app.py --mode low"],
     )
 
 

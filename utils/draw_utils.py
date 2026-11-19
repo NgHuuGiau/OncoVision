@@ -126,15 +126,227 @@ def _draw_fps_text(
     cv2.putText(image, text, (x, y), font, font_scale, (245, 245, 245), thickness, cv2.LINE_AA)
 
 
+def _boxes_overlap(
+    bbox1: tuple[int, int, int, int],
+    bbox2: tuple[int, int, int, int],
+    iou_threshold: float = 0.1,
+) -> bool:
+    """Check if two bounding boxes overlap significantly (IoU > threshold)."""
+    x1 = max(bbox1[0], bbox2[0])
+    y1 = max(bbox1[1], bbox2[1])
+    x2 = min(bbox1[2], bbox2[2])
+    y2 = min(bbox1[3], bbox2[3])
+    if x2 <= x1 or y2 <= y1:
+        return False
+    inter = (x2 - x1) * (y2 - y1)
+    area1 = (bbox1[2] - bbox1[0]) * (bbox1[3] - bbox1[1])
+    area2 = (bbox2[2] - bbox2[0]) * (bbox2[3] - bbox2[1])
+    union = area1 + area2 - inter
+    if union <= 0:
+        return False
+    return (inter / union) > iou_threshold
+
+
+def _apply_nms(
+    detection_list: list,
+    image_shape: tuple[int, ...],
+    iou_threshold: float = 0.1,
+) -> list:
+    """Apply Non-Maximum Suppression to remove overlapping bounding boxes.
+    
+    Strategy:
+    1. Sort detections by confidence (descending)
+    2. For each detection, keep it if IoU with kept detections is below threshold
+    3. Return only the kept detections
+    """
+    if not detection_list:
+        return []
+    
+    # Filter out invalid bboxes first
+    valid_detections = []
+    for det in detection_list:
+        if det.bbox is None:
+            continue
+        clamped = _clamp_bbox_to_image(det.bbox, image_shape)
+        if clamped is not None:
+            valid_detections.append((det, clamped))
+    
+    if not valid_detections:
+        return []
+    
+    # Sort by confidence descending
+    valid_detections.sort(key=lambda x: x[0].confidence, reverse=True)
+    
+    kept_detections = []
+    kept_bboxes = []
+    
+    for det, clamped_bbox in valid_detections:
+        # Check if this detection overlaps with any kept detection
+        overlaps = False
+        for kept_bbox in kept_bboxes:
+            if _boxes_overlap(clamped_bbox, kept_bbox, iou_threshold):
+                overlaps = True
+                break
+        
+        if not overlaps:
+            kept_detections.append(det)
+            kept_bboxes.append(clamped_bbox)
+    
+    return kept_detections
+
+
+def _select_labels_to_show(
+    detection_list: list,
+    image_shape: tuple[int, ...],
+    iou_threshold: float = 0.5,
+) -> set[int]:
+    """Select which detections should show labels.
+    
+    Strategy:
+    1. Group detections by label
+    2. Within each label group, pick the highest confidence detection
+    3. Among selected detections, use NMS-like IoU filtering to avoid overlapping labels
+    """
+    if not detection_list:
+        return set()
+    
+    # Step 1: Group by label and pick highest confidence per label
+    label_best = {}  # label -> (idx, detection)
+    for idx, det in enumerate(detection_list):
+        if det.bbox is None:
+            continue
+        clamped = _clamp_bbox_to_image(det.bbox, image_shape)
+        if clamped is None:
+            continue
+        label = det.label
+        if label not in label_best or det.confidence > label_best[label][1].confidence:
+            label_best[label] = (idx, det)
+    
+    # Step 2: Among label-best detections, use IoU filtering to avoid overlapping labels
+    selected = set()
+    labeled_bboxes = []
+    # Sort by confidence descending
+    sorted_label_best = sorted(label_best.values(), key=lambda x: x[1].confidence, reverse=True)
+    
+    for idx, det in sorted_label_best:
+        clamped = _clamp_bbox_to_image(det.bbox, image_shape)
+        if clamped is None:
+            continue
+        # Check if this detection overlaps with any already-labeled detection
+        overlaps = False
+        for labeled_bbox in labeled_bboxes:
+            if _boxes_overlap(clamped, labeled_bbox, iou_threshold):
+                overlaps = True
+                break
+        if not overlaps:
+            selected.add(idx)
+            labeled_bboxes.append(clamped)
+    
+    return selected
+
+
+def _find_non_overlapping_label_position(
+    image_shape: tuple[int, ...],
+    bbox_x1: int,
+    bbox_y1: int,
+    label_width: int,
+    label_height: int,
+    drawn_rects: list[tuple[int, int, int, int]],
+    margin: int = 8,
+) -> tuple[int, int]:
+    """Find a position for the label that doesn't overlap with already drawn labels.
+    
+    Tries positions in order: above box, right of box, below box, left of box, inside box.
+    """
+    image_h, image_w = image_shape[:2]
+    
+    def _overlaps_any(x: int, y: int) -> bool:
+        for rx, ry, rw, rh in drawn_rects:
+            if not (x >= rx + rw + margin or x + label_width <= rx - margin or
+                    y >= ry + rh + margin or y + label_height <= ry - margin):
+                return True
+        return False
+    
+    def _fits(x: int, y: int) -> bool:
+        return (x >= 0 and y >= 0 and 
+                x + label_width <= image_w and 
+                y + label_height <= image_h)
+    
+    # Try 1: Above the box
+    x, y = max(0, bbox_x1), max(0, bbox_y1 - label_height - margin)
+    if _fits(x, y) and not _overlaps_any(x, y):
+        return x, y
+    
+    # Try 2: Right of the box
+    x, y = max(0, bbox_x1 + label_width + margin), max(0, bbox_y1)
+    if _fits(x, y) and not _overlaps_any(x, y):
+        return x, y
+    
+    # Try 3: Below the box
+    x, y = max(0, bbox_x1), max(0, bbox_y1 + label_height + margin)
+    if _fits(x, y) and not _overlaps_any(x, y):
+        return x, y
+    
+    # Try 4: Left of the box
+    x, y = max(0, bbox_x1 - label_width - margin), max(0, bbox_y1)
+    if _fits(x, y) and not _overlaps_any(x, y):
+        return x, y
+    
+    # Try 5: Inside box, top-left corner
+    x, y = bbox_x1 + 2, bbox_y1 + 2
+    if _fits(x, y) and not _overlaps_any(x, y):
+        return x, y
+    
+    # Fallback: scan for any non-overlapping position
+    for scan_y in range(0, image_h - label_height, 10):
+        for scan_x in range(0, image_w - label_width, 10):
+            if _fits(scan_x, scan_y) and not _overlaps_any(scan_x, scan_y):
+                return scan_x, scan_y
+    
+    # Last resort: return above box
+    return max(0, bbox_x1), max(0, bbox_y1 - label_height - margin)
+
+
+def _draw_semi_transparent_tag(
+    image: np.ndarray,
+    text: str,
+    top_left: tuple[int, int],
+    font_scale: float,
+    text_color: tuple[int, int, int],
+    background_color: tuple[int, int, int],
+    thickness: int = 1,
+    padding: int = _TAG_PADDING,
+    alpha: float = 0.7,
+) -> tuple[int, int, int, int]:
+    """Draw a semi-transparent text tag to avoid completely obscuring the image."""
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    _text_width, text_height, _baseline, box_width, box_height = _text_box_metrics(
+        text=text,
+        font_scale=font_scale,
+        thickness=thickness,
+        padding=padding,
+    )
+    x, y = _clamp_top_left(image.shape, top_left, box_width, box_height)
+    # Create semi-transparent overlay
+    overlay = image.copy()
+    cv2.rectangle(overlay, (x, y), (x + box_width, y + box_height), background_color, -1)
+    cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
+    text_origin = (x + padding, y + padding + text_height)
+    cv2.putText(image, text, text_origin, font, font_scale, text_color, thickness, cv2.LINE_AA)
+    return (x, y, box_width, box_height)
+
+
 def draw_detection_results(
     image: np.ndarray,
     detections: Iterable,
-    box_thickness: int = 2,
-    label_font_scale: float = 0.8,
+    box_thickness: int = 1,
+    label_font_scale: float = 0.5,
     motion_trails: dict[int, list[tuple[int, int]]] | None = None,
     fps: float | None = None,
     show_fps: bool = False,
     show_heatmap: bool = True,
+    show_all_labels: bool = False,
+    label_alpha: float = 0.85,
 ) -> np.ndarray:
     detection_list = list(detections)
     trail_overlay = image.copy() if (motion_trails and len(motion_trails) > 0) else None
@@ -180,7 +392,14 @@ def draw_detection_results(
             heatmap_color[..., 2] = np.clip(heatmap * 255 * 0.90, 0, 255).astype(np.uint8)
             image = cv2.addWeighted(image, 0.75, heatmap_color, 0.25, 0.0)
 
-    for detection in detection_list:
+    # Apply Non-Maximum Suppression (NMS) to remove overlapping boxes
+    nms_detections = _apply_nms(detection_list, image.shape, iou_threshold=0.1)
+    
+    # Track drawn label positions to avoid overlapping labels
+    drawn_label_rects = []  # List of (x, y, w, h) for drawn labels
+    box_counter = 0  # Unique counter for each box
+
+    for detection in nms_detections:
         if detection.bbox is None:
             continue
         clamped_bbox = _clamp_bbox_to_image(detection.bbox, image.shape)
@@ -188,23 +407,35 @@ def draw_detection_results(
             continue
         x1, y1, x2, y2 = clamped_bbox
         box_color = _color_for_label(detection.label)
-        cv2.rectangle(image, (x1, y1), (x2, y2), box_color, max(2, box_thickness))
-        label_text = f"{detection.label} {detection.confidence:.2f}"
-        label_scale = max(0.62, label_font_scale * 0.92)
-        label_thickness = max(1, box_thickness - 1)
+        # Draw thin bounding box (thickness=1)
+        cv2.rectangle(image, (x1, y1), (x2, y2), box_color, 1)
+        
+        # Increment box counter for unique indexing
+        box_counter += 1
+        
+        # Draw label with unique box number
+        label_text = f"Box {box_counter}: {detection.label} {detection.confidence:.2f}"
+        label_scale = label_font_scale
+        label_thickness = 1
         _text_width, _text_height, _baseline, _box_width, box_height = _text_box_metrics(
             label_text,
             label_scale,
             label_thickness,
         )
-        _draw_text_tag(
+        # Find non-overlapping position for label
+        label_x, label_y = _find_non_overlapping_label_position(
+            image.shape, x1, y1, _box_width, box_height, drawn_label_rects, margin=8
+        )
+        drawn_label_rects.append((label_x, label_y, _box_width, box_height))
+        _draw_semi_transparent_tag(
             image=image,
             text=label_text,
-            top_left=(max(0, x1), y1 - box_height - 6),
+            top_left=(label_x, label_y),
             font_scale=label_scale,
             text_color=(255, 255, 255),
             background_color=box_color,
             thickness=label_thickness,
+            alpha=label_alpha,
         )
     if show_fps and fps is not None:
         _draw_fps_text(

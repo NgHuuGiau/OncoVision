@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from app.chat_ui.paths import PROJECT_ROOT
 from medical.pipeline import (
     build_default_medical_analyzer_config,
     validate_medical_analyzer_config,
@@ -10,8 +11,8 @@ from medical.pipeline import (
 from medical.system_status import MedicalSystemStatus, get_medical_system_status
 from utils.file_utils import ensure_project_directories, load_yaml, yaml_file_issues
 
-SETTINGS_PATH = Path("config/settings.yaml")
-MODEL_CONFIG_PATH = Path("config/model_config.yaml")
+SETTINGS_PATH = PROJECT_ROOT / "config/settings.yaml"
+MODEL_CONFIG_PATH = PROJECT_ROOT / "config/model_config.yaml"
 
 
 def module_available(name: str) -> bool:
@@ -31,7 +32,7 @@ def ensure_directory(path: Path) -> Path:
 
 def chat_preflight_status() -> tuple[dict[str, bool], int, MedicalSystemStatus, Path]:
     ensure_project_directories()
-    capture_dir = ensure_directory(Path("output/chat_captures"))
+    capture_dir = ensure_directory(PROJECT_ROOT / "output/chat_captures")
     medical_status = get_medical_system_status()
     required_modules = {
         "PySide6": module_available("PySide6"),
@@ -40,7 +41,7 @@ def chat_preflight_status() -> tuple[dict[str, bool], int, MedicalSystemStatus, 
         "ultralytics": module_available("ultralytics"),
         "torch": module_available("torch"),
     }
-    icons_count = count_files(Path("assets/icons"), suffix=".svg")
+    icons_count = count_files(PROJECT_ROOT / "assets/icons", suffix=".svg")
     return required_modules, icons_count, medical_status, capture_dir
 
 

@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from app.chat_ui.paths import PROJECT_ROOT
 from utils.terminal_encoding import ensure_utf8_console
 
-LOG_FILE = Path("output/logs/app.log")
-LOG_JSON_FILE = Path("output/logs/app.json.log")
+LOG_FILE = PROJECT_ROOT / "output/logs/app.log"
+LOG_JSON_FILE = PROJECT_ROOT / "output/logs/app.json.log"
 
 
 class JsonFormatter(logging.Formatter):
