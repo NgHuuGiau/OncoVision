@@ -56,7 +56,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: requirements/requirements.txt
 
       - name: Prepare log folder
         run: |
@@ -79,7 +79,7 @@ jobs:
           # Loại bỏ pyaudio (Windows-only) khi cài đặt
           python -c "
           from pathlib import Path
-          lines = Path('requirements.txt').read_text(encoding='utf-8').splitlines()
+          lines = Path('requirements/requirements.txt').read_text(encoding='utf-8').splitlines()
           filtered = [line for line in lines if not line.lstrip().startswith('#') and 'pyaudio' not in line.lower()]
           Path('ci-logs/requirements-ci.txt').write_text('\n'.join(filtered) + '\n', encoding='utf-8')
           "
@@ -98,12 +98,12 @@ jobs:
 
       - name: Type check with mypy
         run: |
-          mypy medical utils run_app.py run_chat.py run_doctor.py run_medical.py run_menu.py run_smoke.py run_tests.py --exclude app/chat_ui --ignore-missing-imports --follow-imports=skip --allow-untyped-defs --allow-incomplete-defs --allow-untyped-calls --no-warn-return-any
+          mypy medical utils entrypoints --exclude app/chat_ui --ignore-missing-imports --follow-imports=skip --allow-untyped-defs --allow-incomplete-defs --allow-untyped-calls --no-warn-return-any
 
       - name: Smoke check
         run: |
-          python -c "import pathlib; p = pathlib.Path('run_smoke.py'); print('Found' if p.exists() else 'Not found')"
-          if (Test-Path "run_smoke.py") { python run_smoke.py --ci-safe --stop-on-fail } else { echo "Skipped: run_smoke.py not found" }
+          python -c "import pathlib; p = pathlib.Path('entrypoints/run_smoke.py'); print('Found' if p.exists() else 'Not found')"
+          if (Test-Path "entrypoints/run_smoke.py") { python entrypoints/run_smoke.py --ci-safe --stop-on-fail } else { echo "Skipped: entrypoints/run_smoke.py not found" }
         shell: auto
 
       - name: Run tests with coverage

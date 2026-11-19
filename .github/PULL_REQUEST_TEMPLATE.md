@@ -7,7 +7,7 @@
 ## Kiểm tra
 
 - [ ] Code chạy được trên Windows
-- [ ] Test pass: `python run_tests.py --skip-camera-check`
+- [ ] Test pass: `python entrypoints/run_tests.py --skip-camera-check`
 - [ ] Ruff pass: `python -m ruff check . --ignore E402`
 - [ ] Không commit model/dataset (đã có trong .gitignore)
 

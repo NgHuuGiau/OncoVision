@@ -13,21 +13,24 @@
 
 ---
 
-## Trạng thái hiện tại (10/2026)
+## Trạng thái hiện tại (11/2026)
 
 | Thành phần | Trạng thái |
 |---|---|
-| **Modality Classifier** | ✅ Sẵn sàng — ResNet18, 8 loại ảnh, **99.93% acc** (test 5,640 ảnh) |
-| **Brain Classifier** | ✅ Sẵn sàng — ConvNeXt-Tiny, 4 loại u não (glioma/meningioma/pituitary/no_tumor), **fallback tự động** khi thiếu model tổng |
-| **Brain Detector** | ⏳ Đã có adapter tự nạp YOLO detect/segment; còn thiếu `brain_detector.pt` y khoa |
-| **Brain Volume 3D** | ⏳ Đã có runtime NIfTI/MHA/MHD/DICOM và tọa độ voxel/mm; còn thiếu model torch.export 3D cùng manifest |
-| **Catalog 11 nhóm ung thư** | ✅ Đã có định tuyến dữ liệu và model riêng theo nhóm; hiện repository mới có trọng số classifier não |
+| **Modality Classifier** | ✅ Sẵn sàng — ResNet18, 6 loại ảnh MedNIST, **99.93% acc** (test 5,640 ảnh) |
+| **11 Classifier ung thư** | ✅ Sẵn sàng — 14 classifier cho 11 nhóm ung thư (brain, breast, cervical, colorectal, kidney, liver, lung, pancreas, prostate, stomach, thyroid) |
+| **16 Detector ung thư** | ✅ 15/16 hoạt động — 1 INVALID (thyroid dùng COCO generic, hệ thống tự động bỏ qua) |
+| **Volume 3D** | ⏳ Runtime sẵn sàng, 3-level fallback; chưa có model 3D huấn luyện sẵn — cần huấn luyện hoặc tìm model nguồn mở tương thích |
+| **Catalog 11 nhóm ung thư** | ✅ 11/11 runtime_ready |
+| **Model manifests** | ✅ 31 manifests — loại bỏ cảnh báo khi khởi động |
+| **Model availability** | 📋 [Báo cáo chi tiết](docs/model_availability_report.md) — xác nhận không có model nguồn mở cho thyroid detector, volume 3D |
 | **Kiểm định lâm sàng** | ⏳ Chưa có bộ đánh giá độc lập theo bệnh nhân; kết quả hiện chỉ dùng hỗ trợ sàng lọc |
-| **Web UI (FastAPI)** | ✅ Chạy được — `python web_app.py` → http://127.0.0.1:8000 |
-| **Desktop Chat (PySide6)** | ✅ Chạy được — `python run_chat.py` |
-| **Test suite** | ✅ **391 tests** |
+| **Web UI (FastAPI)** | ✅ Chạy được — `python entrypoints/web_app.py` → http://127.0.0.1:8000 |
+| **Desktop (web UI nhúng)** | ✅ Chạy được — `python entrypoints/run_chat.py` mở cửa sổ QtWebEngine hiển thị **đúng giao diện web** (server local + web app) |
+| **Desktop EXE** | ✅ Build được — `python scripts/setup_build.py build_exe` (~30 phút, ~12 GB) — giao diện giống hệt web |
+| **Test suite** | ✅ **425 tests** |
 
-> **Lưu ý**: Catalog đã có 11 nhóm và runtime chọn model riêng theo nhóm. Repository hiện chỉ có trọng số classifier não và classifier modality; 10 nhóm còn lại vẫn bị khóa cho tới khi bổ sung model tương thích.
+> **Lưu ý**: 11/11 nhóm ung thư có thể inference thành công. Volume 3D cần re-export với PyTorch tương thích.
 
 ---
 
@@ -35,7 +38,7 @@
 
 | Nhóm | Mô tả |
 |---|---|
-| **Chat AI Y khoa** | Giao diện desktop (PySide6) và web (FastAPI) để đặt câu hỏi, tải ảnh y khoa và nhận phân tích tự động |
+| **Chat AI Y khoa** | Một giao diện duy nhất (FastAPI + HTML/CSS/JS): web trình duyệt và desktop nhúng QtWebEngine đều dùng chung, nên giao diện luôn giống nhau. Đặt câu hỏi, tải ảnh y khoa và nhận phân tích tự động |
 | **Phân tích ảnh y tế** | **U não** (4 loại u) — modality tự động nhận diện (8 loại ảnh) |
 | **Camera thông minh** | Chạy realtime object detection với nhiều chế độ (auto/high/medium/low), tự động gợi ý cấu hình runtime phù hợp với máy |
 
@@ -46,10 +49,10 @@
 ### Yêu cầu hệ thống
 
 - Windows 10/11
-- Python 3.10–3.12 (khuyến nghị 3.12; **không hỗ trợ Python 3.13**)
+- Python 3.10–3.13 (khuyến nghị 3.12; Python 3.13 đã hỗ trợ cx_Freeze 8.x)
 - GPU NVIDIA khuyến nghị để suy luận nhanh hơn; CPU vẫn dùng được
 
-Với GPU NVIDIA, sau khi cài `requirements.txt`, cài wheel CUDA chính thức phù hợp với driver (lệnh dưới dùng CUDA 13.0):
+Với GPU NVIDIA, sau khi cài `requirements/requirements.txt`, cài wheel CUDA chính thức phù hợp với driver (lệnh dưới dùng CUDA 13.0):
 
 ```powershell
 python -m pip install --upgrade torch torchvision --index-url https://download.pytorch.org/whl/cu130
@@ -62,7 +65,7 @@ git clone <repo-url>
 cd OncoVision
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements/requirements.txt
 ```
 
 ### Database
@@ -72,25 +75,25 @@ Hệ thống dùng **SQLite** tập trung tại `output/onco.db` — lưu hội 
 ### Kiểm tra môi trường
 
 ```powershell
-python run_doctor.py --skip-camera-check
-python run_smoke.py
+python entrypoints/run_doctor.py --skip-camera-check
+python entrypoints/run_smoke.py
 ```
 
 ### Chạy chat AI
 
 ```powershell
 # Giao diện desktop
-python run_chat.py
+python entrypoints/run_chat.py
 
 # Giao diện web (optional)
-python web_app.py
+python entrypoints/web_app.py
 # hoặc
-python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
+python -m uvicorn entrypoints.web_app:app --host 127.0.0.1 --port 8000
 ```
 
 Lần đầu dùng web: khởi chạy server để tạo bảng tài khoản, sau đó tạo admin theo hướng dẫn [đăng nhập và phân quyền](docs/web_auth.md). Không có tài khoản mặc định.
 
-Desktop (`run_chat.py`) cũng yêu cầu đăng nhập bằng tài khoản trong `output/onco.db`; DB trống thì app hỏi tạo admin đầu tiên. Tài khoản `viewer` trên desktop chỉ xem, không chạy phân tích ảnh.
+Desktop (`entrypoints/run_chat.py`) cũng yêu cầu đăng nhập bằng tài khoản trong `output/onco.db`; DB trống thì app hỏi tạo admin đầu tiên. Tài khoản `viewer` trên desktop chỉ xem, không chạy phân tích ảnh.
 
 ### Chạy bằng Docker (web app)
 
@@ -104,7 +107,7 @@ docker run -d --name onkovision -p 8000:8000 `
   -v ${PWD}/data:/app/data -v ${PWD}/config:/app/config onkovision:latest
 
 # Hoặc dùng compose
-docker compose up -d
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
 Model đặt trong `./models` (bind mount) — image không chứa model. GPU: thêm `--gpus all` vào `docker run` (cần nvidia-container-toolkit). Kiểm tra: `docker exec onkovision python -m pytest -q`.
@@ -115,23 +118,24 @@ Model đặt trong `./models` (bind mount) — image không chứa model. GPU: t
 
 | Entrypoint | Vai trò |
 |---|---|
-| `run_chat.py` | Giao diện chat AI desktop — kiểm tra trạng thái, mở chat, dọn dẹp output |
-| `run_app.py` | Camera realtime — gợi ý cấu hình runtime, chạy object detection trực tiếp |
-| `run_menu.py` | Menu tổng hợp, cửa vào cho người vận hành |
-| `run_doctor.py` | Quét tổng thể hệ thống — dependency, model và output |
-| `run_medical.py` | CLI suy luận ảnh y khoa, xem trạng thái và quản lý ca bệnh |
-| `run_smoke.py` | Kiểm tra nhanh chuỗi entrypoint (CI-friendly) |
-| `run_tests.py` | Dashboard chạy unit test |
-| `web_app.py` | Web app upload ảnh → nhận diện → phân tích (FastAPI) |
+| `entrypoints/run_chat.py` | Giao diện chat AI desktop — kiểm tra trạng thái, mở chat, dọn dẹp output |
+| `entrypoints/run_app.py` | Camera realtime — gợi ý cấu hình runtime, chạy object detection trực tiếp |
+| `entrypoints/run_menu.py` | Menu tổng hợp, cửa vào cho người vận hành |
+| `entrypoints/run_doctor.py` | Quét tổng thể hệ thống — dependency, model và output |
+| `entrypoints/run_medical.py` | CLI suy luận ảnh y khoa, xem trạng thái và quản lý ca bệnh |
+| `entrypoints/run_smoke.py` | Kiểm tra nhanh chuỗi entrypoint (CI-friendly) |
+| `entrypoints/run_tests.py` | Dashboard chạy unit test |
+| `entrypoints/web_app.py` | Web app upload ảnh → nhận diện → phân tích (FastAPI) |
+| `entrypoints/launcher.py` | Launcher tự động phát hiện môi trường và chạy app phù hợp |
 
 ### Luồng dữ liệu cơ bản
 
 ```
-Camera:  run_app.py → core/camera_runner.py → output/captures/
-Chat:    run_chat.py → app/chat_ui/ → medical/phân tích → output/chat/
+Camera:  entrypoints/run_app.py → core/camera_runner.py → output/captures/
+Chat:    entrypoints/run_chat.py → app/chat_ui/ → medical/phân tích → output/chat/
 Medical: ảnh đầu vào → medical/validator.py → medical/pipeline.py → output/medical/
 Model:   models/pretrained/*.pt (bổ sung model suy luận đã chuẩn bị bên ngoài)
-Web:     web_app.py → SQLite → output/onco.db
+Web:     entrypoints/web_app.py → SQLite → output/onco.db
 ```
 
 ---
@@ -154,17 +158,17 @@ Hệ thống **chỉ suy luận bằng model có sẵn**. Hãy đặt model đã
 # Khi biết modality, model phải nằm đúng thư mục, ví dụ cancers/lung/ct/ hoặc cancers/lung/xray/.
 
 # Kiểm tra hệ thống đã nhận đủ model chưa
-python run_doctor.py --skip-camera-check
+python entrypoints/run_doctor.py --skip-camera-check
 
 # Kiểm tra dữ liệu và chia tập không rò rỉ bệnh nhân
-python run_medical.py validate-dataset --csv dataset.csv
-python run_medical.py split-dataset --csv dataset.csv --output dataset_split.csv
+python entrypoints/run_medical.py validate-dataset --csv dataset.csv
+python entrypoints/run_medical.py split-dataset --csv dataset.csv --output dataset_split.csv
 
 # Ước lượng cỡ mẫu kiểm định nhị phân
-python run_medical.py plan-validation --sensitivity 0.90 --specificity 0.85 --prevalence 0.20
+python entrypoints/run_medical.py plan-validation --sensitivity 0.90 --specificity 0.85 --prevalence 0.20
 
 # Phân tích 1 ảnh não
-python run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
+python entrypoints/run_medical.py analyze --image path/to/ảnh.jpg --patient-code BN001
 ```
 
 ---
@@ -177,19 +181,22 @@ OncoVision/
 │   ├── camera_runtime/     # Bootstrap và launch camera
 │   └── chat_ui/            # Chat desktop, theme, storage, widgets
 ├── core/                   # Xử lý camera, model loader, hardware info
+├── deploy/                 # Docker files (Dockerfile, docker-compose.yml)
+├── docs/                   # Tài liệu
+├── entrypoints/            # 9 điểm vào chính (run_*.py, web_app.py, launcher.py)
 ├── medical/                # Kiểm tra ảnh, suy luận, giải thích và báo cáo
-├── utils/                  # Helper dùng chung (console, terminal UI, file, camera)
-├── scripts/                # fetch_model, import_foreign_model; scripts/dev/ = debug một lần
-├── static/                 # CSS/JS cho web app
-├── templates/              # Jinja2 (index, login, admin, error pages)
-├── assets/                 # Icon
-├── config/                 # Cấu hình YAML
 ├── models/                 # Mô hình (gitignored; người dùng tự đặt)
 │   ├── pretrained/         # Model suy luận (brain, modality, yolo11*)
 │   └── trained/            # Model suy luận bổ sung do người dùng cung cấp
 ├── output/                 # Kết quả đầu ra (gitignored)
-├── docs/                   # Tài liệu
-└── tests/                  # Unit test (391 tests)
+├── requirements/           # Dependencies (requirements.txt, requirements-web.txt, requirements-dev.txt)
+├── scripts/                # fetch_model, import_foreign_model; scripts/dev/ = debug một lần
+├── static/                 # CSS/JS cho web app
+├── templates/              # Jinja2 (index, login, admin, error pages)
+├── assets/                 # Icon
+├── config/                 # Cấu hình YAML, Alembic, ruff
+├── tests/                  # Unit test (421 tests)
+└── utils/                  # Helper dùng chung (console, terminal UI, file, camera)
 ```
 
 ---

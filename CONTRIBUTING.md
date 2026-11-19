@@ -27,7 +27,12 @@ source .venv/bin/activate
 
 ### 3. Install dependencies
 ```bash
-pip install -r requirements.txt
+# Production only
+pip install -r requirements/requirements.txt
+
+# Or with development tools (recommended for contributors)
+pip install -r requirements/requirements.txt
+pip install -r requirements/requirements-dev.txt
 ```
 
 ### 4. Setup database
@@ -45,21 +50,21 @@ pytest --cov=medical --cov=app --cov-report=term-missing
 
 ## Code Style
 
-- **Formatter**: Black (default settings)
+- **Formatter**: Ruff format (config in `config/ruff.toml`)
 - **Linter**: Ruff (config in `config/ruff.toml`)
 - **Type checking**: mypy
 - **Line length**: 120 characters
 
 Run quality checks:
 ```bash
+# Format
+ruff format .
+
 # Lint
 ruff check .
 
 # Type check
 mypy medical/ app/ core/
-
-# Format
-ruff format .
 ```
 
 ## Commit Messages
@@ -138,23 +143,23 @@ CancerScreeningTarget(
 
 ### Desktop Chat
 ```bash
-python run_chat.py
+python entrypoints/run_chat.py
 ```
 
 ### Web App
 ```bash
-python web_app.py
+python entrypoints/web_app.py
 # Access at http://localhost:8000
 ```
 
 ### CLI Medical Analysis
 ```bash
-python run_medical.py analyze --image path/to/image.jpg --target brain
+python entrypoints/run_medical.py analyze --image path/to/image.jpg --target brain
 ```
 
 ### Menu
 ```bash
-python run_menu.py
+python entrypoints/run_menu.py
 ```
 
 ## Reporting Issues

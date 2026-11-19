@@ -128,27 +128,130 @@ ReDoc UI (development only).
 | `ONCOVISION_LOG_FORMAT` | `` | Log format (`json` for structured logging) |
 | `ONCOVISION_DB_PATH` | `output/onco.db` | Database path |
 
+## CSRF Protection
+
+Tất cả các yêu cầu POST/PUT/DELETE đều yêu cầu CSRF token để bảo vệ chống lại tấn công Cross-Site Request Forgery.
+
+### Cách lấy CSRF token
+
+1. **GET /login** — Trang đăng nhập trả về CSRF token trong form hidden field:
+   ```html
+   <input type="hidden" name="csrf_token" value="...">
+   ```
+
+2. **Sau khi đăng nhập thành công** — Trang chủ (`/`) trả về CSRF token trong meta tag:
+   ```html
+   <meta name="csrf-token" content="...">
+   ```
+
+### Cách sử dụng CSRF token
+
+**Cách 1: Truyền qua header `X-CSRF-Token`** (khuyến nghị cho API calls):
+```python
+import requests
+
+session = requests.Session()
+
+# Bước 1: Lấy CSRF token từ trang login
+login_page = session.get("http://localhost:8000/login")
+import re
+csrf_match = re.search(r'name="csrf_token" value="([^"]+)"', login_page.text)
+csrf_token = csrf_match.group(1)
+
+# Bước 2: Đăng nhập với CSRF token
+session.post("http://localhost:8000/login", data={
+    "username": "admin",
+    "password": "Admin@123456",
+    "csrf_token": csrf_token
+})
+
+# Bước 3: Lấy CSRF token mới sau khi đăng nhập
+main_page = session.get("http://localhost:8000/")
+csrf_match = re.search(r'name="csrf-token" content="([^"]+)"', main_page.text)
+csrf_token = csrf_match.group(1)
+
+# Bước 4: Upload file với CSRF token trong header
+with open("scan.png", "rb") as f:
+    resp = session.post(
+        "http://localhost:8000/api/upload",
+        files={"file": ("scan.png", f, "image/png")},
+        headers={"X-CSRF-Token": csrf_token}
+    )
+    print(resp.json())
+
+# Bước 5: Analyze với CSRF token
+resp = session.post(
+    "http://localhost:8000/api/analyze",
+    data={
+        "image_path": "output/web_uploads/...",
+        "target_key": "lung",
+        "csrf_token": csrf_token
+    },
+    headers={"X-CSRF-Token": csrf_token}
+)
+print(resp.json())
+```
+
+**Cách 2: Truyền qua form field `csrf_token`**:
+```python
+session.post(
+    "http://localhost:8000/api/conversations",
+    data={"csrf_token": csrf_token}
+)
+```
+
+### Lưu ý quan trọng
+
+- CSRF token được lưu trong session cookie và thay đổi sau mỗi lần đăng nhập.
+- Sau khi đăng nhập thành công, luôn lấy lại CSRF token mới từ trang chủ.
+- Một số endpoint đặc biệt (`/logout`, `/admin/users/create`, `/admin/users/{id}/update`) cho phép truyền CSRF token qua form field thay vì header.
+- Nếu nhận được lỗi `403 Forbidden` với thông báo "CSRF token không hợp lệ", hãy lấy lại token mới.
+
 ## Example Usage
 
 ```python
 import requests
+import re
 
-# Login
 session = requests.Session()
-login_resp = session.post("http://localhost:8000/login", data={
+base = "http://localhost:8000"
+
+# Bước 1: Lấy CSRF token từ trang login
+login_page = session.get(f"{base}/login")
+csrf_match = re.search(r'name="csrf_token" value="([^"]+)"', login_page.text)
+csrf_token = csrf_match.group(1)
+
+# Bước 2: Đăng nhập
+session.post(f"{base}/login", data={
     "username": "admin",
-    "password": "adminadminad",
-    "csrf_token": "..."  # Get from session cookie
+    "password": "Admin@123456",
+    "csrf_token": csrf_token
 })
 
-# Analyze image
-with open("brain_mri.jpg", "rb") as f:
-    resp = session.post("http://localhost:8000/api/v1/analyze", files={
-        "file": f
-    }, data={
-        "target_key": "brain",
-        "csrf_token": "..."
-    })
-    result = resp.json()
-    print(result)
+# Bước 3: Lấy CSRF token mới sau đăng nhập
+main_page = session.get(f"{base}/")
+csrf_match = re.search(r'name="csrf-token" content="([^"]+)"', main_page.text)
+csrf_token = csrf_match.group(1)
+
+# Bước 4: Upload ảnh
+with open("scan.png", "rb") as f:
+    resp = session.post(
+        f"{base}/api/upload",
+        files={"file": ("scan.png", f, "image/png")},
+        headers={"X-CSRF-Token": csrf_token}
+    )
+    upload = resp.json()
+    print(f"Upload ID: {upload['upload_id']}")
+
+# Bước 5: Phân tích
+resp = session.post(
+    f"{base}/api/analyze",
+    data={
+        "image_path": upload["stored_path"],
+        "target_key": "lung",
+        "csrf_token": csrf_token
+    },
+    headers={"X-CSRF-Token": csrf_token}
+)
+print(resp.json())
 ```

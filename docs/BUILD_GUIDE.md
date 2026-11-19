@@ -1,7 +1,7 @@
 # Hướng dẫn Build OncoVision thành EXE
 
 ## Yêu cầu
-- Python 3.12 (khuyến nghị) hoặc 3.10/3.11 — **không dùng Python 3.13** (chưa hỗ trợ cx_Freeze/PyInstaller đầy đủ)
+- Python 3.10, 3.11, 3.12 hoặc 3.13 (cx_Freeze 8.x đã hỗ trợ Python 3.13)
 - cx_Freeze 8.x: `pip install cx-Freeze`
 - Disk space: ~15GB (models 6.95GB + build process)
 
@@ -18,27 +18,36 @@ python scripts/setup_build.py build_exe
 ```
 
 ## Kết quả
-- Output: `build/exe.win-amd64-3.12/`
-  - `OncoVision.exe` — file chạy chính (~1.36 MB)
-  - `lib/` — dependencies Python (~5 GB)
+- Output: `build/exe.win-amd64-3.13/` (hoặc 3.12 tùy Python version)
+  - `OncoVision.exe` — file chạy chính (~1.4 MB)
+  - `lib/` — dependencies Python (~4.98 GB)
     - `torch/`, `cv2/`, `ultralytics/` — AI libraries
     - `PySide6/` — GUI framework
   - `models/` — model AI (6.95 GB)
-    - `pretrained/cancers/` — 266 files cho 11 loại ung thư
-  - `medical/`, `core/`, `utils/` — code Python
+    - `pretrained/cancers/` — 71 files (47 .pt + 24 .pt2) cho 11 loại ung thư
+  - `medical/`, `core/`, `utils/`, `entrypoints/` — code Python
   - `config/` — cấu hình
   - `assets/` — tài nguyên
   - `templates/` — HTML templates
+  - Tổng: ~14,342 files, ~11.94 GB
 
 ## Chạy EXE
 ```powershell
-.\build\exe.win-amd64-3.12\OncoVision.exe
+.\build\exe.win-amd64-3.13\OncoVision.exe
 ```
+
+## Test EXE
+- Khởi động: mở cửa sổ desktop nhúng giao diện web (QtWebEngine) — **giống hệt web app**
+- Đăng nhập bằng form web trong cửa sổ (admin / adminadminad lần đầu, hệ thống bắt đổi mật khẩu) → mở "OncoVision AI Workstation"
+- Web server local chạy ở port ngẫu nhiên, tự dừng khi đóng cửa sổ
+- RAM: ~458 MB, CPU: ~4s
+- Database tự tạo: `output/onco.db`
+- Xóa `build\exe.win-amd64-3.13\output` trước khi đóng gói phát hành
 
 ## Lưu ý quan trọng
 
 ### 1. Models đã được bundle
-- Tất cả 266 model files (6.95 GB) đã được bundle vào `models/`
+- Tất cả 71 model files (6.95 GB) đã được bundle vào `models/`
 - Không cần tải model riêng khi mang exe đi nơi khác
 
 ### 2. Đường dẫn tự động phát hiện
@@ -51,10 +60,10 @@ python scripts/setup_build.py build_exe
 - Build lại: ~10-20 phút (nếu build/ còn cache)
 
 ### 4. Kích thước cuối cùng
-- `build/exe.win-amd64-3.12/`: ~11.92 GB total
-  - `OncoVision.exe`: 1.36 MB
-  - `lib/`: ~5 GB (PyTorch, PySide6, ultralytics, v.v.)
-  - `models/`: 6.95 GB (266 model files)
+- `build/exe.win-amd64-3.13/`: ~11.94 GB total (14,342 files)
+  - `OncoVision.exe`: 1.4 MB
+  - `lib/`: ~4.98 GB (PyTorch, PySide6, ultralytics, v.v.)
+  - `models/`: 6.95 GB (71 model files: 47 .pt + 24 .pt2)
 
 ### 5. Dọn dẹp build
 ```powershell
@@ -120,12 +129,31 @@ Remove-Item -Path build -Recurse -Force
 - cx_Freeze 8.x không còn hỗ trợ spec file như cũ
 - **Giải pháp**: Dùng `scripts/setup_build.py` thay thế
 
-### Python 3.13 không hỗ trợ
-- **Nguyên nhân**: cx_Freeze, PyInstaller, PyAudio, PySide6 chưa hỗ trợ đầy đủ Python 3.13
-- **Giải pháp**: Dùng Python 3.12 để build EXE. Web app (Docker) cũng dùng Python 3.12.
-- **Nếu bắt buộc dùng 3.13**: Build PyInstaller từ source hoặc chờ phiên bản 6.10+; compile PyAudio từ source (cần Visual Studio Build Tools)
+### Python 3.13 hỗ trợ
+- cx_Freeze 8.x đã hỗ trợ Python 3.13
+- Build EXE thành công với Python 3.13.15
+- PyAudio có thể cần compile từ source trên Windows nếu không có wheel 3.13
+- Web app (Docker) dùng Python 3.12
 
 ## Build Web App (Docker)
 ```bash
-docker-compose up --build
+docker-compose -f deploy/docker-compose.yml up --build
 ```
+
+## Lỗi torch.onnx / torch._dynamo.polyfills.fx
+
+### ImportError: No module named 'torch.onnx'
+- **Nguyên nhân**: cx_Freeze exclude `torch.onnx` khỏi bundle, nhưng `torchvision` import `torch.onnx` ngay khi nạp → `medical.cnn_classifier` chết ngay từ import
+- **Giải pháp**: Đã fix trong `scripts/setup_build.py` — **không exclude** `torch.onnx`
+
+### ModuleNotFoundError: No module named 'torch._dynamo.polyfills.fx'
+- **Nguyên nhân**: cx_Freeze bỏ sót `torch._dynamo.polyfills.fx` (torch import động qua `importlib.import_module`) → lỗi khi torchvision nạp
+- **Giải pháp**: Đã fix trong `scripts/setup_build.py` — thêm `"torch._dynamo.polyfills.fx"` vào `includes`
+
+### TypeError: main() got an unexpected keyword argument 'window_title'
+- **Nguyên nhân**: `entrypoints/run_chat.py` import `main` (hàm chết) thay vì `launch_chat_app`; `launch_chat_app` không tạo `QApplication`/gọi `app.exec()`
+- **Giải pháp**: Đã fix `app/chat_ui/window.py` — đưa `_run_desktop_login` và khởi động GUI vào đúng trong `launch_chat_app`; xóa `main()` chết
+
+### Quy tắc torch modules (cập nhật)
+- Các torch modules phải include: `torch.cuda`, `torch.distributed`, `torch.jit`, `torch.fx`, `torch.multiprocessing`, `torch.ao`, `torch.onnx`, `torch._dynamo.polyfills.fx`
+- Các module vẫn có thể exclude: `torch.elastic`, `torch.testing`, `torch.utils.tensorboard`

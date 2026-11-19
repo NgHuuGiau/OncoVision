@@ -14,7 +14,7 @@ body:
       label: Các bước tái hiện
       description: Cách để tái hiện lỗi.
       placeholder: |
-        1. Chạy `python run_medical.py analyze ...`
+        1. Chạy `python entrypoints/run_medical.py analyze ...`
         2. Xem báo cáo
         3. Lỗi xuất hiện
     validations:

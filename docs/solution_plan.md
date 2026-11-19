@@ -314,10 +314,14 @@ jobs:
 Tạo `Makefile` cross-platform:
 
 ```makefile
-.PHONY: install test lint clean docker-build docker-run
+.PHONY: install install-dev test lint clean docker-build docker-run
 
 install:
-	pip install -r requirements.txt
+	pip install -r requirements/requirements.txt
+
+install-dev:
+	pip install -r requirements/requirements.txt
+	pip install -r requirements/requirements-dev.txt
 
 test:
 	python -m pytest tests/ -v
