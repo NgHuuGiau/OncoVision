@@ -18,8 +18,10 @@ MEDICAL_DISCLAIMER = dedent(
 ).strip()
 
 
+from app.chat_ui.paths import PROJECT_ROOT
+
 # Audit trail cho inference requests
-AUDIT_LOG_FILE = Path("output/logs/audit.json.log")
+AUDIT_LOG_FILE = PROJECT_ROOT / "output/logs/audit.json.log"
 
 
 class AuditTrail:

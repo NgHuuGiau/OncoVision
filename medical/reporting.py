@@ -26,17 +26,28 @@ def _risk_label(value: Any) -> str:
 def _malignancy_label(payload: dict[str, Any]) -> str:
     if not payload.get("clinical_assessment_available"):
         return "Chưa được nhân viên y tế đánh giá"
-    return "Có" if payload.get("suspected_malignant") else "Không"
+    # suspected_malignant giờ phản ánh mức độ cần ưu tiên, không phải "ác tính"
+    if payload.get("suspected_malignant"):
+        return "Cần ưu tiên khám"
+    return "Không cần ưu tiên cao"
 
 
 def _position_label(item: dict[str, Any]) -> str:
+    # Nếu bbox không đáng tin, không hiển thị tọa độ cụ thể
+    if not item.get("bbox_reliable", True):
+        return "Vị trí không đáng tin (có thể sai do lỗi scale mô hình)"
     bbox_source = item.get("bbox_source")
+    bbox_source_image_size = item.get("bbox_source_image_size")
     coordinate_frame = item.get("coordinate_frame")
     if bbox_source:
-        return f"ảnh gốc (x1,y1,x2,y2)={bbox_source}"
+        size_str = f" [{bbox_source_image_size[0]}x{bbox_source_image_size[1]}]" if bbox_source_image_size else ""
+        return f"ảnh gốc(x1,y1,x2,y2)={bbox_source}{size_str}"
     bbox = item.get("bbox")
     if bbox:
-        return f"ảnh chuẩn hóa (x1,y1,x2,y2)={bbox}" if coordinate_frame == "normalized_canvas" else str(bbox)
+        bbox_image_size = item.get("bbox_image_size")
+        size_str = f" [{bbox_image_size[0]}x{bbox_image_size[1]}]" if bbox_image_size else ""
+        frame_label = "ảnh chuẩn hóa" if coordinate_frame == "normalized_canvas" else "ảnh"
+        return f"{frame_label}(x1,y1,x2,y2)={bbox}{size_str}"
     bbox_voxel = item.get("bbox_voxel")
     if bbox_voxel:
         bbox_mm = item.get("bbox_mm")
@@ -242,7 +253,7 @@ def _render_pdf_with_reportlab(pdf_path: Path, payload: dict[str, Any], mods: di
     summary_data = [
         ["Mã ca bệnh", str(payload.get("patient_code") or payload.get("case_id", "-"))],
         ["Đánh giá lâm sàng", _risk_label(payload.get("risk_level")) if payload.get("clinical_assessment_available") else "Chưa thực hiện"],
-        ["Nhận định ác tính", _malignancy_label(payload)],
+        ["Mức độ ưu tiên khám", _malignancy_label(payload)],
         ["Mô hình", str(payload.get("model_name", "-"))],
         ["Khuyến nghị", str(payload.get("recommendation", "-"))],
     ]
@@ -525,7 +536,7 @@ def _pdf_report_html(payload: dict[str, Any]) -> str:
   <div class=\"summary\">
     <p><strong>Mã ca bệnh:</strong> {html.escape(str(payload.get('patient_code') or payload.get('case_id', '-')))}</p>
     <p><strong>Đánh giá lâm sàng:</strong> {html.escape(_risk_label(payload.get('risk_level')) if payload.get('clinical_assessment_available') else 'Chưa thực hiện')}</p>
-    <p><strong>Nhận định ác tính:</strong> {html.escape(_malignancy_label(payload))}</p>
+    <p><strong>Mức độ ưu tiên khám:</strong> {html.escape(_malignancy_label(payload))}</p>
     <p><strong>Mô hình:</strong> {html.escape(str(payload.get('model_name', '-')))}</p>
     <p><strong>Khuyến nghị:</strong> {html.escape(str(payload.get('recommendation', '-')))}</p>
     {f"<p><strong>Trạng thái:</strong> Đã được nhân viên y tế duyệt</p><p><strong>Ngày duyệt:</strong> {html.escape(str(payload.get('reviewed_at') or '-'))}</p>" if payload.get('review_status') == 'approved' else ''}

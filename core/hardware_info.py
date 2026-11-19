@@ -192,17 +192,30 @@ def _get_gpu_info_macos() -> tuple[str, float, int]:
 
 
 def _get_gpu_info_windows() -> tuple[str, float, int, float | None, float | None]:
-    """Get GPU info on Windows using GPUtil or wmic."""
+    """Get GPU info on Windows using GPUtil or wmic.
+    
+    Ưu tiên GPU rời (discrete GPU) có VRAM cao nhất thay vì GPU tích hợp.
+    """
     if GPUtil is not None:
         try:
             gpus = GPUtil.getGPUs()
             if gpus:
-                primary = gpus[0]
+                # Ưu tiên GPU có VRAM cao nhất (thường là GPU rời NVIDIA/AMD)
+                primary = max(gpus, key=lambda g: g.memoryTotal)
+                
+                # Nếu có nhiều GPU, đặt CUDA_VISIBLE_DEVICES để PyTorch dùng GPU rời
+                if len(gpus) > 1:
+                    import os
+                    # Tìm chỉ số GPU có VRAM cao nhất
+                    best_index = max(range(len(gpus)), key=lambda i: gpus[i].memoryTotal)
+                    os.environ.setdefault("CUDA_VISIBLE_DEVICES", str(best_index))
+                    print(f"[GPU] Phát hiện {len(gpus)} GPU, chọn GPU rời: {primary.name} ({primary.memoryTotal} MB) tại index {best_index}")
+                
                 return primary.name, round(primary.memoryTotal / 1024, 2), len(gpus), primary.load * 100 if primary.load is not None else None, primary.memoryUtil * 100 if primary.memoryUtil is not None else None
         except Exception:
             pass
 
-    # Fallback: wmic
+    # Fallback: wmic — chọn GPU có VRAM cao nhất
     try:
         import subprocess
         result = subprocess.run(
@@ -212,12 +225,20 @@ def _get_gpu_info_windows() -> tuple[str, float, int, float | None, float | None
         if result.returncode == 0:
             lines = result.stdout.strip().split("\n")
             if len(lines) > 1:
+                best_name = ""
+                best_vram = 0
+                gpu_count = 0
                 for line in lines[1:]:
                     parts = line.split(",")
                     if len(parts) >= 3 and parts[1].strip():
+                        gpu_count += 1
                         name = parts[1].strip()
                         vram = int(parts[2].strip()) if parts[2].strip().isdigit() else 0
-                        return name, round(vram / (1024**3), 2), 1, None, None
+                        if vram > best_vram:
+                            best_name = name
+                            best_vram = vram
+                if best_name:
+                    return best_name, round(best_vram / (1024**3), 2), gpu_count, None, None
     except Exception:
         pass
     return "Không phát hiện GPU", 0.0, 0, None, None

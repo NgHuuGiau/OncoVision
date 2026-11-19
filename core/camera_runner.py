@@ -29,6 +29,7 @@ from core.tracking.detection_filter import (
     _dedupe_display_detections,
     _filter_person_detections,
 )
+from app.chat_ui.paths import PROJECT_ROOT
 from core.tracking.detection_tracker import _match_and_smooth_detections
 from utils.camera_utils import open_camera_capture
 from utils.draw_utils import draw_detection_results
@@ -42,7 +43,7 @@ WINDOW_MARGIN = 16
 TRACK_TRAIL_MAX_POINTS = 10
 TRACK_TRAIL_MIN_MOVEMENT_PX = 4.0
 FRAME_READY_MAX_AGE_SECONDS = 0.25
-SETTINGS_PATH = Path("config/settings.yaml")
+SETTINGS_PATH = PROJECT_ROOT / "config/settings.yaml"
 
 PHONE_LABEL = "phone"
 PHONE_LABEL_ALIASES = {PHONE_LABEL, "cell phone", "mobile phone", "smartphone"}
@@ -68,9 +69,15 @@ def _load_camera_session_output_config() -> CameraSessionOutputConfig:
     settings = load_yaml_cached(SETTINGS_PATH) or {}
     output = settings.get("output", {})
     recording = settings.get("recording", {})
+    capture_dir = Path(output.get("captures_dir", "output/captures"))
+    recording_dir = Path(output.get("recordings_dir", "output/recordings"))
+    if not capture_dir.is_absolute():
+        capture_dir = PROJECT_ROOT / capture_dir
+    if not recording_dir.is_absolute():
+        recording_dir = PROJECT_ROOT / recording_dir
     return CameraSessionOutputConfig(
-        capture_dir=Path(output.get("captures_dir", "output/captures")),
-        recording_dir=Path(output.get("recordings_dir", "output/recordings")),
+        capture_dir=capture_dir,
+        recording_dir=recording_dir,
         recording_codec=str(recording.get("codec", "mp4v")),
         recording_fps=float(recording.get("fps", 20.0)),
     )

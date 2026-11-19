@@ -44,6 +44,9 @@ class MedicalChatService:
         user_prompt: str = "",
         target_key: str | None = None,
         modality: str | None = None,
+        patient_age: str | None = None,
+        patient_sex: str | None = None,
+        clinical_note: str | None = None,
         progress_callback: ProgressCallback = None,
     ) -> MedicalChatResponse:
         try:
@@ -102,7 +105,13 @@ class MedicalChatService:
             "medical_case_id": case_id,
             "risk_level": result.risk_level,
             "suspected_malignant": result.suspected_malignant,
+            "suspected_cancer": target_key,
             "clinical_assessment_available": False,
+            "patient_code": patient_code if patient_code and patient_code not in ("WEB_UPLOAD", "MULTI_UPLOAD", "DRAG_DROP", "CAMERA_CAPTURE") else None,
+            "patient_age": patient_age,
+            "patient_sex": patient_sex,
+            "clinical_note": clinical_note,
+            "image_path": str(result.source_image),
             "localization_available": bool(result.volume_findings)
             or any(item.bbox or item.segmentation for item in result.detections),
             "processed_image_path": str(result.processed_image),
@@ -122,6 +131,10 @@ class MedicalChatService:
                     "label": item.label,
                     "confidence": item.confidence,
                     "bbox": list(item.bbox) if item.bbox else None,
+                    "bbox_reliable": getattr(item, "bbox_reliable", True),
+                    "bbox_image_size": list(item.bbox_image_size) if getattr(item, "bbox_image_size") else None,
+                    "bbox_source": list(item.bbox_source) if getattr(item, "bbox_source") else None,
+                    "bbox_source_image_size": list(item.bbox_source_image_size) if getattr(item, "bbox_source_image_size") else None,
                     "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
                     "frame_index": item.frame_index,
                     "timestamp_seconds": item.timestamp_seconds,
@@ -163,10 +176,22 @@ class MedicalChatService:
             grad_summary = f"\n📊 Grad-CAM: {len(result.gradcam_overlays)} heatmap; chỉ minh họa ảnh hưởng đến dự đoán, không xác nhận ranh giới tổn thương."
         elapsed = result.analysis_time_seconds
         time_str = f"{elapsed:.1f}s" if elapsed > 0 else ""
+        # Xây dựng thông tin lâm sàng nếu có
+        clinical_info_parts = []
+        if patient_age:
+            clinical_info_parts.append(f"Tuổi: {patient_age}")
+        if patient_sex:
+            clinical_info_parts.append(f"Giới tính: {patient_sex}")
+        if clinical_note:
+            clinical_info_parts.append(f"Lâm sàng: {clinical_note}")
+        clinical_info_line = " | ".join(clinical_info_parts)
+        clinical_info_text = f"\n📝 {clinical_info_line}" if clinical_info_line else ""
+
         reply_text = (
             f"📋 **Kết quả phân tích** — Mã BN: {patient_code}\n\n"
             f"{risk_text}\n"
             f"🎯 Vùng chọn: {result.body_region or 'chưa xác định'} | Modality: {result.modality or 'chưa xác định'}\n"
+            f"{clinical_info_text}\n"
             f"🔬 Nhãn dự đoán: {len(result.detections)}\n"
             f"{detection_summary}\n"
             f"{grad_summary}"

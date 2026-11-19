@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.hardware_info import HardwareInfo
+from app.chat_ui.paths import PROJECT_ROOT
 from core.model_catalog import (
     DEFAULT_MODEL_FALLBACK,
     YOLO11_MODELS_DESC,
@@ -11,7 +12,7 @@ from core.model_catalog import (
 )
 from utils.file_utils import load_yaml_cached
 
-SETTINGS_PATH = Path("config/settings.yaml")
+SETTINGS_PATH = PROJECT_ROOT / "config/settings.yaml"
 VRAM_EPSILON_GB = 0.05
 LOW_PROFILE_MIN_GPU_VRAM_GB = 3.0
 MODEL_BACKUPS = build_model_backups()

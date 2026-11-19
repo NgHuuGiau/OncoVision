@@ -109,16 +109,6 @@
     {
       "key": "breast",
       "type": "detector",
-      "modality": "mammogram",
-      "path": "cancers/breast/mammogram/detector_mass.pt",
-      "size_bytes": 92776341,
-      "framework": "ultralytics-yolo",
-      "status": "ready",
-      "notes": "Detector chuyên biệt cho mass vú"
-    },
-    {
-      "key": "breast",
-      "type": "detector",
       "modality": "ultrasound",
       "path": "cancers/breast/mammogram/detector_ultrasound.pt",
       "size_bytes": 6250154,
@@ -316,16 +306,7 @@
       "path": "cancers/thyroid/ultrasound/detector.pt",
       "framework": "ultralytics-yolo",
       "status": "invalid",
-      "notes": "Dùng COCO generic (80 lớp) — không phải detector y khoa tuyến giáp. Sẽ bị tự động phát hiện bởi _is_medical_detector()."
-    },
-    {
-      "key": "spleen",
-      "type": "volume",
-      "modality": "ct",
-      "path": "cancers/spleen/volume.json",
-      "framework": "manifest",
-      "status": "incomplete",
-      "notes": "Chỉ có manifest, chưa có model classifier/detector"
+      "notes": "Dùng COCO generic (80 lớp) — không phải detector y khoa tuyến giáp. Hệ thống tự động bỏ qua detector này. Không có model YOLO thyroid nodule detection nguồn mở trên HuggingFace."
     }
   ]
 }

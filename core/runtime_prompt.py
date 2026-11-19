@@ -30,9 +30,10 @@ from utils.console_ui import (
     rule,
     section,
 )
+from app.chat_ui.paths import PROJECT_ROOT
 from utils.file_utils import load_yaml_cached
 
-MODEL_CONFIG_PATH = "config/model_config.yaml"
+MODEL_CONFIG_PATH = PROJECT_ROOT / "config/model_config.yaml"
 MODE_PROMPT_CHOICES = {"0": "exit", "1": "high", "2": "medium", "3": "low"}
 
 
@@ -55,12 +56,13 @@ def _usage_color(value) -> str:
 def _available_models() -> tuple[list[str], list[str]]:
     available = []
     missing = []
+    pretrained_dir = PROJECT_ROOT / "models/pretrained"
     for name in YOLO11_VARIANTS:
-        if Path("models/pretrained", name).exists() or Path(name).exists():
+        if (pretrained_dir / name).exists() or Path(name).is_absolute() and Path(name).exists():
             available.append(name)
         else:
             missing.append(name)
-    if Path("models/trained/best.pt").exists():
+    if (PROJECT_ROOT / "models/trained/best.pt").exists():
         available.insert(0, "models/trained/best.pt")
     return available, missing
 

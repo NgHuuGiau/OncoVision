@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,8 @@ from medical.pipeline import build_default_medical_analyzer_config
 from medical.status_helpers import count_files
 from medical.validator import _canonical_modality
 from medical.volume_inference import TorchVolumeRuntime
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,31 @@ def _count_cases(case_db_path: Path) -> int:
 
 def _ready_modalities(ready_targets) -> tuple[str, ...]:
     return tuple(dict.fromkeys(modality for target in ready_targets for modality in target.modalities))
+
+
+class _suppress_model_probe_logs:
+    """Context manager để suppress log warnings khi kiểm tra model trong status check.
+
+    Khi get_medical_system_status() kiểm tra models, nó không cần thấy
+    các warning về torch.export.load thất bại hay detector không hợp lệ —
+    chỉ cần biết ready hay không ready.
+    """
+    def __enter__(self):
+        self._volume_logger = logging.getLogger("medical.volume_inference")
+        self._registry_logger = logging.getLogger("medical.cancer_model_registry")
+        self._prev_volume = self._volume_logger.level
+        self._prev_registry = self._registry_logger.level
+        self._volume_logger.setLevel(logging.ERROR)
+        self._registry_logger.setLevel(logging.ERROR)
+        return self
+
+    def __exit__(self, *args):
+        self._volume_logger.setLevel(self._prev_volume)
+        self._registry_logger.setLevel(self._prev_registry)
+
+
+# Alias cho backward compatibility
+_suppress_volume_load_logs = _suppress_model_probe_logs
 
 
 def get_medical_system_status() -> MedicalSystemStatus:
@@ -164,28 +192,29 @@ def get_medical_system_status() -> MedicalSystemStatus:
         localization = False
         organ_root_ready = False
         modality_slot_ready = False
-        for index, item in enumerate(candidate_paths):
-            for name in ("classifier", "detector"):
-                path = item[name]
-                if not path.is_file():
-                    continue
-                # File ngoài target_root (model legacy của config) giữ kiểm theo tồn tại;
-                # file trong cancers/ phải nạp được runtime thật mới tính sẵn sàng.
-                if path.is_relative_to(target_root):
-                    ok, reason = probe_runtime_capability(path, name)
-                else:
-                    ok, reason = True, ""
-                if ok:
-                    if name == "classifier":
-                        classification = True
+        with _suppress_model_probe_logs():
+            for index, item in enumerate(candidate_paths):
+                for name in ("classifier", "detector"):
+                    path = item[name]
+                    if not path.is_file():
+                        continue
+                    # File ngoài target_root (model legacy của config) giữ kiểm theo tồn tại;
+                    # file trong cancers/ phải nạp được runtime thật mới tính sẵn sàng.
+                    if path.is_relative_to(target_root):
+                        ok, reason = probe_runtime_capability(path, name)
                     else:
-                        localization = True
-                    if index == 0:
-                        organ_root_ready = True
-                    else:
-                        modality_slot_ready = True
-                elif reason:
-                    target_messages.append(f"{target.label}: {path.name} không chạy được runtime ({reason})")
+                        ok, reason = True, ""
+                    if ok:
+                        if name == "classifier":
+                            classification = True
+                        else:
+                            localization = True
+                        if index == 0:
+                            organ_root_ready = True
+                        else:
+                            modality_slot_ready = True
+                    elif reason:
+                        target_messages.append(f"{target.label}: {path.name} không chạy được runtime ({reason})")
         # Model đặt ở cấp cơ quan không được runtime dùng khi ảnh xác định được modality
         # (trừ não: có fallback legacy theo config — xem pipeline._target_paths).
         if organ_root_ready and not modality_slot_ready and target.key != "brain" and target.modalities:
@@ -205,14 +234,16 @@ def get_medical_system_status() -> MedicalSystemStatus:
         for item in candidate_paths:
             if not (item["volume_model"].is_file() and item["volume_manifest"].is_file()):
                 continue
-            try:
-                runtime = TorchVolumeRuntime(item["volume_model"], item["volume_manifest"], device="cpu")
-                if runtime.manifest.target == target.key:
-                    volume = True
-                    paths = item
-                    break
-            except Exception as exc:
-                volume_errors.append(f"{target.label}: model 3D không hợp lệ ({exc})")
+            # Suppress volume load warnings during status check — chỉ cần biết ready/không ready
+            with _suppress_volume_load_logs():
+                try:
+                    runtime = TorchVolumeRuntime(item["volume_model"], item["volume_manifest"], device="cpu")
+                    if runtime.manifest.target == target.key:
+                        volume = True
+                        paths = item
+                        break
+                except Exception as exc:
+                    volume_errors.append(f"{target.label}: model 3D không hợp lệ ({exc})")
         # Only report volume errors if no valid volume model was found
         if not volume and volume_errors:
             target_messages.extend(volume_errors)
@@ -249,29 +280,31 @@ def get_medical_system_status() -> MedicalSystemStatus:
             mod_volume = False
             mod_clinical = False
             
-            if paths["classifier"].is_file():
-                if paths["classifier"].is_relative_to(target_root):
-                    ok, _ = probe_runtime_capability(paths["classifier"], "classifier")
-                else:
-                    ok, _ = True, ""
-                if ok:
-                    mod_classification = True
-            
-            if paths["detector"].is_file():
-                if paths["detector"].is_relative_to(target_root):
-                    ok, _ = probe_runtime_capability(paths["detector"], "detector")
-                else:
-                    ok, _ = True, ""
-                if ok:
-                    mod_localization = True
+            with _suppress_model_probe_logs():
+                if paths["classifier"].is_file():
+                    if paths["classifier"].is_relative_to(target_root):
+                        ok, _ = probe_runtime_capability(paths["classifier"], "classifier")
+                    else:
+                        ok, _ = True, ""
+                    if ok:
+                        mod_classification = True
+                
+                if paths["detector"].is_file():
+                    if paths["detector"].is_relative_to(target_root):
+                        ok, _ = probe_runtime_capability(paths["detector"], "detector")
+                    else:
+                        ok, _ = True, ""
+                    if ok:
+                        mod_localization = True
             
             if paths["volume_model"].is_file() and paths["volume_manifest"].is_file():
-                try:
-                    runtime = TorchVolumeRuntime(paths["volume_model"], paths["volume_manifest"], device="cpu")
-                    if runtime.manifest.target == target.key:
-                        mod_volume = True
-                except Exception:
-                    pass
+                with _suppress_volume_load_logs():
+                    try:
+                        runtime = TorchVolumeRuntime(paths["volume_model"], paths["volume_manifest"], device="cpu")
+                        if runtime.manifest.target == target.key:
+                            mod_volume = True
+                    except Exception:
+                        pass
             
             mod_clinical = False
             for validation_model in (paths["volume_model"], paths["classifier"], paths["detector"]):
@@ -356,7 +389,7 @@ def recommended_medical_commands(status: MedicalSystemStatus) -> list[str]:
     if not status.model_ready:
         commands.append(f"Bổ sung model suy luận vào models/pretrained/ (đang cấu hình: {status.configured_model_path.name})")
     if any((status.report_files, status.normalized_files, status.overlay_files, status.export_files)):
-        commands.append("python run_chat.py --cleanup-output --older-than-days 30")
+        commands.append("python entrypoints/run_chat.py --cleanup-output --older-than-days 30")
     if hasattr(status, "localization_ready") and not status.localization_ready:
         commands.append("Bổ sung detector.pt cho từng nhóm cần tọa độ trong models/pretrained/cancers/<key>/")
     if hasattr(status, "volume_ready") and not status.volume_ready:

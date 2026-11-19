@@ -22,6 +22,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from app.chat_ui.paths import PROJECT_ROOT
 from medical.cancer_catalog import get_cancer_target
 from medical.cancer_model_registry import modality_key, target_model_paths
 from medical.classifier import MedicalClassifierModel, load_medical_classifier
@@ -162,6 +163,13 @@ class DetectionFinding:
     segmentation: tuple[tuple[int, int], ...] | None = None
     frame_index: int | None = None
     timestamp_seconds: float | None = None
+    # Đánh dấu bbox có đáng tin không. False khi tọa độ bị clamp nhiều (dấu hiệu lỗi scale).
+    bbox_reliable: bool = True
+    # Kích thước ảnh mà bbox áp dụng (để phân biệt hệ canvas vs hệ ảnh gốc)
+    bbox_image_size: tuple[int, int] | None = None
+    # Tọa độ bbox trong hệ ảnh gốc (nếu khác bbox canvas)
+    bbox_source: tuple[int, int, int, int] | None = None
+    bbox_source_image_size: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -237,6 +245,7 @@ def _coerce_detections(items: list[Any]) -> list[DetectionFinding]:
                         if item.get("timestamp_seconds") is not None
                         else None
                     ),
+                    bbox_reliable=item.get("bbox_reliable", True),
                 )
             )
     return detections
@@ -298,9 +307,19 @@ def _map_detections_to_canvas(
 # Section 4: Configuration Builders
 # ---------------------------------------------------------------------------
 
+def _project_path(value: str | Path) -> Path:
+    """Đường dẫn tương đối trong config được gắn với project root.
+
+    Nếu không, khi app chạy với CWD khác (shortcut desktop, service) model và
+    kết quả phân tích sẽ bị ghi nhầm chỗ.
+    """
+    path = Path(value)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     try:
-        settings = load_yaml("config/medical_settings.yaml").get("medical", {})
+        settings = load_yaml(_project_path("config/medical_settings.yaml")).get("medical", {})
     except FileNotFoundError:
         raise FileNotFoundError(
             "Không tìm thấy config/medical_settings.yaml. "
@@ -311,25 +330,25 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
     advanced = settings.get("advanced", {})
     if not isinstance(advanced, dict):
         advanced = {}
-    configured_model = Path(settings.get("model", "models/pretrained/brain_classifier.pt"))
+    configured_model = _project_path(settings.get("model", "models/pretrained/brain_classifier.pt"))
     brain_model = settings.get("brain_model")
     detector_model = settings.get("yolo_model_path")
     if detector_model is None:
         detector_model = "models/pretrained/brain_detector.pt"
-    volume_model = Path(settings.get("volume_model_path", "models/pretrained/brain_volume_model.pt2"))
+    volume_model = _project_path(settings.get("volume_model_path", "models/pretrained/brain_volume_model.pt2"))
     legacy_volume_model = volume_model.with_suffix(".pt")
     if volume_model.suffix.lower() == ".pt2" and not volume_model.is_file() and legacy_volume_model.is_file():
         volume_model = legacy_volume_model
-    volume_manifest = Path(settings.get("volume_manifest_path", "models/pretrained/brain_volume_model.json"))
+    volume_manifest = _project_path(settings.get("volume_manifest_path", "models/pretrained/brain_volume_model.json"))
     return MedicalImageAnalyzerConfig(
         model_path=configured_model,
-        working_dir=Path(settings.get("output_root", "output/medical")),
-        reports_dir=Path(settings.get("reports_dir", "output/medical/reports")),
-        processed_dir=Path(settings.get("processed_dir", "output/medical/normalized_images")),
-        overlay_dir=Path(settings.get("overlay_dir", "output/medical/processed_images")),
-        brain_model_path=Path(brain_model) if brain_model else None,
-        modality_model_path=Path(settings["modality_model"]) if settings.get("modality_model") else None,
-        fallback_model_path=Path(settings["fallback_model"]) if settings.get("fallback_model") else None,
+        working_dir=_project_path(settings.get("output_root", "output/medical")),
+        reports_dir=_project_path(settings.get("reports_dir", "output/medical/reports")),
+        processed_dir=_project_path(settings.get("processed_dir", "output/medical/normalized_images")),
+        overlay_dir=_project_path(settings.get("overlay_dir", "output/medical/processed_images")),
+        brain_model_path=_project_path(brain_model) if brain_model else None,
+        modality_model_path=_project_path(settings["modality_model"]) if settings.get("modality_model") else None,
+        fallback_model_path=_project_path(settings["fallback_model"]) if settings.get("fallback_model") else None,
         allow_fallback_model=bool(settings.get("allow_fallback_model", False)),
         image_size=int(settings.get("image_size", 320)),
         conf_threshold=float(settings.get("conf_threshold", 0.25)),
@@ -343,19 +362,19 @@ def build_default_medical_analyzer_config() -> MedicalImageAnalyzerConfig:
         cnn_image_size=int(settings.get("cnn_image_size", 224)),
         cnn_tta=bool(settings.get("cnn_tta", True)),
         analyze_topk=int(settings.get("analyze_topk", 3)),
-        yolo_model_path=Path(detector_model),
+        yolo_model_path=_project_path(detector_model),
         volume_model_path=volume_model,
         volume_manifest_path=volume_manifest,
         max_volume_voxels=int(settings.get("max_volume_voxels", 256_000_000)),
         clinical_validation_report_path=(
-            Path(settings["clinical_validation_report"])
+            _project_path(settings["clinical_validation_report"])
             if settings.get("clinical_validation_report")
             else None
         ),
         target_model_root=(
             None
             if not settings.get("target_model_root")
-            else Path(settings["target_model_root"])
+            else _project_path(settings["target_model_root"])
         ),
         ensemble_yolo_weight=float(settings.get("ensemble_yolo_weight", 0.4)),
         ensemble_cnn_weight=float(settings.get("ensemble_cnn_weight", 0.6)),
@@ -558,16 +577,25 @@ class MedicalImageAnalyzer:
                         "MODALITY_MISMATCH: Loại ảnh bạn chọn không khớp với modality nhận diện từ tệp "
                         f"({requested_modality} ≠ {validation.modality}). Hãy chọn đúng loại ảnh hoặc tải tệp khác."
                     )
+            # Chỉ thêm warning khi hệ thống không tự xác định được modality
+            # Nếu validation đã có modality với confidence cao, không cần warning
+            modality_verified = (
+                validation.modality_confidence >= self.config.validation_min_confidence
+                and validation.modality == requested_modality_key
+            )
+            warnings_to_add = validation.quality_warnings
+            if not modality_verified:
+                warnings_to_add = (
+                    *validation.quality_warnings,
+                    (
+                        f"Modality {requested_modality} được chọn bởi người dùng; "
+                        "hệ thống không tự xác minh được từ thông tin ảnh."
+                    ),
+                )
             validation = replace(
                 validation,
                 modality=requested_modality_key,
-                quality_warnings=(
-                    *validation.quality_warnings,
-                    (
-                        f"Chưa xác minh được modality {requested_modality} từ thông tin ảnh; "
-                        "lựa chọn này chỉ là khai báo của người dùng."
-                    ),
-                ),
+                quality_warnings=warnings_to_add,
             )
         if requested_body_region is not None:
             if (
@@ -676,7 +704,7 @@ class MedicalImageAnalyzer:
             analyzed_image, roi_info = self._apply_segmentation_roi(image)
             prepared_image = self._prepare_image_for_analysis(analyzed_image, modality=validation.modality)
             quality_warnings = sorted(
-                set(self._evaluate_image_quality(prepared_image) + list(validation.quality_warnings))
+                set(self._evaluate_image_quality(prepared_image, modality=validation.modality) + list(validation.quality_warnings))
             )
             # Detector chạy trên pixel ảnh gốc: model train trên ảnh thô, cho qua
             # thumbnail/canvas + chuẩn hóa modality làm rơi phát hiện (thực tế trên ảnh CT thận).
@@ -684,6 +712,14 @@ class MedicalImageAnalyzer:
             detect_input = analyzed_image
             if raw_image is not None and roi_info is None:
                 detect_input = raw_image
+            # Debug logging: in kích thước ở các bước để phát hiện lỗi scale
+            raw_size = f"{raw_image.shape[1]}x{raw_image.shape[0]}" if raw_image is not None else "None"
+            logger.info(
+                "[Pipeline] Ảnh canvas: %dx%d, ảnh raw: %s, detect_input: %dx%d",
+                image.shape[1], image.shape[0],
+                raw_size,
+                detect_input.shape[1], detect_input.shape[0],
+            )
             stage_results = self._run_pipeline_stages(
                 prepared_image,
                 normalized_path,
@@ -705,6 +741,18 @@ class MedicalImageAnalyzer:
             overlay_detections if is_video else report_detections,
             patient_code=patient_code,
         )
+        # Cảnh báo khi có detection với bbox không đáng tin (do clamp tọa độ)
+        unreliable_bbox_detections = [
+            det for det in detections
+            if det.bbox is not None and not getattr(det, "bbox_reliable", True)
+        ]
+        if unreliable_bbox_detections:
+            labels_unreliable = ", ".join({det.label for det in unreliable_bbox_detections})
+            quality_warnings.append(
+                f"Tọa độ vùng phát hiện của '{labels_unreliable}' có thể không chính xác do lỗi scale "
+                "giữa kích thước huấn luyện mô hình và ảnh đầu vào. "
+                "Vui lòng kiểm tra bằng mắt và không dùng tọa độ này cho mục đích lâm sàng."
+            )
         consistency_score, conflicting_pairs = self._compute_detection_consistency(detections)
         slot_warning = self._detector_slot_warning()
         if slot_warning:
@@ -717,11 +765,25 @@ class MedicalImageAnalyzer:
             )
         if len(detections) >= 2:
             top1_conf = detections[0].confidence
-            top2_conf = detections[1].confidence
-            if top1_conf < 0.7 or (top1_conf - top2_conf) < 0.2:
+            top1_label = detections[0].label.lower()
+            # Chỉ tính gap giữa các lớp khác nhau, không phải giữa 2 box cùng lớp
+            top2_conf_for_gap = None
+            for det in detections[1:]:
+                if det.label.lower() != top1_label:
+                    top2_conf_for_gap = det.confidence
+                    break
+            if top2_conf_for_gap is not None:
+                gap = top1_conf - top2_conf_for_gap
+                if top1_conf < 0.7 or gap < 0.2:
+                    quality_warnings.append(
+                        f"Độ tin cậy thấp giữa các lớp khác nhau (top1={top1_conf:.2f}, "
+                        f"top2_other_class={top2_conf_for_gap:.2f}, gap={gap:.2f}). "
+                        f"Kết quả có thể không chính xác."
+                    )
+            elif top1_conf < 0.7:
                 quality_warnings.append(
-                    f"Độ tin cậy thấp giữa các lớp (top1={top1_conf:.2f}, top2={top2_conf:.2f}, "
-                    f"gap={top1_conf-top2_conf:.2f}). Kết quả có thể không chính xác."
+                    f"Điểm dự đoán cao nhất thấp (top1={top1_conf:.2f} < 0.70). "
+                    f"Kết quả có thể không chính xác."
                 )
         risk_level, suspected_malignant, recommendation, average_confidence = self._classify_findings(detections)
         uncertainty_info = self._estimate_uncertainty(prepared_image)
@@ -738,7 +800,8 @@ class MedicalImageAnalyzer:
             image, raw_image, source_frame_detections is not None
         )
         detection_payloads = self._detection_payloads(
-            report_detections, source_frame_detections, coordinate_frame
+            report_detections, source_frame_detections, coordinate_frame,
+            source_size=source_size, canvas_size=[int(image.shape[1]), int(image.shape[0])],
         )
         payload = {
             "case_id": case_id,
@@ -1145,7 +1208,7 @@ class MedicalImageAnalyzer:
         for frame_index, timestamp, frame in samples:
             image = self._fit_video_frame(frame, self.config.image_size)
             prepared = self._prepare_image_for_analysis(image, modality=validation.modality)
-            warnings.extend(self._evaluate_image_quality(prepared))
+            warnings.extend(self._evaluate_image_quality(prepared, modality=validation.modality))
             stages = self._run_pipeline_stages(
                 prepared,
                 normalized_path,
@@ -1368,20 +1431,95 @@ class MedicalImageAnalyzer:
             logger.warning("[Uncertainty] Bo qua MC Dropout", exc_info=True)
             return None
 
-    def _evaluate_image_quality(self, image: np.ndarray) -> list[str]:
+    # Ngưỡng blur (Laplacian variance) theo loại ảnh.
+    # Lưu ý quan trọng: các ngưỡng này là giá trị khởi tạo. Để chính xác, cần tính phân phối
+    # blur score trên tập dữ liệu thật (cả ảnh tốt và ảnh mờ) rồi chọn ngưỡng theo percentile.
+    # Không nên hạ ngưỡng liên tục để "vừa" một vài ảnh mẫu — điều này làm mất khả năng
+    # phát hiện ảnh mờ thật. Thay vào đó, hãy tính blur trên vùng có mô (tissue mask)
+    # để loại ảnh hưởng của nền đen.
+    #
+    # Tham khảo: Laplacian variance của ảnh MRI não T1 (toàn ảnh) thường 5-50,
+    # nhưng trên vùng có mô thường 20-100. Ảnh camera y khoa (endoscopy) thường 100-500.
+    _BLUR_THRESHOLD_CROSS_SECTIONAL = 20.0
+    _BLUR_THRESHOLD_CAMERA = 45.0
+
+    def _evaluate_image_quality(self, image: np.ndarray, *, modality: str | None = None) -> list[str]:
+        """Đánh giá chất lượng ảnh, tách riêng logic cho CT/MRI/PET và camera images.
+
+        Với CT/MRI/PET: ảnh dùng thang Hounsfield Units (HU) hoặc grayscale chuyên biệt,
+        vùng nền xung quanh cơ thể luôn màu đen — không áp dụng kiểm tra độ sáng toàn ảnh.
+        Cả blur và brightness đều tính trên vùng có mô (tissue mask) để loại nền đen.
+
+        Với camera images (endoscopy, ultrasound, mammogram, colposcopy, xray):
+        áp dụng đầy đủ kiểm tra độ sáng, độ tương phản, độ mờ trên toàn ảnh.
+
+        Lưu ý: ngưỡng blur là giá trị khởi tạo. Nên hiệu chỉnh dựa trên phân phối thực tế
+        của tập dữ liệu để tránh overfit vào một vài ảnh mẫu.
+        """
         warnings: list[str] = []
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
         brightness = float(np.mean(gray))
         height, width = gray.shape[:2]
+
+        # Xác định loại ảnh để áp dụng threshold phù hợp
+        modality_lower = (modality or "").lower()
+        is_cross_sectional = modality_lower in {"ct", "mri", "pet_ct", "pet"}
+
         if min(height, width) < 256:
             warnings.append("Ảnh có độ phân giải thấp, kết quả có thể kém ổn định.")
-        if blur_score < 45:
-            warnings.append("Ảnh có dấu hiệu mờ, nên chụp lại rõ hơn và lấy nét vào vùng tổn thương.")
-        if brightness < 45:
-            warnings.append("Ảnh quá tối, nên bổ sung ánh sáng đều trước khi phân tích.")
-        if brightness > 220:
-            warnings.append("Ảnh quá sáng, có nguy cơ mất chi tiết tổn thương.")
+
+        # Độ mờ: tính trên vùng có mô cho CT/MRI để loại ảnh hưởng của nền đen
+        if is_cross_sectional:
+            # Mask vùng có mô: loại nền đen (threshold 20 để bắt các pixel có tín hiệu)
+            tissue_mask = gray > 20
+            if tissue_mask.sum() > 0:
+                # Tạo ảnh chỉ có vùng mô, nền đen — tính Laplacian trên ảnh này
+                # để loại ảnh hưởng của nền đen lên variance
+                masked_gray = np.zeros_like(gray)
+                masked_gray[tissue_mask] = gray[tissue_mask]
+                blur_score = cv2.Laplacian(masked_gray, cv2.CV_64F).var()
+            else:
+                # Toàn ảnh đen — không có mô, dùng toàn ảnh
+                blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+        else:
+            blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+        blur_threshold = (
+            self._BLUR_THRESHOLD_CROSS_SECTIONAL if is_cross_sectional else self._BLUR_THRESHOLD_CAMERA
+        )
+        if blur_score < blur_threshold:
+            if is_cross_sectional:
+                warnings.append(
+                    f"Ảnh có dấu hiệu mờ (blur_score={blur_score:.1f} < {blur_threshold:.0f}), "
+                    f"nên kiểm tra lại chất lượng chụp. "
+                    f"(Blur được tính trên vùng có mô, ngưỡng có thể cần hiệu chỉnh dựa trên "
+                    f"phân phối của tập dữ liệu thực tế.)"
+                )
+            else:
+                warnings.append(
+                    f"Ảnh có dấu hiệu mờ (blur_score={blur_score:.1f} < {blur_threshold:.0f}), "
+                    f"nên chụp lại rõ hơn và lấy nét vào vùng tổn thương."
+                )
+
+        # Độ sáng: CHỈ áp dụng cho camera images, KHÔNG áp dụng cho CT/MRI/PET
+        # Vì ảnh CT/MRI có vùng nền đen (không khí) là bình thường
+        if not is_cross_sectional:
+            if brightness < 45:
+                warnings.append("Ảnh quá tối, nên bổ sung ánh sáng đều trước khi phân tích.")
+            if brightness > 220:
+                warnings.append("Ảnh quá sáng, có nguy cơ mất chi tiết tổn thương.")
+        else:
+            # Với CT/MRI: tính độ sáng trên vùng có mô (loại nền đen) để đánh giá chính xác hơn
+            # Nền đen của MRI/CT là bình thường; chỉ cảnh báo nếu vùng có mô cũng quá tối
+            non_black_mask = gray > 20
+            if non_black_mask.sum() > 0:
+                tissue_brightness = float(np.mean(gray[non_black_mask]))
+                if tissue_brightness < 30:
+                    warnings.append(
+                        f"Vùng có mô trong ảnh quá tối (brightness={tissue_brightness:.1f}), "
+                        f"nên kiểm tra lại tham số chụp."
+                    )
+
         return warnings
 
     def _uses_brain_model(self, body_region: str | None) -> bool:
@@ -1413,11 +1551,17 @@ class MedicalImageAnalyzer:
             if yolo_detections:
                 if cnn_wrapper is not None:
                     return self._ensemble_detections(image, yolo_detections, body_region=body_region)
+                # Lọc detections có confidence thấp
+                min_conf = getattr(self.config, 'detection_min_confidence', 0.3)
+                yolo_detections = [d for d in yolo_detections if d.confidence >= min_conf]
                 return yolo_detections
             if cnn_wrapper is None:
                 return yolo_detections
         if cnn_wrapper is not None:
             cnn_predictions = cnn_wrapper.predict(image, top_k=max(1, self.config.analyze_topk), tta=self.config.cnn_tta)
+            # Lọc predictions có confidence thấp
+            min_conf = getattr(self.config, 'detection_min_confidence', 0.3)
+            cnn_predictions = [p for p in cnn_predictions if float(p.get("confidence", 0.0)) >= min_conf]
             return [
                 DetectionFinding(
                     label=str(item.get("label", "")),
@@ -1428,6 +1572,9 @@ class MedicalImageAnalyzer:
             ]
         classifier = self._load_classifier()
         classifier_predictions = classifier.predict(image, top_k=max(1, self.config.analyze_topk))
+        # Lọc predictions có confidence thấp
+        min_conf = getattr(self.config, 'detection_min_confidence', 0.3)
+        classifier_predictions = [p for p in classifier_predictions if p.confidence >= min_conf]
         return [
             DetectionFinding(
                 label=str(item.label),
@@ -1447,21 +1594,47 @@ class MedicalImageAnalyzer:
                     self._invalid_detector_paths.add(Path(detector_path))
                 return None
             self._detector_backend = backend
+        # Debug logging: in kích thước ảnh và thông tin YOLO để phát hiện lỗi scale
+        img_h, img_w = image.shape[:2]
+        logger.info(
+            "[Detect] Ảnh đầu vào YOLO: %dx%d (channels=%d)",
+            img_w, img_h, image.shape[2] if image.ndim == 3 else 1,
+        )
         results = backend.predict(
             source=image,
             conf=self.config.conf_threshold,
             verbose=False,
             stream=False,
         )
+        # Log orig_shape từ kết quả YOLO để so sánh với ảnh đầu vào
+        for result in results:
+            orig_shape = getattr(result, "orig_shape", None)
+            if orig_shape is not None:
+                logger.info(
+                    "[Detect] YOLO orig_shape: %sx%s, ảnh truyền vào: %dx%d",
+                    orig_shape[0], orig_shape[1], img_h, img_w,
+                )
         findings: list[DetectionFinding] = []
         for result in results:
             if hasattr(result, "boxes"):
                 names = getattr(result, "names", {})
                 mask_polygons = list(getattr(getattr(result, "masks", None), "xy", ()) or ())
                 for box_index, box in enumerate(getattr(result, "boxes", [])):
+                    raw_xyxy = box.xyxy[0].tolist()
+                    logger.info(
+                        "[Detect] Raw bbox từ YOLO xyxy: (%.1f, %.1f, %.1f, %.1f) trên ảnh %dx%d",
+                        raw_xyxy[0], raw_xyxy[1], raw_xyxy[2], raw_xyxy[3], img_w, img_h,
+                    )
                     cls_id = int(box.cls[0].item())
                     confidence = float(box.conf[0].item())
-                    bbox = self._normalize_bbox(box.xyxy[0].tolist(), image.shape)
+                    bbox, bbox_reliable = self._normalize_bbox(
+                        raw_xyxy, image.shape
+                    )
+                    if bbox:
+                        logger.info(
+                            "[Detect] Bbox sau normalize: (%d, %d, %d, %d), reliable=%s",
+                            bbox[0], bbox[1], bbox[2], bbox[3], bbox_reliable,
+                        )
                     segmentation = None
                     if box_index < len(mask_polygons):
                         height, width = image.shape[:2]
@@ -1476,26 +1649,29 @@ class MedicalImageAnalyzer:
                             confidence=confidence,
                             bbox=bbox,
                             segmentation=segmentation,
+                            bbox_reliable=bbox_reliable,
                         )
                     )
             elif hasattr(result, "label") and hasattr(result, "confidence"):
                 raw_bbox = getattr(result, "bbox", None)
-                bbox = self._normalize_bbox(raw_bbox, image.shape)
+                bbox, bbox_reliable = self._normalize_bbox(raw_bbox, image.shape)
                 findings.append(
                     DetectionFinding(
                         label=str(result.label),
                         confidence=float(result.confidence),
                         bbox=bbox,
+                        bbox_reliable=bbox_reliable,
                     )
                 )
             elif isinstance(result, dict) and "label" in result and "confidence" in result:
                 raw_bbox = result.get("bbox")
-                bbox = self._normalize_bbox(raw_bbox, image.shape)
+                bbox, bbox_reliable = self._normalize_bbox(raw_bbox, image.shape)
                 findings.append(
                     DetectionFinding(
                         label=str(result["label"]),
                         confidence=float(result["confidence"]),
                         bbox=bbox,
+                        bbox_reliable=bbox_reliable,
                     )
                 )
         return findings
@@ -1504,18 +1680,67 @@ class MedicalImageAnalyzer:
     def _normalize_bbox(
         raw_bbox: Any,
         image_shape: tuple[int, ...],
-    ) -> tuple[int, int, int, int] | None:
+    ) -> tuple[tuple[int, int, int, int], bool]:
+        """Chuẩn hóa bbox và trả về (bbox, is_reliable).
+
+        Lưu ý quan trọng: Ultralytics YOLO trả về boxes.xyxy đã ở tọa độ ảnh gốc
+        (original-image pixels), không phải không gian imgsz. Hàm này chỉ clamp
+        tọa độ vượt khỏi ảnh và kiểm tra bbox chiếm quá 95% diện tích.
+
+        is_reliable = False khi:
+        - Tọa độ bị clamp (vượt khỏi ảnh) — dấu hiệu lỗi scale từ nguồn khác YOLO
+        - Bbox chiếm quá 95% diện tích ảnh
+
+        HEURISTIC SCALE ĐÃ BỊ LOẠI BỎ: trước đây hàm này cố gắng phát hiện bbox
+        lệch scale bằng cách so sánh imgsz với kích thước ảnh, nhưng Ultralytics
+        đã scale về ảnh gốc tự động. Heuristic cũ gây cảnh báo oan cho hầu hết ảnh.
+        Để debug tọa độ sai, hãy in ra raw bbox từ model và so với ảnh gốc.
+        """
         try:
             if raw_bbox is None or len(raw_bbox) != 4:
-                return None
+                return (None, True)
             coordinates = tuple(round(float(value)) for value in raw_bbox)
         except (TypeError, ValueError, OverflowError):
-            return None
+            return (None, True)
         height, width = image_shape[:2]
-        x1, y1, x2, y2 = coordinates
-        x1, x2 = sorted((max(0, min(width, x1)), max(0, min(width, x2))))
-        y1, y2 = sorted((max(0, min(height, y1)), max(0, min(height, y2))))
-        return (x1, y1, x2, y2) if x2 > x1 and y2 > y1 else None
+        orig_x1, orig_y1, orig_x2, orig_y2 = coordinates
+        # Clamp tọa độ vào giới hạn ảnh để tránh bbox vượt khỏi ảnh
+        # Dùng width-1 và height-1 vì tọa độ pixel tối đa là width-1, height-1
+        clamped_x1, clamped_x2 = sorted((max(0, min(width - 1, orig_x1)), max(0, min(width - 1, orig_x2))))
+        clamped_y1, clamped_y2 = sorted((max(0, min(height - 1, orig_y1)), max(0, min(height - 1, orig_y2))))
+        # Kiểm tra bbox hợp lệ: width và height phải > 0
+        if clamped_x2 <= clamped_x1 or clamped_y2 <= clamped_y1:
+            return (None, True)
+        # --- Đánh giá độ đáng tin của bbox ---
+        is_reliable = True
+
+        # 1. Kiểm tra clamp: tọa độ bị cắt nghĩa là sai scale
+        clamp_distance = (
+            abs(orig_x1 - clamped_x1)
+            + abs(orig_y1 - clamped_y1)
+            + abs(orig_x2 - clamped_x2)
+            + abs(orig_y2 - clamped_y2)
+        )
+        if clamp_distance > 0:
+            is_reliable = False
+            logger.warning(
+                "[BBox] Tọa độ bbox bị clamp: (%d,%d,%d,%d) -> (%d,%d,%d,%d) trên ảnh %dx%d. "
+                "Có thể do lỗi scale từ nguồn dữ liệu.",
+                orig_x1, orig_y1, orig_x2, orig_y2,
+                clamped_x1, clamped_y1, clamped_x2, clamped_y2,
+                width, height,
+            )
+
+        # 2. Kiểm tra bbox không vượt quá 95% diện tích ảnh (có thể là lỗi scale)
+        bbox_area = (clamped_x2 - clamped_x1) * (clamped_y2 - clamped_y1)
+        image_area = width * height
+        if bbox_area > 0.95 * image_area:
+            is_reliable = False
+            logger.warning(
+                "[BBox] Bbox chiếm %.1f%% diện tích ảnh, có thể do lỗi scale.",
+                bbox_area / image_area * 100,
+            )
+        return ((clamped_x1, clamped_y1, clamped_x2, clamped_y2), is_reliable)
 
         # --- 6.9: Model Loading & Readiness ---
 
@@ -1943,8 +2168,14 @@ class MedicalImageAnalyzer:
         report_detections: list[DetectionFinding],
         source_frame_detections: list[DetectionFinding] | None,
         coordinate_frame: str,
+        source_size: list[int] | None = None,
+        canvas_size: list[int] | None = None,
     ) -> list[dict[str, Any]]:
-        """Dựng detections cho báo cáo: giữ bbox canvas + bổ sung bbox hệ ảnh gốc."""
+        """Dựng detections cho báo cáo: giữ bbox canvas + bổ sung bbox hệ ảnh gốc.
+
+        source_size: kích thước ảnh gốc [w, h] (dùng cho bbox_source).
+        canvas_size: kích thước canvas chuẩn hóa [w, h] (dùng cho bbox).
+        """
         payloads: list[dict[str, Any]] = []
         for index, item in enumerate(report_detections):
             source_item = (
@@ -1958,12 +2189,27 @@ class MedicalImageAnalyzer:
                 if coordinate_frame == "source_image" and item.bbox == source_item.bbox
                 else "normalized_canvas"
             )
+            bbox_reliable = getattr(item, "bbox_reliable", True)
+            # bbox_image_size ghi rõ kích thước ảnh mà 'bbox' áp dụng
+            # để báo cáo không nhầm lẫn giữa hệ canvas và hệ ảnh gốc
+            bbox_image_size = None
+            if item.bbox is not None:
+                if bbox_frame == "source_image":
+                    bbox_image_size = source_size
+                else:
+                    bbox_image_size = canvas_size
+            # bbox_source_image_size ghi rõ kích thước ảnh mà 'bbox_source' áp dụng
+            bbox_source_image_size = None
+            if source_item.bbox is not None:
+                bbox_source_image_size = source_size
             payloads.append(
                 {
                     "label": item.label,
                     "confidence": item.confidence,
                     "bbox": list(item.bbox) if item.bbox else None,
                     "bbox_source": list(source_item.bbox) if source_item.bbox else None,
+                    "bbox_image_size": bbox_image_size,
+                    "bbox_source_image_size": bbox_source_image_size,
                     "segmentation": [list(point) for point in item.segmentation] if item.segmentation else None,
                     "segmentation_source": (
                         [list(point) for point in source_item.segmentation] if source_item.segmentation else None
@@ -1971,20 +2217,113 @@ class MedicalImageAnalyzer:
                     "frame_index": item.frame_index,
                     "timestamp_seconds": item.timestamp_seconds,
                     "coordinate_frame": bbox_frame,
+                    "bbox_reliable": bbox_reliable,
                 }
             )
         return payloads
 
         # --- 6.11: Risk Classification ---
 
+    # Các loại u thường gặp phần lớn là lành tính (WHO grade I), không nên gắn trực tiếp với "ác tính".
+    # Lưu ý: ngay cả các loại u này cũng có thể có độ II/III (ví dụ meningioma WHO grade II/III),
+    # nên không nên hạ mức ưu tiên khám xuống thấp. Chỉ tách riêng "loại u" khỏi "mức độ ưu tiên".
+    _BENIGN_PREDOMINANT_LABELS = {
+        "meningioma",
+        "pituitary_adenoma",
+        "pituitary adenoma",
+        "pituitary",
+        "adenoma",
+        "hemangioma",
+        "lipoma",
+        "neurofibroma",
+        "schwannoma",
+        "vestibular_schwannoma",
+        "acoustic_neuroma",
+        "craniopharyngioma",
+        "choroid_plexus papilloma",
+    }
+
     def _classify_findings(self, detections: list[DetectionFinding]) -> tuple[str, bool, str, float]:
-        average_confidence = sum(item.confidence for item in detections) / len(detections) if detections else 0.0
-        return (
-            "uncertain",
-            False,
-            "Đây là nhãn và điểm dự đoán của model, không phải kết luận về vị trí tổn thương hay tính ác tính. Cần được nhân viên y tế đánh giá trước khi đưa ra nhận định lâm sàng.",
-            average_confidence,
+        """Phân loại mức độ ưu tiên khám dựa trên confidence threshold 3 mức và loại nhãn.
+
+        Ngưỡng:
+        - < 35%: Low suspicion (ít cần ưu tiên)
+        - 35% - 65%: Indeterminate (chưa rõ ràng, cần hội chẩn)
+        - > 65%: High suspicion (cần ưu tiên khám)
+
+        Lưu ý quan trọng:
+        - confidence cao không đồng nghĩa với "ác tính". Một số loại u (ví dụ meningioma)
+          phần lớn là lành tính dù điểm dự đoán cao.
+        - Ngay cả các loại u lành tính cũng cần được bác sĩ đánh giá; không hạ mức ưu tiên
+          khám xuống thấp chỉ vì nhãn thường lành tính (meningioma có thể WHO grade II/III).
+        - Hàm này trả về mức độ cần ưu tiên khám, không phải kết luận về tính ác tính.
+        - Chỉ có giải phẫu bệnh mới kết luận được lành tính hay ác tính.
+
+        Trả về: (risk_level, suspected_malignant, recommendation, average_confidence)
+        """
+        if not detections:
+            return (
+                "uncertain",
+                False,
+                "Không có phát hiện nào. Cần được nhân viên y tế đánh giá trước khi đưa ra nhận định lâm sàng.",
+                0.0,
+            )
+
+        average_confidence = sum(item.confidence for item in detections) / len(detections)
+        top_detection = detections[0]
+        top_confidence = top_detection.confidence
+        top_label = top_detection.label.lower().replace(" ", "_").replace("-", "_")
+
+        # Kiểm tra xem nhãn có thuộc nhóm thường lành tính không
+        is_benign_predominant = top_label in self._BENIGN_PREDOMINANT_LABELS or any(
+            benign in top_label for benign in ("meningioma", "adenoma", "hemangioma", "lipoma", "schwannoma")
         )
+
+        # Xác định risk level dựa trên 3 mức ngưỡng
+        if top_confidence < 0.35:
+            risk_level = "low_suspicion"
+            suspected_malignant = False
+            recommendation = (
+                "Điểm dự đoán thấp, mức độ cần ưu tiên khám thấp. "
+                "Đây là nhãn và điểm dự đoán của model, không phải kết luận về vị trí tổn thương hay mức độ nghiêm trọng. "
+                "Cần được nhân viên y tế đánh giá trước khi đưa ra nhận định lâm sàng."
+            )
+        elif top_confidence < 0.65:
+            risk_level = "indeterminate"
+            suspected_malignant = False
+            recommendation = (
+                "Điểm dự đoán ở mức chưa rõ ràng (vùng xám). "
+                "Không thể kết luận mức độ nghiêm trọng dựa trên kết quả này. "
+                "Cần hội chẩn và chụp bổ sung để xác nhận. "
+                "Đây là nhãn và điểm dự đoán của model, không phải kết luận về vị trí tổn thương hay mức độ nghiêm trọng. "
+                "Cần được nhân viên y tế đánh giá trước khi đưa ra nhận định lâm sàng."
+            )
+        else:
+            # Confidence cao (> 65%): cần ưu tiên khám cao cho mọi loại nhãn.
+            # Ngay cả nhãn thường lành tính cũng cần được bác sĩ đánh giá sớm
+            # vì có thể có ngoại lệ (meningioma WHO grade II/III, v.v.).
+            if is_benign_predominant:
+                risk_level = "high_suspicion"
+                suspected_malignant = False
+                recommendation = (
+                    f"Điểm dự đoán cao cho nhãn '{top_detection.label}', cần được bác sĩ đánh giá sớm. "
+                    f"Loại u này phần lớn là lành tính, nhưng vẫn có thể có trường hợp ngoại lệ "
+                    f"(ví dụ meningioma độ II/III theo WHO). Điểm dự đoán cao chỉ phản ánh mô hình "
+                    f"nhận diện rõ ràng, không đồng nghĩa với tính ác tính. "
+                    f"Chỉ có bác sĩ và giải phẫu bệnh mới kết luận được lành tính hay ác tính. "
+                    f"Cần được nhân viên y tế đánh giá và xét nghiệm bổ sung trước khi đưa ra nhận định lâm sàng."
+                )
+            else:
+                risk_level = "high_suspicion"
+                suspected_malignant = True
+                recommendation = (
+                    "Điểm dự đoán cao, mức độ cần ưu tiên khám cao. "
+                    "Tuy nhiên, đây là nhãn và điểm dự đoán của model, không phải kết luận về vị trí tổn thương hay tính ác tính. "
+                    "Chỉ có bác sĩ và giải phẫu bệnh mới kết luận được lành tính hay ác tính. "
+                    "Cần được nhân viên y tế đánh giá và xét nghiệm bổ sung trước khi đưa ra nhận định lâm sàng."
+                )
+
+        return risk_level, suspected_malignant, recommendation, average_confidence
 
     def _deidentify_input(self, source: Path) -> Path | None:
         from medical.compliance import (
@@ -2054,9 +2393,10 @@ class MedicalImageAnalyzer:
         overlay = draw_detection_results(
             image=image,
             detections=detections,
-            box_thickness=3,
-            label_font_scale=0.9,
+            box_thickness=1,
+            label_font_scale=0.6,
             show_fps=False,
+            label_alpha=0.85,
         )
         if gradcam_overlays:
             try:

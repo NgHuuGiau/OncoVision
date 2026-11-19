@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from app.chat_ui.paths import PROJECT_ROOT
 from medical.dataset import supported_medical_modalities_for_target
 from utils.file_utils import load_yaml
 
@@ -138,7 +139,7 @@ SUPPORTED_MAPPING = {
     "thyroid": supported_medical_modalities_for_target("thyroid"),
 }
 
-DEFAULT_MEDICAL_SETTINGS_PATH = Path("config/medical_settings.yaml")
+DEFAULT_MEDICAL_SETTINGS_PATH = PROJECT_ROOT / "config/medical_settings.yaml"
 
 
 def _collect_image_text(image_path: str) -> str:
@@ -396,13 +397,19 @@ def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
 
     if min(height, width) < 256:
         warnings.append("kích thước ảnh quá nhỏ để phân tích chính xác")
-    if blur_score < 60:
+
+    # Ngưỡng blur thấp hơn cho ảnh y khoa (MRI/CT thường mịn hơn ảnh camera)
+    # Sử dụng ngưỡng 30 thay vì 60 để tránh cảnh báo sai cho MRI
+    if blur_score < 30:
         warnings.append("ảnh quá mờ")
     if contrast < 20:
         warnings.append("độ tương phản thấp (contrast)")
-    if brightness < 45:
+
+    # Độ sáng: chỉ cảnh báo nếu ảnh rõ ràng quá tối hoặc quá sáng
+    # Ảnh MRI/CT có nền đen là bình thường, nên chỉ cảnh báo khi cực kỳ tối
+    if brightness < 20:
         warnings.append("ảnh quá tối")
-    if brightness > 220:
+    if brightness > 240:
         warnings.append("ảnh quá sáng")
 
     quality_score = min(1.0, max(0.0, 0.35 + (blur_score / 300.0) * 0.3 + (contrast / 100.0) * 0.2 + (1.0 - abs(brightness - 128) / 128.0) * 0.15))
@@ -446,7 +453,12 @@ def _validate_single_file_strict(source, allowed, min_confidence):
             guessed = guess_modality_from_pixels(source)
             if guessed:
                 modality_label = guessed
-                modality_confidence = 0.4
+                # Tăng confidence cho pixel analysis để giảm warning không cần thiết
+                # MRI/CT có rules rõ ràng nên confidence cao hơn
+                if guessed in ("MRI", "CT"):
+                    modality_confidence = 0.6
+                else:
+                    modality_confidence = 0.5
         except Exception:
             pass
 

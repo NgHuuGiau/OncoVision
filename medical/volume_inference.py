@@ -16,6 +16,9 @@ import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
+# Cache cho volume load failures — chỉ log lỗi 1 lần mỗi file
+_VOLUME_LOAD_FAILURE_CACHE: dict[str, str] = {}
+
 @dataclass(frozen=True)
 class VolumeData:
     array: np.ndarray
@@ -314,9 +317,19 @@ def load_volume_model(path: str | Path, device: str | torch.device = "cpu") -> t
     - .pt2: torch.export format (ưu tiên), fallback sang TorchScript nếu version mismatch
     - .pt/.pth: TorchScript (ưu tiên), fallback sang regular checkpoint
     - Các format khác: regular PyTorch checkpoint
+
+    Cache failure: nếu một file đã từng load fail, lần sau sẽ raise ngay
+    mà không log lại, tránh spam log khi hệ thống kiểm tra nhiều lần.
     """
     source = Path(path)
+    source_str = str(source.resolve())
     target = torch.device(device)
+
+    # Kiểm tra cache failure — nếu đã từng fail, raise ngay mà không log lại
+    cached_failure = _VOLUME_LOAD_FAILURE_CACHE.get(source_str)
+    if cached_failure is not None:
+        raise RuntimeError(cached_failure)
+
     logger.info("Đang nạp model 3D từ %s", source)
 
     with warnings.catch_warnings():
@@ -344,7 +357,15 @@ def load_volume_model(path: str | Path, device: str | torch.device = "cpu") -> t
                         type(jit_err).__name__
                     )
                     # Last resort: try as regular checkpoint
-                    return _load_regular_checkpoint(str(source), target)
+                    try:
+                        return _load_regular_checkpoint(str(source), target)
+                    except Exception as regular_err:
+                        failure_reason = (
+                            f"Tất cả fallback thất bại: "
+                            f"{type(export_err).__name__} -> {type(jit_err).__name__} -> {type(regular_err).__name__}"
+                        )
+                        _VOLUME_LOAD_FAILURE_CACHE[source_str] = failure_reason
+                        raise RuntimeError(failure_reason) from regular_err
 
         # For .pt/.pth and other formats: try TorchScript first, then regular checkpoint
         try:
@@ -353,7 +374,11 @@ def load_volume_model(path: str | Path, device: str | torch.device = "cpu") -> t
             return model.eval()
         except Exception:
             logger.info("Không phải TorchScript, thử nạp sebagai model PyTorch thường")
-            return _load_regular_checkpoint(str(source), target)
+            try:
+                return _load_regular_checkpoint(str(source), target)
+            except Exception as exc:
+                _VOLUME_LOAD_FAILURE_CACHE[source_str] = str(exc)
+                raise
 
 
 def _load_regular_checkpoint(path: str, device: torch.device) -> torch.nn.Module:

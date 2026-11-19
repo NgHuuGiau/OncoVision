@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 
+from app.chat_ui.paths import PROJECT_ROOT
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ def _get_cancers_dir() -> Path:
             return internal_dir / "models" / "pretrained" / "cancers"
         if (base_dir / "models" / "pretrained" / "cancers").is_dir():
             return base_dir / "models" / "pretrained" / "cancers"
-    return Path("models/pretrained/cancers")
+    return PROJECT_ROOT / "models/pretrained/cancers"
 
 
 CANCERS_DIR = _get_cancers_dir()
@@ -112,6 +113,9 @@ def _first_file(directory: Path, names: tuple[str, ...]) -> Path:
 
 _PROBE_CACHE: dict[tuple[str, str, int, int], tuple[bool, str]] = {}
 
+# Cache cho detector validation warnings — chỉ log 1 lần mỗi file
+_DETECTOR_WARNING_LOGGED: set[str] = set()
+
 
 def _short(exc: object) -> str:
     return " ".join(str(exc).split())[:200]
@@ -159,7 +163,10 @@ def probe_runtime_capability(path: str | Path, kind: str) -> tuple[bool, str]:
                 is_medical, medical_reason = _is_medical_detector(model_labels)
                 if not is_medical:
                     result = (False, f"detector không phải y khoa ({medical_reason})")
-                    logger.warning("Detector %s không hợp lệ: %s", source, medical_reason)
+                    source_str = str(source)
+                    if source_str not in _DETECTOR_WARNING_LOGGED:
+                        logger.warning("Detector %s không hợp lệ: %s", source, medical_reason)
+                        _DETECTOR_WARNING_LOGGED.add(source_str)
                     _PROBE_CACHE[key] = result
                     return result
                 # Nạp được chưa đủ: state_dict lạ vẫn load được nhưng predict mới vỡ

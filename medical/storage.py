@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.chat_ui.paths import ONCO_DB_PATH
 from utils.logger import get_logger
 from utils.sqlite_utils import DEFAULT_SQLITE_TIMEOUT_SECONDS, create_sqlite_connection
 
@@ -38,8 +39,10 @@ class MedicalCaseRecord:
 class MedicalCaseDatabase:
     CONNECT_TIMEOUT_SECONDS = DEFAULT_SQLITE_TIMEOUT_SECONDS
 
-    def __init__(self, db_path: str | Path = "output/onco.db") -> None:
-        self.db_path = Path(db_path)
+    def __init__(self, db_path: str | Path | None = None) -> None:
+        # Đường dẫn mặc định phải tuyệt đối: app đọc và ghi cùng một file DB
+        # (nếu dùng đường dẫn tương đối, app chạy từ CWD khác sẽ ghi lệch chỗ).
+        self.db_path = Path(db_path) if db_path is not None else ONCO_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 

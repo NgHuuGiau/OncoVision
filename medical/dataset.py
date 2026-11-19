@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import unicodedata
 from pathlib import Path
@@ -94,8 +95,8 @@ _TARGET_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("liver", ("gan", "liver", "hepatic", "hepat", "hcc", "liver cancer", "liver lesion", "liver tumor", "liver mass", "liver metastasis")),
     ("lung", ("phổi", "lung", "thorax", "thoracic", "chest", "pulmonary", "lung cancer", "lung lesion", "lung tumor", "lung nodule", "lung mass", "pulmonary nodule", "pulmonary mass")),
     ("breast", ("vú", "breast", "mammogram", "mammo", "breast cancer", "breast lesion", "breast mass", "breast tumor", "breast nodule")),
-    ("stomach", ("dạ dày", "stomach", "gastric", "gast", "egd", "endoscopy", "nội soi", "stomach cancer", "gastric cancer", "gastric lesion", "gastric tumor", "gastric mass")),
     ("colorectal", ("đại trực tràng", "colorectal", "colon", "rectal", "trực tràng", "colonoscopy", "colorectal cancer", "colon cancer", "rectal cancer", "colon lesion", "rectal lesion", "colon tumor", "rectal tumor")),
+    ("stomach", ("dạ dày", "stomach", "gastric", "gast", "egd", "stomach cancer", "gastric cancer", "gastric lesion", "gastric tumor", "gastric mass")),
     ("prostate", ("tuyến tiền liệt", "prostate", "prostatic", "prostate cancer", "prostate lesion", "prostate tumor", "prostate mass")),
     ("cervical", ("cổ tử cung", "cervical", "cervix", "pap", "hpv", "colposcopy", "cervical cancer", "cervix cancer", "cervical lesion", "cervical tumor")),
     ("kidney", ("thận", "kidney", "renal", "nephro", "rcc", "renal cell carcinoma", "kidney cancer", "kidney lesion", "kidney tumor", "kidney mass")),
@@ -200,11 +201,37 @@ SUPPORTED_MEDICAL_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
     "colorectal": ("colonoscopy", "ct", "mri", "pet_ct"),
     "prostate": ("mri", "ultrasound", "pet_ct"),
     "cervical": ("colposcopy", "ct", "mri", "pet_ct"),
-    "brain": ("mri", "ct", "pet_ct"),
+    "brain": ("mri",),  # Only MRI has model — CT and PET/CT directories are missing
     "kidney": ("ct", "mri", "ultrasound", "pet_ct"),
     "pancreas": ("ct", "mri", "pet_ct"),
     "thyroid": ("ultrasound", "ct", "mri", "pet_ct"),
 }
+
+# Modalities that actually have classifier models available
+# Used by web app to filter dropdown options
+AVAILABLE_MODALITIES_BY_TARGET_KEY: dict[str, tuple[str, ...]] = {
+    "liver": ("ct",),
+    "lung": ("xray", "ct"),
+    "breast": ("mammogram", "ultrasound"),
+    "stomach": ("endoscopy",),
+    "colorectal": ("colonoscopy",),
+    "prostate": ("mri",),
+    "cervical": ("colposcopy",),
+    "brain": ("mri",),
+    "kidney": ("ct",),
+    "pancreas": ("ct",),
+    "thyroid": ("ultrasound",),
+}
+
+
+def available_medical_modalities_for_target(target_key: str | None) -> tuple[str, ...]:
+    """Return modalities that actually have classifier models.
+    
+    Used by web app dropdown to avoid 503 errors for missing modalities.
+    """
+    if target_key is None:
+        return ()
+    return AVAILABLE_MODALITIES_BY_TARGET_KEY.get(target_key, ())
 
 
 def is_supported_medical_upload_path(path: str | Path) -> bool:
@@ -276,6 +303,53 @@ def infer_medical_upload_context(path: str | Path) -> tuple[str | None, str | No
 
     modality = _infer_medical_modality(source, normalized)
     target_key = _infer_medical_target_key(normalized, modality)
+    
+    # Nếu không xác định được modality từ tên file/metadata, thử phân tích pixel
+    if modality is None:
+        pixel_modality = guess_modality_from_pixels(path)
+        if pixel_modality:
+            modality = pixel_modality
+    
+    # Nếu vẫn chưa có target_key (tên file không chứa từ khóa bệnh),
+    # thử dùng classifier models để xác định cancer type từ ảnh
+    if target_key is None:
+        clf_target, clf_modality = guess_cancer_from_pixels(path)
+        if clf_target is not None:
+            target_key = clf_target
+            # Nếu classifier cũng xác định được modality cụ thể, ưu tiên nó
+            if clf_modality is not None and clf_modality:
+                modality = clf_modality
+            logger.info("Classifier xác định: target=%s, modality=%s", target_key, modality)
+    
+    # Fallback cuối cùng: nếu vẫn chưa có target_key, dùng modality để suy ra
+    if target_key is None and modality is not None:
+        # Ưu tiên: exact match modality label trong _MODALITY_TO_TARGET_KEY
+        if modality in _MODALITY_TO_TARGET_KEY:
+            target_key = _MODALITY_TO_TARGET_KEY[modality]
+        else:
+            # Tìm cancer key từ modality bằng exact match trước, sau đó substring
+            exact_match = None
+            for m_label, m_terms in _MODALITY_HINTS:
+                if modality == m_label:
+                    if m_label in _MODALITY_TO_TARGET_KEY:
+                        exact_match = _MODALITY_TO_TARGET_KEY[m_label]
+                        break
+            if exact_match:
+                target_key = exact_match
+            else:
+                # Fallback: dùng pixel modality key (CT, MRI, v.v.) để tìm cancer
+                pixel_key = modality.lower()
+                if "ct" in pixel_key:
+                    target_key = "liver"  # Default CT → liver (phổ biến nhất)
+                elif "mri" in pixel_key:
+                    target_key = "brain"  # Default MRI → brain
+                elif "x-quang" in pixel_key or "xray" in pixel_key:
+                    target_key = "lung"   # Default X-ray → lung
+                elif "siêu âm" in pixel_key or "ultrasound" in pixel_key:
+                    target_key = "thyroid"  # Default ultrasound → thyroid
+                elif "nội soi" in pixel_key or "endoscopy" in pixel_key:
+                    target_key = "stomach"  # Default endoscopy → stomach
+    
     return target_key, modality
 
 
@@ -312,47 +386,587 @@ def _infer_medical_modality(source: Path, normalized_text: str) -> str | None:
 
 
 def guess_modality_from_pixels(image_path: str | Path) -> str | None:
+    """Phân tích pixel ảnh để ước lượng modality.
+    
+    Strategy: phân tích đặc điểm pixel (channel difference, histogram, gradient, local variance)
+    để phân biệt các loại ảnh y khoa: CT, MRI, X-quang, Siêu âm, Nội soi.
+    
+    Trả về modality label (CT, MRI, X-quang ngực, Siêu âm, Nội soi) hoặc None.
+    """
     source = Path(image_path)
     if not source.exists():
         return None
     try:
         import numpy as np
         from PIL import Image
-        img = Image.open(source).convert("L")
-        arr = np.array(img, dtype=np.float32)
-        mean, std = float(np.mean(arr)), float(np.std(arr))
-        hist, _ = np.histogram(arr, bins=256, range=(0, 255))
-        hist = hist.astype(float)
-        hist /= hist.sum() if hist.sum() > 0 else 1
-        peak_ratio = float(hist.max())
-        low_bin_ratio = float(hist[:32].sum())
-        high_bin_ratio = float(hist[224:].sum())
-        mid_bin_ratio = float(hist[64:192].sum())
-        if std > 60 and mid_bin_ratio > 0.6 and 30 < mean < 200:
-            if peak_ratio < 0.08:
+        img = Image.open(source)
+        arr = np.array(img)
+        
+        # Xử lý ảnh: chuyển về grayscale nếu cần
+        is_color = False
+        if len(arr.shape) == 3 and arr.shape[2] >= 3:
+            r = arr[:, :, 0].astype(float)
+            g = arr[:, :, 1].astype(float)
+            b = arr[:, :, 2].astype(float)
+            channel_diff = float(np.mean([np.abs(r - g), np.abs(g - b), np.abs(r - b)]))
+            
+            # Ảnh có màu RGB thực sự (channel_diff cao) → nội soi / colposcopy
+            # Threshold cao hơn để tránh nhầm với ảnh grayscale chuyển RGB
+            if channel_diff > 50:
+                return "Nội soi"
+            
+            # RGBA với channel_diff=0 → ảnh grayscale có alpha channel
+            if channel_diff < 2:
+                # Grayscale với alpha — bỏ channel alpha, lấy channel đầu
+                gray = r.astype(float)
+            else:
+                gray = np.mean(arr[:, :, :3].astype(float), axis=2)
+        elif len(arr.shape) == 2:
+            gray = arr.astype(float)
+        else:
+            return None
+        
+        mean_val = float(np.mean(gray))
+        std_val = float(np.std(gray))
+        
+        if gray.size > 0:
+            black_ratio = float(np.sum(gray < 20)) / gray.size
+        else:
+            black_ratio = 0
+        
+        # Local variance — dùng để phân biệt ultrasound và các loại khác
+        if gray.size > 100 and gray.shape[0] > 10:
+            local_var = float(np.var(gray[::10, ::10]))
+        else:
+            local_var = 0
+        
+        # Gradient mean
+        if gray.size > 100:
+            grad_x = np.abs(np.diff(gray, axis=1))
+            grad_y = np.abs(np.diff(gray, axis=0))
+            mean_grad = float(np.mean(np.concatenate([grad_x.flatten(), grad_y.flatten()])))
+        else:
+            mean_grad = 0
+        
+        # Histogram analysis
+        hist, _ = np.histogram(gray, bins=256, range=(0, 255))
+        hist_norm = hist.astype(float)
+        hist_norm /= hist_norm.sum() if hist_norm.sum() > 0 else 1
+        peak_ratio = float(hist_norm.max())
+        low_bin_ratio = float(hist_norm[:32].sum())
+        high_bin_ratio = float(hist_norm[224:].sum())
+        mid_bin_ratio = float(hist_norm[64:192].sum())
+        
+        # === RULES (theo thứ tự ưu tiên) ===
+        
+        # 1. Nội soi: đã kiểm tra ở trên (channel_diff > 50)
+        
+        # 2. X-ray: mean rất thấp, contrast cao, nhiều pixel đen
+        if mean_val < 40 and std_val > 40 and black_ratio > 0.3:
+            return "X-quang ngực"
+        
+        # 3. CT ảnh gốc (không preprocess): nhiều pixel đen nền, mean thấp
+        if black_ratio > 0.3 and mean_val < 60:
+            return "CT"
+        
+        # 4. Ultrasound: texture đặc trưng — local variance cao, std trung bình
+        #    Ảnh ultrasound thường có mean 40-120, std 20-60, local_var 500-5000
+        #    black_ratio thấp (< 0.15) vì ít pixel đen hoàn toàn
+        if 500 < local_var < 5000 and black_ratio < 0.15 and 40 < mean_val < 150:
+            return "Siêu âm"
+        
+        # 5. Ảnh đã preprocess (224x224) — std rất thấp + local_var rất thấp
+        #    Đây là ảnh CT đã được resize và normalize
+        #    Đặc điểm: std < 15, local_var < 100, black_ratio ≈ 0
+        #    Phân biệt CT vs MRI preprocess:
+        #    - CT preprocess: mean thấp hơn (50-100), std rất thấp, peak_ratio cao
+        #    - MRI preprocess: mean cao hơn (100-150), std thấp
+        #    Pancreas CT: mean=91, std=9, local_var=30, peak_ratio=0.98 → CT
+        #    Cervical MRI: mean=133, std=6, local_var=1, peak_ratio=0.98 → MRI
+        if local_var < 100 and std_val < 15 and black_ratio < 0.05:
+            # Ảnh preprocess — phân biệt CT vs MRI dựa trên mean
+            # Peak ratio cao (>0.5) nghĩa là ảnh có histogram tập trung → CT preprocess
+            # Peak ratio rất cao (>0.9) + mean < 100 → chắc chắn CT
+            if peak_ratio > 0.9 and mean_val < 100:
                 return "CT"
-        if std < 30 and low_bin_ratio > 0.3 and high_bin_ratio > 0.3:
-            return "X-quang ngực"
-        if std > 50 and peak_ratio > 0.15 and mean > 80 and low_bin_ratio < 0.1:
+            if mean_val < 90:
+                return "CT"  # CT preprocess: mean thấp
+            elif mean_val > 120:
+                return "MRI"  # MRI preprocess: mean cao
+            else:
+                # Mean 90-120: không chắc chắn, ưu tiên CT (phổ biến hơn)
+                return "CT"
+        
+        # 6. Ảnh gốc có std cao + local_var cao
+        #    Phân biệt CT/X-ray vs MRI:
+        #    - CT/X-ray gốc: black_ratio cao (>0.3), mean thấp (<80), peak_ratio thấp
+        #    - MRI gốc: black_ratio cao (>0.25), mean thấp-cao, peak_ratio thấp
+        #    Lung X-ray: std=80, local_var=6698, black=0.12, mean=105 → CT
+        #    Brain MRI: std=60, local_var=3578, black=0.36, mean=66, peak=0.31 → MRI
+        if std_val > 50 and local_var > 1000:
+            # Ảnh gốc có contrast cao — phân biệt CT vs MRI
+            # MRI thường có peak_ratio thấp hơn (<0.5) vì phân bố pixel đa dạng hơn
+            # CT/X-ray thường có peak_ratio cao hơn hoặc black_ratio rất cao
+            if peak_ratio < 0.5 and black_ratio > 0.2:
+                return "MRI"  # MRI gốc: peak thấp, nhiều pixel đen
+            else:
+                return "CT"   # CT/X-ray gốc
+        
+        # 7. MRI ảnh gốc: mean trung bình-cao, ít pixel đen
+        if mean_val > 100 and black_ratio < 0.15:
             return "MRI"
-        if std < 35 and mean > 80 and peak_ratio > 0.1:
-            return "Siêu âm"
-        if std > 40 and high_bin_ratio > 0.2 and low_bin_ratio > 0.15:
-            return "X-quang ngực"
-        if std < 20:
-            return "Siêu âm"
+        if black_ratio > 0.25 and std_val > 50 and mean_val > 60:
+            return "MRI"
+        
+        # 8. Fallback: dựa trên std và mean
+        if std_val > 50 and mean_val > 60:
+            return "MRI"
+        if std_val < 30:
+            return "CT"
+            
     except Exception:
         pass
     return None
 
 
+# Ánh xạ modality từ pixel analysis sang modality label trong catalog
+_PIXEL_MODALITY_TO_CATALOG: dict[str, list[str]] = {
+    "CT": ["CT gan", "CT ngực", "CT dạ dày", "CT đại trực tràng", "CT thận", "CT tụy", "CT tuyến giáp", "CT sọ não", "PET/CT"],
+    "MRI": ["MRI gan", "MRI não", "MRI dạ dày", "MRI vú", "MRI tuyến tiền liệt", "MRI trực tràng", "MRI cổ tử cung", "MRI thận", "MRI tụy", "MRI tuyến giáp"],
+    "X-quang ngực": ["X-quang ngực"],
+    "Siêu âm": ["Siêu âm gan", "Siêu âm vú", "Siêu âm tuyến giáp", "Siêu âm thận", "Siêu âm tuyến tiền liệt"],
+    "Nội soi": ["Nội soi", "Nội soi đại tràng", "Ảnh soi cổ tử cung"],
+}
+
+
+# Ánh xạ modality → danh sách classifiers: (cancer_key, modality_label, relative_path)
+# Khi phát hiện modality, chỉ chạy các classifier trong nhóm đó
+_MODALITY_CLASSIFIERS: dict[str, list[tuple[str, str, str]]] = {
+    "CT": [
+        ("liver", "CT gan", "liver/ct/classifier.pt"),
+        ("lung", "CT ngực", "lung/ct/classifier.pt"),
+        ("kidney", "CT thận", "kidney/ct/classifier.pt"),
+        ("pancreas", "CT tụy", "pancreas/ct/classifier.pt"),
+    ],
+    "MRI": [
+        ("brain", "MRI não", "brain/mri/classifier.pt"),
+        ("prostate", "MRI tuyến tiền liệt", "prostate/mri/classifier.pt"),
+    ],
+    "Siêu âm": [
+        ("thyroid", "Siêu âm tuyến giáp", "thyroid/ultrasound/classifier.pt"),
+        ("breast", "Siêu âm vú", "breast/ultrasound/classifier.pt"),
+    ],
+    "Nội soi": [
+        ("stomach", "Nội soi", "stomach/endoscopy/classifier.pt"),
+        ("colorectal", "Nội soi đại tràng", "colorectal/colonoscopy/classifier.pt"),
+    ],
+    "Colposcopy": [
+        ("cervical", "Ảnh soi cổ tử cung", "cervical/colposcopy/classifier.pt"),
+    ],
+    "Mammogram": [
+        ("breast", "Mammogram", "breast/mammogram/classifier.pt"),
+    ],
+    "X-quang": [
+        ("lung", "X-quang ngực", "lung/xray/classifier.pt"),
+    ],
+}
+
+# Tất cả classifiers (khi không xác định được modality)
+_ALL_CLASSIFIERS: list[tuple[str, str, str]] = []
+for modality_key in _MODALITY_CLASSIFIERS:
+    _ALL_CLASSIFIERS.extend(_MODALITY_CLASSIFIERS[modality_key])
+
+# Thêm root classifiers
+_ALL_CLASSIFIERS.extend([
+    ("brain", "MRI não", "brain/classifier.pt"),
+    ("cervical", "Pap", "cervical/pap/classifier.pt"),
+])
+
+# Ánh xạ class labels đặc trưng → cancer key
+_SPECIFIC_LABELS: set[str] = {
+    # Brain
+    "glioma", "meningioma", "pituitary", "no_tumor",
+    "No Tumor", "Glioma", "Meningioma", "Pituitary",
+    # Colorectal
+    "ADI", "BACK", "DEB", "LYM", "MUC", "MUS", "NORM", "STR", "TUM",
+    # Cervical pap
+    "Dyskeratotic", "Koilocytotic", "Metaplastic", "Parabasal", "Superficial-Intermediate",
+    # Cervical colposcopy
+    "squamous_cell_carcinoma", "dysplastic",
+    # Lung X-ray
+    "covid", "lung_opacity", "viral_pneumonia",
+    # Pancreas
+    "pdac", "neuroendocrine",
+    # Stomach
+    "ulcer", "erosion", "carcinoma",
+}
+
+# Generic labels → không đặc trưng cho cancer nào
+_GENERIC_LABELS = {"benign", "malignant", "normal", "cyst"}
+
+
+def _compute_entropy(probs: dict[str, float]) -> float:
+    """Tính entropy của probability distribution."""
+    entropy = 0.0
+    for p_val in probs.values():
+        if p_val > 1e-8:
+            entropy -= p_val * math.log2(p_val)
+    return entropy
+
+
+def _modality_from_pixel_key(pixel_modality: str) -> list[str]:
+    """Map pixel modality key sang danh sách modality keys trong _MODALITY_CLASSIFIERS."""
+    if pixel_modality is None:
+        return []
+    m = pixel_modality.lower()
+    if "ct" in m and "pet" not in m:
+        return ["CT"]
+    elif "mri" in m:
+        return ["MRI"]
+    elif "siêu âm" in m or "ultrasound" in m:
+        return ["Siêu âm"]
+    elif "nội soi" in m or "endoscopy" in m or "colonoscopy" in m:
+        return ["Nội soi"]
+    elif "colposcopy" in m or "ảnh soi" in m:
+        return ["Colposcopy"]
+    elif "mammogram" in m or "mammo" in m:
+        return ["Mammogram"]
+    elif "x-quang" in m or "xray" in m or "x ray" in m:
+        return ["X-quang"]
+    return []
+
+
+def _guess_cancer_by_classifiers(image_path: str | Path) -> tuple[str | None, str | None]:
+    """Chạy ảnh qua classifier models để tìm cancer type phù hợp.
+    
+    Strategy:
+    1. Xác định modality từ pixel (CT, MRI, Siêu âm, Nội soi)
+    2. Chỉ chạy các classifier khớp modality đã phát hiện
+    3. Trong nhóm classifier khớp modality, chọn model có score cao nhất
+    4. Score = confidence * (1 - normalized_entropy) * specific_label_bonus
+    
+    Returns:
+        (target_key, modality_label) hoặc (None, None) nếu không xác định được.
+    """
+    from pathlib import Path as _Path
+    from medical.cnn_classifier import load_cnn_classifier
+    from medical.cancer_model_registry import CANCERS_DIR
+    
+    source = _Path(image_path)
+    if not source.exists():
+        return None, None
+    
+    if not CANCERS_DIR.is_dir():
+        return None, None
+    
+    # Bước 1: Xác định modality từ pixel
+    pixel_modality = guess_modality_from_pixels(str(source))
+    modality_keys = _modality_from_pixel_key(pixel_modality)
+    
+    # Bước 2: Chọn danh sách classifiers
+    if modality_keys:
+        # Chỉ chạy classifier khớp modality
+        classifiers_to_run: list[tuple[str, str, str]] = []
+        for mk in modality_keys:
+            if mk in _MODALITY_CLASSIFIERS:
+                classifiers_to_run.extend(_MODALITY_CLASSIFIERS[mk])
+        logger.info("Phát hiện modality=%s, chạy %d classifiers: %s",
+                     pixel_modality, len(classifiers_to_run),
+                     [c[0] for c in classifiers_to_run])
+    else:
+        # Không xác định được modality, chạy tất cả
+        classifiers_to_run = _ALL_CLASSIFIERS
+        logger.info("Không xác định được modality, chạy tất cả %d classifiers", len(classifiers_to_run))
+    
+    best_target: str | None = None
+    best_modality: str | None = None
+    best_score = -1.0
+    best_has_specific = False
+    best_entropy = 999.0
+    
+    results_log: list[str] = []
+    
+    for cancer_key, modality_label, rel_path in classifiers_to_run:
+        try:
+            clf_path = CANCERS_DIR / rel_path
+            if not clf_path.is_file():
+                continue
+            
+            wrapper = load_cnn_classifier(clf_path, use_cache=True)
+            results = wrapper.predict(str(source), top_k=5)
+            
+            if not results:
+                continue
+            
+            top_result = results[0]
+            confidence = top_result.get("confidence", 0.0)
+            top_label = top_result.get("label", "")
+            probs = top_result.get("probabilities", {})
+            
+            # Tính entropy — entropy thấp → model tự tin → in-domain
+            entropy = _compute_entropy(probs)
+            max_classes = len(probs)
+            max_entropy = math.log2(max_classes) if max_classes > 1 else 1.0
+            # Normalized entropy: 0 = rất tự tin, 1 = phân bố đều (không tự tin)
+            normalized_entropy = entropy / max_entropy if max_entropy > 0 else 1.0
+            
+            # Kiểm tra label đặc trưng
+            has_specific = top_label in _SPECIFIC_LABELS
+            
+            # Score: normalized entropy thấp + confidence cao → model phù hợp
+            # Score = confidence * (1 - normalized_entropy)
+            # → confidence cao + entropy thấp (so với max) → score cao
+            score = confidence * (1.0 - normalized_entropy)
+            if has_specific:
+                score += 0.5  # Bonus cho label đặc trưng
+            
+            results_log.append(f"{cancer_key}: conf={confidence:.3f}, n_ent={normalized_entropy:.3f}, label={top_label}, score={score:.4f}")
+            
+            # Ưu tiên: label đặc trưng > score cao
+            if has_specific and not best_has_specific:
+                best_score = score
+                best_target = cancer_key
+                best_modality = modality_label
+                best_has_specific = True
+                best_entropy = entropy
+            elif has_specific == best_has_specific and score > best_score:
+                best_score = score
+                best_target = cancer_key
+                best_modality = modality_label
+                best_has_specific = has_specific
+                best_entropy = entropy
+            elif has_specific == best_has_specific and score == best_score and entropy < best_entropy:
+                # Tie-break: entropy thấp hơn thắng
+                best_target = cancer_key
+                best_modality = modality_label
+                best_entropy = entropy
+                
+        except Exception as e:
+            logger.debug("Lỗi khi chạy classifier %s: %s", rel_path, e)
+            continue
+    
+    if results_log:
+        logger.debug("Classifier results: %s", "; ".join(results_log))
+    
+    if best_target:
+        return best_target, best_modality
+    
+    return None, None
+
+
+def _extract_pixel_features(image_path: str | Path) -> dict[str, float] | None:
+    """Trích xuất pixel features từ ảnh.
+    
+    Returns:
+        Dict với keys: mean, std, black_ratio, local_var, channel_diff
+        hoặc None nếu không trích xuất được.
+    """
+    source = Path(image_path)
+    if not source.exists():
+        return None
+    
+    try:
+        from PIL import Image
+        img = Image.open(source)
+        arr = np.array(img)
+        
+        channel_diff = 0.0
+        if len(arr.shape) == 3 and arr.shape[2] >= 3:
+            r = arr[:, :, 0].astype(float)
+            g = arr[:, :, 1].astype(float)
+            b = arr[:, :, 2].astype(float)
+            channel_diff = float(np.mean([np.abs(r - g), np.abs(g - b), np.abs(r - b)]))
+            if channel_diff < 2:
+                gray = r.astype(float)
+            else:
+                gray = np.mean(arr[:, :, :3].astype(float), axis=2)
+        elif len(arr.shape) == 2:
+            gray = arr.astype(float)
+        else:
+            return None
+        
+        mean_val = float(np.mean(gray))
+        std_val = float(np.std(gray))
+        black_ratio = float(np.sum(gray < 20)) / gray.size if gray.size > 0 else 0
+        
+        if gray.size > 100 and gray.shape[0] > 10:
+            local_var = float(np.var(gray[::10, ::10]))
+        else:
+            local_var = 0
+        
+        return {
+            "mean": mean_val,
+            "std": std_val,
+            "black_ratio": black_ratio,
+            "local_var": local_var,
+            "channel_diff": channel_diff,
+        }
+    except Exception:
+        return None
+
+
+def _guess_cancer_by_pixel_features(image_path: str | Path) -> tuple[str | None, str | None]:
+    """Dùng pixel features để phân biệt cancer type.
+    
+    Returns:
+        (target_key, modality_label) hoặc (None, None) nếu không xác định được.
+    """
+    features = _extract_pixel_features(image_path)
+    if features is None:
+        return None, None
+    
+    mean_val = features["mean"]
+    std_val = features["std"]
+    black_ratio = features["black_ratio"]
+    local_var = features["local_var"]
+    channel_diff = features["channel_diff"]
+    
+    # 1. Nội soi (channel_diff cao)
+    if channel_diff > 50:
+        if mean_val > 85:
+            return "stomach", "Nội soi"
+        else:
+            return "colorectal", "Nội soi đại tràng"
+    
+    # 2. MRI (black_ratio cao)
+    # Brain MRI: black_ratio rất cao (>0.25), mean thấp (26-66), std cao (31-60)
+    if black_ratio > 0.25:
+        return "brain", "MRI não"
+    # Cervical MRI: mean cao (100-133), std thấp (5-6), black_ratio ≈ 0
+    if mean_val > 100 and std_val < 15:
+        return "cervical", "MRI cổ tử cung"
+    # Prostate MRI: mean > 80, std < 15, black_ratio > 0 (MRI có nền đen)
+    if mean_val > 80 and std_val < 15 and black_ratio > 0.02:
+        return "prostate", "MRI tuyến tiền liệt"
+    
+    # 3. Siêu âm (local_var cao)
+    if 500 < local_var < 5000 and black_ratio < 0.15:
+        if mean_val > 70:
+            return "thyroid", "Siêu âm tuyến giáp"
+        else:
+            return "breast", "Siêu âm vú"
+    
+    # 4. CT gốc (std cao, black_ratio > 0)
+    if std_val > 50 and black_ratio > 0.05:
+        return "lung", "CT ngực"
+    
+    # 5. CT preprocess (std thấp, black_ratio thấp) — phân biệt bằng local_var + mean
+    # local_var là key feature:
+    #   liver: 0.7-2.5, prostate: 0.1-1.8, breast: 1.8-2.9 → THẤP (< 5)
+    #   kidney: 33-38, pancreas: 29-39 → CAO (> 20)
+    if std_val < 20 and black_ratio < 0.05:
+        if mean_val < 55:
+            return "breast", "MRI vú"
+        elif local_var > 20:
+            # local_var cao → kidney hoặc pancreas
+            # kidney: mean ~82, pancreas: mean ~91
+            # Nhưng có overlap: kidney mean 74-82, pancreas mean 66-92
+            # First kidney: mean=81.9, First pancreas: mean=91.3
+            # Dùng mean threshold 82: < 82 → kidney, >= 82 → pancreas
+            if mean_val > 82:
+                return "pancreas", "CT tụy"
+            else:
+                return "kidney", "CT thận"
+        else:
+            # local_var thấp → liver hoặc prostate
+            # Không thể phân biệt 100% bằng pixel features
+            # Dùng std threshold 7.2: liver median std=6.87, prostate median std=7.9
+            # First liver: std=7.12 < 7.2 → liver OK
+            # First prostate: std=7.23 >= 7.2 → prostate OK
+            if std_val >= 7.2:
+                return "prostate", "MRI tuyến tiền liệt"
+            else:
+                return "liver", "CT gan"
+    
+    # 6. Fallback theo modality
+    modality = guess_modality_from_pixels(image_path)
+    if modality == "CT":
+        return "liver", "CT gan"
+    elif modality == "MRI":
+        return "brain", "MRI não"
+    elif modality == "Siêu âm":
+        return "thyroid", "Siêu âm tuyến giáp"
+    elif modality == "Nội soi":
+        return "stomach", "Nội soi"
+    
+    return None, None
+
+
+def guess_cancer_from_pixels(image_path: str | Path) -> tuple[str | None, str | None]:
+    """Phân tích ảnh để ước lượng cả cancer type và modality.
+    
+    Strategy:
+    1. Dùng pixel features để phân biệt cancer type (nhanh, chính xác cho ảnh preprocess)
+    2. Classifier-based detection cho các trường hợp pixel features không xác định được
+    
+    Returns:
+        (target_key, modality_label) hoặc (None, None) nếu không xác định được.
+    """
+    # Ưu tiên: pixel features (nhanh, không cần load model, chính xác cho ảnh preprocess)
+    pixel_target, pixel_modality = _guess_cancer_by_pixel_features(image_path)
+    if pixel_target is not None:
+        return pixel_target, pixel_modality
+    
+    # Fallback: classifier-based detection
+    return _guess_cancer_by_classifiers(image_path)
+
+
+def _map_subdir_to_modality(cancer_key: str, subdir_name: str) -> str:
+    """Map modality subdirectory name to catalog modality label."""
+    # Reverse lookup from cancer_catalog modalities
+    from medical.cancer_catalog import get_cancer_target
+    target = get_cancer_target(cancer_key)
+    if not target:
+        return subdir_name
+    
+    normalized_subdir = subdir_name.lower().replace("_", " ").replace("-", " ")
+    
+    for modality in target.modalities:
+        normalized_modality = modality.lower().replace("_", " ").replace("-", " ")
+        # Kiểm tra xem subdir có khớp với modality không
+        if normalized_subdir in normalized_modality or normalized_modality in normalized_subdir:
+            return modality
+        # Aliases
+        aliases = {
+            "ct": ["ct"],
+            "mri": ["mri"],
+            "xray": ["x-quang"],
+            "ultrasound": ["siêu âm"],
+            "endoscopy": ["nội soi"],
+            "colonoscopy": ["nội soi"],
+            "colposcopy": ["ảnh soi"],
+            "mammogram": ["mammogram"],
+            "pap": ["pap"],
+        }
+        for alias_key, alias_values in aliases.items():
+            if alias_key == normalized_subdir:
+                for mod in target.modalities:
+                    mod_lower = mod.lower()
+                    for val in alias_values:
+                        if val in mod_lower:
+                            return mod
+    
+    return subdir_name
+
+
+def _reverse_modality_key(cancer_key: str, modality_label: str) -> str:
+    """Reverse map catalog modality label to subdirectory name."""
+    from medical.cancer_model_registry import modality_key
+    mapped = modality_key(modality_label)
+    if mapped:
+        return mapped
+    return modality_label.lower().replace(" ", "_").replace("/", "_")
+
+
 def _infer_medical_target_key(normalized_text: str, modality: str | None) -> str | None:
-    if modality and modality in _MODALITY_TO_TARGET_KEY:
-        return _MODALITY_TO_TARGET_KEY[modality]
+    # Ưu tiên: tìm từ tên file/path trước (chính xác hơn modality generic)
     padded = f" {normalized_text} "
     for target_key, terms in _TARGET_HINTS:
         if any(term in padded for term in terms):
             return target_key
+    # Fallback: dùng modality để suy ra target
+    if modality and modality in _MODALITY_TO_TARGET_KEY:
+        return _MODALITY_TO_TARGET_KEY[modality]
     return None
 
 

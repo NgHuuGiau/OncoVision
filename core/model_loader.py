@@ -10,12 +10,13 @@ from core.model_catalog import is_allowed_model_reference, is_supported_pretrain
 YOLO = None
 ULTRALYTICS_IMPORT_ERROR = None
 
+from app.chat_ui.paths import PROJECT_ROOT
 from core.model_selector import RuntimeConfig
 from utils.file_utils import load_yaml_cached
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-MODEL_CONFIG_PATH = Path("config/model_config.yaml")
+MODEL_CONFIG_PATH = PROJECT_ROOT / "config/model_config.yaml"
 
 
 @dataclass
@@ -41,9 +42,9 @@ def _candidate_paths(model_name: str) -> list[str]:
     if not is_allowed_model_reference(model_name):
         logger.warning("Rejected unsupported model reference: %s", model_name)
         return []
-    trained_path = Path("models/trained/best.pt")
-    pretrained_path = Path("models/pretrained") / model_name
-    local_root_path = Path(model_name)
+    trained_path = PROJECT_ROOT / "models/trained/best.pt"
+    pretrained_path = (PROJECT_ROOT / "models/pretrained") / model_name
+    local_root_path = Path(model_name) if Path(model_name).is_absolute() else PROJECT_ROOT / model_name
     configured_priority = load_yaml_cached(str(MODEL_CONFIG_PATH)).get("priority_order", [])
     normalized_model_name = str(model_name).replace("\\", "/")
     explicit_trained_best = normalized_model_name == "models/trained/best.pt"

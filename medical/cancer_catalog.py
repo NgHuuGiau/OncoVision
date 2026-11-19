@@ -92,7 +92,7 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
         description="Phân tích siêu âm, CT, MRI hoặc PET/CT tuyến giáp.",
         modalities=("Siêu âm tuyến giáp", "CT tuyến giáp", "MRI tuyến giáp", "PET/CT tuyến giáp"),
         model_ready=True,
-        notes="Siêu âm 2D cần detector/classifier được huấn luyện riêng.",
+        notes="Classifier siêu âm hoạt động (benign/malignant). Detector dùng COCO generic — hệ thống tự động bỏ qua, chỉ dùng classifier.",
     ),
     CancerScreeningTarget(
         key="brain",
@@ -101,14 +101,6 @@ COMMON_CANCER_TARGETS: tuple[CancerScreeningTarget, ...] = (
         modalities=("MRI não", "CT sọ não", "PET/CT não"),
         model_ready=True,
         notes="Model hiện có: ConvNeXt-Tiny, 4 loại u não (glioma/meningioma/pituitary/no_tumor).",
-    ),
-    CancerScreeningTarget(
-        key="spleen",
-        label="Ung thư lách",
-        description="Phân tích tổn thương lách trên CT, MRI hoặc PET/CT.",
-        modalities=("CT lách", "MRI lách", "PET/CT"),
-        model_ready=False,
-        notes="Chưa có classifier/detector; chỉ có volume manifest.",
     ),
 )
 
