@@ -322,33 +322,21 @@ def infer_medical_upload_context(path: str | Path) -> tuple[str | None, str | No
             logger.info("Classifier xác định: target=%s, modality=%s", target_key, modality)
     
     # Fallback cuối cùng: nếu vẫn chưa có target_key, dùng modality để suy ra
+    # Chỉ áp dụng khi modality là specific label (có trong _MODALITY_TO_TARGET_KEY)
+    # Không áp dụng cho modality generic từ pixel analysis (CT, MRI, Siêu âm, Nội soi)
+    # vì những modality này có thể là false positive cho ảnh không phải y khoa
     if target_key is None and modality is not None:
         # Ưu tiên: exact match modality label trong _MODALITY_TO_TARGET_KEY
+        # Chỉ dùng khi modality là specific label (ví dụ: "CT gan", "MRI não", "Siêu âm tuyến giáp")
+        # Không dùng cho generic modality (CT, MRI, Siêu âm, Nội soi) vì dễ nhầm
         if modality in _MODALITY_TO_TARGET_KEY:
-            target_key = _MODALITY_TO_TARGET_KEY[modality]
-        else:
-            # Tìm cancer key từ modality bằng exact match trước, sau đó substring
-            exact_match = None
-            for m_label, m_terms in _MODALITY_HINTS:
-                if modality == m_label:
-                    if m_label in _MODALITY_TO_TARGET_KEY:
-                        exact_match = _MODALITY_TO_TARGET_KEY[m_label]
-                        break
-            if exact_match:
-                target_key = exact_match
-            else:
-                # Fallback: dùng pixel modality key (CT, MRI, v.v.) để tìm cancer
-                pixel_key = modality.lower()
-                if "ct" in pixel_key:
-                    target_key = "liver"  # Default CT → liver (phổ biến nhất)
-                elif "mri" in pixel_key:
-                    target_key = "brain"  # Default MRI → brain
-                elif "x-quang" in pixel_key or "xray" in pixel_key:
-                    target_key = "lung"   # Default X-ray → lung
-                elif "siêu âm" in pixel_key or "ultrasound" in pixel_key:
-                    target_key = "thyroid"  # Default ultrasound → thyroid
-                elif "nội soi" in pixel_key or "endoscopy" in pixel_key:
-                    target_key = "stomach"  # Default endoscopy → stomach
+            # Kiểm tra: modality có phải là specific label không?
+            # Generic modality từ pixel analysis: CT, MRI, Siêu âm, Nội soi, X-quang ngực
+            generic_modalities = {"CT", "MRI", "Siêu âm", "Nội soi", "X-quang ngực", "PET/CT", "PET"}
+            if modality not in generic_modalities:
+                target_key = _MODALITY_TO_TARGET_KEY[modality]
+            # Nếu modality là generic, không fallback — trả về None để pipeline biết
+            # Auto-detect sẽ dùng classifier-based detection thay vì guess từ modality
     
     return target_key, modality
 
@@ -391,7 +379,10 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
     Strategy: phân tích đặc điểm pixel (channel difference, histogram, gradient, local variance)
     để phân biệt các loại ảnh y khoa: CT, MRI, X-quang, Siêu âm, Nội soi.
     
-    Trả về modality label (CT, MRI, X-quang ngực, Siêu âm, Nội soi) hoặc None.
+    Trả về modality label (CT, MRI, X-quang ngực, Siêu âm, Nội soi) hoặc None nếu không chắc chắn.
+    
+    QUAN TRỌNG: Hàm này trả về None cho ảnh không phải y khoa để tránh false positive.
+    Các fallback rules cũ đã bị loại bỏ vì chúng luôn trả về 1 modality.
     """
     source = Path(image_path)
     if not source.exists():
@@ -404,6 +395,7 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
         
         # Xử lý ảnh: chuyển về grayscale nếu cần
         is_color = False
+        channel_diff = 0.0
         if len(arr.shape) == 3 and arr.shape[2] >= 3:
             r = arr[:, :, 0].astype(float)
             g = arr[:, :, 1].astype(float)
@@ -458,6 +450,8 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
         mid_bin_ratio = float(hist_norm[64:192].sum())
         
         # === RULES (theo thứ tự ưu tiên) ===
+        # Mỗi rule trả về modality chỉ khi điều kiện ĐỦ RÕ RÀNG.
+        # Nếu không khớp rule nào → trả về None (không có fallback aggressive).
         
         # 1. Nội soi: đã kiểm tra ở trên (channel_diff > 50)
         
@@ -518,12 +512,13 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
         if black_ratio > 0.25 and std_val > 50 and mean_val > 60:
             return "MRI"
         
-        # 8. Fallback: dựa trên std và mean
-        if std_val > 50 and mean_val > 60:
-            return "MRI"
-        if std_val < 30:
-            return "CT"
-            
+        # === LOẠI BỎ FALLBACK AGGRESSIVE ===
+        # Old code:
+        #   if std_val > 50 and mean_val > 60: return "MRI"
+        #   if std_val < 30: return "CT"
+        # Những rule này luôn trả về 1 modality cho ảnh không phải y khoa.
+        # Thay vào đó, trả về None để pipeline biết không xác định được.
+        
     except Exception:
         pass
     return None
@@ -640,10 +635,11 @@ def _guess_cancer_by_classifiers(image_path: str | Path) -> tuple[str | None, st
     """Chạy ảnh qua classifier models để tìm cancer type phù hợp.
     
     Strategy:
-    1. Xác định modality từ pixel (CT, MRI, Siêu âm, Nội soi)
-    2. Chỉ chạy các classifier khớp modality đã phát hiện
-    3. Trong nhóm classifier khớp modality, chọn model có score cao nhất
-    4. Score = confidence * (1 - normalized_entropy) * specific_label_bonus
+    1. Kiểm tra chất lượng ảnh y khoa cơ bản
+    2. Xác định modality từ pixel (CT, MRI, Siêu âm, Nội soi)
+    3. Chỉ chạy các classifier khớp modality đã phát hiện
+    4. Trong nhóm classifier khớp modality, chọn model có score cao nhất
+    5. Score = confidence * (1 - normalized_entropy) * specific_label_bonus
     
     Returns:
         (target_key, modality_label) hoặc (None, None) nếu không xác định được.
@@ -658,6 +654,46 @@ def _guess_cancer_by_classifiers(image_path: str | Path) -> tuple[str | None, st
     
     if not CANCERS_DIR.is_dir():
         return None, None
+    
+    # === KIỂM TRA CHẤT LƯỢNG ẢNH Y KHOA CƠ BẢN ===
+    # Loại ảnh rõ ràng không phải y khoa trước khi chạy classifier
+    features = _extract_pixel_features(str(source))
+    if features is not None:
+        mean_val = features["mean"]
+        std_val = features["std"]
+        channel_diff = features["channel_diff"]
+        black_ratio = features["black_ratio"]
+        local_var = features["local_var"]
+        
+        # Ảnh solid color: std ≈ 0
+        if std_val < 3 and channel_diff < 10:
+            logger.debug("Ảnh có std quá thấp (%.2f) — không phải ảnh y khoa", std_val)
+            return None, None
+        
+        # Ảnh trắng hoàn toàn
+        if mean_val > 250 and std_val < 5:
+            logger.debug("Ảnh trắng hoàn toàn — không phải ảnh y khoa")
+            return None, None
+        
+        # Ảnh đen hoàn toàn
+        if mean_val < 5 and std_val < 5:
+            logger.debug("Ảnh đen hoàn toàn — không phải ảnh y khoa")
+            return None, None
+        
+        # Ảnh noise ngẫu nhiên (có thể đã nén JPEG):
+        # - Raw noise: std ~75, local_var ~5800, channel_diff ~58
+        # - JPEG noise: std ~49, local_var ~2237, channel_diff ~29, mean ~127
+        # Ảnh y khoa RGB (nội soi) có channel_diff cao nhưng std thấp hơn và mean khác
+        # Ảnh y khoa grayscale có channel_diff ≈ 0
+        #
+        # Detection: mean gần 127 + std 30-70 + local_var 1000-5000 + channel_diff 10-50
+        # → Pattern đặc trưng của noise ngẫu nhiên đã nén JPEG
+        if (100 < mean_val < 150 and 30 < std_val < 70
+                and 1000 < local_var < 5000 and 10 < channel_diff < 50
+                and black_ratio < 0.05):
+            logger.debug("Ảnh có vẻ là noise ngẫu nhiên (mean=%.1f, std=%.1f, local_var=%.1f) — không phải ảnh y khoa",
+                         mean_val, std_val, local_var)
+            return None, None
     
     # Bước 1: Xác định modality từ pixel
     pixel_modality = guess_modality_from_pixels(str(source))
@@ -749,6 +785,25 @@ def _guess_cancer_by_classifiers(image_path: str | Path) -> tuple[str | None, st
         logger.debug("Classifier results: %s", "; ".join(results_log))
     
     if best_target:
+        # Threshold: chỉ trả về kết quả khi có ít nhất 1 classifier thực sự tự tin
+        # Ảnh không phải y khoa thường có score thấp vì entropy cao (phân bố đều)
+        # và confidence thấp. Threshold 0.3 để loại ảnh noise/solid color.
+        #
+        # Score = confidence * (1 - normalized_entropy)
+        # - Ảnh y khoa: confidence ~0.5-0.9, entropy thấp → score > 0.3
+        # - Ảnh không y khoa: entropy cao → score < 0.3
+        #
+        # Ngoài ra, ưu tiên label đặc trưng (glioma, meningioma, pdac...) —
+        # nếu best_has_specific = False, threshold cao hơn (0.4) vì generic labels
+        # (benign, malignant, normal) dễ xuất hiện cho ảnh không y khoa.
+        if best_has_specific:
+            threshold = 0.3
+        else:
+            threshold = 0.4  # Generic labels cần score cao hơn
+        if best_score < threshold:
+            logger.debug("Auto-detect score quá thấp (%.4f < %.1f) — có thể không phải ảnh y khoa",
+                         best_score, threshold)
+            return None, None
         return best_target, best_modality
     
     return None, None
@@ -810,6 +865,9 @@ def _guess_cancer_by_pixel_features(image_path: str | Path) -> tuple[str | None,
     
     Returns:
         (target_key, modality_label) hoặc (None, None) nếu không xác định được.
+    
+    QUAN TRỌNG: Hàm này chỉ hoạt động với ảnh y khoa đã preprocess (224x224).
+    Ảnh không phải y khoa hoặc ảnh có std quá thấp (solid color, gradient) sẽ trả về None.
     """
     features = _extract_pixel_features(image_path)
     if features is None:
@@ -820,6 +878,14 @@ def _guess_cancer_by_pixel_features(image_path: str | Path) -> tuple[str | None,
     black_ratio = features["black_ratio"]
     local_var = features["local_var"]
     channel_diff = features["channel_diff"]
+    
+    # === KIỂM TRA CƠ BẢN: ảnh có nội dung thực sự không? ===
+    # Ảnh solid color: std ≈ 0 → không phải ảnh y khoa
+    # Ảnh gradient: std thấp, local_var thấp → không phải ảnh y khoa
+    # Ảnh y khoa preprocess có std tối thiểu ~3-5 (do noise và chi tiết)
+    if std_val < 3 and channel_diff < 50:
+        # Ảnh gần như đồng nhất — không phải ảnh y khoa
+        return None, None
     
     # 1. Nội soi (channel_diff cao)
     if channel_diff > 50:
@@ -833,10 +899,11 @@ def _guess_cancer_by_pixel_features(image_path: str | Path) -> tuple[str | None,
     if black_ratio > 0.25:
         return "brain", "MRI não"
     # Cervical MRI: mean cao (100-133), std thấp (5-6), black_ratio ≈ 0
-    if mean_val > 100 and std_val < 15:
+    # Thêm std > 3 để tránh solid color images
+    if mean_val > 100 and 3 < std_val < 15:
         return "cervical", "MRI cổ tử cung"
     # Prostate MRI: mean > 80, std < 15, black_ratio > 0 (MRI có nền đen)
-    if mean_val > 80 and std_val < 15 and black_ratio > 0.02:
+    if mean_val > 80 and 3 < std_val < 15 and black_ratio > 0.02:
         return "prostate", "MRI tuyến tiền liệt"
     
     # 3. Siêu âm (local_var cao)
@@ -854,7 +921,7 @@ def _guess_cancer_by_pixel_features(image_path: str | Path) -> tuple[str | None,
     # local_var là key feature:
     #   liver: 0.7-2.5, prostate: 0.1-1.8, breast: 1.8-2.9 → THẤP (< 5)
     #   kidney: 33-38, pancreas: 29-39 → CAO (> 20)
-    if std_val < 20 and black_ratio < 0.05:
+    if 3 < std_val < 20 and black_ratio < 0.05:
         if mean_val < 55:
             return "breast", "MRI vú"
         elif local_var > 20:
@@ -878,17 +945,10 @@ def _guess_cancer_by_pixel_features(image_path: str | Path) -> tuple[str | None,
             else:
                 return "liver", "CT gan"
     
-    # 6. Fallback theo modality
-    modality = guess_modality_from_pixels(image_path)
-    if modality == "CT":
-        return "liver", "CT gan"
-    elif modality == "MRI":
-        return "brain", "MRI não"
-    elif modality == "Siêu âm":
-        return "thyroid", "Siêu âm tuyến giáp"
-    elif modality == "Nội soi":
-        return "stomach", "Nội soi"
-    
+    # 6. Không fallback theo generic modality từ pixel analysis
+    # vì guess_modality_from_pixels có thể trả về false positive cho ảnh không phải y khoa
+    # Thay vào đó, trả về None để guess_cancer_from_pixels dùng classifier-based detection
+    # (có threshold score để lọc false positive)
     return None, None
 
 
@@ -896,18 +956,16 @@ def guess_cancer_from_pixels(image_path: str | Path) -> tuple[str | None, str | 
     """Phân tích ảnh để ước lượng cả cancer type và modality.
     
     Strategy:
-    1. Dùng pixel features để phân biệt cancer type (nhanh, chính xác cho ảnh preprocess)
-    2. Classifier-based detection cho các trường hợp pixel features không xác định được
+    1. Classifier-based detection (có threshold score để lọc false positive)
     
     Returns:
         (target_key, modality_label) hoặc (None, None) nếu không xác định được.
-    """
-    # Ưu tiên: pixel features (nhanh, không cần load model, chính xác cho ảnh preprocess)
-    pixel_target, pixel_modality = _guess_cancer_by_pixel_features(image_path)
-    if pixel_target is not None:
-        return pixel_target, pixel_modality
     
-    # Fallback: classifier-based detection
+    QUAN TRỌNG: Chỉ dùng classifier-based detection vì nó có threshold score
+    để tự động loại ảnh không phải y khoa. Pixel features đã bị loại bỏ vì
+    dễ false positive cho ảnh noise, gradient, solid color.
+    """
+    # Chỉ dùng classifier-based detection (có threshold score để lọc false positive)
     return _guess_cancer_by_classifiers(image_path)
 
 
