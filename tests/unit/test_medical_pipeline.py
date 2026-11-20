@@ -98,7 +98,7 @@ class MedicalPipelineTests(unittest.TestCase):
             ]
             normalized = root / "representative.jpg"
             validation = ValidationResult(status="success", modality="endoscopy", body_region="stomach")
-            with patch("medical.pipeline.sample_medical_video_frames", return_value=samples):
+            with patch("medical.pipeline.analyzer.sample_medical_video_frames", return_value=samples):
                 result = analyzer._run_video_samples(
                     root / "case.mp4",
                     normalized,
@@ -179,8 +179,8 @@ class MedicalPipelineTests(unittest.TestCase):
             normalized.write_bytes(b"png")
             overlay.write_bytes(b"png")
 
-            with patch("medical.pipeline.load_medical_volume", return_value=volume), patch(
-                "medical.pipeline.render_volume_overlay", return_value=(normalized, overlay)
+            with patch("medical.pipeline.analyzer.load_medical_volume", return_value=volume), patch(
+                "medical.pipeline.analyzer.render_volume_overlay", return_value=(normalized, overlay)
             ):
                 result = analyzer.analyze_image(source, patient_code="BN3D", target_key="brain")
 
