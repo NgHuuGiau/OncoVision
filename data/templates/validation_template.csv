@@ -1,0 +1,6 @@
+patient_id,truth,prediction
+P001,glioma,glioma
+P002,meningioma,meningioma
+P003,no_tumor,no_tumor
+P004,pituitary,pituitary
+P005,glioma,no_tumor

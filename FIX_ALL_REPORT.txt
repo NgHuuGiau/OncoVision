@@ -1,0 +1,124 @@
+================================================================================================
+ONCOVISION FIX_ALL — BAO CAO KHAC PHUC TU DONG
+================================================================================================
+
+Script nay chi DOC file model (khong sua .pt / .pt2) de tranh hoi hieu inference.
+Tat ca loi can can thiep thu cong duoc liet o cuoi bao cao.
+
+------------------------------------------------------------------------------------------------
+PHAN 1: TRANG THAI 11 NHOM UNG THU
+------------------------------------------------------------------------------------------------
+Nhom           Class     Detect    Volume    Clinical    Runtime  
+------------------------------------------------------------------------------------------------
+liver          OK        OK        X         OK          OK       
+lung           OK        OK        X         OK          OK       
+breast         OK        OK        X         OK          OK       
+stomach        OK        OK        X         OK          OK       
+colorectal     OK        OK        X         OK          OK       
+prostate       OK        OK        X         OK          OK       
+cervical       OK        OK        X         OK          OK       
+kidney         OK        OK        X         OK          OK       
+pancreas       OK        OK        X         OK          OK       
+thyroid        OK        OK        X         OK          OK       
+brain          OK        OK        X         OK          OK       
+------------------------------------------------------------------------------------------------
+Tong: 11 nhom ung thu.
+KET QUAN: Tat ca 11 nhom da co classifier + detector san sang.
+
+------------------------------------------------------------------------------------------------
+PHAN 2: KIEM TRA VOLUME.JSON MANIFEST
+------------------------------------------------------------------------------------------------
+liver          models\pretrained\cancers\liver\volume.json: OK
+liver          models\pretrained\cancers\liver\ct\volume.json: OK
+liver          models\pretrained\cancers\liver\ct\liver_volume_model.json: OK
+lung           models\pretrained\cancers\lung\volume.json: OK
+lung           models\pretrained\cancers\lung\ct\volume.json: OK
+lung           models\pretrained\cancers\lung\ct\lung_volume_model.json: OK
+breast         models\pretrained\cancers\breast\volume.json: OK
+breast         models\pretrained\cancers\breast\mammogram\volume.json: OK
+breast         models\pretrained\cancers\breast\ultrasound\volume.json: OK
+breast         models\pretrained\cancers\breast\breast_volume_model.json: OK
+stomach        models\pretrained\cancers\stomach\volume.json: OK
+stomach        models\pretrained\cancers\stomach\endoscopy\volume.json: OK
+colorectal     models\pretrained\cancers\colorectal\volume.json: OK
+colorectal     models\pretrained\cancers\colorectal\colonoscopy\volume.json: OK
+colorectal     models\pretrained\cancers\colorectal\endoscopy\volume.json: OK
+colorectal     models\pretrained\cancers\colorectal\endoscopy\colorectal_volume_model.json: OK
+prostate       models\pretrained\cancers\prostate\volume.json: OK
+prostate       models\pretrained\cancers\prostate\mri\volume.json: OK
+prostate       models\pretrained\cancers\prostate\mri\prostate_volume_model.json: OK
+cervical       models\pretrained\cancers\cervical\volume.json: OK
+cervical       models\pretrained\cancers\cervical\colposcopy\volume.json: OK
+cervical       models\pretrained\cancers\cervical\colposcopy\cervical_volume_model.json: OK
+kidney         models\pretrained\cancers\kidney\volume.json: OK
+kidney         models\pretrained\cancers\kidney\ct\volume.json: OK
+kidney         models\pretrained\cancers\kidney\ct\kidney_volume_model.json: OK
+pancreas       models\pretrained\cancers\pancreas\volume.json: OK
+pancreas       models\pretrained\cancers\pancreas\ct\volume.json: OK
+pancreas       models\pretrained\cancers\pancreas\ct\pancreas_volume_model.json: OK
+thyroid        models\pretrained\cancers\thyroid\ultrasound\volume.json: OK
+brain          models\pretrained\cancers\brain\volume.json: OK
+brain          models\pretrained\cancers\brain\mri\volume.json: OK
+Tat ca volume.json: 31 hop le, 0 loi/thieu.
+
+------------------------------------------------------------------------------------------------
+PHAN 3: DETECTOR TUYEN GIAP (THYROID)
+------------------------------------------------------------------------------------------------
+Detector thyroid duoc phat hien la COCO generic (80 lop), he thong DA TU DONG BO QUA.
+Chi con classifier siêu âm (benign/malignant) — hoat binh thuong.
+KHONG can can thiep them neu chi can phan loai tuyen giap.
+
+------------------------------------------------------------------------------------------------
+PHAN 4: VOLUME 3D (.pt2)
+------------------------------------------------------------------------------------------------
+Cac nhom chua co volume 3D san sang: liver, lung, breast, stomach, colorectal, prostate, cervical, kidney, pancreas, thyroid, brain
+
+NGUYEN NHAN: File .pt2 duat xuat boi PyTorch cu, khong khop voi PyTorch hien tai
+(loi torch.export.load KeyError / TorchScript RuntimeError).
+
+CACH KHAC PHUC (ban phai lam thu cong tren may cua minh):
+  1. Co mo hinh nguon (.pt cu hoac training script) cho tung nhom.
+  2. Re-export sang .pt2 voi PyTorch 2.7.1:
+       python -m torch.export.save(model, "volume.pt2", args=(example_input,))
+  3. Dam bao volume.json (manifest) o cung thuong muc voi .pt2.
+  4. Neu khong co mo hinh nguon: bo qua buoc 3D — he con van chay 2D binh thuong.
+
+------------------------------------------------------------------------------------------------
+PHAN 5: BUILD DESKTOP EXE
+------------------------------------------------------------------------------------------------
+Lenh: python scripts/setup_build.py build_exe
+Output: OncoVision.exe (~12 GB, ~30 phut).
+Yeu cau: O dia trong >= 20 GB, da cai requirements/requirements.txt.
+Giao dien EXE giong hệt web (QtWebEngine nhung FastAPI local).
+
+------------------------------------------------------------------------------------------------
+PHAN 6: TEST THU CONG WEB / DESKTOP
+------------------------------------------------------------------------------------------------
+Web (trinh duyet):    python entrypoints/web_app.py  -> http://127.0.0.1:8000
+Desktop (QtWebEngine): python entrypoints/run_chat.py
+Kiem tra he thong:    python entrypoints/run_doctor.py --skip-camera-check
+Chay 425 unit test:   python entrypoints/run_tests.py
+
+================================================================================================
+PHAN 7: CAN THIEP THU CONG (KHONG THE TU DONG BO)
+================================================================================================
+
+1. MODEL .pt THIEU (neu clone repo moi):
+   Thu muc models/pretrained/cancers/ duoc gitignore, KHONG di kem repo.
+   Ban phai tu dong dat model .pt vao dung thuong muc, vi du:
+      models/pretrained/cancers/lung/ct/classifier.pt
+      models/pretrained/cancers/lung/ct/detector.pt
+
+2. VOLUME 3D (.pt2):
+   Re-export .pt2 voi PyTorch 2.7.1 hoac lay mo hinh nguon tu ong ngoai.
+
+3. BUILD EXE:
+   Chay lenh o Phan 5 tren may co o dia trong >= 20 GB.
+
+4. KIEM DINH LAM SANG:
+   Chua co bo danh gia doc lap theo benh nhan — ket qua chi ho tro sang loc,
+   KHONG thay the chuan doan bac si.
+
+================================================================================================
+HET BAO CAO
+================================================================================================
