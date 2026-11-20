@@ -125,8 +125,13 @@ async def require_authenticated(request: Request) -> WebUser | None:
 
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         provided_token = request.headers.get("x-csrf-token")
+        # Các endpoint cho phép đọc CSRF token từ form field thay vì header
+        # Lưu ý: /api/upload và /api/analyze KHÔNG đọc form ở đây vì endpoint cần đọc form
+        _csrf_form_paths = {
+            "/logout", "/admin/users/create",
+        }
         if not provided_token and (
-            request.url.path in {"/logout", "/admin/users/create"}
+            request.url.path in _csrf_form_paths
             or (
                 request.url.path.startswith("/admin/users/")
                 and request.url.path.endswith("/update")
@@ -134,6 +139,7 @@ async def require_authenticated(request: Request) -> WebUser | None:
         ):
             form = await request.form()
             provided_token = str(form.get("csrf_token", ""))
+            await form.close()
         expected_token = request.session.get("csrf_token", "")
         if not expected_token or not secrets.compare_digest(str(provided_token or ""), str(expected_token)):
             raise HTTPException(status_code=403, detail="CSRF token không hợp lệ hoặc đã hết hạn.")

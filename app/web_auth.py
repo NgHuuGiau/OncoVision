@@ -17,7 +17,7 @@ from pathlib import Path
 from utils.sqlite_utils import create_sqlite_connection
 
 PASSWORD_ITERATIONS = 600_000
-PASSWORD_MIN_LENGTH = 8
+PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 1024
 LOGIN_FAILURE_LIMIT = 5
 LOGIN_LOCK_SECONDS = 15 * 60
