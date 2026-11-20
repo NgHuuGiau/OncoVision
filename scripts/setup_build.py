@@ -81,7 +81,6 @@ build_exe_options = {
         "medical.case_payloads",
         "medical.chat_service",
         "medical.compliance",
-        "medical.anatomy_mapping",
         "medical.clinical_validation",
         "medical.volume_inference",
         "medical.status_helpers",
