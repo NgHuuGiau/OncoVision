@@ -25,7 +25,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>Tên đăng nhập<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" title="3-32 ký tự: chữ, số, dấu chấm, gạch dưới, gạch ngang" required></label>
       <label>Email khôi phục<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
-      <label>Mật khẩu<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
+      <label>Mật khẩu<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
       <label>Vai trò<select name="role"><option value="clinician">Nhân viên y tế</option><option value="viewer">Người dùng chỉ xem</option><option value="admin">Quản trị viên</option></select></label>
       <button type="submit">Tạo tài khoản</button>
     </form>
