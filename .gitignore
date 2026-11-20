@@ -109,3 +109,10 @@ data/datasets/
 
 # Coverage XML reports
 coverage.xml
+
+# Model backup binaries (không commit file l?n)
+models/backup/**/*.pth
+models/backup/**/*.pt2
+models/backup/**/*.pt
+models/backup/**/*.bin
+models/backup/**/*.safetensors
