@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 from fastapi.testclient import TestClient
 
+import entrypoints.web.shared as web_shared
 import entrypoints.web_app as web_app
 from app.web_auth import WebAuthDatabase, hash_password
 from medical.case_payloads import case_detections, case_localization_available
@@ -56,16 +57,16 @@ class WebCaseRoutesTests(unittest.TestCase):
             metadata_json="{}"
         )
 
-        patcher_db = patch.object(web_app, "_db", None)
-        patcher_case = patch.object(web_app, "_case_db", case_db)
-        patcher_medical = patch.object(web_app, "_medical_service", mock_medical_service)
+        patcher_db = patch.object(web_shared, "_db", None)
+        patcher_case = patch.object(web_shared, "_case_db", case_db)
+        patcher_medical = patch.object(web_shared, "_medical_service", mock_medical_service)
         auth_db = WebAuthDatabase(db_path)
         auth_db.create_user("testadmin", hash_password("ValidAdminPass123!"), "admin")
         auth_db.create_user("clinician01", hash_password("ValidClinicianPass123!"), "clinician")
         auth_db.create_user("clinician02", hash_password("OtherClinicianPass123!"), "clinician")
         auth_db.create_user("viewer01", hash_password("ValidViewerPassword123!"), "viewer")
-        patcher_auth = patch.object(web_app, "_auth_db", auth_db)
-        patcher_path = patch.object(web_app, "CHAT_HISTORY_DB_PATH", db_path)
+        patcher_auth = patch.object(web_shared, "_auth_db", auth_db)
+        patcher_path = patch.object(web_shared, "CHAT_HISTORY_DB_PATH", db_path)
         for p in (patcher_db, patcher_case, patcher_medical, patcher_auth, patcher_path):
             p.start()
             self.addCleanup(p.stop)
@@ -116,7 +117,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         # Ghim nguyên nhân gốc: input hỏng trả 400 và không được đụng tới
         # capability check, kể cả khi nhóm bệnh đang thiếu model (503).
         status = Mock(target_capabilities={"brain": {"runtime_ready": False}})
-        with patch.object(web_app, "get_medical_system_status", return_value=status) as status_mock:
+        with patch.object(web_shared, "get_medical_system_status", return_value=status) as status_mock:
             response = self.client.post(
                 "/api/analyze",
                 data={"image_path": ""},
@@ -132,8 +133,8 @@ class WebCaseRoutesTests(unittest.TestCase):
         # Patch system status để 503 không phụ thuộc model có sẵn trên máy.
         status = Mock(target_capabilities={"thyroid": {"runtime_ready": False}})
         with (
-            patch.object(web_app, "OUTPUT_DIR", output_dir),
-            patch.object(web_app, "get_medical_system_status", return_value=status),
+            patch("entrypoints.web.upload_analyze.OUTPUT_DIR", output_dir),
+            patch.object(web_shared, "get_medical_system_status", return_value=status),
         ):
             response = self.client.post(
                 "/api/analyze",
@@ -155,9 +156,9 @@ class WebCaseRoutesTests(unittest.TestCase):
             metadata_json=json.dumps({"medical_case_id": self.case_id}),
         )
         with (
-            patch.object(web_app, "OUTPUT_DIR", output_dir),
-            patch.object(web_app, "get_medical_service", return_value=service),
-            patch.object(web_app, "_require_ready_capability", return_value=None),
+            patch("entrypoints.web.upload_analyze.OUTPUT_DIR", output_dir),
+            patch("entrypoints.web.upload_analyze.get_medical_service", return_value=service),
+            patch("entrypoints.web.upload_analyze._require_ready_capability", return_value=None),
         ):
             response = clinician.post(
                 "/api/analyze",
@@ -165,7 +166,7 @@ class WebCaseRoutesTests(unittest.TestCase):
                 headers={"X-CSRF-Token": csrf},
             )
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(web_app.get_case_db().get_case(self.case_id).assigned_to, "clinician01")
+        self.assertEqual(web_shared.get_case_db().get_case(self.case_id).assigned_to, "clinician01")
 
     def test_analyze_maps_input_errors_to_400(self) -> None:
         clinician, csrf = self.login_as("clinician01", "ValidClinicianPass123!")
@@ -175,9 +176,9 @@ class WebCaseRoutesTests(unittest.TestCase):
         service = Mock()
         service.analyze_attachment.side_effect = ValueError("TARGET_MISMATCH: Ảnh không khớp.")
         with (
-            patch.object(web_app, "OUTPUT_DIR", output_dir),
-            patch.object(web_app, "get_medical_service", return_value=service),
-            patch.object(web_app, "_require_ready_capability", return_value=None),
+            patch("entrypoints.web.upload_analyze.OUTPUT_DIR", output_dir),
+            patch("entrypoints.web.upload_analyze.get_medical_service", return_value=service),
+            patch("entrypoints.web.upload_analyze._require_ready_capability", return_value=None),
         ):
             response = clinician.post(
                 "/api/analyze",
@@ -195,9 +196,9 @@ class WebCaseRoutesTests(unittest.TestCase):
         service = Mock()
         service.analyze_attachment.side_effect = RuntimeError("cuda oom")
         with (
-            patch.object(web_app, "OUTPUT_DIR", output_dir),
-            patch.object(web_app, "get_medical_service", return_value=service),
-            patch.object(web_app, "_require_ready_capability", return_value=None),
+            patch("entrypoints.web.upload_analyze.OUTPUT_DIR", output_dir),
+            patch("entrypoints.web.upload_analyze.get_medical_service", return_value=service),
+            patch("entrypoints.web.upload_analyze._require_ready_capability", return_value=None),
         ):
             response = clinician.post(
                 "/api/analyze",
@@ -285,14 +286,14 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(my_cases[0]["patient_username"], "viewer01")
         self.assertEqual(my_cases[0]["detections"][0]["bbox"], [1, 2, 3, 4])
         self.assertEqual(viewer.get(f"/api/cases/{self.case_id}").status_code, 200)
-        with patch.object(web_app, "OUTPUT_DIR", Path(self._tmp.name)):
+        with patch("entrypoints.web.utils_routes.OUTPUT_DIR", Path(self._tmp.name)):
             viewer_pdf = viewer.get(f"/api/cases/{self.case_id}/pdf")
         self.assertEqual(viewer_pdf.status_code, 200)
         self.assertEqual(viewer_pdf.headers["content-type"], "application/pdf")
 
         pdf = Path(self._tmp.name) / "public.pdf"
         pdf.write_bytes(b"%PDF public report")
-        with patch.object(web_app, "export_case_pdf", return_value=pdf) as export:
+        with patch("entrypoints.web.cases.export_case_pdf", return_value=pdf) as export:
             public_pdf = viewer.get(f"/api/public/cases/{public_code}/pdf")
         self.assertEqual(public_pdf.status_code, 200)
         self.assertEqual(public_pdf.content, b"%PDF public report")
@@ -330,7 +331,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 404)
 
     def test_clinician_cannot_read_case_assigned_to_another_employee(self) -> None:
-        self.assertTrue(web_app.get_case_db().assign_case(self.case_id, "clinician02"))
+        self.assertTrue(web_shared.get_case_db().assign_case(self.case_id, "clinician02"))
         clinician, _ = self.login_as("clinician01", "ValidClinicianPass123!")
         self.assertEqual(clinician.get(f"/api/cases/{self.case_id}").status_code, 403)
 
@@ -339,14 +340,14 @@ class WebCaseRoutesTests(unittest.TestCase):
             import reportlab  # noqa: F401
         except ImportError:
             self.skipTest("reportlab not installed")
-        with patch.object(web_app, "OUTPUT_DIR", Path(self._tmp.name)):
+        with patch("entrypoints.web.utils_routes.OUTPUT_DIR", Path(self._tmp.name)):
             resp = self.client.get(f"/api/cases/{self.case_id}/pdf")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.headers["content-type"], "application/pdf")
         self.assertTrue(resp.content.startswith(b"%PDF"))
 
     def test_message_endpoint_persists_metadata_json(self) -> None:
-        conv_id = web_app.get_db().create_conversation(title="T", subtitle="S")
+        conv_id = web_shared.get_db().create_conversation(title="T", subtitle="S")
         meta = json.dumps({"medical_case_id": self.case_id})
         resp = self.client.post(
             f"/api/conversations/{conv_id}/messages",
@@ -354,7 +355,7 @@ class WebCaseRoutesTests(unittest.TestCase):
             headers={"X-CSRF-Token": self.csrf},
         )
         self.assertEqual(resp.status_code, 200)
-        conv = web_app.get_db().get_conversation(conv_id)
+        conv = web_shared.get_db().get_conversation(conv_id)
         self.assertEqual(conv.messages[0].metadata_json, meta)
 
     def test_healthz_is_public_for_docker_healthcheck(self) -> None:

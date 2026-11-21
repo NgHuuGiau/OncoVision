@@ -12,6 +12,7 @@ from urllib.parse import unquote
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
+import entrypoints.web.shared as web_shared
 import entrypoints.web_app as web_app
 from app.web_auth import (
     WebAuthDatabase,
@@ -52,11 +53,13 @@ class WebAuthTests(unittest.TestCase):
             ("_db", None),
             ("_case_db", None),
             ("_medical_service", mock_medical_service),
-            ("CHAT_HISTORY_DB_PATH", self.db_path),
         ):
-            patcher = patch.object(web_app, name, value)
+            patcher = patch.object(web_shared, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
+        patcher2 = patch.object(web_shared, "CHAT_HISTORY_DB_PATH", self.db_path)
+        patcher2.start()
+        self.addCleanup(patcher2.stop)
         self.client = TestClient(web_app.app, follow_redirects=False)
         self.csrf = self.login("admin01", "AdminPassword123!")
 
@@ -175,7 +178,7 @@ class WebAuthTests(unittest.TestCase):
         self.assertEqual(redirect.status_code, 303)
         self.assertEqual(redirect.headers.get("location"), "/login")
         blocked_upload_dir = self.root / "blocked-uploads"
-        with patch.object(web_app, "WEB_UPLOADS_DIR", blocked_upload_dir):
+        with patch.object(web_shared, "WEB_UPLOADS_DIR", blocked_upload_dir):
             response = anonymous.post("/api/upload", files={"file": ("scan.png", b"pixels", "image/png")})
         self.assertEqual(response.status_code, 401)
         self.assertFalse(blocked_upload_dir.exists())
@@ -186,7 +189,7 @@ class WebAuthTests(unittest.TestCase):
         token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
         bad = self.client.post("/login", data={"username": "admin01", "password": "wrong", "csrf_token": token})
         self.assertEqual(bad.status_code, 401)
-        self.assertEqual(self.client.post("/api/conversations").status_code, 401)
+        self.assertEqual(self.client.get("/api/cases").status_code, 401)
 
     def test_authenticated_responses_include_security_headers(self) -> None:
         response = self.client.get("/api/status")
@@ -200,7 +203,7 @@ class WebAuthTests(unittest.TestCase):
         page = self.client.get("/forgot-password")
         self.assertEqual(page.status_code, 200)
         token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
-        with patch.object(web_app, "send_password_recovery_email") as send_email:
+        with patch.object(web_shared, "send_password_recovery_email") as send_email:
             request = self.client.post("/forgot-password/request", data={
                 "csrf_token": token,
                 "username": "viewer01",
@@ -235,7 +238,7 @@ class WebAuthTests(unittest.TestCase):
         self.client.post("/logout", headers={"X-CSRF-Token": self.csrf})
         page = self.client.get("/forgot-password")
         token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
-        with patch.object(web_app, "send_password_recovery_email") as send_email:
+        with patch.object(web_shared, "send_password_recovery_email") as send_email:
             response = self.client.post("/forgot-password/request", data={
                 "csrf_token": token, "username": "missing",
             })
@@ -247,7 +250,7 @@ class WebAuthTests(unittest.TestCase):
         self.client.post("/logout", headers={"X-CSRF-Token": self.csrf})
         page = self.client.get("/forgot-password")
         token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
-        with patch.object(web_app, "send_password_recovery_email", side_effect=OSError("SMTP unavailable")):
+        with patch.object(web_shared, "send_password_recovery_email", side_effect=OSError("SMTP unavailable")):
             response = self.client.post("/forgot-password/request", data={
                 "csrf_token": token, "username": "viewer01",
             })
@@ -257,8 +260,8 @@ class WebAuthTests(unittest.TestCase):
         ))
 
     def test_authenticated_mutations_require_csrf(self) -> None:
-        self.assertEqual(self.client.post("/api/conversations").status_code, 403)
-        response = self.client.post("/api/conversations", headers={"X-CSRF-Token": self.csrf})
+        self.assertEqual(self.client.post("/api/settings").status_code, 403)
+        response = self.client.post("/api/settings", data={"language": "en", "theme": "light"}, headers={"X-CSRF-Token": self.csrf})
         self.assertEqual(response.status_code, 200)
 
     def test_viewer_can_read_but_cannot_write(self) -> None:
@@ -269,7 +272,7 @@ class WebAuthTests(unittest.TestCase):
         self.assertIn('data-role="viewer"', page.text)
         self.assertIn('id="myCaseList"', page.text)
         self.assertIn('id="publicCaseSearch"', page.text)
-        denied = self.client.post("/api/conversations", headers={"X-CSRF-Token": csrf})
+        denied = self.client.post("/api/settings", data={"language": "en", "theme": "light"}, headers={"X-CSRF-Token": csrf})
         self.assertEqual(denied.status_code, 403)
         settings = self.client.post(
             "/api/settings",
@@ -277,7 +280,7 @@ class WebAuthTests(unittest.TestCase):
             headers={"X-CSRF-Token": csrf},
         )
         self.assertEqual(settings.status_code, 403)
-        self.assertEqual(web_app.get_db().get_setting("language", "vi"), "vi")
+        self.assertEqual(web_shared.get_db().get_setting("language", "vi"), "vi")
         self.assertEqual(self.client.get("/admin/users").status_code, 403)
 
     def test_admin_can_create_users_and_last_admin_cannot_be_disabled(self) -> None:
@@ -334,7 +337,7 @@ class WebAuthTests(unittest.TestCase):
         output_dir = self.root / "output"
         output_dir.mkdir()
         (output_dir / "report.txt").write_text("private report", encoding="utf-8")
-        with patch.object(web_app, "OUTPUT_DIR", output_dir):
+        with patch("entrypoints.web.utils_routes.OUTPUT_DIR", output_dir):
             response = self.client.get("/output/report.txt")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.text, "private report")
@@ -343,8 +346,8 @@ class WebAuthTests(unittest.TestCase):
     def test_upload_filename_cannot_escape_upload_directory(self) -> None:
         uploads_dir = self.root / "uploads"
         with (
-            patch.object(web_app, "WEB_UPLOADS_DIR", uploads_dir),
-            patch.object(web_app, "infer_medical_upload_context", return_value=(None, None)),
+            patch("entrypoints.web.upload_analyze.WEB_UPLOADS_DIR", uploads_dir),
+            patch.object(web_shared, "infer_medical_upload_context", return_value=(None, None)),
         ):
             response = self.client.post(
                 "/api/upload",
