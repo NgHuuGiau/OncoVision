@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Section 3: Detection helpers.
 
 Các hàm xử lý detection findings: coerce, decode raw image, map to canvas.

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Section 6: MedicalImageAnalyzer — Main class.
 
 Trục chính của pipeline y khoa: validate → preprocess → detect → classify → report.
@@ -9,9 +8,9 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, ClassVar
 
 import cv2
 import numpy as np
@@ -37,7 +36,10 @@ from medical.model_policy import (
     resolve_medical_runtime_model_path,
 )
 from medical.model_versioning import read_model_manifest
-from medical.pipeline.config import build_default_medical_analyzer_config, validate_medical_analyzer_config
+from medical.pipeline.config import (
+    build_default_medical_analyzer_config,
+    validate_medical_analyzer_config,
+)
 from medical.pipeline.dataclasses import (
     DetectionFinding,
     DetectorBackend,
@@ -45,7 +47,11 @@ from medical.pipeline.dataclasses import (
     MedicalImageAnalyzerConfig,
     PipelineStageResult,
 )
-from medical.pipeline.detection import _coerce_detections, _decode_raw_image, _map_detections_to_canvas
+from medical.pipeline.detection import (
+    _coerce_detections,
+    _decode_raw_image,
+    _map_detections_to_canvas,
+)
 from medical.pipeline.helpers import (
     _canonical_body_region_key,
     _sanitize_filename_part,
@@ -55,7 +61,6 @@ from medical.reporting import build_artifact_stamp, write_case_report
 from medical.validator import (
     _DICOM_MODALITY_MAP,
     ValidationResult,
-    _canonical_body_region,
     _canonical_modality,
     _load_modality_tuning_from_config,
     get_modality_tuning,
@@ -234,9 +239,6 @@ class MedicalImageAnalyzer:
                 )
             validation = replace(validation, body_region=requested_body_region)
         # Xác định target_key: ưu tiên requested > validation > auto-detect từ pixel
-        auto_detected_target: str | None = None
-        auto_detected_modality: str | None = None
-        auto_detect_failed = False
         
         if requested_target_key is not None:
             self._active_target_key = requested_target_key
@@ -252,23 +254,17 @@ class MedicalImageAnalyzer:
                     if target_obj is not None:
                         paths = self._target_paths(detected_target, detected_modality)
                         if paths["classifier"].is_file() or paths["detector"].is_file():
-                            auto_detected_target = detected_target
-                            auto_detected_modality = detected_modality
                             self._active_target_key = detected_target
                             logger.info("Auto-detect cancer type: %s (modality: %s) — model xác minh OK",
                                         detected_target, detected_modality)
                         else:
-                            auto_detect_failed = True
                             logger.warning("Auto-detect tìm thấy %s nhưng model không tồn tại tại %s — bỏ qua",
                                            detected_target, paths["directory"])
                     else:
-                        auto_detect_failed = True
                         logger.warning("Auto-detect tìm thấy %s nhưng không có trong catalog — bỏ qua", detected_target)
                 else:
-                    auto_detect_failed = True
                     logger.warning("Auto-detect không xác định được cancer type từ ảnh")
             except Exception as e:
-                auto_detect_failed = True
                 logger.warning("Auto-detect fail: %s", e)
         
         self._active_modality = validation.modality
@@ -1887,7 +1883,7 @@ class MedicalImageAnalyzer:
     # Các loại u thường gặp phần lớn là lành tính (WHO grade I), không nên gắn trực tiếp với "ác tính".
     # Lưu ý: ngay cả các loại u này cũng có thể có độ II/III (ví dụ meningioma WHO grade II/III),
     # nên không nên hạ mức ưu tiên khám xuống thấp. Chỉ tách riêng "loại u" khỏi "mức độ ưu tiên".
-    _BENIGN_PREDOMINANT_LABELS = {
+    _BENIGN_PREDOMINANT_LABELS: ClassVar[set[str]] = {
         "meningioma",
         "pituitary_adenoma",
         "pituitary adenoma",
@@ -2135,17 +2131,14 @@ class MedicalImageAnalyzer:
         started_at: float,
     ) -> MedicalAnalysisResult:
         """Demo mode: returns simulated analysis results without real models."""
-        import random
-        import numpy as np
-        from PIL import Image
         import cv2
+        import numpy as np
         
         self._call_progress(progress_callback, "Demo mode: Simulating analysis...", 0.2)
         
         # Determine target for demo
         target_key = requested_target_key or self._active_target_key or "brain"
-        target = get_cancer_target(target_key)
-        target_label = target.label if target else "U não"
+        get_cancer_target(target_key)
         
         # Simulate modality and body region
         modality = validation.modality or "mri"
@@ -2270,7 +2263,7 @@ class MedicalImageAnalyzer:
     def _generate_mock_detections(self, target_key: str, validation: ValidationResult) -> list[DetectionFinding]:
         """Generate mock detections for demo mode based on target."""
         import random
-        import numpy as np
+
         
         # Define mock labels per target
         mock_labels = {

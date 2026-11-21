@@ -12,17 +12,17 @@ Public API:
 """
 from __future__ import annotations
 
+from medical.pipeline.analyzer import MedicalImageAnalyzer
+from medical.pipeline.config import (
+    build_default_medical_analyzer_config,
+    validate_medical_analyzer_config,
+)
 from medical.pipeline.dataclasses import (
     DetectionFinding,
     MedicalAnalysisResult,
     MedicalImageAnalyzerConfig,
     PipelineStageResult,
 )
-from medical.pipeline.config import (
-    build_default_medical_analyzer_config,
-    validate_medical_analyzer_config,
-)
-from medical.pipeline.analyzer import MedicalImageAnalyzer
 
 __all__ = [
     "DetectionFinding",

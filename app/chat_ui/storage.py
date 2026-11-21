@@ -4,6 +4,7 @@ import os
 import sqlite3
 from collections import defaultdict
 from contextlib import contextmanager
+from datetime import UTC
 
 from app.chat_ui.models import ChatMessage, Conversation
 from utils.logger import get_logger
@@ -371,11 +372,11 @@ class ChatDatabase:
         Returns:
             Dict with export metadata and all conversations.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         conversations = self.get_all_conversations(limit=200, offset=0)
         return {
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "total_conversations": len(conversations),
             "conversations": [
                 {

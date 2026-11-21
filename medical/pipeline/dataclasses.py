@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Section 2: Data classes & protocols.
 
 Định nghĩa các dataclass và Protocol dùng trong pipeline y khoa:

@@ -4,6 +4,7 @@ import base64
 import getpass
 import hashlib
 import hmac
+import logging
 import re
 import secrets
 import sqlite3
@@ -15,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from utils.sqlite_utils import create_sqlite_connection
+
+logger = logging.getLogger(__name__)
 
 PASSWORD_ITERATIONS = 600_000
 PASSWORD_MIN_LENGTH = 12

@@ -297,7 +297,6 @@ def find_cancer_model(key: str, base: Path = CANCERS_DIR) -> dict:
     normalized = key.strip().lower()
     paths = target_model_paths(normalized, base)
     d = paths["directory"]
-    target_directory = Path(base) / KEY_TO_DIR.get(normalized, normalized)
     if normalized not in KEY_TO_DIR:
         return {"key": normalized, "dir": str(d), "kind": "missing", "files": [], "artifact_ready": False,
                 "runtime_ready": False, "classification_ready": False, "localization_ready": False,

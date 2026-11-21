@@ -10,6 +10,7 @@ from typing import Any
 import cv2
 import numpy as np
 
+from app.chat_ui.paths import PROJECT_ROOT
 from core.fallback_manager import iter_fallback_configs
 from core.frame_capture import FrameCapture
 from core.frame_processing import (
@@ -29,7 +30,6 @@ from core.tracking.detection_filter import (
     _dedupe_display_detections,
     _filter_person_detections,
 )
-from app.chat_ui.paths import PROJECT_ROOT
 from core.tracking.detection_tracker import _match_and_smooth_detections
 from utils.camera_utils import open_camera_capture
 from utils.draw_utils import draw_detection_results

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Section 4-5: Configuration builders & validation.
 
 Xây dựng và kiểm tra cấu hình MedicalImageAnalyzer từ YAML settings.
@@ -8,9 +7,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.chat_ui.paths import PROJECT_ROOT
-from utils.file_utils import load_yaml
-
 from medical.pipeline.dataclasses import MedicalImageAnalyzerConfig
+from utils.file_utils import load_yaml
 
 
 def _project_path(value: str | Path) -> Path:

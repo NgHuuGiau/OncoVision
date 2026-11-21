@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Section 1: Helper functions.
 
 Các hàm utility dùng trong pipeline: sanitize filename, validate path, canonical body region.

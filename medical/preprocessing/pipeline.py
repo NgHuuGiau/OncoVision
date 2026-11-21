@@ -14,8 +14,8 @@ from medical.preprocessing.base import (
     _resize_and_pad,
     _to_uint8_rgb,
 )
-from medical.preprocessing.colposcopy import preprocess_colposcopy
 from medical.preprocessing.colonoscopy import preprocess_colonoscopy
+from medical.preprocessing.colposcopy import preprocess_colposcopy
 from medical.preprocessing.ct import preprocess_ct
 from medical.preprocessing.endoscopy import preprocess_endoscopy
 from medical.preprocessing.mammogram import preprocess_mammogram

@@ -394,7 +394,6 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
         arr = np.array(img)
         
         # Xử lý ảnh: chuyển về grayscale nếu cần
-        is_color = False
         channel_diff = 0.0
         if len(arr.shape) == 3 and arr.shape[2] >= 3:
             r = arr[:, :, 0].astype(float)
@@ -436,18 +435,18 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
         if gray.size > 100:
             grad_x = np.abs(np.diff(gray, axis=1))
             grad_y = np.abs(np.diff(gray, axis=0))
-            mean_grad = float(np.mean(np.concatenate([grad_x.flatten(), grad_y.flatten()])))
+            float(np.mean(np.concatenate([grad_x.flatten(), grad_y.flatten()])))
         else:
-            mean_grad = 0
+            pass
         
         # Histogram analysis
         hist, _ = np.histogram(gray, bins=256, range=(0, 255))
         hist_norm = hist.astype(float)
         hist_norm /= hist_norm.sum() if hist_norm.sum() > 0 else 1
         peak_ratio = float(hist_norm.max())
-        low_bin_ratio = float(hist_norm[:32].sum())
-        high_bin_ratio = float(hist_norm[224:].sum())
-        mid_bin_ratio = float(hist_norm[64:192].sum())
+        float(hist_norm[:32].sum())
+        float(hist_norm[224:].sum())
+        float(hist_norm[64:192].sum())
         
         # === RULES (theo thứ tự ưu tiên) ===
         # Mỗi rule trả về modality chỉ khi điều kiện ĐỦ RÕ RÀNG.
@@ -568,8 +567,8 @@ _MODALITY_CLASSIFIERS: dict[str, list[tuple[str, str, str]]] = {
 
 # Tất cả classifiers (khi không xác định được modality)
 _ALL_CLASSIFIERS: list[tuple[str, str, str]] = []
-for modality_key in _MODALITY_CLASSIFIERS:
-    _ALL_CLASSIFIERS.extend(_MODALITY_CLASSIFIERS[modality_key])
+for _cls_list in _MODALITY_CLASSIFIERS.values():
+    _ALL_CLASSIFIERS.extend(_cls_list)
 
 # Thêm root classifiers
 _ALL_CLASSIFIERS.extend([
@@ -645,8 +644,9 @@ def _guess_cancer_by_classifiers(image_path: str | Path) -> tuple[str | None, st
         (target_key, modality_label) hoặc (None, None) nếu không xác định được.
     """
     from pathlib import Path as _Path
-    from medical.cnn_classifier import load_cnn_classifier
+
     from medical.cancer_model_registry import CANCERS_DIR
+    from medical.cnn_classifier import load_cnn_classifier
     
     source = _Path(image_path)
     if not source.exists():

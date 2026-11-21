@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
-from pathlib import Path
+
+from sqlalchemy import create_engine, pool
 
 from alembic import context
-from sqlalchemy import create_engine, pool
 
 config = context.config
 

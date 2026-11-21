@@ -73,10 +73,17 @@ def launch_web_desktop(
     3. Mở QtWebEngineView và load giao diện web
     4. Khi đóng window, dừng web server
     """
-    from PySide6.QtCore import QTimer, QUrl, Qt
+    from PySide6.QtCore import Qt, QTimer, QUrl
     from PySide6.QtWebEngineCore import QWebEngineProfile
     from PySide6.QtWebEngineWidgets import QWebEngineView
-    from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QProgressBar
+    from PySide6.QtWidgets import (
+        QApplication,
+        QLabel,
+        QMainWindow,
+        QProgressBar,
+        QVBoxLayout,
+        QWidget,
+    )
 
     from app.chat_ui.paths import PROJECT_ROOT
 

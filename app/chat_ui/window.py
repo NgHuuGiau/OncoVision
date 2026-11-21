@@ -52,7 +52,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             QVariantAnimation,
             Signal,
         )
-        from PySide6.QtGui import (  # noqa: F401
+        from PySide6.QtGui import (
             QColor,
             QKeySequence,
             QPixmap,
@@ -1162,13 +1162,10 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             SettingsDialog(parent_window=self).exec()
 
 
-    from app.web_auth import WebAuthDatabase, WebUser
     from app.chat_ui.desktop_auth import (
-        needs_bootstrap,
-        create_bootstrap_admin,
-        authenticate_desktop_user,
         change_desktop_credentials,
     )
+    from app.web_auth import WebAuthDatabase, WebUser
 
     def _run_desktop_login() -> WebUser | None:
         """Hộp thoại đăng nhập desktop dùng chung DB web. None = hủy/thất bại."""
@@ -1250,6 +1247,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             layout.addWidget(error_label)
             save_button = QPushButton("Lưu thay đổi")
             layout.addWidget(save_button)
+            chosen: dict[str, object] = {}
 
             def _submit_change() -> None:
                 new_username = new_username_edit.text().strip()

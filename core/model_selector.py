@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from core.hardware_info import HardwareInfo
 from app.chat_ui.paths import PROJECT_ROOT
+from core.hardware_info import HardwareInfo
 from core.model_catalog import (
     DEFAULT_MODEL_FALLBACK,
     YOLO11_MODELS_DESC,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+from app.chat_ui.paths import PROJECT_ROOT
 from core.hardware_info import detect_hardware
 from core.model_selector import load_settings
 from core.runtime_advisor import (
@@ -30,7 +31,6 @@ from utils.console_ui import (
     rule,
     section,
 )
-from app.chat_ui.paths import PROJECT_ROOT
 from utils.file_utils import load_yaml_cached
 
 MODEL_CONFIG_PATH = PROJECT_ROOT / "config/model_config.yaml"

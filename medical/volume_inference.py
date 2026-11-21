@@ -396,13 +396,13 @@ def _load_regular_checkpoint(path: str, device: torch.device) -> torch.nn.Module
             model.load_state_dict(checkpoint["model_state_dict"])
         elif "state_dict" in checkpoint:
             # Regular checkpoint with state_dict
-            import torchvision.models as models
+            from torchvision import models
             model = models.resnet50(weights=None)
             model.fc = torch.nn.Linear(2048, 2)
             model.load_state_dict(checkpoint["state_dict"])
         else:
             # Assume it's a raw state_dict
-            import torchvision.models as models
+            from torchvision import models
             model = models.resnet50(weights=None)
             model.fc = torch.nn.Linear(2048, 2)
             model.load_state_dict(checkpoint)
