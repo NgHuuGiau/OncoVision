@@ -272,7 +272,7 @@ class MedicalCNNClassifierWrapper:
                 backbone, head = cls._detect_backbone_and_head(list(state_dict.keys()), num_classes, backbone_meta, head_meta)
 
                 # Add backbone. prefix if missing (raw backbone format)
-                if not any(k.startswith("backbone.") for k in state_dict.keys()):
+                if not any(k.startswith("backbone.") for k in state_dict):
                     state_dict = cls._add_backbone_prefix(state_dict, head)
                     logger.info("Da them backbone. prefix cho %s (backbone=%s, head=%s)", path, backbone, head)
 
@@ -292,7 +292,7 @@ class MedicalCNNClassifierWrapper:
 
                 backbone, head = cls._detect_backbone_and_head(list(state_dict.keys()), num_classes, backbone_meta, head_meta)
 
-                if not any(k.startswith("backbone.") for k in state_dict.keys()):
+                if not any(k.startswith("backbone.") for k in state_dict):
                     state_dict = cls._add_backbone_prefix(state_dict, head)
                     logger.info("Da them backbone. prefix cho %s (backbone=%s, head=%s)", path, backbone, head)
 
@@ -315,7 +315,7 @@ class MedicalCNNClassifierWrapper:
 
                 backbone, head = cls._detect_backbone_and_head(list(state_dict.keys()), num_classes, backbone_meta, head_meta)
 
-                if not any(k.startswith("backbone.") for k in state_dict.keys()):
+                if not any(k.startswith("backbone.") for k in state_dict):
                     state_dict = cls._add_backbone_prefix(state_dict, head)
                     logger.info("Da them backbone. prefix cho %s (backbone=%s, head=%s)", path, backbone, head)
 
@@ -335,12 +335,12 @@ class MedicalCNNClassifierWrapper:
 
                 backbone, head = cls._detect_backbone_and_head(list(state_dict.keys()), num_classes, backbone_meta, head_meta)
 
-                if not any(k.startswith("backbone.") for k in state_dict.keys()):
+                if not any(k.startswith("backbone.") for k in state_dict):
                     state_dict = cls._add_backbone_prefix(state_dict, head)
                     logger.info("Da them backbone. prefix cho %s (backbone=%s, head=%s)", path, backbone, head)
 
         else:
-            raise ValueError("Checkpoint khong hop le: khong phai dict")
+            raise TypeError("Checkpoint khong hop le: khong phai dict")
 
         # Build model with detected backbone and head
         model = MedicalCNNClassifier(
@@ -471,9 +471,7 @@ class MedicalCNNClassifierWrapper:
         elif "denseblock" in stripped_str:
             backbone = "densenet121"
         elif "swin" in stripped_str:
-            if "swin.embeddings" in stripped_str or "swin.encoder" in stripped_str:
-                backbone = "swin_tiny_patch4_window7_224"
-            elif "swin_tiny" in backbone_meta or "tiny" in stripped_str:
+            if "swin.embeddings" in stripped_str or "swin.encoder" in stripped_str or "swin_tiny" in backbone_meta or "tiny" in stripped_str:
                 backbone = "swin_tiny_patch4_window7_224"
             else:
                 backbone = "swin_tiny_patch4_window7_224"
@@ -483,9 +481,7 @@ class MedicalCNNClassifierWrapper:
             backbone = "convnext_tiny"
         elif "patch_embed" in stripped_str:
             backbone = "vit"
-        elif "conv_stem" in stripped_str and "blocks." in stripped_str:
-            backbone = "efficientnet_b0"
-        elif "conv_stem" in stripped_str or ("features.0.0.weight" in stripped_str and "features.0.1.weight" in stripped_str):
+        elif "conv_stem" in stripped_str and "blocks." in stripped_str or "conv_stem" in stripped_str or ("features.0.0.weight" in stripped_str and "features.0.1.weight" in stripped_str):
             backbone = "efficientnet_b0"
         elif "layer1" in stripped_str or "conv1" in stripped_str:
             if not has_backbone_prefix:
@@ -507,16 +503,7 @@ class MedicalCNNClassifierWrapper:
         has_head_prefix = any(k.startswith("head.") for k in keys)
         
         # Brain Swin raw: classifier.weight + classifier.bias at top level = linear head
-        if not has_backbone_prefix and "classifier.weight" in keys_str and "classifier.bias" in keys_str:
-            head = "linear"
-        # Cervical/pap: separate head.* keys = linear head
-        elif has_head_prefix:
-            head = "linear"
-        elif has_fc:
-            head = "linear"
-        elif has_classifier_1:
-            head = "linear"
-        elif has_classifier_weight:
+        if not has_backbone_prefix and "classifier.weight" in keys_str and "classifier.bias" in keys_str or has_head_prefix or has_fc or has_classifier_1 or has_classifier_weight:
             head = "linear"
         else:
             head = "mlp"
