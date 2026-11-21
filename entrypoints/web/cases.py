@@ -12,8 +12,8 @@ from entrypoints.web.shared import (
     ADMIN_REQUIRED,
     MEDICAL_DISCLAIMER,
     OUTPUT_DIR,
-    _case_summary,
     _can_read_case,
+    _case_summary,
     build_case_export_payload,
     export_case_pdf,
     get_auth_db,
@@ -128,7 +128,7 @@ def register_cases_routes(app):
                     public_code=public_code,
                 ):
                     return {"ok": True, "public_code": public_code}
-            except Exception:
+            except Exception:  # noqa: S112 — retry loop for public code generation
                 continue
         raise HTTPException(status_code=500, detail="Không thể tạo mã đọc kết quả, vui lòng thử lại.")
 

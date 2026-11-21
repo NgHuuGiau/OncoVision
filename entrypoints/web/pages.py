@@ -5,16 +5,14 @@ from __future__ import annotations
 import json
 import secrets
 import time
-from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, Form, HTTPException, Request
+from fastapi import BackgroundTasks, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from entrypoints.web.shared import (
     ADMIN_REQUIRED,
     MEDICAL_DISCLAIMER,
-    OUTPUT_DIR,
     STATIC_DIR,
     TEMPLATES_DIR,
     _deliver_recovery_email,
@@ -24,8 +22,6 @@ from entrypoints.web.shared import (
     get_auth_db,
     hash_password,
     hash_recovery_code,
-    require_authenticated,
-    require_role,
 )
 from medical.cancer_catalog import COMMON_CANCER_TARGETS
 
@@ -269,7 +265,6 @@ def register_pages_routes(app):
     # --- Admin users ---
 
     def _admin_users_response(request: Request, *, notice: str = "", error: str = ""):
-        from urllib.parse import quote as url_quote
         return templates.TemplateResponse(request, "admin_users.html", {
             "request": request,
             "users": get_auth_db().list_users(),

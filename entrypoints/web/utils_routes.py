@@ -6,11 +6,10 @@ import io
 from pathlib import Path
 
 import numpy as np
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from entrypoints.web.shared import (
     ADMIN_REQUIRED,
@@ -35,8 +34,7 @@ def register_utils_routes(app):
             raise HTTPException(status_code=400, detail="bbox không hợp lệ")
 
         clean_path = image_path
-        if clean_path.startswith('/output/'):
-            clean_path = clean_path[8:]
+        clean_path = clean_path.removeprefix('/output/')
 
         image_file = Path(clean_path)
         if image_file.is_absolute():

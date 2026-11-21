@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import Form, HTTPException, Request
 from starlette.datastructures import UploadFile
 
+from app.chat_ui.models import ChatMessage
 from entrypoints.web.shared import (
     ANALYSIS_SEMAPHORE,
     MAX_FORM_BYTES,
@@ -22,13 +23,11 @@ from entrypoints.web.shared import (
     _safe_path,
     _save_upload,
     _validate_target_input,
-    get_auth_db,
     get_case_db,
     get_db,
     get_medical_service,
     logger,
 )
-from app.chat_ui.models import ChatMessage
 from medical.chat_service import MedicalChatResponse
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from fastapi import Depends, Form, HTTPException
+from fastapi import Form, HTTPException
 
 from entrypoints.web.shared import (
     ADMIN_REQUIRED,

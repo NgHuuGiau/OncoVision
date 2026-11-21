@@ -26,7 +26,6 @@ from entrypoints.web.shared import (
     IS_PRODUCTION,
     OUTPUT_DIR,
     SESSION_SECRET,
-    _safe_path,
     get_auth_db,
     get_medical_service,
     logger,
@@ -118,8 +117,8 @@ async def add_security_headers(request: Request, call_next):
 # Register blueprint routes
 # ---------------------------------------------------------------------------
 
-from entrypoints.web.conversations import register_conversations_routes
 from entrypoints.web.cases import register_cases_routes
+from entrypoints.web.conversations import register_conversations_routes
 from entrypoints.web.health import register_health_routes
 from entrypoints.web.pages import register_pages_routes
 from entrypoints.web.settings import register_settings_routes

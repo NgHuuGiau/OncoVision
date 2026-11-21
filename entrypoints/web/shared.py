@@ -1,46 +1,43 @@
 from __future__ import annotations
 
-import json
 import os
 import secrets
-import sqlite3
 import sys
 import threading
 import time
-import uuid
 from pathlib import Path
-from typing import Literal, cast
 
 # Add project root to sys.path when running from entrypoints/
 _project_root = Path(__file__).resolve().parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from fastapi import Depends, Form, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from starlette.datastructures import UploadFile
 
-from app.chat_ui.models import ChatMessage
+from app.chat_ui.models import ChatMessage  # noqa: F401 — re-exported
 from app.chat_ui.paths import CHAT_HISTORY_DB_PATH, OUTPUT_DIR, PROJECT_ROOT
 from app.chat_ui.storage import ChatDatabase
 from app.email_service import send_password_recovery_email
 from app.web_auth import (
-    RECOVERY_CODE_TTL_SECONDS,
     WebAuthDatabase,
     WebUser,
-    generate_recovery_code,
-    hash_password,
-    hash_recovery_code,
+    generate_recovery_code,  # noqa: F401 — re-exported
+    hash_password,  # noqa: F401 — re-exported
+    hash_recovery_code,  # noqa: F401 — re-exported
 )
 from medical.cancer_catalog import get_cancer_target
 from medical.case_payloads import (
-    build_case_export_payload,
+    build_case_export_payload,  # noqa: F401 — re-exported
     case_detections,
     case_localization_available,
 )
-from medical.chat_service import MedicalChatResponse, MedicalChatService
-from medical.compliance import MEDICAL_DISCLAIMER, get_audit_trail
-from medical.dataset import infer_medical_upload_context
-from medical.reporting import export_case_pdf
+from medical.chat_service import MedicalChatService
+from medical.compliance import (
+    MEDICAL_DISCLAIMER,  # noqa: F401 — re-exported
+    get_audit_trail,
+)
+from medical.reporting import export_case_pdf  # noqa: F401 — re-exported
 from medical.storage import MedicalCaseDatabase
 from medical.system_status import get_medical_system_status
 from utils.logger import get_logger

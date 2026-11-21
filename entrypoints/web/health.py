@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import time
 
-from fastapi import HTTPException, Request
-
 from entrypoints.web.shared import (
     MEDICAL_DISCLAIMER,
     _cached_medical_status,
