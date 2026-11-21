@@ -6,8 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import entrypoints.run_app as run_app
-import entrypoints.run_chat as run_chat
+from entrypoints import run_app, run_chat
 from utils.console_ui import mode_to_ui_defaults
 
 

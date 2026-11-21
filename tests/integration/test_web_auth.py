@@ -6,14 +6,12 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.parse import unquote
 
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock
 
 import entrypoints.web.shared as web_shared
-import entrypoints.web_app as web_app
 from app.web_auth import (
     WebAuthDatabase,
     generate_recovery_code,
@@ -21,6 +19,7 @@ from app.web_auth import (
     hash_recovery_code,
     verify_password,
 )
+from entrypoints import web_app
 from medical.chat_service import MedicalChatService
 
 

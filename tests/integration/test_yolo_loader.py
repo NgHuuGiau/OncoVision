@@ -66,7 +66,7 @@ class YoloLoaderTests(unittest.TestCase):
         def fake_exists(path_obj):
             path_str = str(path_obj).replace("\\", "/")
             # Giờ path là tuyệt đối (PROJECT_ROOT / models/...)
-            return path_str.endswith("models/trained/best.pt") or path_str.endswith("models/pretrained/yolo11s.pt")
+            return path_str.endswith(("models/trained/best.pt", "models/pretrained/yolo11s.pt"))
 
         exists_mock.side_effect = fake_exists
 

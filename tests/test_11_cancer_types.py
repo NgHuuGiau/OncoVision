@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Test toàn bộ 11 nhóm ung thư với explicit target_key."""
 import io
 import json
@@ -15,7 +14,7 @@ sys.path.insert(0, str(project_root))
 
 from medical.pipeline.analyzer import MedicalImageAnalyzer
 from medical.pipeline.config import build_default_medical_analyzer_config
-from medical.cancer_catalog import get_cancer_target
+
 
 def test_cancer_type(cancer_key, modality_key, dataset_subdir):
     """Test 1 nhóm ung thư với ảnh từ dataset."""
@@ -69,10 +68,10 @@ def test_cancer_type(cancer_key, modality_key, dataset_subdir):
         
         # Đánh giá
         if result.average_confidence > 0:
-            print(f"  ✅ Classifier hoạt động")
+            print("  ✅ Classifier hoạt động")
             return True
         else:
-            print(f"  ⚠️ Confidence = 0, có thể ảnh không khớp domain model")
+            print("  ⚠️ Confidence = 0, có thể ảnh không khớp domain model")
             return False
         
     except Exception as e:

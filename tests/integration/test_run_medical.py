@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import entrypoints.run_medical as run_medical
+from entrypoints import run_medical
 
 
 class RunMedicalTests(unittest.TestCase):
@@ -194,7 +194,6 @@ class RunMedicalTests(unittest.TestCase):
         self.assertIn("Đã xóa ca bệnh", stdout.getvalue())
 
     def test_backup_db_command_creates_timestamped_copy(self) -> None:
-        import os
         import sqlite3
         import tempfile
 

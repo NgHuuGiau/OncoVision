@@ -9,20 +9,21 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 import entrypoints.web.shared as web_shared
-import entrypoints.web_app as web_app
 from app.web_auth import WebAuthDatabase, hash_password
+from entrypoints import web_app
 from medical.chat_service import MedicalChatResponse
 
 
 class FullWebTest(unittest.TestCase):
     """Test toan bo luong: upload -> AI -> 3D model."""
 
-    PRIMARY_11 = [
+    PRIMARY_11: ClassVar[list[str]] = [
         "brain", "breast", "lung", "thyroid", "kidney",
         "liver", "stomach", "colorectal", "cervical", "prostate", "pancreas",
     ]

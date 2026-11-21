@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Test end-to-end: chạy ảnh chó mèo qua full pipeline analyze_image."""
 import io
 import json
@@ -85,7 +84,7 @@ def test_analyze_image(name, path):
             target_key=None,  # Tự động xác định
         )
         
-        print(f"\n[Pipeline Result]")
+        print("\n[Pipeline Result]")
         print(f"  Risk level: {result.risk_level}")
         print(f"  Suspected malignant: {result.suspected_malignant}")
         print(f"  Modality: {result.modality}")
@@ -96,7 +95,7 @@ def test_analyze_image(name, path):
 
         stage_conf = result.stage_confidences
         if stage_conf:
-            print(f"\n  [Stage Confidences]")
+            print("\n  [Stage Confidences]")
             for k, v in stage_conf.items():
                 print(f"    {k}: {v:.4f}")
 
@@ -114,13 +113,13 @@ def test_analyze_image(name, path):
         if result.report_json_path.exists():
             with open(result.report_json_path, "r", encoding="utf-8") as f:
                 report = json.load(f)
-            print(f"\n  [Report JSON]")
+            print("\n  [Report JSON]")
             for k in ("status", "target_key", "modality", "confidence", "error_code", "classification_labels"):
                 if k in report:
                     print(f"    {k}: {report[k]}")
 
         # Đánh giá
-        print(f"\n  [Đánh giá]")
+        print("\n  [Đánh giá]")
         avg_conf = result.average_confidence
         if avg_conf < 0.3:
             print(f"    ⚠️ Average confidence rất thấp ({avg_conf:.4f}) — có thể cần threshold")

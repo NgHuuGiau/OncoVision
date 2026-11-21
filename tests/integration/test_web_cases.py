@@ -5,13 +5,13 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 from fastapi.testclient import TestClient
 
 import entrypoints.web.shared as web_shared
-import entrypoints.web_app as web_app
 from app.web_auth import WebAuthDatabase, hash_password
+from entrypoints import web_app
 from medical.case_payloads import case_detections, case_localization_available
 from medical.chat_service import MedicalChatResponse, MedicalChatService
 from medical.storage import MedicalCaseDatabase

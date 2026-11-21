@@ -2,12 +2,7 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 
 class TestAuditTrail:
@@ -80,7 +75,7 @@ class TestModelCaching:
         assert info == {}
 
     def test_get_model_cache_info(self) -> None:
-        from medical.cnn_classifier import get_model_cache_info, _model_cache
+        from medical.cnn_classifier import _model_cache, get_model_cache_info
 
         # Simulate cached model
         _model_cache["/test/path.pt"] = (None, "cpu")  # type: ignore[arg-type]
@@ -123,6 +118,7 @@ class TestJsonFormatter:
 
     def test_json_formatter_output(self) -> None:
         import logging
+
         from utils.logger import JsonFormatter
 
         formatter = JsonFormatter()
@@ -144,6 +140,7 @@ class TestJsonFormatter:
 
     def test_json_formatter_with_exception(self) -> None:
         import logging
+
         from utils.logger import JsonFormatter
 
         formatter = JsonFormatter()

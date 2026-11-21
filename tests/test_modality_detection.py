@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Test modality detection và cancer classification với ảnh không liên quan và ảnh y khoa.
 
 Chạy: python tests/test_modality_detection.py
 """
+import io
 import json
 import sys
-import io
 from pathlib import Path
 
 # Force UTF-8 output on Windows
@@ -22,10 +21,10 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from medical.dataset import (
-    guess_modality_from_pixels,
-    guess_cancer_from_pixels,
-    infer_medical_upload_context,
     _extract_pixel_features,
+    guess_cancer_from_pixels,
+    guess_modality_from_pixels,
+    infer_medical_upload_context,
 )
 
 output_dir = project_root / "output" / "test_images"
@@ -193,7 +192,7 @@ def test_image(name, path, expected_modality=None, expected_cancer=None):
     # Pixel features
     features = _extract_pixel_features(path)
     if features:
-        print(f"\n[Pixel Features]")
+        print("\n[Pixel Features]")
         print(f"  Mean: {features['mean']:.1f}")
         print(f"  Std: {features['std']:.1f}")
         print(f"  Black ratio: {features['black_ratio']:.3f}")
@@ -204,7 +203,7 @@ def test_image(name, path, expected_modality=None, expected_cancer=None):
 
     # Modality detection
     modality = guess_modality_from_pixels(path)
-    print(f"\n[Modality Detection]")
+    print("\n[Modality Detection]")
     print(f"  Kết quả: {modality}")
     if expected_modality:
         status = "✅" if modality == expected_modality else "❌"
@@ -212,7 +211,7 @@ def test_image(name, path, expected_modality=None, expected_cancer=None):
 
     # Cancer detection
     cancer_key, cancer_modality = guess_cancer_from_pixels(path)
-    print(f"\n[Cancer Detection]")
+    print("\n[Cancer Detection]")
     print(f"  Cancer key: {cancer_key}")
     print(f"  Cancer modality: {cancer_modality}")
     if expected_cancer:
@@ -221,7 +220,7 @@ def test_image(name, path, expected_modality=None, expected_cancer=None):
 
     # Full context inference
     target_key, inferred_modality = infer_medical_upload_context(path)
-    print(f"\n[Full Context Inference]")
+    print("\n[Full Context Inference]")
     print(f"  Target key: {target_key}")
     print(f"  Modality: {inferred_modality}")
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Test auto-detect: chạy ảnh y khoa thực tế qua pipeline không có target_key."""
 import io
 import json
@@ -13,9 +12,14 @@ if sys.platform == "win32":
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from medical.dataset import (
+    guess_cancer_from_pixels,
+    guess_modality_from_pixels,
+    infer_medical_upload_context,
+)
 from medical.pipeline.analyzer import MedicalImageAnalyzer
 from medical.pipeline.config import build_default_medical_analyzer_config
-from medical.dataset import infer_medical_upload_context, guess_modality_from_pixels, guess_cancer_from_pixels
+
 
 def test_infer_context(name, path):
     """Test infer_medical_upload_context với 1 ảnh."""
@@ -26,18 +30,18 @@ def test_infer_context(name, path):
     
     # Pixel modality
     modality = guess_modality_from_pixels(str(path))
-    print(f"\n[Pixel Modality]")
+    print("\n[Pixel Modality]")
     print(f"  Kết quả: {modality}")
     
     # Cancer from pixels
     cancer_key, cancer_modality = guess_cancer_from_pixels(str(path))
-    print(f"\n[Cancer From Pixels]")
+    print("\n[Cancer From Pixels]")
     print(f"  Cancer key: {cancer_key}")
     print(f"  Cancer modality: {cancer_modality}")
     
     # Full context
     target_key, inferred_modality = infer_medical_upload_context(str(path))
-    print(f"\n[Full Context Inference]")
+    print("\n[Full Context Inference]")
     print(f"  Target key: {target_key}")
     print(f"  Modality: {inferred_modality}")
     
@@ -60,7 +64,7 @@ def test_pipeline_auto_detect(name, path):
             target_key=None,  # Auto-detect
         )
         
-        print(f"\n[Pipeline Result]")
+        print("\n[Pipeline Result]")
         print(f"  Risk level: {result.risk_level}")
         print(f"  Suspected malignant: {result.suspected_malignant}")
         print(f"  Modality: {result.modality}")
@@ -76,7 +80,7 @@ def test_pipeline_auto_detect(name, path):
         if result.report_json_path.exists():
             with open(result.report_json_path, "r", encoding="utf-8") as f:
                 report = json.load(f)
-            print(f"\n  [Report JSON]")
+            print("\n  [Report JSON]")
             for k in ("status", "target_key", "modality", "confidence", "error_code"):
                 if k in report:
                     print(f"    {k}: {report[k]}")
@@ -84,11 +88,11 @@ def test_pipeline_auto_detect(name, path):
                 print(f"    labels: {report['classification_labels'][:5]}")
         
         # Đánh giá
-        print(f"\n  [Đánh giá]")
+        print("\n  [Đánh giá]")
         if result.average_confidence > 0.3:
             print(f"    ✅ Auto-detect hoạt động! Confidence={result.average_confidence:.4f}")
         elif result.risk_level == "uncertain" and result.average_confidence == 0:
-            print(f"    ⚠️ Auto-detect không xác định được (uncertain, conf=0)")
+            print("    ⚠️ Auto-detect không xác định được (uncertain, conf=0)")
         else:
             print(f"    ⚠️ Confidence thấp: {result.average_confidence:.4f}")
         

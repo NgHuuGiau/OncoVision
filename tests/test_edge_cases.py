@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Test edge cases: ảnh không liên quan, file invalid, target_key sai."""
 import io
 import json
 import sys
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 from PIL import Image
 
 if sys.platform == "win32":
@@ -17,6 +17,7 @@ sys.path.insert(0, str(project_root))
 
 from medical.pipeline.analyzer import MedicalImageAnalyzer
 from medical.pipeline.config import build_default_medical_analyzer_config
+
 
 def create_test_images():
     """Tạo các ảnh test cho edge cases."""
@@ -92,10 +93,10 @@ def test_edge_case(name, image_path, target_key=None):
         if target_key is None:
             # Auto-detect: nên là uncertain cho ảnh không y khoa
             if result.risk_level == "uncertain" and result.average_confidence == 0:
-                print(f"  ✅ Đúng: uncertain, confidence=0")
+                print("  ✅ Đúng: uncertain, confidence=0")
                 return True
             else:
-                print(f"  ⚠️ Không uncertain như mong đợi")
+                print("  ⚠️ Không uncertain như mong đợi")
                 return False
         else:
             # Explicit target: có thể có kết quả, nhưng confidence thấp
@@ -109,7 +110,7 @@ def test_edge_case(name, image_path, target_key=None):
 def test_invalid_file():
     """Test file không hợp lệ."""
     print(f"\n{'='*70}")
-    print(f"Test: File không hợp lệ (PDF)")
+    print("Test: File không hợp lệ (PDF)")
     print(f"{'='*70}")
     
     # Tạo file PDF giả
@@ -122,13 +123,13 @@ def test_invalid_file():
         config = build_default_medical_analyzer_config()
         analyzer = MedicalImageAnalyzer(config=config)
         
-        result = analyzer.analyze_image(
+        analyzer.analyze_image(
             image_path=str(pdf_path),
             patient_code="EDGE_TEST",
             target_key="lung",
         )
         
-        print(f"  ❌ Không nên chạy được với file PDF")
+        print("  ❌ Không nên chạy được với file PDF")
         return False
         
     except Exception as e:
@@ -138,26 +139,26 @@ def test_invalid_file():
 def test_invalid_target_key():
     """Test target_key không tồn tại."""
     print(f"\n{'='*70}")
-    print(f"Test: Target key không tồn tại")
+    print("Test: Target key không tồn tại")
     print(f"{'='*70}")
     
     # Dùng ảnh thyroid hợp lệ
     thyroid_img = project_root / "data" / "datasets" / "thyroid" / "benign" / "000001.png"
     if not thyroid_img.exists():
-        print(f"  ⚠️ Không có ảnh thyroid để test")
+        print("  ⚠️ Không có ảnh thyroid để test")
         return None
     
     try:
         config = build_default_medical_analyzer_config()
         analyzer = MedicalImageAnalyzer(config=config)
         
-        result = analyzer.analyze_image(
+        analyzer.analyze_image(
             image_path=str(thyroid_img),
             patient_code="EDGE_TEST",
             target_key="nonexistent_cancer",
         )
         
-        print(f"  ❌ Không nên chạy được với target_key sai")
+        print("  ❌ Không nên chạy được với target_key sai")
         return False
         
     except Exception as e:
@@ -167,20 +168,20 @@ def test_invalid_target_key():
 def test_missing_file():
     """Test file không tồn tại."""
     print(f"\n{'='*70}")
-    print(f"Test: File không tồn tại")
+    print("Test: File không tồn tại")
     print(f"{'='*70}")
     
     try:
         config = build_default_medical_analyzer_config()
         analyzer = MedicalImageAnalyzer(config=config)
         
-        result = analyzer.analyze_image(
+        analyzer.analyze_image(
             image_path="D:\\nonexistent\\file.jpg",
             patient_code="EDGE_TEST",
             target_key="lung",
         )
         
-        print(f"  ❌ Không nên chạy được với file không tồn tại")
+        print("  ❌ Không nên chạy được với file không tồn tại")
         return False
         
     except Exception as e:

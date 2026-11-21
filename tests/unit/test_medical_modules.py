@@ -1,6 +1,5 @@
 """Tests for medical modules without coverage: explainability, uncertainty, segmentation, preprocessing."""
 import numpy as np
-import pytest
 
 
 class TestExplainability:
@@ -59,8 +58,9 @@ class TestSegmentation:
         assert hasattr(models, "__file__")
 
     def test_attention_unet_class(self):
-        from medical.segmentation.models import AttentionUNet
         import torch
+
+        from medical.segmentation.models import AttentionUNet
 
         # Check the actual signature of AttentionUNet
         model = AttentionUNet(in_channels=3, num_classes=2)

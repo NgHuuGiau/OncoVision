@@ -1,7 +1,8 @@
-import pytest
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 collect_ignore = ["tests/manual"]
 
@@ -10,7 +11,7 @@ _torch_available = False
 try:
     result = subprocess.run(
         [sys.executable, "-c", "from torchvision.models import resnet18; resnet18(weights=None)"],
-        capture_output=True, timeout=30
+        check=False, capture_output=True, timeout=30
     )
     _torch_available = (result.returncode == 0)
 except Exception:

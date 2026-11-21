@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-import entrypoints.run_doctor as run_doctor
+from entrypoints import run_doctor
 from medical.system_status import MedicalSystemStatus
 
 

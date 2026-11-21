@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import entrypoints.run_smoke as run_smoke
+from entrypoints import run_smoke
 
 
 class RunSmokeTests(unittest.TestCase):

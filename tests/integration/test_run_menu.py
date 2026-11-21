@@ -4,7 +4,7 @@ import re
 import unittest
 from unittest.mock import MagicMock, patch
 
-import entrypoints.run_menu as run_menu
+from entrypoints import run_menu
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 

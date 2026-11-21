@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Test end-to-end với ảnh y khoa thực tế từ data/datasets/."""
 import io
 import json

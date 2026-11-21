@@ -810,7 +810,7 @@ class MedicalPipelineTests(unittest.TestCase):
                     gt_x2 = 3 * width // 4
                     gt_y2 = 3 * height // 4
                     result = SimpleNamespace(names={0: "lesion"}, boxes=[_FakeBox(0, 0.9, [gt_x1, gt_y1, gt_x2, gt_y2])])
-                    analyzer._load_default_backend = lambda: _FakeDetector([result])  # type: ignore[method-assign]
+                    analyzer._load_default_backend = lambda r=result: _FakeDetector([r])  # type: ignore[method-assign]
                     analyzer._load_cnn_wrapper = lambda: None  # type: ignore[method-assign]
 
                     img = np.zeros((height, width, 3), dtype=np.uint8)

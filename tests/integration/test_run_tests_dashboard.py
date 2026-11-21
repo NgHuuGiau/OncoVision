@@ -4,7 +4,7 @@ import io
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-import entrypoints.run_tests as run_tests
+from entrypoints import run_tests
 
 
 class DummyPassingTest(unittest.TestCase):
