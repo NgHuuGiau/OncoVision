@@ -1,4 +1,3 @@
-# -*- mode: python ; coding: utf-8 -*-
 """
 Setup script for building OncoVision Desktop Chat EXE using cx_Freeze 8.x
 Replaces the old OncoVision_chat.spec file.
@@ -8,8 +7,8 @@ Usage:
 """
 
 import sys
-import os
 from pathlib import Path
+
 sys.setrecursionlimit(5000)  # Increase recursion limit for PyTorch
 
 # Project root directory (parent of scripts/)
@@ -18,7 +17,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 # Add project root to sys.path so cx_Freeze can find app/, medical/, core/, utils/
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from cx_Freeze import setup, Executable
+from cx_Freeze import Executable, setup
 
 # Find PySide6 Qt plugins directory for native desktop
 pyside6_path = Path(__import__("PySide6").__file__).parent

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 OncoVision FIX_ALL — tự động khắc phục mọi thứ có thể sửa qua code.
 Chỉ ĐỌC file model (không sửa .pt / .pt2) de tranh hoi hieu inference.
@@ -7,7 +6,6 @@ Xuất ra: FIX_ALL_REPORT.txt
 """
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -15,8 +13,8 @@ _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from medical.cancer_model_registry import list_cancer_models  # noqa: E402
-from medical.cancer_catalog import COMMON_CANCER_TARGETS  # noqa: E402
+from medical.cancer_catalog import COMMON_CANCER_TARGETS
+from medical.cancer_model_registry import list_cancer_models
 
 REPORT_PATH = _project_root / "FIX_ALL_REPORT.txt"
 

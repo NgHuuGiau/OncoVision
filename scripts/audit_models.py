@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Audit trạng thái model của 11 nhóm ung thư trong models/pretrained/cancers/.
 Chỉ ĐỌC (không sửa file model) de tranh hoi hieu inference.
@@ -13,7 +12,7 @@ _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from medical.cancer_model_registry import list_cancer_models  # noqa: E402
+from medical.cancer_model_registry import list_cancer_models
 
 
 def main() -> int:

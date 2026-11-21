@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Re-export Volume 3D model từ .pt (TorchScript/checkpoint cũ) sang .pt2 (torch.export format).
 
@@ -20,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 from pathlib import Path
 
 import torch
@@ -83,12 +81,14 @@ def load_source_model(source_path: Path) -> torch.nn.Module:
     logger.info("Đang load model từ %s", source_path)
 
     # Thử TorchScript trước
+    jit_err_name: str | None = None
     try:
         model = torch.jit.load(str(source_path), map_location="cpu")
         logger.info("Load thành công qua TorchScript")
         return model
     except Exception as jit_err:
-        logger.warning("TorchScript load thất bại: %s", type(jit_err).__name__)
+        jit_err_name = type(jit_err).__name__
+        logger.warning("TorchScript load thất bại: %s", jit_err_name)
 
     # Thử regular checkpoint
     try:
@@ -96,12 +96,12 @@ def load_source_model(source_path: Path) -> torch.nn.Module:
         if isinstance(checkpoint, dict):
             if "model_state_dict" in checkpoint:
                 # Cần rebuild model architecture — không thể tự động
-                raise ValueError(
+                raise TypeError(
                     "Checkpoint có model_state_dict nhưng không có model architecture. "
                     "Cần cung cấp training script để rebuild model."
                 )
             elif "state_dict" in checkpoint:
-                raise ValueError(
+                raise TypeError(
                     "Checkpoint có state_dict nhưng không có model architecture. "
                     "Cần cung cấp training script để rebuild model."
                 )
@@ -109,11 +109,11 @@ def load_source_model(source_path: Path) -> torch.nn.Module:
             logger.info("Load thành công qua raw model checkpoint")
             return checkpoint
         else:
-            raise ValueError(f"Unknown checkpoint format: {type(checkpoint)}")
+            raise TypeError(f"Unknown checkpoint format: {type(checkpoint)}")
     except Exception as ckpt_err:
         raise RuntimeError(
             f"Không load được model từ {source_path}. "
-            f"TorchScript: {type(jit_err).__name__}, Checkpoint: {type(ckpt_err).__name__}. "
+            f"TorchScript: {jit_err_name or 'N/A'}, Checkpoint: {type(ckpt_err).__name__}. "
             f"Cần file TorchScript (.pt) hoặc training script để rebuild."
         ) from ckpt_err
 
@@ -259,13 +259,13 @@ def main() -> int:
     # Xác nhận file đầu ra
     if output_path.is_file():
         size_mb = output_path.stat().st_size / (1024 * 1024)
-        print(f"\n✅ Thành công! File .pt2 đã được tạo:")
+        print("\n✅ Thành công! File .pt2 đã được tạo:")
         print(f"   Đường dẫn: {output_path}")
         print(f"   Kích thước: {size_mb:.2f} MB")
-        print(f"\nLưu ý:")
-        print(f"   - Đảm bảo volume.json manifest ở cùng thư mục với .pt2")
+        print("\nLưu ý:")
+        print("   - Đảm bảo volume.json manifest ở cùng thư mục với .pt2")
         print(f"   - Chạy test: python -c \"from medical.volume_inference import load_volume_model; load_volume_model('{output_path}')\"")
-        print(f"   - Nếu hệ thống vẫn báo lỗi, cần re-export từ training script gốc")
+        print("   - Nếu hệ thống vẫn báo lỗi, cần re-export từ training script gốc")
     else:
         print(f"\nLỖI: File đầu ra không được tạo: {output_path}")
         return 1

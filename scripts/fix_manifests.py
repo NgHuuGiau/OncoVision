@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Sua volume.json cap goc (organ root) loi thanh manifest hop le.
 Sao chep tu volume.json o thuong muc modality (ct/, mri/, ultrasound…) cua cung nhom.
@@ -16,7 +15,7 @@ _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from medical.cancer_model_registry import CANCERS_DIR  # noqa: E402
+from medical.cancer_model_registry import CANCERS_DIR
 
 
 def _is_valid_manifest(path: Path) -> bool:
@@ -36,9 +35,7 @@ def _is_valid_manifest(path: Path) -> bool:
     if task != "volume_segmentation" and not labels:
         return False
     threshold = float(data.get("mask_threshold", 0.5))
-    if not (0.0 < threshold < 1.0):
-        return False
-    return True
+    return 0.0 < threshold < 1.0
 
 
 def _find_valid_manifest(organ_dir: Path) -> Path | None:
@@ -79,7 +76,7 @@ def main() -> int:
         # Tim manifest hop le tu modality subdir
         valid = _find_valid_manifest(organ_dir)
         if valid is None:
-            print(f"  -> KHONG TIM THAY volume.json hop le o thuong muc con, de trong")
+            print("  -> KHONG TIM THAY volume.json hop le o thuong muc con, de trong")
             continue
 
         # Doc, sua target thanh organ key, ghi lai

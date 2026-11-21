@@ -17,7 +17,7 @@ import hashlib
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import torch
@@ -218,7 +218,7 @@ def convert(source_dir: Path, target: str, modality: str | None, dest_dir: Path,
         "repo_type": "foreign-converted",
         "file": checkpoint_name,
         "sha256": _sha256(checkpoint_path),
-        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "probe_kind": "classifier",
         "probe_ok": True,
         "converted_from": str(source_dir),

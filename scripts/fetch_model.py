@@ -24,7 +24,7 @@ import shutil
 import sys
 import tempfile
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -148,7 +148,7 @@ def _install(
                 "repo_type": repo_type,
                 "file": file,
                 "sha256": _sha256(source),
-                "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
                 "probe_kind": kind,
                 "probe_ok": True,
             },
