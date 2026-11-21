@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable
+from typing import Any
 
 import cv2
 import numpy as np
@@ -177,8 +178,8 @@ def _apply_nms(
     # Sort by confidence descending
     valid_detections.sort(key=lambda x: x[0].confidence, reverse=True)
     
-    kept_detections = []
-    kept_bboxes = []
+    kept_detections: list[Any] = []
+    kept_bboxes: list[tuple[int, int, int, int]] = []
     
     for det, clamped_bbox in valid_detections:
         # Check if this detection overlaps with any kept detection
@@ -211,7 +212,7 @@ def _select_labels_to_show(
         return set()
     
     # Step 1: Group by label and pick highest confidence per label
-    label_best = {}  # label -> (idx, detection)
+    label_best: dict[str, tuple[int, Any]] = {}  # label -> (idx, detection)
     for idx, det in enumerate(detection_list):
         if det.bbox is None:
             continue
@@ -223,8 +224,8 @@ def _select_labels_to_show(
             label_best[label] = (idx, det)
     
     # Step 2: Among label-best detections, use IoU filtering to avoid overlapping labels
-    selected = set()
-    labeled_bboxes = []
+    selected: set[int] = set()
+    labeled_bboxes: list[tuple[int, int, int, int]] = []
     # Sort by confidence descending
     sorted_label_best = sorted(label_best.values(), key=lambda x: x[1].confidence, reverse=True)
     
@@ -396,7 +397,7 @@ def draw_detection_results(
     nms_detections = _apply_nms(detection_list, image.shape, iou_threshold=0.1)
     
     # Track drawn label positions to avoid overlapping labels
-    drawn_label_rects = []  # List of (x, y, w, h) for drawn labels
+    drawn_label_rects: list[tuple[int, int, int, int]] = []  # List of (x, y, w, h) for drawn labels
     box_counter = 0  # Unique counter for each box
 
     for detection in nms_detections:

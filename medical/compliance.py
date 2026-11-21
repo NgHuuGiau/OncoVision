@@ -52,7 +52,7 @@ class AuditTrail:
         metadata: dict[str, object] | None = None,
     ) -> None:
         """Ghi một entry vào audit trail."""
-        entry = {
+        entry: dict[str, object] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "user": user or "anonymous",
             "action": action,

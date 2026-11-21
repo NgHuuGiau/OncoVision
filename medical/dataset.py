@@ -697,7 +697,7 @@ def _guess_cancer_by_classifiers(image_path: str | Path) -> tuple[str | None, st
     
     # Bước 1: Xác định modality từ pixel
     pixel_modality = guess_modality_from_pixels(str(source))
-    modality_keys = _modality_from_pixel_key(pixel_modality)
+    modality_keys = _modality_from_pixel_key(pixel_modality) if pixel_modality is not None else []
     
     # Bước 2: Chọn danh sách classifiers
     if modality_keys:
@@ -1326,7 +1326,7 @@ def sample_medical_video_frames(
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = float(capture.get(cv2.CAP_PROP_FPS))
         if frame_count > 0:
-            indices = sorted(set(np.linspace(0, frame_count - 1, min(max_frames, frame_count), dtype=int).tolist()))
+            indices: list[int] = sorted(set(np.linspace(0, frame_count - 1, min(max_frames, frame_count), dtype=int).tolist()))
             frames: list[tuple[int, float, np.ndarray]] = []
             for index in indices:
                 capture.set(cv2.CAP_PROP_POS_FRAMES, index)

@@ -238,7 +238,7 @@ def target_model_paths(key: str, base: Path | None = None, modality: str | None 
     modality_directory = target_directory / modality_dir_key if modality_dir_key else None
     
     # Neu modality duoc chi dinh, chi tim trong modality subdirectory do
-    if modality_dir_key:
+    if modality_dir_key and modality_directory is not None:
         # Chi tra ve modality directory neu no ton tai, nguoc lai tra ve modality directory (khong ton tai)
         if modality_directory.exists():
             directory = modality_directory

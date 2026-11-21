@@ -119,7 +119,7 @@ class MedicalAnalysisResult:
     stage_messages: dict[str, str] = field(default_factory=dict)
     gradcam_overlays: list[str] = field(default_factory=list)
     deidentified_source: Path | None = None
-    dicom_info: dict[str, str] = field(default_factory=dict)
+    dicom_info: dict[str, str] | None = None
     analysis_time_seconds: float = 0.0
     modality: str | None = None
     body_region: str | None = None

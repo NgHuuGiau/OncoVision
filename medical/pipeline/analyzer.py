@@ -1200,7 +1200,7 @@ class MedicalImageAnalyzer:
         ):
             self._detector_backend = None
         detector_file = detector_path is not None and Path(detector_path).is_file()
-        if detector_file and Path(detector_path) in self._invalid_detector_paths:
+        if detector_file and detector_path is not None and Path(detector_path) in self._invalid_detector_paths:
             detector_file = False
         if self._detector_backend is not None or detector_file:
             yolo_detections = self._detect_with_backend(image)
@@ -1212,7 +1212,7 @@ class MedicalImageAnalyzer:
                 yolo_detections = [d for d in yolo_detections if d.confidence >= min_conf]
                 return yolo_detections
             if cnn_wrapper is None:
-                return yolo_detections
+                return yolo_detections or []
         if cnn_wrapper is not None:
             cnn_predictions = cnn_wrapper.predict(image, top_k=max(1, self.config.analyze_topk), tta=self.config.cnn_tta)
             # Lọc predictions có confidence thấp
@@ -1336,7 +1336,7 @@ class MedicalImageAnalyzer:
     def _normalize_bbox(
         raw_bbox: Any,
         image_shape: tuple[int, ...],
-    ) -> tuple[tuple[int, int, int, int], bool]:
+    ) -> tuple[tuple[int, int, int, int] | None, bool]:
         """Chuẩn hóa bbox và trả về (bbox, is_reliable).
 
         Lưu ý quan trọng: Ultralytics YOLO trả về boxes.xyxy đã ở tọa độ ảnh gốc
@@ -1354,10 +1354,10 @@ class MedicalImageAnalyzer:
         """
         try:
             if raw_bbox is None or len(raw_bbox) != 4:
-                return (None, True)
+                return None, True
             coordinates = tuple(round(float(value)) for value in raw_bbox)
         except (TypeError, ValueError, OverflowError):
-            return (None, True)
+            return None, True
         height, width = image_shape[:2]
         orig_x1, orig_y1, orig_x2, orig_y2 = coordinates
         # Clamp tọa độ vào giới hạn ảnh để tránh bbox vượt khỏi ảnh
@@ -1366,7 +1366,7 @@ class MedicalImageAnalyzer:
         clamped_y1, clamped_y2 = sorted((max(0, min(height - 1, orig_y1)), max(0, min(height - 1, orig_y2))))
         # Kiểm tra bbox hợp lệ: width và height phải > 0
         if clamped_x2 <= clamped_x1 or clamped_y2 <= clamped_y1:
-            return (None, True)
+            return None, True
         # --- Đánh giá độ đáng tin của bbox ---
         is_reliable = True
 

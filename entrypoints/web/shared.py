@@ -305,8 +305,9 @@ def _require_ready_capability(target) -> None:
 
     capabilities = get_medical_system_status().target_capabilities.get(target.key, {})
     if not capabilities.get("runtime_ready", False):
-        mod_caps = capabilities.get("modality_capabilities", {})
-        ready_modalities = [m for m, info in mod_caps.items() if info.get("runtime_ready", False)]
+        mod_caps_raw: object = capabilities.get("modality_capabilities", {})
+        mod_caps: dict[str, object] = mod_caps_raw if isinstance(mod_caps_raw, dict) else {}
+        ready_modalities = [m for m, info in mod_caps.items() if isinstance(info, dict) and info.get("runtime_ready", False)]
         if ready_modalities:
             detail = (
                 f"Chưa có model suy luận cho {target.label}. "
