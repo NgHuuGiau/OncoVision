@@ -3,15 +3,16 @@
 
 Chạy: python tests/test_modality_detection.py
 """
-import io
 import json
 import sys
 from pathlib import Path
 
 # Force UTF-8 output on Windows
 if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
 import numpy as np
 from PIL import Image

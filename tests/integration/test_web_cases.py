@@ -111,7 +111,8 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertIn("Ung thư thận", response.text)
         self.assertIn("Ung thư tuyến giáp", response.text)
         self.assertIn("model_ready", response.text)
-        self.assertIn('id="caseAssignmentModal"', response.text)
+        self.assertIn('id="adminFold"', response.text)
+        self.assertIn('id="targetSelect"', response.text)
 
     def test_analyze_validates_input_before_model_capability(self) -> None:
         # Ghim nguyên nhân gốc: input hỏng trả 400 và không được đụng tới
@@ -220,7 +221,7 @@ class WebCaseRoutesTests(unittest.TestCase):
 
         clinician, clinician_csrf = self.login_as("clinician01", "ValidClinicianPass123!")
         clinician_page = clinician.get("/")
-        self.assertIn('id="workflowCaseList"', clinician_page.text)
+        self.assertIn('id="caseList"', clinician_page.text)
         self.assertNotIn('class="app-container"', clinician_page.text)
         cases = clinician.get("/api/cases").json()["cases"]
         self.assertEqual([case["case_id"] for case in cases], [self.case_id])
@@ -249,8 +250,8 @@ class WebCaseRoutesTests(unittest.TestCase):
 
         viewer, viewer_csrf = self.login_as("viewer01", "ValidViewerPassword123!")
         viewer_page = viewer.get("/")
-        self.assertIn('id="publicCaseSearch"', viewer_page.text)
-        self.assertIn('id="myCaseList"', viewer_page.text)
+        self.assertIn('id="viewerLookupBox"', viewer_page.text)
+        self.assertIn('id="publicCodeInput"', viewer_page.text)
         self.assertNotIn('class="app-container"', viewer_page.text)
         # Chưa duyệt + chưa gán TK: người dùng chưa thấy gì.
         self.assertEqual(viewer.get("/api/cases").json()["cases"], [])
@@ -365,15 +366,15 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(resp.json(), {"status": "ok"})
 
     def test_static_files_served(self) -> None:
-        css_resp = self.client.get("/static/css/styles.css")
+        css_resp = self.client.get("/static/css/app.css")
         self.assertEqual(css_resp.status_code, 200)
-        self.assertIn("--bg-primary", css_resp.text)
-        self.assertIn("color-scheme: light", css_resp.text)
-        self.assertIn("min-width: 1024px", css_resp.text)
+        self.assertIn("--bg:", css_resp.text)
+        self.assertIn('[data-theme="light"]', css_resp.text)
+        self.assertIn(".pacs-grid", css_resp.text)
 
         js_resp = self.client.get("/static/js/app.js")
         self.assertEqual(js_resp.status_code, 200)
-        self.assertIn("OncoVision AI Workstation", js_resp.text)
+        self.assertIn("settingsBtns", js_resp.text)
 
         fav_resp = self.client.get("/static/favicon.svg")
         self.assertEqual(fav_resp.status_code, 200)
@@ -386,12 +387,7 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(auth_css.status_code, 200)
         self.assertIn('[data-theme="light"]', auth_css.text)
 
-        theme_js = self.client.get("/static/js/auth-theme.js")
-        self.assertEqual(theme_js.status_code, 200)
-        self.assertIn("toggleAuthTheme", theme_js.text)
-        workflow_js = self.client.get("/static/js/case-workflow.js")
-        self.assertEqual(workflow_js.status_code, 200)
-        self.assertIn("searchPublicCase", workflow_js.text)
+        self.assertIn('src="/static/js/app.js?v=2"', self.client.get("/").text)
 
     def test_settings_get_and_post(self) -> None:
         get_resp = self.client.get("/api/settings")
@@ -415,7 +411,8 @@ class WebCaseRoutesTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
         self.assertIn("404", resp.text)
         self.assertIn("Không tìm thấy", resp.text)
-        self.assertIn("error-theme-toggle", resp.text)
+        self.assertIn('/static/css/auth.css', resp.text)
+        self.assertIn('href="/"', resp.text)
 
     def test_404_error_json_for_api(self) -> None:
         resp = self.client.get("/api/nonexistent-route")

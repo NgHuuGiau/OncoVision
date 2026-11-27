@@ -189,7 +189,6 @@ class FullWebTest(unittest.TestCase):
             self.assertIn("position", data["cancer"])
             self.assertIn("color", data["cancer"])
 
-    @unittest.expectedFailure
     def test_api_anatomy_organs_all_11(self) -> None:
         for ct in self.PRIMARY_11:
             r = self.client.get(f"/api/anatomy/organs?target={ct}")

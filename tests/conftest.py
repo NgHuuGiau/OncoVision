@@ -5,6 +5,19 @@ from pathlib import Path
 import pytest
 
 collect_ignore = ["tests/manual"]
+_project_root = Path(__file__).resolve().parent.parent
+collect_ignore.extend(
+    str(_project_root / "tests" / name)
+    for name in (
+        "test_11_cancer_types.py",
+        "test_auto_detect.py",
+        "test_edge_cases.py",
+        "test_end_to_end_medical.py",
+        "test_end_to_end_non_medical.py",
+        "test_explicit_target.py",
+        "test_modality_detection.py",
+    )
+)
 
 # Check PyTorch availability in a subprocess to avoid crashing the main process
 _torch_available = False

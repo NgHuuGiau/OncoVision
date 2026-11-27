@@ -130,13 +130,16 @@ class WebAuthTests(unittest.TestCase):
             response = anonymous.get(path)
             self.assertEqual(response.status_code, 200)
             self.assertIn('/static/css/auth.css', response.text)
-            self.assertIn('data-theme="light"', response.text)
+            self.assertIn('<body class="auth-page">', response.text)
+        auth_css = anonymous.get("/static/css/auth.css")
+        self.assertEqual(auth_css.status_code, 200)
+        self.assertIn('[data-theme="light"]', auth_css.text)
         self.assertIn('action="/forgot-password/request"', response.text)
         self.assertNotIn('name="email"', response.text)
         self.assertNotIn('name="username"', response.text.split('action="/forgot-password"')[1])
         admin_page = self.client.get("/admin/users")
         self.assertEqual(admin_page.status_code, 200)
-        self.assertIn('/static/css/auth.css', admin_page.text)
+        self.assertIn('/static/css/app.css', admin_page.text)
         self.assertIn('name="email"', admin_page.text)
 
     def test_auth_database_migrates_legacy_recovery_codes_and_adds_email(self) -> None:
@@ -269,8 +272,8 @@ class WebAuthTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/cases").status_code, 200)
         page = self.client.get("/")
         self.assertIn('data-role="viewer"', page.text)
-        self.assertIn('id="myCaseList"', page.text)
-        self.assertIn('id="publicCaseSearch"', page.text)
+        self.assertIn('id="viewerLookupBox"', page.text)
+        self.assertIn('id="publicCodeInput"', page.text)
         denied = self.client.post("/api/settings", data={"language": "en", "theme": "light"}, headers={"X-CSRF-Token": csrf})
         self.assertEqual(denied.status_code, 403)
         settings = self.client.post(
@@ -346,7 +349,7 @@ class WebAuthTests(unittest.TestCase):
         uploads_dir = self.root / "uploads"
         with (
             patch("entrypoints.web.upload_analyze.WEB_UPLOADS_DIR", uploads_dir),
-            patch.object(web_shared, "infer_medical_upload_context", return_value=(None, None)),
+            patch("medical.dataset.infer_medical_upload_context", return_value=(None, None)),
         ):
             response = self.client.post(
                 "/api/upload",

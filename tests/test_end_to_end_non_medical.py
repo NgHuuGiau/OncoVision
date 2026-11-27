@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 """Test end-to-end: chạy ảnh chó mèo qua full pipeline analyze_image."""
-import io
 import json
 import sys
 from pathlib import Path
@@ -9,8 +8,10 @@ import numpy as np
 from PIL import Image
 
 if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
