@@ -139,7 +139,7 @@ _ROLE_HIERARCHY = {"admin": 3, "clinician": 2, "viewer": 1}
 
 
 async def require_authenticated(request: Request) -> WebUser | None:
-    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/change-credentials", "/favicon.svg", "/favicon.ico", "/healthz", "/health", "/v1/models"}:
+    if request.url.path in {"/login", "/forgot-password", "/forgot-password/request", "/change-credentials", "/favicon.svg", "/favicon.ico", "/healthz", "/health", "/v1/models", "/api/anatomy/targets", "/api/anatomy/organs"}:
         return None
 
     user_id = request.session.get("user_id")

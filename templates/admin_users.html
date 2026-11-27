@@ -4,66 +4,79 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <script>const savedTheme=localStorage.getItem('theme')||'system';document.documentElement.dataset.theme=savedTheme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):savedTheme;</script>
-  <link rel="stylesheet" href="/static/css/auth.css">
-  <script defer src="/static/js/auth-theme.js"></script>
   <title>Quản lý tài khoản · OncoVision</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body class="auth-page">
-<button class="theme-toggle" type="button" onclick="toggleAuthTheme()" aria-label="Chuyển đổi giao diện sáng/tối">◐ Giao diện</button>
-<main class="auth-shell admin-shell">
-  <header class="admin-header">
-    <div><h1>Quản lý tài khoản</h1><p class="muted">Đăng nhập: {{ current_user.username }} · admin</p></div>
-    <nav class="admin-nav"><a href="/">← Quay lại ứng dụng</a><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Đăng xuất</button></form></nav>
-  </header>
-  {% if notice == 'created' %}<div class="auth-notice" role="status">Đã tạo tài khoản.</div>
-  {% elif notice == 'updated' %}<div class="auth-notice" role="status">Đã cập nhật tài khoản.</div>{% endif %}
-  {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
-  <section class="panel">
-    <h2>Tạo tài khoản</h2>
-    <form class="admin-grid" method="post" action="/admin/users/create" autocomplete="off">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label>Tên đăng nhập<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" title="3-32 ký tự: chữ, số, dấu chấm, gạch dưới, gạch ngang" required></label>
-      <label>Email khôi phục<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
-      <label>Mật khẩu<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
-      <label>Vai trò<select name="role"><option value="clinician">Nhân viên y tế</option><option value="viewer">Người dùng chỉ xem</option><option value="admin">Quản trị viên</option></select></label>
-      <button type="submit">Tạo tài khoản</button>
-    </form>
-  </section>
-  <section class="panel">
-    <h2>Tài khoản hiện có</h2>
-    <p class="admin-hint">Cập nhật email đã xác minh cho từng tài khoản. Mã khôi phục chỉ được gửi tới đúng email đã lưu và không hiển thị trong trang quản trị.</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Tên đăng nhập</th><th>Email khôi phục</th><th>Vai trò / trạng thái</th><th>Ngày tạo</th><th>Cập nhật</th></tr></thead>
-      <tbody>
-      {% for user in users %}
-        <tr>
-          <td>{{ user.username }}{% if user.id == current_user.id %} <span class="muted">(bạn)</span>{% endif %}</td>
-          <td>{{ user.email or 'Chưa thiết lập' }}</td>
-          <td>
-            <form class="row-form" method="post" action="/admin/users/{{ user.id }}/update">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <select name="role" aria-label="Vai trò của {{ user.username }}">
-                <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
-                <option value="clinician" {% if user.role == 'clinician' %}selected{% endif %}>Nhân viên y tế</option>
-                <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>Người dùng chỉ xem</option>
-              </select>
-              <select name="is_active" aria-label="Trạng thái của {{ user.username }}">
-                <option value="1" {% if user.is_active %}selected{% endif %}>Đang hoạt động</option>
-                <option value="0" {% if not user.is_active %}selected{% endif %}>Đã khóa</option>
-              </select>
-              <input name="email" type="email" maxlength="254" value="{{ user.email or '' }}" placeholder="Email khôi phục" aria-label="Email khôi phục của {{ user.username }}">
-              <button type="submit">Lưu</button>
-            </form>
-          </td>
-          <td>{{ user.created_at }}</td><td><span class="status {% if not user.is_active %}off{% endif %}">{% if user.is_active %}Hoạt động{% else %}Đã khóa{% endif %}</span></td>
-        </tr>
-      {% else %}
-        <tr><td colspan="5">Chưa có tài khoản.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
-  </section>
-</main>
+<body style="overflow:auto;height:auto;">
+  <div style="max-width:920px;margin:28px auto;padding:0 16px;display:flex;flex-direction:column;gap:18px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div class="brand">
+        <span class="brand-mark">O</span>
+        <span>Quản lý tài khoản</span>
+      </div>
+      <a href="/" class="btn btn-sm">Quay lại PACS</a>
+    </div>
+
+    {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+    {% if notice == 'created' %}<div class="alert alert-ok" role="status">Đã tạo tài khoản mới.</div>{% endif %}
+    {% if notice == 'updated' %}<div class="alert alert-ok" role="status">Đã cập nhật tài khoản.</div>{% endif %}
+
+    <section style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:12px;">
+      <h2 class="panel-heading">Tạo tài khoản mới</h2>
+      <form method="post" action="/admin/users/create" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div><label style="font-size:12px;color:var(--text-muted);">Tài khoản</label><input name="username" class="input" required></div>
+        <div><label style="font-size:12px;color:var(--text-muted);">Email</label><input name="email" type="email" class="input" required></div>
+        <div><label style="font-size:12px;color:var(--text-muted);">Mật khẩu (≥ 8 ký tự)</label><input name="password" type="password" minlength="8" class="input" required></div>
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);">Vai trò</label>
+          <select name="role" class="select">
+            <option value="clinician">clinician (Bác sĩ)</option>
+            <option value="viewer">viewer (Bệnh nhân)</option>
+            <option value="admin">admin (Quản trị)</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Tạo tài khoản</button>
+      </form>
+    </section>
+
+    <section style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:12px;">
+      <h2 class="panel-heading">Danh sách tài khoản</h2>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--text-muted);">
+              <th style="padding:8px;">Tài khoản</th>
+              <th style="padding:8px;">Email / Vai trò / Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px;font-weight:600;white-space:nowrap;">{{ u.username }}</td>
+              <td style="padding:8px;">
+                <form method="post" action="/admin/users/{{ u.id }}/update" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input name="email" value="{{ u.email or '' }}" class="input" style="flex:1;min-width:160px;" placeholder="Email">
+                  <select name="role" class="select" style="width:130px;">
+                    <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
+                    <option value="clinician" {% if u.role == 'clinician' %}selected{% endif %}>clinician</option>
+                    <option value="viewer" {% if u.role == 'viewer' %}selected{% endif %}>viewer</option>
+                  </select>
+                  <select name="is_active" class="select" style="width:120px;">
+                    <option value="1" {% if u.is_active %}selected{% endif %}>Hoạt động</option>
+                    <option value="0" {% if not u.is_active %}selected{% endif %}>Đã khóa</option>
+                  </select>
+                  <button type="submit" class="btn btn-sm">Lưu</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 </body>
 </html>

@@ -124,6 +124,7 @@ from entrypoints.web.pages import register_pages_routes
 from entrypoints.web.settings import register_settings_routes
 from entrypoints.web.upload_analyze import register_upload_analyze_routes
 from entrypoints.web.utils_routes import register_utils_routes
+from entrypoints.web.anatomy_routes import register_anatomy_routes
 
 register_pages_routes(app)
 register_health_routes(app)
@@ -132,6 +133,7 @@ register_cases_routes(app)
 register_conversations_routes(app)
 register_settings_routes(app)
 register_utils_routes(app)
+register_anatomy_routes(app)
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
