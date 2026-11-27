@@ -116,3 +116,18 @@ models/backup/**/*.pt2
 models/backup/**/*.pt
 models/backup/**/*.bin
 models/backup/**/*.safetensors
+
+# Alembic migration files (local only)
+alembic.ini
+alembic/
+
+# Config files (local only)
+config/settings.py
+pyproject.toml
+
+# Build scripts
+scripts/*.py
+scripts/archive/
+
+# Database migration utility
+utils/migrations.py
