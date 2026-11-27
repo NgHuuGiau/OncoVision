@@ -63,6 +63,7 @@ from medical.validator import (
     ValidationResult,
     _canonical_modality,
     _load_modality_tuning_from_config,
+    detect_non_medical_image,
     get_modality_tuning,
     validate_image,
 )
@@ -192,10 +193,28 @@ class MedicalImageAnalyzer:
         validation = self.validate_input(resolved_source)
         if validation.status == "error":
             raise ValueError(f"{validation.error_code}: {validation.message}")
+        requested_modality_key: str | None = None
         if requested_modality:
             requested_modality_key = _canonical_modality(requested_modality)
             if requested_modality_key is None:
                 raise ValueError("INVALID_MODALITY: Loại ảnh được chọn không hợp lệ.")
+        strict_medical_gate = not self.config.demo_mode and self.config.validation_min_confidence >= 0.5
+        if strict_medical_gate:
+            non_medical_reason = detect_non_medical_image(
+                resolved_source,
+                expected_modality=requested_modality_key or validation.modality,
+                expected_target=requested_target_key,
+            )
+            if non_medical_reason is not None:
+                raise ValueError(f"NON_MEDICAL_IMAGE: {non_medical_reason}")
+            if validation.status == "uncertain" and (
+                validation.modality is None or validation.error_code == "UNKNOWN_IMAGE_TYPE"
+            ):
+                raise ValueError(
+                    "NON_MEDICAL_IMAGE: Không nhận diện được đây là ảnh y khoa hợp lệ "
+                    "(CT, MRI, X-quang, siêu âm, nội soi...). Vui lòng tải lên đúng ảnh y khoa."
+                )
+        if requested_modality_key is not None:
             # Chỉ kiểm tra strict modality khi validation_min_confidence đủ lớn (>= 0.5)
             # và classifier có confidence cao. Nếu threshold nhỏ thì coi như user override.
             if (self.config.validation_min_confidence >= 0.5
@@ -266,7 +285,13 @@ class MedicalImageAnalyzer:
                     logger.warning("Auto-detect không xác định được cancer type từ ảnh")
             except Exception as e:
                 logger.warning("Auto-detect fail: %s", e)
-        
+
+        if strict_medical_gate and self._active_target_key is None and requested_target_key is None:
+            raise ValueError(
+                "NON_MEDICAL_IMAGE: Không xác định được vùng cơ thể hoặc nhóm ung thư phù hợp từ ảnh. "
+                "Vui lòng tải lên ảnh y khoa hợp lệ hoặc chọn đúng nhóm bệnh."
+            )
+
         self._active_modality = validation.modality
         self._runtime_model_path = None
         self._brain_fallback_active = False

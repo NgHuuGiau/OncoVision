@@ -338,6 +338,106 @@ def _is_size_only_warning(warnings: list[str] | tuple[str, ...]) -> bool:
     return bool(warnings) and all("kích thước" in warning.lower() for warning in warnings)
 
 
+_GRAYSCALE_MODALITIES = frozenset({"ct", "mri", "xray", "mammogram", "ultrasound"})
+_GRAYSCALE_ONLY_TARGETS = frozenset({"brain", "liver", "lung", "breast", "prostate", "kidney", "pancreas", "thyroid"})
+_NON_MEDICAL_COCO_CLASSES = frozenset({
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+    "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
+    "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
+    "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
+    "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
+    "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake",
+    "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop",
+    "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
+    "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
+})
+
+
+@lru_cache(maxsize=1)
+def _load_coco_guard_model() -> Any | None:
+    model_path = PROJECT_ROOT / "models" / "pretrained" / "yolo11n.pt"
+    if not model_path.is_file():
+        return None
+    try:
+        import os
+        import tempfile
+        os.environ.setdefault("YOLO_CONFIG_DIR", tempfile.gettempdir())
+        from ultralytics import YOLO
+        return YOLO(str(model_path))
+    except Exception:
+        return None
+
+
+def detect_non_medical_image(
+    image_path: str | Path,
+    *,
+    expected_modality: str | None = None,
+    expected_target: str | None = None,
+) -> str | None:
+    """Trả về lý do từ chối nếu ảnh 2D rõ ràng không phải ảnh y khoa, ngược lại trả về None."""
+    source = Path(image_path)
+    if not source.is_file():
+        return None
+    suffix = source.suffix.lower()
+    if suffix in {".dcm", ".nii", ".gz", ".mha", ".mhd", ".mp4", ".avi", ".mov", ".mkv"}:
+        return None
+
+    try:
+        with Image.open(source) as img:
+            arr = np.array(img.convert("RGB"))
+    except Exception:
+        return None
+
+    if arr.size == 0 or arr.ndim != 3 or arr.shape[2] < 3:
+        return "Ảnh không hợp lệ hoặc rỗng."
+
+    r = arr[:, :, 0].astype(float)
+    g = arr[:, :, 1].astype(float)
+    b = arr[:, :, 2].astype(float)
+    channel_diff = float(np.mean([np.abs(r - g), np.abs(g - b), np.abs(r - b)]))
+    gray = np.mean(arr[:, :, :3].astype(float), axis=2)
+    mean_val = float(np.mean(gray))
+    std_val = float(np.std(gray))
+    black_ratio = float(np.sum(gray < 20)) / gray.size
+    local_var = float(np.var(gray[::10, ::10])) if gray.shape[0] > 10 and gray.shape[1] > 10 else 0.0
+
+    if std_val < 5.0 or (mean_val < 5.0 and std_val < 5.0) or (mean_val > 250.0 and std_val < 5.0):
+        return "Ảnh trống hoặc đơn sắc, không phải ảnh y khoa."
+
+    if (100 < mean_val < 150 and 30 < std_val < 70
+            and 1000 < local_var < 5000 and 10 < channel_diff < 50 and black_ratio < 0.05):
+        return "Ảnh nhiễu ngẫu nhiên, không phải ảnh y khoa."
+
+    if channel_diff > 25.0:
+        if expected_modality in _GRAYSCALE_MODALITIES or (
+            expected_modality is None and expected_target in _GRAYSCALE_ONLY_TARGETS
+        ):
+            return "Ảnh màu thông thường không khớp với loại ảnh y khoa dạng xám (CT/MRI/X-quang/Siêu âm/Mammogram)."
+        mean_r, mean_g, mean_b = float(np.mean(r)), float(np.mean(g)), float(np.mean(b))
+        is_mucosa = mean_r > 60 and mean_r > mean_g * 1.15 and mean_r > mean_b * 1.15
+        is_histopathology = mean_r > mean_g * 1.05 and mean_b > mean_g * 1.05
+        if not (is_mucosa or is_histopathology):
+            return "Ảnh màu thông thường không khớp đặc trưng ảnh y khoa."
+
+    coco_model = _load_coco_guard_model()
+    if coco_model is not None:
+        try:
+            results = coco_model.predict(str(source), conf=0.40, verbose=False)
+            for res in results:
+                names = getattr(res, "names", {}) or {}
+                for box in getattr(res, "boxes", []) or []:
+                    cls_id = int(box.cls[0])
+                    label = str(names.get(cls_id, "")).lower()
+                    conf = float(box.conf[0])
+                    if label in _NON_MEDICAL_COCO_CLASSES and conf >= 0.40:
+                        return f"Phát hiện đối tượng đời thường ({label}, {conf:.0%}), không phải ảnh y khoa."
+        except Exception:
+            pass
+
+    return None
+
+
 def assess_image_quality(image_path: str | Path) -> tuple[list[str], float]:
     source = Path(image_path)
     if not source.exists():

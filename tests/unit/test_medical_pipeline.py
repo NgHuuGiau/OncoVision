@@ -944,3 +944,57 @@ class MedicalPipelineTests(unittest.TestCase):
         }
         label = _position_label(item)
         self.assertIn("không đáng tin", label)
+
+    def test_analyze_image_rejects_color_non_medical_image_even_with_target(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            image_path = root / "cat.jpg"
+            arr = np.zeros((120, 120, 3), dtype=np.uint8)
+            arr[:60, :, :] = [135, 206, 235]
+            arr[60:, :, :] = [34, 139, 34]
+            cv2.imwrite(str(image_path), arr)
+            model_path = root / "model.pt"
+            model_path.write_bytes(b"weights")
+            analyzer = MedicalImageAnalyzer(
+                config=MedicalImageAnalyzerConfig(
+                    model_path=model_path,
+                    working_dir=root / "work",
+                    reports_dir=root / "reports",
+                    processed_dir=root / "normalized",
+                    overlay_dir=root / "overlay",
+                    validation_min_confidence=0.70,
+                )
+            )
+            with self.assertRaisesRegex(ValueError, "NON_MEDICAL_IMAGE"):
+                analyzer.analyze_image(image_path, patient_code="BNCAT", target_key="brain")
+
+    def test_analyze_image_rejects_coco_cat_even_if_grayscale_named_mri(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            image_path = root / "brain_mri_cat.jpg"
+            rng = np.random.default_rng(42)
+            gray = rng.integers(30, 200, (128, 128), dtype=np.uint8)
+            cv2.imwrite(str(image_path), np.stack([gray] * 3, axis=-1))
+            model_path = root / "model.pt"
+            model_path.write_bytes(b"weights")
+            analyzer = MedicalImageAnalyzer(
+                config=MedicalImageAnalyzerConfig(
+                    model_path=model_path,
+                    working_dir=root / "work",
+                    reports_dir=root / "reports",
+                    processed_dir=root / "normalized",
+                    overlay_dir=root / "overlay",
+                    validation_min_confidence=0.70,
+                )
+            )
+            fake_coco = SimpleNamespace(
+                predict=lambda *_a, **_kw: [
+                    SimpleNamespace(
+                        names={0: "cat"},
+                        boxes=[SimpleNamespace(cls=[0], conf=[0.92])],
+                    )
+                ]
+            )
+            with patch("medical.validator._load_coco_guard_model", return_value=fake_coco):
+                with self.assertRaisesRegex(ValueError, "NON_MEDICAL_IMAGE"):
+                    analyzer.analyze_image(image_path, patient_code="BNCAT2", target_key="brain")

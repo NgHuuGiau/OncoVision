@@ -400,15 +400,18 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
             g = arr[:, :, 1].astype(float)
             b = arr[:, :, 2].astype(float)
             channel_diff = float(np.mean([np.abs(r - g), np.abs(g - b), np.abs(r - b)]))
-            
-            # Ảnh có màu RGB thực sự (channel_diff cao) → nội soi / colposcopy
-            # Threshold cao hơn để tránh nhầm với ảnh grayscale chuyển RGB
-            if channel_diff > 50:
-                return "Nội soi"
-            
+
+            # Ảnh màu thực sự không thể là CT/MRI/X-quang/Siêu âm B-mode.
+            # Chỉ nhận là Nội soi nếu có tông màu niêm mạc (đỏ/hồng chiếm ưu thế) và không phải ảnh phẳng.
+            if channel_diff > 18:
+                mean_r, mean_g, mean_b = float(np.mean(r)), float(np.mean(g)), float(np.mean(b))
+                gray_tmp = np.mean(arr[:, :, :3].astype(float), axis=2)
+                if float(np.std(gray_tmp)) >= 8.0 and mean_r > 60 and mean_r > mean_g * 1.15 and mean_r > mean_b * 1.15:
+                    return "Nội soi"
+                return None
+
             # RGBA với channel_diff=0 → ảnh grayscale có alpha channel
             if channel_diff < 2:
-                # Grayscale với alpha — bỏ channel alpha, lấy channel đầu
                 gray = r.astype(float)
             else:
                 gray = np.mean(arr[:, :, :3].astype(float), axis=2)
@@ -416,9 +419,11 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
             gray = arr.astype(float)
         else:
             return None
-        
+
         mean_val = float(np.mean(gray))
         std_val = float(np.std(gray))
+        if std_val < 5.0:
+            return None
         
         if gray.size > 0:
             black_ratio = float(np.sum(gray < 20)) / gray.size
@@ -476,38 +481,22 @@ def guess_modality_from_pixels(image_path: str | Path) -> str | None:
         #    - MRI preprocess: mean cao hơn (100-150), std thấp
         #    Pancreas CT: mean=91, std=9, local_var=30, peak_ratio=0.98 → CT
         #    Cervical MRI: mean=133, std=6, local_var=1, peak_ratio=0.98 → MRI
-        if local_var < 100 and std_val < 15 and black_ratio < 0.05:
-            # Ảnh preprocess — phân biệt CT vs MRI dựa trên mean
-            # Peak ratio cao (>0.5) nghĩa là ảnh có histogram tập trung → CT preprocess
-            # Peak ratio rất cao (>0.9) + mean < 100 → chắc chắn CT
+        if local_var < 100 and std_val < 15 and black_ratio < 0.05 and peak_ratio > 0.5:
             if peak_ratio > 0.9 and mean_val < 100:
                 return "CT"
             if mean_val < 90:
-                return "CT"  # CT preprocess: mean thấp
-            elif mean_val > 120:
-                return "MRI"  # MRI preprocess: mean cao
-            else:
-                # Mean 90-120: không chắc chắn, ưu tiên CT (phổ biến hơn)
                 return "CT"
-        
-        # 6. Ảnh gốc có std cao + local_var cao
-        #    Phân biệt CT/X-ray vs MRI:
-        #    - CT/X-ray gốc: black_ratio cao (>0.3), mean thấp (<80), peak_ratio thấp
-        #    - MRI gốc: black_ratio cao (>0.25), mean thấp-cao, peak_ratio thấp
-        #    Lung X-ray: std=80, local_var=6698, black=0.12, mean=105 → CT
-        #    Brain MRI: std=60, local_var=3578, black=0.36, mean=66, peak=0.31 → MRI
-        if std_val > 50 and local_var > 1000:
-            # Ảnh gốc có contrast cao — phân biệt CT vs MRI
-            # MRI thường có peak_ratio thấp hơn (<0.5) vì phân bố pixel đa dạng hơn
-            # CT/X-ray thường có peak_ratio cao hơn hoặc black_ratio rất cao
+            if mean_val > 120:
+                return "MRI"
+            return "CT"
+
+        # 6. Ảnh gốc có std cao + local_var cao + có nền tối y khoa
+        if std_val > 50 and local_var > 1000 and black_ratio > 0.12:
             if peak_ratio < 0.5 and black_ratio > 0.2:
-                return "MRI"  # MRI gốc: peak thấp, nhiều pixel đen
-            else:
-                return "CT"   # CT/X-ray gốc
-        
-        # 7. MRI ảnh gốc: mean trung bình-cao, ít pixel đen
-        if mean_val > 100 and black_ratio < 0.15:
-            return "MRI"
+                return "MRI"
+            return "CT"
+
+        # 7. MRI ảnh gốc có nền đen rõ ràng
         if black_ratio > 0.25 and std_val > 50 and mean_val > 60:
             return "MRI"
         
@@ -699,20 +688,18 @@ def _guess_cancer_by_classifiers(image_path: str | Path) -> tuple[str | None, st
     pixel_modality = guess_modality_from_pixels(str(source))
     modality_keys = _modality_from_pixel_key(pixel_modality) if pixel_modality is not None else []
     
-    # Bước 2: Chọn danh sách classifiers
-    if modality_keys:
-        # Chỉ chạy classifier khớp modality
-        classifiers_to_run: list[tuple[str, str, str]] = []
-        for mk in modality_keys:
-            if mk in _MODALITY_CLASSIFIERS:
-                classifiers_to_run.extend(_MODALITY_CLASSIFIERS[mk])
-        logger.info("Phát hiện modality=%s, chạy %d classifiers: %s",
-                     pixel_modality, len(classifiers_to_run),
-                     [c[0] for c in classifiers_to_run])
-    else:
-        # Không xác định được modality, chạy tất cả
-        classifiers_to_run = _ALL_CLASSIFIERS
-        logger.info("Không xác định được modality, chạy tất cả %d classifiers", len(classifiers_to_run))
+    # Bước 2: Chọn danh sách classifiers — không brute-force tất cả nếu không xác định được modality
+    if not modality_keys:
+        logger.info("Không xác định được modality từ pixel — bỏ qua auto-detect classifier")
+        return None, None
+
+    classifiers_to_run: list[tuple[str, str, str]] = []
+    for mk in modality_keys:
+        if mk in _MODALITY_CLASSIFIERS:
+            classifiers_to_run.extend(_MODALITY_CLASSIFIERS[mk])
+    logger.info("Phát hiện modality=%s, chạy %d classifiers: %s",
+                 pixel_modality, len(classifiers_to_run),
+                 [c[0] for c in classifiers_to_run])
     
     best_target: str | None = None
     best_modality: str | None = None
