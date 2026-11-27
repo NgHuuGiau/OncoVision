@@ -6,8 +6,8 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from medical.anatomy_mapping import (
-    get_full_mapping,
     get_available_targets,
+    get_full_mapping,
     validate_target,
 )
 
@@ -58,8 +58,8 @@ async def get_anatomy_targets() -> JSONResponse:
 
     # Include labels for both languages
     from medical.anatomy_mapping import (
-        CANCER_LABELS_VI,
         CANCER_LABELS_EN,
+        CANCER_LABELS_VI,
     )
 
     target_list = [

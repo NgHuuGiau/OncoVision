@@ -261,8 +261,12 @@ def _has_allowed_magic(path: Path, filename: str) -> bool:
         return head[:2] == b"\x1f\x8b"
     if lower.endswith(".nii"):
         return head[344:348] in (b"n+1\x00", b"ni1\x00")
-    if lower.endswith(".dcm") or head[128:132] == b"DICM":
+    # DICOM files must have DICM header at offset 128
+    if head[128:132] == b"DICM":
         return True
+    # Files with .dcm extension but no DICM header are invalid
+    if lower.endswith(".dcm"):
+        return False
     img_magic = (b"\xff\xd8\xff", b"\x89PNG", b"BM", b"II*\x00", b"MM\x00*", b"RIFF", b"\x49\x49\x2b\x00")
     return head.startswith(img_magic) or (lower.endswith((".mp4", ".mov")) and head[4:8] == b"ftyp")
 

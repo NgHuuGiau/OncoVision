@@ -32,6 +32,11 @@ from entrypoints.web.shared import (
     require_authenticated,
 )
 
+from utils.entrypoint_common import run_entrypoint
+from utils.terminal_encoding import ensure_utf8_console
+
+ensure_utf8_console()
+
 # ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
@@ -117,6 +122,7 @@ async def add_security_headers(request: Request, call_next):
 # Register blueprint routes
 # ---------------------------------------------------------------------------
 
+from entrypoints.web.anatomy_routes import register_anatomy_routes
 from entrypoints.web.cases import register_cases_routes
 from entrypoints.web.conversations import register_conversations_routes
 from entrypoints.web.health import register_health_routes
@@ -124,7 +130,6 @@ from entrypoints.web.pages import register_pages_routes
 from entrypoints.web.settings import register_settings_routes
 from entrypoints.web.upload_analyze import register_upload_analyze_routes
 from entrypoints.web.utils_routes import register_utils_routes
-from entrypoints.web.anatomy_routes import register_anatomy_routes
 
 register_pages_routes(app)
 register_health_routes(app)
