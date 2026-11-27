@@ -6,6 +6,7 @@ import random
 import sys
 import time
 from pathlib import Path
+from typing import Any, TYPE_CHECKING
 
 from app.chat_ui.desktop_auth import (
     authenticate_desktop_user,
@@ -35,7 +36,52 @@ except ImportError:
 try:
     import numpy as np
 except ImportError:
-    np = None
+    np = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from PySide6.QtCore import (
+        QAbstractAnimation,
+        QEasingCurve,
+        QPoint,
+        QPropertyAnimation,
+        QSize,
+        Qt,
+        QTimer,
+        QVariantAnimation,
+        QThread,
+        Signal,
+    )
+    from PySide6.QtGui import (
+        QColor,
+        QKeySequence,
+        QPixmap,
+        QShortcut,
+    )
+    from PySide6.QtWidgets import (
+        QApplication,
+        QComboBox,
+        QDialog,
+        QFrame,
+        QGraphicsDropShadowEffect,
+        QGraphicsOpacityEffect,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QListWidget,
+        QListWidgetItem,
+        QMainWindow,
+        QMessageBox,
+        QPushButton,
+        QScrollArea,
+        QSizePolicy,
+        QSpacerItem,
+        QStackedWidget,
+        QSystemTrayIcon,
+        QVBoxLayout,
+        QWidget,
+    )
+    from app.chat_ui.widgets import ChatBubble, MessageInput, RecordingPanel
+    from app.web_auth import WebUser
 
 
 def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str = "medium", selected_model: str | None = None) -> int:
@@ -87,7 +133,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
     from medical.chat_service import MedicalChatService
 
-    MedicalAnalysisWorker = create_medical_worker_base(QThread, Signal)
+    MedicalAnalysisWorker = create_medical_worker_base(QThread, Signal)  # type: ignore[no-untyped-call]
 
     try:
         import wave  # noqa: F401
@@ -95,14 +141,15 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         import numpy as np
         import pyaudio
         import torch
-        from faster_whisper import WhisperModel
+        from faster_whisper import WhisperModel  # type: ignore
         VOICE_LOCAL_AVAILABLE = whisper_model_path.is_dir()
     except ImportError:
         VOICE_LOCAL_AVAILABLE = False
+        WhisperModel = None
 
     voice_model_cache: dict[tuple[str, str], object] = {}
 
-    def get_cached_whisper_model(*, language: str, device: str):
+    def get_cached_whisper_model(*, language: str, device: str) -> Any:
         cache_key = (language, device)
         model = voice_model_cache.get(cache_key)
         if model is None:
@@ -209,7 +256,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         ChatBubble,
     )
 
-    VoiceWorker = None
+    VoiceWorker: type | None = None
     if VOICE_LOCAL_AVAILABLE:
         VoiceWorker = build_voice_worker_class(
             qthread_cls=QThread,
@@ -227,8 +274,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.theme_mode = "system"
             self.effective_theme = "system"
             self.theme_overlay: QLabel | None = None
-            self.theme_overlay_effect = None
-            self.theme_transition_anim = None
+            self.theme_overlay_effect: QGraphicsOpacityEffect | None = None
+            self.theme_transition_anim: QPropertyAnimation | None = None
             self.sidebar_expanded = True
             self.is_refreshing_history = False
             self.is_recording = False
@@ -243,9 +290,75 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.conversations: list[Conversation] = []
             self.db = ChatDatabase(str(CHAT_HISTORY_DB_PATH))
             self.medical_controller = MedicalChatController(MedicalChatService())
-            self.medical_worker: MedicalAnalysisWorker | None = None
+            self.medical_worker: Any = None
             self.medical_status_message = ""
             self.current_user: WebUser | None = None
+
+            # UI attributes (initialized in build_ui/build_composer_section)
+            self.sidebar_shadow: Any = None
+            self.sidebar: Any = None
+            self.sidebar_layout: Any = None
+            self.sidebar_stack: Any = None
+            self.sidebar_open_page: Any = None
+            self.sidebar_compact_page: Any = None
+            self.sidebar_header_layout: Any = None
+            self.brand_text: Any = None
+            self.sidebar_toggle_button: Any = None
+            self.sidebar_collapsed_button: Any = None
+            self.new_chat_button: Any = None
+            self.search_box: Any = None
+            self.search_icon: Any = None
+            self.search_input: Any = None
+            self.search_filter_label: Any = None
+            self.history_title: Any = None
+            self.history_panel: Any = None
+            self.history_list: Any = None
+            self.sidebar_spacer: Any = None
+            self.settings_button: Any = None
+            self.compact_new_chat_button: Any = None
+            self.compact_search_button: Any = None
+            self.compact_spacer: Any = None
+            self.compact_settings_button: Any = None
+            self.chat_panel: Any = None
+            self.light_mode_button: Any = None
+            self.dark_mode_button: Any = None
+            self.desktop_button: Any = None
+            self.medical_row: Any = None
+            self.greeting_card: Any = None
+            self.greeting_title: Any = None
+            self.greeting_text: Any = None
+            self.empty_state: Any = None
+            self.robot_mark: Any = None
+            self.empty_title: Any = None
+            self.empty_subtitle: Any = None
+            self.scroll_area: Any = None
+            self.messages_host: Any = None
+            self.messages_layout: Any = None
+            self.message_input: "MessageInput" = None  # type: ignore[assignment]
+            self.plus_button: "QPushButton" = None  # type: ignore[assignment]
+            self.micro_button: "QPushButton" = None  # type: ignore[assignment]
+            self.send_button: "QPushButton" = None  # type: ignore[assignment]
+            self.disclaimer_label: Any = None
+            self.medical_status_label: Any = None
+            self.recording_panel: "RecordingPanel" = None  # type: ignore[assignment]
+            self.composer: Any = None
+            self.image_preview_area: "QScrollArea" = None  # type: ignore[assignment]
+            self.image_preview_host: Any = None
+            self.image_preview_layout: Any = None
+            self.message_input_row: Any = None
+            self.pulse_anim: "QVariantAnimation" = None  # type: ignore[assignment]
+            self.tray_icon: Any = None
+            self.sidebar_shortcut: Any = None
+            self.new_chat_shortcut: Any = None
+            self.typewriter_content = ""
+            self.typewriter_idx = 0
+            self.current_system_text = ""
+            self._pending_attach_path: str | None = None
+            self._pending_attach_kind: str | None = None
+            self._pending_prompt = ""
+            self._pending_voice_text = ""
+            self.is_recording = False
+            self.worker: Any = None
 
             self.language = self.db.get_setting("language", "vi")
             self.theme_mode = self.db.get_setting("theme", "system")
@@ -295,7 +408,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                 self.tray_icon.showMessage(
                     tr(self.language, "new_message"),
                     snippet,
-                    QSystemTrayIcon.Information,
+                    QSystemTrayIcon.MessageIcon.Information,
                     3000
                 )
 
@@ -335,7 +448,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.pulse_anim.setDuration(700)
             self.pulse_anim.setStartValue(QColor("#FF5252"))
             self.pulse_anim.setEndValue(QColor("#7F2929"))
-            self.pulse_anim.setEasingCurve(QEasingCurve.InOutSine)
+            self.pulse_anim.setEasingCurve(QEasingCurve.Type.InOutSine)
             self.pulse_anim.setLoopCount(-1)
             self.pulse_anim.valueChanged.connect(self.update_mic_style)
 
@@ -347,13 +460,13 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                 }}
             """)
 
-        def dragEnterEvent(self, event):
+        def dragEnterEvent(self, event: Any) -> None:
             if event.mimeData().hasUrls():
                 event.accept()
             else:
                 event.ignore()
 
-        def dropEvent(self, event):
+        def dropEvent(self, event: Any) -> None:
             handled = False
             for url in event.mimeData().urls():
                 path = url.toLocalFile()
@@ -365,7 +478,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             else:
                 event.ignore()
 
-        def handle_dropped_image(self, path: str):
+        def handle_dropped_image(self, path: str) -> None:
             handle_dropped_image_flow(self, path)
 
         def build_ui(self) -> None:
@@ -425,13 +538,13 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.sidebar_collapsed_button.setFixedSize(40, 40)
             self.sidebar_collapsed_button.clicked.connect(self.toggle_sidebar)
             header.addWidget(self.brand_text, 1)
-            header.addWidget(self.sidebar_toggle_button, 0, Qt.AlignRight)
+            header.addWidget(self.sidebar_toggle_button, 0, Qt.AlignmentFlag.AlignRight)
             open_layout.addWidget(header_frame)
 
             self.new_chat_button = QPushButton()
             self.new_chat_button.setObjectName("SidebarPrimaryButton")
             self.new_chat_button.setIconSize(QSize(20, 20))
-            self.new_chat_button.setLayoutDirection(Qt.LeftToRight)
+            self.new_chat_button.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
             self.new_chat_button.clicked.connect(self.start_new_chat)
             self.new_chat_button.setText(tr(self.language, "new_chat"))
             open_layout.addWidget(self.new_chat_button)
@@ -452,7 +565,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             search_layout.addWidget(self.search_input, 1)
             self.search_filter_label = QLabel("\u2630")
             self.search_filter_label.setObjectName("Subtle")
-            self.search_filter_label.setAlignment(Qt.AlignCenter)
+            self.search_filter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.search_filter_label.setFixedSize(18, 18)
             search_layout.addWidget(self.search_filter_label)
             self.search_box.setMinimumHeight(50)
@@ -464,17 +577,17 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
             self.history_panel = QFrame()
             self.history_panel.setObjectName("HistoryPanel")
-            self.history_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.history_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             history_panel_layout = QVBoxLayout(self.history_panel)
             history_panel_layout.setContentsMargins(0, 0, 0, 0)
             history_panel_layout.setSpacing(0)
 
             self.history_list = QListWidget()
-            self.history_list.setFrameShape(QFrame.NoFrame)
+            self.history_list.setFrameShape(QFrame.Shape.NoFrame)
             self.history_list.setSpacing(8)
-            self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.history_list.setContextMenuPolicy(Qt.CustomContextMenu)
+            self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.history_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             self.history_list.customContextMenuRequested.connect(self.show_history_context_menu)
             self.history_list.currentRowChanged.connect(self.select_conversation)
             history_panel_layout.addWidget(self.history_list, 1)
@@ -482,14 +595,14 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             open_layout.setStretchFactor(self.history_panel, 1)
 
             self.sidebar_spacer = QWidget()
-            self.sidebar_spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            self.sidebar_spacer.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             open_layout.addWidget(self.sidebar_spacer)
             open_layout.setStretchFactor(self.sidebar_spacer, 0)
 
             self.settings_button = QPushButton()
             self.settings_button.setObjectName("SidebarFooterButton")
             self.settings_button.setIconSize(QSize(20, 20))
-            self.settings_button.setLayoutDirection(Qt.LeftToRight)
+            self.settings_button.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
             self.settings_button.clicked.connect(self.open_settings)
             self.settings_button.setText(tr(self.language, "settings"))
             open_layout.addWidget(self.settings_button)
@@ -498,7 +611,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             compact_header.setContentsMargins(0, 4, 0, 0)
             compact_header.setSpacing(0)
             compact_header.addStretch(1)
-            compact_header.addWidget(self.sidebar_collapsed_button, 0, Qt.AlignCenter)
+            compact_header.addWidget(self.sidebar_collapsed_button, 0, Qt.AlignmentFlag.AlignCenter)
             compact_header.addStretch(1)
             compact_layout.addLayout(compact_header)
 
@@ -506,23 +619,23 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.compact_new_chat_button.setObjectName("SidebarCompactButton")
             self.compact_new_chat_button.setFixedSize(40, 40)
             self.compact_new_chat_button.clicked.connect(self.start_new_chat)
-            compact_layout.addWidget(self.compact_new_chat_button, 0, Qt.AlignHCenter)
+            compact_layout.addWidget(self.compact_new_chat_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
             self.compact_search_button = QPushButton()
             self.compact_search_button.setObjectName("SidebarCompactButton")
             self.compact_search_button.setFixedSize(40, 40)
             self.compact_search_button.clicked.connect(self.expand_sidebar_and_focus_search)
-            compact_layout.addWidget(self.compact_search_button, 0, Qt.AlignHCenter)
+            compact_layout.addWidget(self.compact_search_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
             self.compact_spacer = QWidget()
-            self.compact_spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            self.compact_spacer.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             compact_layout.addWidget(self.compact_spacer)
 
             self.compact_settings_button = QPushButton()
             self.compact_settings_button.setObjectName("SidebarCompactButton")
             self.compact_settings_button.setFixedSize(40, 40)
             self.compact_settings_button.clicked.connect(self.open_settings)
-            compact_layout.addWidget(self.compact_settings_button, 0, Qt.AlignHCenter)
+            compact_layout.addWidget(self.compact_settings_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
             root.addWidget(self.sidebar, 0)
 
@@ -538,21 +651,21 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.light_mode_button = QPushButton()
             self.light_mode_button.setObjectName("ModeButton")
             self.light_mode_button.setMinimumSize(80, 38)
-            self.light_mode_button.setLayoutDirection(Qt.LeftToRight)
+            self.light_mode_button.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
             self.light_mode_button.clicked.connect(lambda: self.set_theme_mode("light"))
             self.light_mode_button.setVisible(False)
             top_row.addWidget(self.light_mode_button)
             self.dark_mode_button = QPushButton()
             self.dark_mode_button.setObjectName("ModeButton")
             self.dark_mode_button.setMinimumSize(70, 38)
-            self.dark_mode_button.setLayoutDirection(Qt.LeftToRight)
+            self.dark_mode_button.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
             self.dark_mode_button.clicked.connect(lambda: self.set_theme_mode("dark"))
             self.dark_mode_button.setVisible(False)
             top_row.addWidget(self.dark_mode_button)
             self.desktop_button = QPushButton()
             self.desktop_button.setObjectName("ModeButton")
             self.desktop_button.setMinimumSize(190, 38)
-            self.desktop_button.setLayoutDirection(Qt.LeftToRight)
+            self.desktop_button.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
             self.desktop_button.setVisible(False)
             top_row.addWidget(self.desktop_button)
             chat_layout.addLayout(top_row)
@@ -572,9 +685,9 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.greeting_text = QLabel()
             self.greeting_text.setObjectName("GreetingText")
             greeting_layout.addWidget(self.greeting_title)
-            self.greeting_title.setAlignment(Qt.AlignLeft)
+            self.greeting_title.setAlignment(Qt.AlignmentFlag.AlignLeft)
             greeting_layout.addWidget(self.greeting_text)
-            self.greeting_text.setAlignment(Qt.AlignLeft)
+            self.greeting_text.setAlignment(Qt.AlignmentFlag.AlignLeft)
             chat_layout.addWidget(self.greeting_card)
 
             self.empty_state = QFrame()
@@ -585,15 +698,15 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             empty_layout.addStretch(1)
             self.robot_mark = QLabel("🤖")
             self.robot_mark.setObjectName("EmptyRobot")
-            self.robot_mark.setAlignment(Qt.AlignCenter)
+            self.robot_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_layout.addWidget(self.robot_mark)
             self.empty_title = QLabel(tr(self.language, "empty_title"))
             self.empty_title.setObjectName("EmptyTitle")
-            self.empty_title.setAlignment(Qt.AlignCenter)
+            self.empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_layout.addWidget(self.empty_title)
             self.empty_subtitle = QLabel(tr(self.language, "empty_subtitle"))
             self.empty_subtitle.setObjectName("Subtle")
-            self.empty_subtitle.setAlignment(Qt.AlignCenter)
+            self.empty_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_layout.addWidget(self.empty_subtitle)
             empty_layout.addStretch(1)
             chat_layout.addWidget(self.empty_state, 1)
@@ -601,14 +714,14 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.scroll_area = QScrollArea()
             self.scroll_area.setObjectName("MessageScroll")
             self.scroll_area.setWidgetResizable(True)
-            self.scroll_area.setFrameShape(QFrame.NoFrame)
-            self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+            self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             self.messages_host = QWidget()
             self.messages_host.setObjectName("MessagesHost")
             self.messages_layout = QVBoxLayout(self.messages_host)
             self.messages_layout.setContentsMargins(0, 6, 0, 6)
             self.messages_layout.setSpacing(14)
-            self.messages_layout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
+            self.messages_layout.addItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
             self.scroll_area.setWidget(self.messages_host)
             self.scroll_area.hide()
             chat_layout.addWidget(self.scroll_area, 1)
@@ -659,8 +772,14 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def _apply_theme_target(self, target: str) -> None:
             self.effective_theme = target
             app = QApplication.instance()
-            if app:
-                app.setStyleSheet(LIGHT_STYLESHEET if target == "light" else DARK_STYLESHEET)
+            if app is None:
+                return
+            # QApplication.instance() returns QCoreApplication | None, but we know it's QApplication
+            # Use type ignore to suppress the QCoreApplication error
+            app.setStyleSheet(LIGHT_STYLESHEET if target == "light" else DARK_STYLESHEET)  # type: ignore[attr-defined]
+            self.db.set_setting("theme", self.theme_mode)
+            self.apply_theme_assets()
+            self.refresh_history()
             self.db.set_setting("theme", self.theme_mode)
             self.apply_theme_assets()
             self.refresh_history()
@@ -684,7 +803,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             animation.setDuration(280)
             animation.setStartValue(1.0)
             animation.setEndValue(0.0)
-            animation.setEasingCurve(QEasingCurve.InOutCubic)
+            animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
 
             def _finish_overlay() -> None:
                 self._clear_theme_overlay()
@@ -892,7 +1011,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
         def send_message(self) -> None:
             send_message_flow(self)
 
-        def generate_system_response(self, prompt: str, attach_path: str | None = None, attach_kind: str | None = None):
+        def generate_system_response(self, prompt: str, attach_path: str | None = None, attach_kind: str | None = None) -> None:
             source = attach_kind or "chat"
             if source in {"image", "camera"} and attach_path:
                 self._start_medical_analysis(prompt=prompt, attach_path=attach_path, attach_kind=source)
@@ -932,7 +1051,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.medical_worker.finished.connect(self._on_medical_analysis_finished)
             self.medical_worker.start()
 
-        def _on_medical_analysis_success(self, medical_response) -> None:
+        def _on_medical_analysis_success(self, medical_response: Any) -> None:
             self.add_message(
                 ChatMessage(
                     sender="assistant",
@@ -965,7 +1084,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                 kind = getattr(self, '_pending_attach_kind', "image")
                 path = getattr(self, '_pending_attach_path', "")
                 text = self.build_system_reply(text=self._pending_prompt, source=kind)
-                self.add_message(ChatMessage(sender="assistant", text=text, attachment_path=path, attachment_kind=kind))
+                self.add_message(ChatMessage(sender="assistant", text=text, attachment_path=path, attachment_kind=kind))  # type: ignore[arg-type]
             else:
                 self.add_message(ChatMessage(sender="assistant", text=self._format_error(err)))
             self.scroll_to_bottom()
@@ -1019,7 +1138,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             if hasattr(self, "medical_modality_hint_label"):
                 self.medical_modality_hint_label.setText(tr(self.language, "medical_modality_hint").format(modality=self.current_medical_modality))
 
-        def start_typewriter(self, full_text: str):
+        def start_typewriter(self, full_text: str) -> None:
             self.typewriter_content = full_text
             self.typewriter_idx = 0
             self.current_system_text = ""
@@ -1029,7 +1148,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
 
             self.typewriter_tick()
 
-        def typewriter_tick(self):
+        def typewriter_tick(self) -> None:
             if self.typewriter_idx < len(self.typewriter_content):
                 char = self.typewriter_content[self.typewriter_idx]
                 self.current_system_text += char
@@ -1048,7 +1167,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             else:
                 self.show_tray_notification(self.typewriter_content)
 
-        def update_last_message(self, text: str):
+        def update_last_message(self, text: str) -> None:
             conv = self.active_conversation()
             if conv.messages:
                 conv.messages[-1].text = text
@@ -1062,7 +1181,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
                             if text.startswith(("Error:", "Phân tích lỗi:")):
                                 self.shake_bubble(last_bubble)
 
-        def shake_bubble(self, bubble: ChatBubble):
+        def shake_bubble(self, bubble: ChatBubble) -> None:
             orig_pos = bubble.pos()
             shake = QPropertyAnimation(bubble, b"pos", self)
             shake.setDuration(300)
@@ -1074,8 +1193,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             shake.setKeyValueAt(0.75, orig_pos + QPoint(-3, 0))
             shake.setKeyValueAt(0.9, orig_pos + QPoint(3, 0))
             shake.setEndValue(orig_pos)
-            shake.setEasingCurve(QEasingCurve.OutBounce)
-            shake.start(QPropertyAnimation.DeleteWhenStopped)
+            shake.setEasingCurve(QEasingCurve.Type.OutBounce)
+            shake.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
         def start_voice_input(self) -> None:
             if not VOICE_LOCAL_AVAILABLE:
@@ -1091,6 +1210,8 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.recording_panel.show()
             self.pulse_anim.start()
 
+            if VoiceWorker is None:
+                return
             self.worker = VoiceWorker(self.language)
             self._pending_voice_text = ""
             self.worker.result_ready.connect(self.on_voice_success)
@@ -1100,17 +1221,17 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.worker.start()
             self.message_input.setPlaceholderText(tr(self.language, "recording_status"))
 
-        def on_voice_success(self, text: str):
+        def on_voice_success(self, text: str) -> None:
             if text:
                 existing_text = self.message_input.toPlainText().strip()
                 combined_text = f"{existing_text} {text}".strip() if existing_text else text
                 self._pending_voice_text = combined_text
                 self.message_input.setPlainText(combined_text)
 
-        def on_voice_error(self):
+        def on_voice_error(self) -> None:
             QMessageBox.warning(self, tr(self.language, "info_title"), tr(self.language, "voice_error"))
 
-        def on_voice_complete(self):
+        def on_voice_complete(self) -> None:
             self.is_recording = False
             self.pulse_anim.stop()
             self.recording_panel.hide()
@@ -1193,7 +1314,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             layout.addWidget(error_label)
             login_button = QPushButton("Tạo admin" if needs_bootstrap(auth_db) else "Đăng nhập")
             layout.addWidget(login_button)
-            chosen: dict[str, object] = {}
+            chosen: dict[str, WebUser | None] = {}
 
             def _submit() -> None:
                 username = username_edit.text().strip()
@@ -1247,7 +1368,7 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             layout.addWidget(error_label)
             save_button = QPushButton("Lưu thay đổi")
             layout.addWidget(save_button)
-            chosen: dict[str, object] = {}
+            chosen: dict[str, WebUser | None] = {}
 
             def _submit_change() -> None:
                 new_username = new_username_edit.text().strip()

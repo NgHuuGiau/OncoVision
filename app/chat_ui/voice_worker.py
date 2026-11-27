@@ -4,19 +4,20 @@ import logging
 import os
 import tempfile
 import wave
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 def build_voice_worker_class(
     *,
-    qthread_cls,
-    signal_cls,
-    np_module,
-    pyaudio_module,
-    torch_module,
-    get_cached_whisper_model,
-):
+    qthread_cls: type,
+    signal_cls: type,
+    np_module: Any,
+    pyaudio_module: Any,
+    torch_module: Any,
+    get_cached_whisper_model: Any,
+) -> type:
     class VoiceWorker(qthread_cls):
         result_ready = signal_cls(str)
         intensity_changed = signal_cls(int)
