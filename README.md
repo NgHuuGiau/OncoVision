@@ -1,5 +1,14 @@
 # OncoVision
 
+[![Python](https://img.shields.io/badge/Python-3.10%20%E2%80%93%203.13-3776AB)](https://www.python.org/)
+[![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6)](https://www.microsoft.com/windows)
+[![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C)](https://pytorch.org/)
+[![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO11-111111)](https://www.ultralytics.com/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8)](https://opencv.org/)
+[![PySide6](https://img.shields.io/badge/PySide6-Desktop%20UI-41CD52)](https://www.qt.io/qt-for-python)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Web%20Chat-009688)](https://fastapi.tiangolo.com/)
+[![Medical](https://img.shields.io/badge/Medical-Screening-00A6A6)](docs/medical_imaging_guide.md)
+
 Ứng dụng suy luận ảnh y khoa: nhận ảnh → kiểm tra dữ liệu → chạy model có sẵn → trả kết quả sàng lọc và gợi ý bước tiếp theo. Hỗ trợ DICOM, NIfTI, JPG, PNG cùng giao diện desktop (PySide6/QtWebEngine) và web (FastAPI).
 
 ## Chạy dự án
