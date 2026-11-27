@@ -7,19 +7,28 @@ import sys
 
 
 def ensure_utf8_console() -> None:
+    """Đảm bảo console Windows sử dụng UTF-8 để tránh lỗi charmap với tên file tiếng Việt."""
     try:
+        # Set environment variables BEFORE any I/O
         os.environ.setdefault("PYTHONIOENCODING", "utf-8")
         os.environ.setdefault("PYTHONUTF8", "1")
+
         if os.name == "nt":
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleCP(65001)
             kernel32.SetConsoleOutputCP(65001)
             os.system("chcp 65001 > nul")
+
         locale.setlocale(locale.LC_ALL, "")
+
         for stream_name in ("stdin", "stdout", "stderr"):
             stream = getattr(sys, stream_name, None)
             reconfigure = getattr(stream, "reconfigure", None)
             if callable(reconfigure):
                 reconfigure(encoding="utf-8", errors="replace")
     except Exception:
-        return
+        pass
+
+
+# Auto-run when module is imported
+ensure_utf8_console()
