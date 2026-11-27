@@ -780,9 +780,6 @@ def launch_chat_app(*, window_title: str, camera_index: int = 0, app_mode: str =
             self.db.set_setting("theme", self.theme_mode)
             self.apply_theme_assets()
             self.refresh_history()
-            self.db.set_setting("theme", self.theme_mode)
-            self.apply_theme_assets()
-            self.refresh_history()
 
         def _animate_theme_overlay(self, snapshot: QPixmap) -> None:
             if snapshot.isNull():

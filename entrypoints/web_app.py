@@ -32,7 +32,6 @@ from entrypoints.web.shared import (
     require_authenticated,
 )
 
-from utils.entrypoint_common import run_entrypoint
 from utils.terminal_encoding import ensure_utf8_console
 
 ensure_utf8_console()
